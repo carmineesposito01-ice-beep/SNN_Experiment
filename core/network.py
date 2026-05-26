@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+from collections import deque    # F8: ring-buffer O(1) per delay assonali
 from core.hardware import po2_quantize
 from core.neurons import ALIFCell, LICell
 
@@ -23,15 +24,22 @@ class HiddenLayer_ALIF(nn.Module):
         self.cell = ALIFCell(out_features)
 
     def reset_state(self, batch_size, device):
-        self.x_buffer = [torch.zeros(batch_size, self.in_features, device=device) for _ in range(self.max_delay)]
+        # F8: deque(maxlen) come ring-buffer — appendleft() è O(1) vs list.insert() O(n).
+        # maxlen garantisce che il buffer non cresca oltre max_delay elementi.
+        self.x_buffer = deque(
+            [torch.zeros(batch_size, self.in_features, device=device)
+             for _ in range(self.max_delay)],
+            maxlen=self.max_delay,
+        )
         self.cell.reset_state(batch_size, device)
 
     def forward(self, x):
         if self.x_buffer is None:
             self.reset_state(x.size(0), x.device)
 
-        self.x_buffer.insert(0, x)
-        self.x_buffer.pop()
+        # F8: appendleft sposta l'input in testa e scarta automaticamente la coda
+        # (equivalente a insert(0, x) + pop() ma O(1) invece di O(max_delay)).
+        self.x_buffer.appendleft(x)
 
         w_po2 = po2_quantize(self.fc_weight)
         u_po2 = po2_quantize(self.rec_U)
@@ -267,7 +275,10 @@ class CF_FSNN_Net(nn.Module):
         OutputLayer_LI   (32 → 5)                        ← IDM-2D: [v0, T, s0, a, b]
 
     Connessione IDM-2D ↔ ALIF (Ch12 + Ch13):
-        max_delay=6  →  Tr_max = 6 × 0.1 s = 0.6 s  (tempo di reazione, Ch13)
+        max_delay=6  →  ritardo sinaptico hardware = 6 tick × (DT/TICKS_PER_STEP)
+                        = 6 × 0.01 s = 0.06 s (ritardo assonale FPGA — F11).
+                        Il tempo di reazione biologico Tr ∈ [0.1, 0.6] s è modellato
+                        dal buffer delay, non dal singolo tick interno (Ch13).
         fatica ALIF  →  T(t) stocastico IDM-2D  (banda [T1, T2])
         rank=8       →  ricorrenza low-rank (U 32×8, V 8×32)
 
@@ -317,6 +328,16 @@ class CF_FSNN_Net(nn.Module):
         self.register_buffer('param_lo', bounds[:, 0])   # (5,)
         self.register_buffer('param_hi', bounds[:, 1])   # (5,)
 
+        # F5 — Pre-scaling per equalizzare il gradiente tra i 5 parametri.
+        # Problema: d(decode_i)/d(raw_i) = (hi_i - lo_i) * σ'(raw_i).
+        # I range differiscono: v0=37, T=2, s0=4, a=2.2, b=2.5.
+        # Senza scaling il gradiente che arriva a raw_v0 è 37/2 = 18.5× più grande
+        # di quello a raw_T → la rete impara v0 molto più velocemente di T.
+        # Fix: raw_eq_i = raw_i / decode_scale_i dove decode_scale_i = (hi-lo)_i / max_range.
+        # Risultato: d(decode_i)/d(raw_i) = σ'(raw_eq_i) — identico per tutti i parametri.
+        ranges = bounds[:, 1] - bounds[:, 0]                  # (5,) = [37, 2, 4, 2.2, 2.5]
+        self.register_buffer('decode_scale', ranges / ranges.max())  # (5,) normalizzato
+
     # ----------------------------------------------------------
     # Stato SNN
     # ----------------------------------------------------------
@@ -330,10 +351,18 @@ class CF_FSNN_Net(nn.Module):
     # ----------------------------------------------------------
     def _decode_params(self, raw):
         """Potenziale LI grezzo → parametri IDM-2D fisici via sigmoid.
+
         raw:     (batch, 5)
         returns: (batch, 5) in unità fisiche
+
+        F5 — Pre-scaling per gradiente bilanciato:
+            raw_eq_i = raw_i / decode_scale_i
+            d(param_i)/d(raw_i) = (hi-lo)_i * σ'(raw_eq_i) / decode_scale_i
+                                 = max_range * σ'(raw_eq_i)   [uniforme tra i 5 param]
+        Senza scaling raw_v0 avrebbe un gradiente 18.5× maggiore di raw_T.
         """
-        return self.param_lo + (self.param_hi - self.param_lo) * torch.sigmoid(raw)
+        raw_eq = raw / self.decode_scale              # (batch, 5) — scala equalizzata
+        return self.param_lo + (self.param_hi - self.param_lo) * torch.sigmoid(raw_eq)
 
     # ----------------------------------------------------------
     # Forward
@@ -396,7 +425,9 @@ class CF_FSNN_Net(nn.Module):
         sqrt_ab = torch.sqrt(a * b).clamp(min=1e-6)
         s_star  = s0 + torch.relu(v * T + v * dv / (2.0 * sqrt_ab))
 
-        # Accelerazione IDM: a · [1 − (v/v0)^4 − (s*/s)²]
+        # Accelerazione IDM: a · [1 − (v/v0)^delta − (s*/s)²]
+        # delta=4 hardcoded (F7): coerente con IDM_HWY/URB/TRK in config.py (tutti delta=4).
+        # ATTENZIONE: se il generatore usa delta≠4, le formule divergono. Verificare config.
         s_safe  = s.clamp(min=0.5)
         v_ratio = (v / v0).clamp(max=10.0)
         accel   = a * (1.0 - v_ratio ** 4 - (s_star / s_safe) ** 2)
@@ -436,7 +467,9 @@ class CF_FSNN_Net(nn.Module):
         s_safe  = s.clamp(min=2.0)
 
         # ── IIDM base (ch12: regime free-flow separato dal car-following) ──
-        # afree = a*(1-(v/v0)^4): positivo se v<=v0, negativo se v>v0
+        # afree = a*(1-(v/v0)^delta): positivo se v<=v0, negativo se v>v0
+        # delta=4 hardcoded (F7): coerente con IDM_HWY/URB/TRK in config.py (tutti delta=4).
+        # ATTENZIONE: se il generatore usa delta≠4, le formule divergono. Verificare config.
         v_free   = a * (1.0 - (v / v0).clamp(max=10.0) ** 4)
         z        = (s_star / s_safe).clamp(max=20.0)
         below_v0 = v <= v0
@@ -472,6 +505,13 @@ class CF_FSNN_Net(nn.Module):
         del processo IDM-2d (Ch12 Eq. 12.19):
             E[T(t+Δt)] = α·T(t) + (1−α)·T_mean,   α = exp(−Δt / τ_OU)
 
+        NOTA SUL FLOOR (F6): il generatore usa un processo di salto Markoviano
+        per T (salta a U(T1,T2) con prob dt/tau ≈ 0.003 per step), non un OU
+        continuo. Questa penalità penalizza quei salti come 'deviazioni OU'.
+        Il floor irreducibile stimato è Var(U(T1,T2)) * prob_jump ≈ 1.8e-4.
+        In training, L_ou < 1e-3 indica T ragionevolmente smooth — non è
+        atteso scendere a zero per costruzione.
+
         params_seq: (batch, T, 5)
         returns:    scalare
         """
@@ -480,3 +520,30 @@ class CF_FSNN_Net(nn.Module):
         T_next     = T_seq[:, 1:]
         T_expected = self.ou_alpha * T_prev + (1.0 - self.ou_alpha) * self.T_mean
         return torch.mean((T_next - T_expected) ** 2)
+
+    def forward_sequence_with_stats(self, x_seq_norm):
+        """Come forward_sequence ma restituisce anche spike_rate del layer hidden.
+
+        Usato da pinn_loss() per il logging diagnostico della spike activity.
+        Definito direttamente nella classe (F4: rimosso il monkey-patch da train.py).
+
+        x_seq_norm: (batch, T, 4)
+        returns:    (params_seq (batch, T, 5), spike_rate (batch, T))
+        """
+        batch, T_len, _ = x_seq_norm.shape
+        self.reset_state(batch, x_seq_norm.device)
+        steps  = []
+        spikes = []
+        for t in range(T_len):
+            x_t = x_seq_norm[:, t, :]
+            raw_out     = None
+            spike_h_acc = torch.zeros(batch, self.layer_hidden.out_features,
+                                      device=x_t.device)
+            for _ in range(self.n_ticks):
+                spike_h = self.layer_hidden(x_t)
+                raw_out = self.layer_out(spike_h)
+                spike_h_acc = spike_h_acc + spike_h.float()
+            spike_h_rate = spike_h_acc / self.n_ticks        # (batch, hidden)
+            spikes.append(spike_h_rate.mean(dim=1, keepdim=True))   # (batch, 1)
+            steps.append(self._decode_params(raw_out).unsqueeze(1))  # (batch, 1, 5)
+        return torch.cat(steps, dim=1), torch.cat(spikes, dim=1)     # (batch,T,5), (batch,T)

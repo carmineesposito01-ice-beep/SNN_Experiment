@@ -82,8 +82,12 @@ def _acc_iidm_accel(s, v, v_l, a_l, params, c=ACC_COOLNESS):
     b     = params['b']
     delta = params['delta']
 
-    dv     = v - v_l
-    s_safe = max(s, 0.01)
+    dv = v - v_l
+    # min=2.0: allinea a network.py (acc_iidm_accel s_safe=2.0) — F1.
+    # Garantisce L_phys riducibile a 0 con i parametri corretti su tutti gli scenari.
+    # Con 0.01 e s<2m: a_cah diverge di ±2.25 m/s² rispetto alla rete → floor irreducibile.
+    # La crash provision (s >= s0*0.5) è indipendente da questo floor.
+    s_safe = max(s, 2.0)
 
     # Gap desiderato s* (uguale a IDM)
     s_star = s0 + max(0.0, v * T + v * dv / (2.0 * np.sqrt(a * b + 1e-9)))

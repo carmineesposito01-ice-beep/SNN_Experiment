@@ -59,7 +59,10 @@ def load_training_log(csv_path: str) -> dict:
         rows = list(reader)
 
     if not rows:
-        raise ValueError(f"File log vuoto: {csv_path}")
+        # F3a: training abortito prima di epoch 1 → CSV ha solo l'header.
+        # Restituisce None invece di ValueError; plot_all e main() lo gestiscono.
+        print(f"[plot_diagnostics] Log vuoto (training abortito prima di epoch 1): {csv_path}")
+        return None
 
     data = {k: [] for k in rows[0].keys()}
     for row in rows:
@@ -107,7 +110,7 @@ def plot_g2_components(log: dict, out_path: str):
     fig, ax = plt.subplots(figsize=(8, 4))
     ep = log['epoch']
     comps = {
-        'L_data (λ·SRMSE)':  log['val_data'],
+        'L_data (Masked RMSE)':  log['val_data'],
         'L_phys (residuo ACC-IDM)': log['val_phys'],
         'L_OU (vincolo T)':  log['val_ou'],
         'L_bc (crash pen.)': log['val_bc'],
@@ -242,6 +245,10 @@ def plot_all(log: dict, out_dir: str,
     T_pred/T_true: array per G5 (opzionali — se None G5 viene saltato)
     param_samples: dict per G7 (opzionale — se None G7 viene saltato)
     """
+    # F3b: training abortito → log=None, nessun dato da plottare
+    if log is None:
+        print("[plot_diagnostics] Nessun log da plottare (log=None). Grafici saltati.")
+        return
     if not _MPL:
         print("[plot_diagnostics] matplotlib non disponibile — grafici saltati.")
         return

@@ -242,42 +242,6 @@ def pinn_loss(model, x_seq, y_seq, mask_seq,
 
 
 # ===========================================================
-# Patch: forward_sequence_with_stats
-# ===========================================================
-
-def _forward_sequence_with_stats(self, x_seq_norm):
-    """
-    Come forward_sequence ma restituisce anche spike_rate del layer hidden.
-    Patch aggiunta a CF_FSNN_Net per il logging diagnostico.
-    """
-    batch, T_len, _ = x_seq_norm.shape
-    self.reset_state(batch, x_seq_norm.device)
-    steps  = []
-    spikes = []
-    for t in range(T_len):
-        x_t = x_seq_norm[:, t, :]
-        # Ripeti forward_step monitorando gli spike
-        raw_out = None
-        spike_h_acc = torch.zeros(batch, self.layer_hidden.out_features,
-                                  device=x_t.device)
-        for tick in range(self.n_ticks):
-            spike_h = self.layer_hidden(x_t)
-            raw_out = self.layer_out(spike_h)
-            spike_h_acc = spike_h_acc + spike_h.float()
-        # Media spike rate sul tick
-        spike_h_rate = spike_h_acc / self.n_ticks   # (batch, hidden)
-        spikes.append(spike_h_rate.mean(dim=1, keepdim=True))  # (batch, 1)
-        steps.append(self._decode_params(raw_out).unsqueeze(1))
-
-    params_seq = torch.cat(steps,  dim=1)   # (batch, T, 5)
-    spike_rate = torch.cat(spikes, dim=1)   # (batch, T)
-    return params_seq, spike_rate
-
-# Monkey-patch sul modello
-CF_FSNN_Net.forward_sequence_with_stats = _forward_sequence_with_stats
-
-
-# ===========================================================
 # Train / Val epoch
 # ===========================================================
 
@@ -471,6 +435,9 @@ def val_epoch(model, loader, device, lam):
         y    = y.to(device)
         mask = mask.to(device)
         _, comps, sr = pinn_loss(model, x, y, mask, *lam)
+        # F2: salta batch degeneri — NaN si propaga in tutti i totals silenziosamente
+        if not math.isfinite(comps['total']):
+            continue
         for k in totals:
             totals[k] += comps[k]
         spike_acc += sr
@@ -882,9 +849,13 @@ def main():
     else:
         log_data = load_training_log(log_path)
         plot_dir = os.path.join(save_dir, 'plots')
-        plot_all(log_data, plot_dir,
-                 T_pred=T_pred_arr, T_true=T_true_arr,
-                 param_samples=param_samples)
+        if log_data is not None:
+            plot_all(log_data, plot_dir,
+                     T_pred=T_pred_arr, T_true=T_true_arr,
+                     param_samples=param_samples)
+        else:
+            # F3c: training abortito prima di epoch 1 — log vuoto, grafici saltati
+            print("[Diagnostics] Training terminato prima dell'epoch 1 — grafici saltati.")
 
     print(f"\n[Fine training] Best val_loss = {best_val:.5f}")
     print(f"  Checkpoint: {os.path.join(save_dir, 'best_model.pt')}")

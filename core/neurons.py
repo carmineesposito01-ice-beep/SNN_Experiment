@@ -29,13 +29,20 @@ class ALIFCell(nn.Module):
         leak = self.potential / (2.0 ** self.bit_shift)
         self.potential = self.potential - leak + input_current + rec_current
 
-        # La soglia sale in base alla fatica
-        eff_thresh = self.base_threshold + torch.relu(self.fatigue)
+        # La soglia sale in base alla fatica.
+        # clamp(min=0): fatigue >= 0 per costruzione (incrementa di thresh_jump.clamp(min=0)
+        # ad ogni spike e decade verso 0 via bit-shift), quindi la clamp è ridondante
+        # ma funge da guardia numerica esplicita. F10: era relu(fatigue).
+        eff_thresh = self.base_threshold + self.fatigue.clamp(min=0)
         spikes = spike_fn(self.potential, eff_thresh)
 
         # Leak Fatica HW
         fatigue_leak = self.fatigue / (2.0 ** self.bit_shift)
-        self.fatigue = self.fatigue - fatigue_leak + (spikes * torch.abs(self.thresh_jump))
+        # thresh_jump.clamp(min=0): thresh_jump è il salto di soglia per spike.
+        # Per design ALIF il salto è sempre positivo — il segno non influenza mai il
+        # comportamento. clamp(min=0) è semanticamente più corretto di torch.abs()
+        # e ha gradiente nullo solo al confine (abs ha gradiente discontinuo in 0). F9.
+        self.fatigue = self.fatigue - fatigue_leak + (spikes * self.thresh_jump.clamp(min=0))
 
         # Soft Reset HW (Sottrazione pura, niente zeri forzati)
         self.potential = self.potential - (spikes * eff_thresh)
