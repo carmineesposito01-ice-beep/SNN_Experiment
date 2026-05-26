@@ -430,7 +430,10 @@ class CF_FSNN_Net(nn.Module):
         # Gap desiderato s*
         sqrt_ab = torch.sqrt(a * b).clamp(min=1e-6)
         s_star  = s0 + torch.relu(v * T + v * dv / (2.0 * sqrt_ab))
-        s_safe  = s.clamp(min=0.5)
+        # min=2.0 invece di 0.5: limita d(a_IIDM)/d(T) = -2*a*z*v/s_safe.
+        # Con la formula corretta a*(1-z^2), il gradiente cresce linearmente con z.
+        # s_safe=0.5 → v/s_safe=76 → gn~8000 su highway; s_safe=2.0 → v/s_safe=19 → gn~200.
+        s_safe  = s.clamp(min=2.0)
 
         # ── IIDM base (ch12: regime free-flow separato dal car-following) ──
         # afree = a*(1-(v/v0)^4): positivo se v<=v0, negativo se v>v0

@@ -381,19 +381,15 @@ def train_epoch(model, loader, optimizer, device, epoch, lam,
         # ── Norme per-layer PRIMA del clip ────────────────────────
         # clip_grad_norm_(total=inf) azzera tutti i grad (coeff = max_norm/inf = 0).
         # Le norme devono essere raccolte ora, altrimenti sono irrecuperabili.
-        # In smoke mode (diag=True) le raccogliamo sempre; in normal mode solo
-        # se troviamo gradienti già inf/nan (check bitwise O(n_params), cheapo).
-        has_inf_grad = any(
-            p.grad is not None and not p.grad.isfinite().all()
-            for p in model.parameters()
-        )
-        pre_norms = None
-        if has_inf_grad or diag:
-            pre_norms = {
-                name: p.grad.detach().norm().item()
-                for name, p in model.named_parameters()
-                if p.grad is not None
-            }
+        # Calcola sempre pre_norms prima del clip: overhead trascurabile (6 tensori,
+        # 864 parametri totali). Necessario per diagnosticare l'overflow float32:
+        # gn=inf può avvenire anche con gradienti finite-ma-enormi (somma quadrati > 3.4e38),
+        # caso in cui has_inf_grad=False ma le norme per-layer rivelano il layer esplosivo.
+        pre_norms = {
+            name: p.grad.detach().norm().item()
+            for name, p in model.named_parameters()
+            if p.grad is not None
+        }
 
         gn     = nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
         gn_val = float(gn)
