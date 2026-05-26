@@ -599,8 +599,8 @@ def main():
         args.epochs         = 1
         args.log_every      = 1
         args.max_inf_streak = 5
-        print("[SMOKE] Modalità diagnostica:"
-              f" n_train≤{args.n_train}, n_val≤{args.n_val},"
+        print("[SMOKE] Modalita diagnostica:"
+              f" n_train<={args.n_train}, n_val<={args.n_val},"
               " 1 epoca, LOG_EVERY=1, max_inf_streak=5, norme per-layer attive")
 
     set_seed(SEED)
