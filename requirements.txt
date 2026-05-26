@@ -1,0 +1,13 @@
+# CF_FSNN — dipendenze Python
+# Installazione: pip install -r requirements.txt
+#
+# Testate su Python 3.9+ / PyTorch 2.x
+
+torch>=2.0.0
+numpy>=1.24.0
+
+# Opzionale: visualizzazione training
+# matplotlib>=3.7.0
+
+# Opzionale: snnTorch (per confronto con implementazione canonica SNN)
+# snntorch>=0.9.0
