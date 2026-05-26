@@ -59,10 +59,11 @@ def _acc_iidm_accel(s, v, v_l, a_l, params, c=ACC_COOLNESS):
     Accelerazione ACC-IDM con base IIDM (Ch12, Sez. 12.4).
 
     Differenze rispetto all'IDM plain:
-    - IIDM: separa il regime free-flow dal car-following con
-      formula piu' precisa -> elimina il bias v0 di IDM.
-    - CAH: Constant Acceleration Heuristic -> risposta anticipatoria
-      al comportamento del leader -> no panic braking su cut-in.
+    - IIDM (ch12): separa il regime free-flow dal car-following.
+      z<1, v<=v0: afree*(1-z²);  z>=1, v<=v0: a*(1-z²) [vale 0 in z=1].
+      v>v0: afree (z<1) o afree+a*(1-z²) (z>=1).
+    - CAH (ch12 Eq.12.35): a_cah = min(a_l,a) - relu(Δv)²/(2s).
+      Anticipa la frenata del leader, evita panic braking su cut-in.
     - Blend pesato da c: a_ACC = (1-c)*a_IIDM + c*(a_CAH + b*tanh(...))
       Con c=0.99 la CAH domina quando a_IIDM < a_CAH.
 
@@ -87,26 +88,31 @@ def _acc_iidm_accel(s, v, v_l, a_l, params, c=ACC_COOLNESS):
     # Gap desiderato s* (uguale a IDM)
     s_star = s0 + max(0.0, v * T + v * dv / (2.0 * np.sqrt(a * b + 1e-9)))
 
-    # ── IIDM base (regime free-flow separato dal regime following) ──
-    # v_free: decelerazione libera se non ci fosse il leader
+    # ── IIDM base (ch12: regime free-flow separato dal car-following) ──
+    # v_free = afree: accelerazione libera (positiva se v<=v0, negativa se v>v0)
     v_free = a * (1.0 - (v / max(v0, 1e-3)) ** delta)
     z      = s_star / s_safe
-    if z < 1.0:
-        # Regime free-flow dominante
-        a_iidm = v_free * (1.0 - z ** 2)
-    else:
-        # Regime car-following dominante (z>=1 -> forte frenata)
-        a_iidm = v_free - a * (z ** 2 - 1.0) / (1.0 + z) ** 2
+    if v <= v0:         # afree >= 0: regime normale
+        if z < 1.0:
+            # Free-flow dominante: a_IIDM = afree*(1-z²)  [ch12]
+            a_iidm = v_free * (1.0 - z ** 2)
+        else:
+            # Car-following dominante: a*(1-z²), vale 0 in z=1 (equilibrio)  [ch12]
+            a_iidm = a * (1.0 - z ** 2)
+    else:               # v > v0, afree < 0: il veicolo è sopra la velocità desiderata
+        if z < 1.0:
+            # Nessuna interazione col leader: solo decelerazione verso v0
+            a_iidm = v_free
+        else:
+            # Interazione e deceleration verso v0
+            a_iidm = v_free + a * (1.0 - z ** 2)
 
-    # ── CAH (Constant Acceleration Heuristic) ───────────────────────
-    # ā_l = min(a_l, a) -- evita assunzioni ottimistiche sul leader
+    # ── CAH (Constant Acceleration Heuristic, ch12 Eq.12.35) ────────
+    # a_cah = ā_l − relu(Δv)²/(2s)
+    # ā_l = min(a_l, a): evita assunzioni ottimistiche sul leader
     a_l_bar = min(a_l, a)
-    # Denominatore della CAH: v*ā_l/s + (v-v_l)^2/(2s)
-    denom = v * a_l_bar / s_safe + dv ** 2 / (2.0 * s_safe + 1e-9)
-    if abs(denom) > 1e-9:
-        a_cah = v ** 2 * a_l_bar / (denom + 1e-9)
-    else:
-        a_cah = -9.0   # fallback conservativo
+    dv_pos  = max(dv, 0.0)            # relu(Δv), Δv = v − v_l
+    a_cah   = a_l_bar - dv_pos ** 2 / (2.0 * s_safe + 1e-9)
     a_cah = float(np.clip(a_cah, -9.0, a))
 
     # ── Blend ACC-IDM ────────────────────────────────────────────────

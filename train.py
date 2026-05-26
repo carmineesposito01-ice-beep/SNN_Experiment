@@ -3,7 +3,7 @@ train.py -- Training loop PINN per CF_FSNN (ACC-IDM con base IIDM)
 ===================================================================
 Addestra la rete CF_FSNN_Net su dati ACC-IDM sintetici con loss PINN:
 
-    L = λ_data * SRMSE(a_pred, a_gt)        [fit accelerazione, Ch17 MoP]
+    L = λ_data * RMSE_masked(a_pred, a_gt)  [fit accelerazione, Ch17 MoP]
       + λ_phys * MSE(a_ACC-IDM, a_gt)        [residuo ACC-IDM con IIDM base]
       + λ_OU   * OU_residual(T_seq)          [mean-reversion su T, Ch12]
       + λ_bc   * crash_penalty(s, s0_pred)   [boundary condition Ch17]
@@ -281,20 +281,81 @@ CF_FSNN_Net.forward_sequence_with_stats = _forward_sequence_with_stats
 # Train / Val epoch
 # ===========================================================
 
-LOG_EVERY = 50
+LOG_EVERY           = 50
+GRAD_WARN_THRESHOLD = 5.0   # log diagnostica se grad_norm > soglia (anche se finito)
+
+
+def _log_batch_diagnostics(tag, comps, gn_total, x, pre_norms, model):
+    """
+    Diagnostica dettagliata per batch anomali. Chiamata in tre casi:
+      (a) loss = nan/inf  → before backward, pre_norms=None
+      (b) grad_norm = inf → sempre; pre_norms disponibili se has_inf_grad o diag=True
+      (c) grad_norm > GRAD_WARN_THRESHOLD e diag=True → smoke/debug mode
+
+    ATTENZIONE: clip_grad_norm_(total=inf) moltiplica tutti i grad per 0 (coeff=0),
+    quindi le norme per-layer DEVONO essere calcolate PRIMA del clip per essere utili.
+    pre_norms contiene le norme calcolate pre-clip; se None il log salta quella sezione.
+    """
+    # Loss components
+    print(f"{tag} loss: total={comps['total']:.4f}  data={comps['data']:.4f}"
+          f"  phys={comps['phys']:.5f}  ou={comps['ou']:.6f}  bc={comps['bc']:.6f}")
+
+    # Input batch stats — x: (B, T, 4) = [s, v_ego, dv, v_l] normalizzati
+    with torch.no_grad():
+        gap   = x[:, :, 0]
+        v_ego = x[:, :, 1]
+        dv    = x[:, :, 2]
+        print(f"{tag} input:"
+              f"  gap=[{gap.min():.3f},{gap.max():.3f}]"
+              f"  v_ego=[{v_ego.min():.3f},{v_ego.max():.3f}]"
+              f"  dv=[{dv.min():.3f},{dv.max():.3f}] abs_mean={dv.abs().mean():.4f}")
+
+    # Norme per-layer pre-clip (chiave per identificare quale layer esplode)
+    if pre_norms is not None:
+        def _sort_key(kv):
+            return (0, 0) if not math.isfinite(kv[1]) else (1, -kv[1])
+        worst = sorted(pre_norms.items(), key=_sort_key)[:12]
+        lines = [f"    {'Layer':<42} {'grad_norm':>12}"]
+        for name, val in worst:
+            mark = "  *** INF ***" if not math.isfinite(val) else ""
+            lines.append(f"    {name:<42} {val:>12.3e}{mark}")
+        print(f"{tag} grad norms per layer (pre-clip):\n" + "\n".join(lines))
+
+    # Weight stats — identifica pesi corrotti
+    bad, wmax_global = [], 0.0
+    for name, p in model.named_parameters():
+        wmax = p.detach().abs().max().item()
+        wmax_global = max(wmax_global, wmax)
+        if not p.detach().isfinite().all():
+            bad.append(f"    {name:<42} max={wmax:.3e}  *** INF/NAN ***")
+        elif wmax > 10.0:
+            bad.append(f"    {name:<42} max={wmax:.3e}  (large)")
+    if bad:
+        print(f"{tag} weight anomalies:\n" + "\n".join(bad))
+    else:
+        print(f"{tag} weights: all finite, global_max_abs={wmax_global:.3e}")
+
 
 def train_epoch(model, loader, optimizer, device, epoch, lam,
-                scheduler=None, step_per_batch=False):
+                scheduler=None, step_per_batch=False,
+                log_every=LOG_EVERY, max_inf_streak=20, diag=False):
     """
-    step_per_batch=True: lo scheduler viene steppato dopo ogni batch
-    (necessario per OneCycleLR, che lavora su total_steps = epochs * batches).
+    Esegue un'epoca di training con guardie e diagnostica.
+
+    step_per_batch  — True per OneCycleLR (step dopo ogni batch).
+    log_every       — frequenza log batch (1 = ogni batch, per smoke mode).
+    max_inf_streak  — n. massimo di batch consecutivi con grad=inf prima di abortire.
+    diag            — True: calcola norme per-layer pre-clip su OGNI batch (smoke mode).
+
+    Ritorna dict metriche; se training abortito, include 'aborted': True.
     """
     model.train()
-    totals    = {'total': 0.0, 'data': 0.0, 'phys': 0.0, 'ou': 0.0, 'bc': 0.0}
-    spike_acc = 0.0
-    grad_acc  = 0.0
-    n_batches = 0
-    t0        = time.time()
+    totals     = {'total': 0.0, 'data': 0.0, 'phys': 0.0, 'ou': 0.0, 'bc': 0.0}
+    spike_acc  = 0.0
+    grad_acc   = 0.0
+    n_batches  = 0
+    inf_streak = 0          # batch consecutivi con grad_norm=inf
+    t0         = time.time()
 
     for batch_idx, (x, y, mask) in enumerate(loader):
         x    = x.to(device)
@@ -304,12 +365,11 @@ def train_epoch(model, loader, optimizer, device, epoch, lam,
         optimizer.zero_grad()
         loss, comps, sr = pinn_loss(model, x, y, mask, *lam)
 
-        # ── Guardia NaN loss (evita di corrompere i pesi) ─────────
+        # ── Guardia NaN loss ──────────────────────────────────────
         if not loss.isfinite():
-            print(f"  [NaN-Guard E{epoch} B{batch_idx+1:04d}]"
-                  f" loss={loss.item()}  data={comps['data']:.3f}"
-                  f"  phys={comps['phys']:.3f} — skip backward")
-            # Step scheduler comunque per mantere l'allineamento
+            tag = f"  [NaN-Guard E{epoch:02d} B{batch_idx+1:04d}]"
+            print(f"{tag} loss={loss.item()} — skip backward")
+            _log_batch_diagnostics(tag, comps, float('nan'), x, None, model)
             if step_per_batch and scheduler is not None:
                 scheduler.step()
             spike_acc += sr
@@ -318,19 +378,58 @@ def train_epoch(model, loader, optimizer, device, epoch, lam,
 
         loss.backward()
 
-        # Gradient clipping
-        gn = nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+        # ── Norme per-layer PRIMA del clip ────────────────────────
+        # clip_grad_norm_(total=inf) azzera tutti i grad (coeff = max_norm/inf = 0).
+        # Le norme devono essere raccolte ora, altrimenti sono irrecuperabili.
+        # In smoke mode (diag=True) le raccogliamo sempre; in normal mode solo
+        # se troviamo gradienti già inf/nan (check bitwise O(n_params), cheapo).
+        has_inf_grad = any(
+            p.grad is not None and not p.grad.isfinite().all()
+            for p in model.parameters()
+        )
+        pre_norms = None
+        if has_inf_grad or diag:
+            pre_norms = {
+                name: p.grad.detach().norm().item()
+                for name, p in model.named_parameters()
+                if p.grad is not None
+            }
 
-        # ── Guardia NaN gradiente (blocca inf/NaN prima dell'optimizer) ─
-        if not math.isfinite(float(gn)):
-            print(f"  [NaN-Grad E{epoch} B{batch_idx+1:04d}]"
-                  f" grad_norm={float(gn):.2e} — zero grad, skip step")
+        gn     = nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+        gn_val = float(gn)
+
+        # ── Guardia NaN gradiente ─────────────────────────────────
+        if not math.isfinite(gn_val):
+            inf_streak += 1
+            tag = f"  [NaN-Grad E{epoch:02d} B{batch_idx+1:04d}]"
+            print(f"{tag} grad_norm=inf  streak={inf_streak}/{max_inf_streak}")
+            _log_batch_diagnostics(tag, comps, gn_val, x, pre_norms, model)
             optimizer.zero_grad()
             if step_per_batch and scheduler is not None:
                 scheduler.step()
             spike_acc += sr
             n_batches  += 1
+            # ── Early stop su esplosione persistente ──────────────
+            if inf_streak >= max_inf_streak:
+                print(f"\n  [EARLY-STOP] {max_inf_streak} batch consecutivi con"
+                      f" grad=inf — training abortito (epoca {epoch},"
+                      f" LR={optimizer.param_groups[0]['lr']:.3e})\n")
+                nb   = max(n_batches, 1)
+                avgs = {k: v / nb for k, v in totals.items()}
+                avgs['spike_rate'] = spike_acc / nb
+                avgs['grad_norm']  = float('inf')
+                avgs['aborted']    = True
+                return avgs
             continue
+
+        # Batch OK: azzera streak
+        inf_streak = 0
+
+        # Diagnostica su grad alto ma finito (solo se diag=True)
+        if diag and gn_val > GRAD_WARN_THRESHOLD:
+            tag = f"  [GRAD-WARN E{epoch:02d} B{batch_idx+1:04d}]"
+            print(f"{tag} grad_norm={gn_val:.3e} (>{GRAD_WARN_THRESHOLD})")
+            _log_batch_diagnostics(tag, comps, gn_val, x, pre_norms, model)
 
         optimizer.step()
 
@@ -341,10 +440,10 @@ def train_epoch(model, loader, optimizer, device, epoch, lam,
         for k in totals:
             totals[k] += comps[k]
         spike_acc += sr
-        grad_acc  += float(gn)
+        grad_acc  += gn_val
         n_batches  += 1
 
-        if (batch_idx + 1) % LOG_EVERY == 0:
+        if (batch_idx + 1) % log_every == 0:
             elapsed = time.time() - t0
             avg     = totals['total'] / n_batches
             print(f"  [E{epoch:02d} | B{batch_idx+1:04d}/{len(loader):04d}]"
@@ -353,12 +452,14 @@ def train_epoch(model, loader, optimizer, device, epoch, lam,
                   f"  phys={totals['phys']/n_batches:.5f}"
                   f"  ou={totals['ou']/n_batches:.6f}"
                   f"  spike={spike_acc/n_batches*100:.1f}%"
+                  f"  gn={gn_val:.3e}"
                   f"  ({elapsed:.1f}s)")
 
-    nb = max(n_batches, 1)
+    nb   = max(n_batches, 1)
     avgs = {k: v / nb for k, v in totals.items()}
     avgs['spike_rate'] = spike_acc / nb
     avgs['grad_norm']  = grad_acc  / nb
+    avgs['aborted']    = False
     return avgs
 
 
@@ -474,12 +575,33 @@ def main():
     # DataLoader
     parser.add_argument('--num_workers', type=int,   default=-1,
                         help='Worker DataLoader (-1=auto, 0=disabilita, Colab usa 0)')
+    # Diagnostica e robustezza
+    parser.add_argument('--smoke',          action='store_true',
+                        help='Smoke diagnostico: n_train≤100, 1 epoca, log ogni batch, '
+                             'norme per-layer, max_inf_streak=5')
+    parser.add_argument('--max_inf_streak', type=int,   default=20,
+                        help='Batch consecutivi con grad=inf prima di abortire (default=20)')
+    parser.add_argument('--log_every',      type=int,   default=LOG_EVERY,
+                        help='Frequenza log batch (default=50; smoke forza 1)')
     # Checkpoint
     parser.add_argument('--resume',      type=str,   default=None,
                         help='Checkpoint .pt da cui riprendere')
     parser.add_argument('--tag',         type=str,   default='run',
                         help='Etichetta cartella output (checkpoints/<tag>/)')
     args = parser.parse_args()
+
+    # ── Smoke mode: sovrascrive parametri per run diagnostico rapido ──────────
+    # Obiettivo: 1 epoca su ~100 traiettorie con log ogni singolo batch e
+    # norme per-layer su ogni anomalia. Dura ~1-2 min su CPU, ~20s su GPU.
+    if args.smoke:
+        args.n_train        = min(args.n_train, 100)
+        args.n_val          = min(args.n_val,   30)
+        args.epochs         = 1
+        args.log_every      = 1
+        args.max_inf_streak = 5
+        print("[SMOKE] Modalità diagnostica:"
+              f" n_train≤{args.n_train}, n_val≤{args.n_val},"
+              " 1 epoca, LOG_EVERY=1, max_inf_streak=5, norme per-layer attive")
 
     set_seed(SEED)
     device   = DEVICE
@@ -624,7 +746,18 @@ def main():
                 model, train_loader, optimizer, device, epoch, lam,
                 scheduler=scheduler if sched_per_batch else None,
                 step_per_batch=sched_per_batch,
+                log_every=args.log_every,
+                max_inf_streak=args.max_inf_streak,
+                diag=args.smoke,
             )
+
+            if train_m.get('aborted'):
+                print(f"[Training] Abortito per esplosione del gradiente."
+                      f" Epoch {epoch}, LR={optimizer.param_groups[0]['lr']:.3e}")
+                crash_path = os.path.join(save_dir, 'crash_model.pt')
+                save_checkpoint(model, optimizer, epoch, float('inf'), crash_path)
+                print(f"  Crash dump salvato: {crash_path}")
+                break
 
             val_m = val_epoch(model, val_loader, device, lam)
 

@@ -410,8 +410,10 @@ class CF_FSNN_Net(nn.Module):
     def acc_iidm_accel(s, v, dv, a_l, params, coolness=0.99):
         """Accelerazione ACC-IDM con base IIDM (versione torch per PINN loss).
 
-        Sostituisce idm_accel() nella loss — usa IIDM (risolve bias v0)
-        e CAH (anticipa frenata leader, evita panic braking su cut-in).
+        Usa IIDM (ch12) per eliminare il bias v0 di IDM plain:
+          z<1, v<=v0: afree*(1-z²);  z>=1, v<=v0: a*(1-z²) [vale 0 in z=1].
+          v>v0: afree (z<1) o afree+a*(1-z²) (z>=1).
+        Usa CAH (ch12 Eq.12.35): a_cah = min(a_l,a) - relu(Δv)²/(2s).
 
         s, v, dv:  (batch,) — gap [m], vel. ego [m/s], Δv = v − v_l [m/s]
         a_l:       (batch,) — acc. leader stimata (filtro OU) [m/s²]
@@ -430,18 +432,23 @@ class CF_FSNN_Net(nn.Module):
         s_star  = s0 + torch.relu(v * T + v * dv / (2.0 * sqrt_ab))
         s_safe  = s.clamp(min=0.5)
 
-        # ── IIDM base (regime free-flow separato dal car-following) ──
-        v_free = a * (1.0 - (v / v0).clamp(max=10.0) ** 4)
-        z      = (s_star / s_safe).clamp(max=20.0)
-        # z < 1 → free-flow dominante;  z >= 1 → following dominante
-        a_iidm_ff = v_free * (1.0 - z ** 2)
-        a_iidm_cf = v_free - a * (z ** 2 - 1.0) / (1.0 + z).clamp(min=1e-6) ** 2
-        a_iidm    = torch.where(z < 1.0, a_iidm_ff, a_iidm_cf)
+        # ── IIDM base (ch12: regime free-flow separato dal car-following) ──
+        # afree = a*(1-(v/v0)^4): positivo se v<=v0, negativo se v>v0
+        v_free   = a * (1.0 - (v / v0).clamp(max=10.0) ** 4)
+        z        = (s_star / s_safe).clamp(max=20.0)
+        below_v0 = v <= v0
+        a_z      = a * (1.0 - z.pow(2))           # termine interazione puro
 
-        # ── CAH ─────────────────────────────────────────────────────
-        a_l_bar = torch.minimum(a_l, a)          # ā_l = min(a_l, a)
-        denom   = v * a_l_bar / s_safe + dv ** 2 / (2.0 * s_safe + 1e-6)
-        a_cah   = v ** 2 * a_l_bar / (denom + 1e-6)
+        # z < 1 (free-flow): afree*(1-z²) se v<=v0, altrimenti solo afree
+        a_ff = torch.where(below_v0, v_free * (1.0 - z.pow(2)), v_free)
+        # z >= 1 (car-following): a*(1-z²) se v<=v0 [vale 0 in z=1], afree+a*(1-z²) se v>v0
+        a_cf = torch.where(below_v0, a_z, v_free + a_z)
+        a_iidm = torch.where(z < 1.0, a_ff, a_cf)
+
+        # ── CAH (ch12 Eq.12.35) ──────────────────────────────────────
+        # a_cah = ā_l − relu(Δv)²/(2s),  ā_l = min(a_l, a)
+        a_l_bar = torch.minimum(a_l, a)
+        a_cah   = a_l_bar - torch.relu(dv).pow(2) / (2.0 * s_safe + 1e-6)
         a_cah   = a_cah.clamp(min=-9.0)
         a_cah   = torch.minimum(a_cah, a)
 
