@@ -181,13 +181,17 @@ def pinn_loss(model, x_seq, y_seq, mask_seq,
     # a_l_raw[t] = (v_l[t] - v_l[t-1]) / DT  (prima differenza)
     vl_diff = torch.diff(vl_obs, dim=1) / DT          # (batch, T-1)
     vl_diff = torch.cat([vl_diff[:, :1], vl_diff], dim=1)  # (batch, T)
-    # Filtro OU (EMA) con alpha = exp(-DT / ACC_AL_TAU)
+    # Filtro OU (IIR): y[t] = alpha*y[t-1] + beta*x[t],  y[0] = x[0]
+    # Soluzione chiusa (nessun loop Python → un solo pass su GPU):
+    #   y[t] = alpha^t * ( alpha*x[0] + beta * cumsum(x[k]/alpha^k)[t] )
     alpha_al = math.exp(-DT / ACC_AL_TAU)
-    a_l_filt = torch.zeros_like(vl_diff)
-    a_l_filt[:, 0] = vl_diff[:, 0]
-    for t in range(1, T_len):
-        a_l_filt[:, t] = (alpha_al * a_l_filt[:, t - 1]
-                          + (1.0 - alpha_al) * vl_diff[:, t])
+    beta_al  = 1.0 - alpha_al
+    t_idx    = torch.arange(T_len, device=vl_diff.device, dtype=vl_diff.dtype)
+    inv_pow  = alpha_al ** (-t_idx)               # (T,) = [1, 1/α, 1/α², …]
+    fwd_pow  = alpha_al **   t_idx                # (T,) = [1, α,   α², …]
+    x_sc     = vl_diff * inv_pow                  # (batch, T)
+    cs       = torch.cumsum(x_sc, dim=1)          # (batch, T)
+    a_l_filt = fwd_pow * (alpha_al * vl_diff[:, :1] + beta_al * cs)  # (batch, T)
 
     # ── Accelerazione predetta da ACC-IDM con parametri SNN ────────
     a_pred = CF_FSNN_Net.acc_iidm_accel(
@@ -436,6 +440,9 @@ def main():
                         help='Cartella con train.pkl / val.pkl (salta generazione)')
     parser.add_argument('--n_train',     type=int,   default=N_SCENARIOS_TRAIN)
     parser.add_argument('--n_val',       type=int,   default=N_SCENARIOS_VAL)
+    # DataLoader
+    parser.add_argument('--num_workers', type=int,   default=-1,
+                        help='Worker DataLoader (-1=auto, 0=disabilita, Colab usa 0)')
     # Checkpoint
     parser.add_argument('--resume',      type=str,   default=None,
                         help='Checkpoint .pt da cui riprendere')
@@ -445,6 +452,10 @@ def main():
 
     set_seed(SEED)
     device   = DEVICE
+    # cudnn.benchmark: ottimizza i kernel CUDA per le dimensioni fisse dei batch
+    # (utile su GPU come T4/V100 con modelli piccoli e batch costanti)
+    if device.type == 'cuda':
+        torch.backends.cudnn.benchmark = True
     # Percorso assoluto: checkpoints/<tag> accanto a train.py
     # Funziona anche se Azure lancia il job con CWD diverso
     save_dir = os.path.join(_HERE, 'checkpoints', args.tag)
@@ -484,9 +495,20 @@ def main():
     train_ds = CFDataset(train_data, seq_len=seq_len, stride=stride_trn)
     val_ds   = CFDataset(val_data,   seq_len=seq_len, stride=stride_val)
 
-    # num_workers: 0 su Windows (CUDA context non fork-safe su nt),
-    # min(4, cpu_count) su Linux/Azure — CFDataset e' completamente fork-safe
-    _nw = 0 if os.name == 'nt' else min(4, os.cpu_count() or 1)
+    # num_workers: auto-rilevamento sicuro per ogni piattaforma.
+    # Regola: 0 se Windows (fork CUDA non sicuro), 0 se Colab (CUDA già
+    # inizializzato da model.to(device) prima del fork), altrimenti min(4, cpu).
+    if args.num_workers >= 0:
+        _nw = args.num_workers          # override esplicito da CLI
+    elif os.name == 'nt':
+        _nw = 0                          # Windows — CUDA non fork-safe
+    else:
+        # Colab detection: se google.colab è importabile siamo su Colab
+        try:
+            import google.colab          # noqa: F401
+            _nw = 0                      # Colab — CUDA inizializzato prima del fork
+        except ImportError:
+            _nw = min(4, os.cpu_count() or 1)  # Azure/Linux — fork-safe
     _pw = _nw > 0   # persistent_workers riduce overhead di spawn su Azure
 
     train_loader = DataLoader(
@@ -499,7 +521,8 @@ def main():
         num_workers=_nw, pin_memory=(device.type == 'cuda'),
         persistent_workers=_pw,
     )
-    print(f"[Dataset] Finestre train: {len(train_ds)}  |  val: {len(val_ds)}")
+    print(f"[Dataset] Finestre train: {len(train_ds)}  |  val: {len(val_ds)}"
+          f"  |  num_workers={_nw}")
 
     # ── Modello ───────────────────────────────────────────────────
     model    = CF_FSNN_Net().to(device)
