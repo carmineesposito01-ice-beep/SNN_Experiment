@@ -204,9 +204,12 @@ def pinn_loss(model, x_seq, y_seq, mask_seq,
     ).reshape(batch, T_len)
 
     # ── L_data: SRMSE(a_pred, a_gt) sui passi con V2X ok ─────────
+    # eps DENTRO sqrt: evita inf*0=NaN nel backward quando sq_err→0
+    # (d(sqrt(x))/dx = inf per x→0 e (a_pred-v_dot_gt)→0 insieme → NaN)
     eps    = 1e-8
     sq_err = mask_seq * (a_pred - v_dot_gt) ** 2
-    L_data = torch.sqrt(sq_err.sum() / (v_dot_gt.pow(2).sum() + eps))
+    denom  = v_dot_gt.pow(2).sum() + eps
+    L_data = torch.sqrt(sq_err.sum() / denom + eps)
 
     # ── L_phys: residuo ACC-IDM su TUTTI i passi ──────────────────
     L_phys = torch.mean((a_pred - v_dot_gt) ** 2)
@@ -296,10 +299,34 @@ def train_epoch(model, loader, optimizer, device, epoch, lam,
 
         optimizer.zero_grad()
         loss, comps, sr = pinn_loss(model, x, y, mask, *lam)
+
+        # ── Guardia NaN loss (evita di corrompere i pesi) ─────────
+        if not loss.isfinite():
+            print(f"  [NaN-Guard E{epoch} B{batch_idx+1:04d}]"
+                  f" loss={loss.item()}  data={comps['data']:.3f}"
+                  f"  phys={comps['phys']:.3f} — skip backward")
+            # Step scheduler comunque per mantere l'allineamento
+            if step_per_batch and scheduler is not None:
+                scheduler.step()
+            spike_acc += sr
+            n_batches  += 1
+            continue
+
         loss.backward()
 
         # Gradient clipping
         gn = nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+
+        # ── Guardia NaN gradiente (blocca inf/NaN prima dell'optimizer) ─
+        if not math.isfinite(float(gn)):
+            print(f"  [NaN-Grad E{epoch} B{batch_idx+1:04d}]"
+                  f" grad_norm={float(gn):.2e} — zero grad, skip step")
+            optimizer.zero_grad()
+            if step_per_batch and scheduler is not None:
+                scheduler.step()
+            spike_acc += sr
+            n_batches  += 1
+            continue
 
         optimizer.step()
 
