@@ -203,13 +203,17 @@ def pinn_loss(model, x_seq, y_seq, mask_seq,
         coolness=ACC_COOLNESS,
     ).reshape(batch, T_len)
 
-    # ── L_data: SRMSE(a_pred, a_gt) sui passi con V2X ok ─────────
-    # eps DENTRO sqrt: evita inf*0=NaN nel backward quando sq_err→0
-    # (d(sqrt(x))/dx = inf per x→0 e (a_pred-v_dot_gt)→0 insieme → NaN)
-    eps    = 1e-8
-    sq_err = mask_seq * (a_pred - v_dot_gt) ** 2
-    denom  = v_dot_gt.pow(2).sum() + eps
-    L_data = torch.sqrt(sq_err.sum() / denom + eps)
+    # ── L_data: masked RMSE(a_pred, a_gt) sui passi con V2X ok ──────
+    # NOTA: la precedente formula SRMSE usava denom = v_dot_gt.pow(2).sum() + eps.
+    # Quando un intero batch è constant-speed (v_dot_gt ≈ 0 ovunque),
+    # denom ≈ eps = 1e-8 → grad esplode a ~1e9+ → pesi corrotti → inf permanente.
+    # Fix: normalizzare per numero di campioni V2X validi (sempre ≥ 1), non per
+    # energia GT. Gradiente massimo = |a_pred - v_dot_gt| / (N_valid * L_data)
+    # ≤ 9 / (1 * 1e-4) = 9e4 — safe per float32 e clip a 1.0.
+    eps     = 1e-8
+    sq_err  = mask_seq * (a_pred - v_dot_gt) ** 2
+    N_valid = mask_seq.sum().clamp(min=1.0)
+    L_data  = torch.sqrt(sq_err.sum() / N_valid + eps)
 
     # ── L_phys: residuo ACC-IDM su TUTTI i passi ──────────────────
     L_phys = torch.mean((a_pred - v_dot_gt) ** 2)
