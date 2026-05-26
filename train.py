@@ -569,7 +569,10 @@ def main():
                         help='Ottimizzatore: adam|adamw|lion')
     # Dataset
     parser.add_argument('--load_data',   type=str,   default=None,
-                        help='Cartella con train.pkl / val.pkl (salta generazione)')
+                        help='Cartella con train.pkl / val.pkl (legacy, usa --data_cache)')
+    parser.add_argument('--data_cache',  type=str,   default=None,
+                        help='File .pt cache dataset: carica se esiste, genera e salva se no. '
+                             'Es: --data_cache data/cache_1500.pt')
     parser.add_argument('--n_train',     type=int,   default=N_SCENARIOS_TRAIN)
     parser.add_argument('--n_val',       type=int,   default=N_SCENARIOS_VAL)
     # DataLoader
@@ -625,21 +628,40 @@ def main():
         json.dump(config_snap, f, indent=2)
 
     # ── Dataset ───────────────────────────────────────────────────
-    if args.load_data is not None:
-        print(f"[Dataset] Carico da {args.load_data} ...")
+    from data.generator import generate_dataset, print_dataset_stats
+
+    if args.data_cache is not None and os.path.isfile(args.data_cache):
+        # ── Carica dalla cache .pt ─────────────────────────────────
+        print(f"[Dataset] Caricamento da cache: {args.data_cache}")
+        cache      = torch.load(args.data_cache, weights_only=False)
+        train_data = cache['train']
+        val_data   = cache['val']
+        print(f"  Train: {len(train_data)} traiettorie  |  "
+              f"Val: {len(val_data)} traiettorie  (seed={cache.get('seed', '?')})")
+
+    elif args.load_data is not None:
+        # ── Legacy: carica da cartella pkl ────────────────────────
+        print(f"[Dataset] Caricamento legacy da {args.load_data} ...")
         with open(os.path.join(args.load_data, 'train.pkl'), 'rb') as f:
             train_data = pickle.load(f)
         with open(os.path.join(args.load_data, 'val.pkl'), 'rb') as f:
             val_data = pickle.load(f)
-        print(f"  Train: {len(train_data)} traiettorie")
-        print(f"  Val:   {len(val_data)} traiettorie")
+        print(f"  Train: {len(train_data)} traiettorie  |  Val: {len(val_data)} traiettorie")
+
     else:
-        from data.generator import generate_dataset, print_dataset_stats
+        # ── Genera ex novo ────────────────────────────────────────
         print("[Dataset] Generazione sintetica ACC-IDM ...")
         train_data = generate_dataset(args.n_train, base_seed=SEED)
         val_data   = generate_dataset(args.n_val,   base_seed=SEED + 1)
         print_dataset_stats(train_data, 'train')
         print_dataset_stats(val_data,   'val')
+
+        # Salva cache se richiesto
+        if args.data_cache is not None:
+            os.makedirs(os.path.dirname(os.path.abspath(args.data_cache)), exist_ok=True)
+            torch.save({'train': train_data, 'val': val_data, 'seed': SEED}, args.data_cache)
+            print(f"[Dataset] Cache salvata: {args.data_cache}"
+                  f"  ({os.path.getsize(args.data_cache) / 1e6:.1f} MB)")
 
     seq_len    = args.seq_len
     stride_trn = seq_len // 2
