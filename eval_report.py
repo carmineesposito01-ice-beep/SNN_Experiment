@@ -18,7 +18,8 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+_HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, _HERE)
 
 from config import (
     SEED, set_seed,
@@ -41,7 +42,7 @@ def main():
         description='CF_FSNN Evaluation Report — test set + grafici G5/G7'
     )
     parser.add_argument('--checkpoint', type=str,
-                        default='checkpoints/run/best_model.pt',
+                        default=os.path.join(_HERE, 'checkpoints', 'run', 'best_model.pt'),
                         help='Percorso al best_model.pt da valutare')
     parser.add_argument('--n_test', type=int, default=200,
                         help='Numero di traiettorie di test da generare')
@@ -67,7 +68,7 @@ def main():
 
     device = torch.device('cpu')
     model  = CF_FSNN_Net().to(device)
-    ck     = torch.load(args.checkpoint, map_location=device)
+    ck     = torch.load(args.checkpoint, map_location=device, weights_only=False)
     model.load_state_dict(ck['model_state'])
     model.eval()
     print(f"[Modello] Caricato da epoca {ck['epoch']}"

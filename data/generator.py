@@ -405,7 +405,11 @@ def normalize(traj):
     """
     s   = traj[:, 0] / NORM_S_MAX
     v   = traj[:, 1] / NORM_V_MAX
-    dv  = (traj[:, 2] + NORM_DV_MAX) / (2.0 * NORM_DV_MAX)
+    # Clamp prima della normalizzazione: evita valori fuori [0,1] in
+    # scenari estremi (cut-in + rumore OU) che causerebbero dv_obs
+    # fuori range nella pinn_loss e valori fisici errati nella CAH.
+    dv_phys = np.clip(traj[:, 2], -NORM_DV_MAX, NORM_DV_MAX)
+    dv  = (dv_phys + NORM_DV_MAX) / (2.0 * NORM_DV_MAX)
     v_l = traj[:, 3] / NORM_VL_MAX
 
     x_norm = np.stack([s, v, dv, v_l], axis=1).astype(np.float32)

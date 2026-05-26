@@ -28,6 +28,10 @@ import pickle
 import sys
 import time
 
+# Percorso assoluto della directory del file — usato per save_dir
+# Evita il problema del CWD diverso su Azure (SLURM, container, ecc.)
+_HERE = os.path.dirname(os.path.abspath(__file__))
+
 import numpy as np
 import torch
 import torch.nn as nn
@@ -351,7 +355,10 @@ def val_epoch(model, loader, device, lam):
 # ===========================================================
 
 def save_checkpoint(model, optimizer, epoch, val_loss, path):
-    os.makedirs(os.path.dirname(path), exist_ok=True)
+    # Crea la directory solo se il path ha una componente directory
+    dir_part = os.path.dirname(path)
+    if dir_part:
+        os.makedirs(dir_part, exist_ok=True)
     torch.save({
         'epoch'      : epoch,
         'val_loss'   : val_loss,
@@ -361,7 +368,8 @@ def save_checkpoint(model, optimizer, epoch, val_loss, path):
 
 
 def load_checkpoint(model, optimizer, path, device):
-    ckpt = torch.load(path, map_location=device)
+    # weights_only=False: il checkpoint contiene anche optimizer state (dict PyTorch)
+    ckpt = torch.load(path, map_location=device, weights_only=False)
     model.load_state_dict(ckpt['model_state'])
     optimizer.load_state_dict(ckpt['optim_state'])
     return ckpt['epoch'], ckpt['val_loss']
@@ -436,8 +444,10 @@ def main():
     args = parser.parse_args()
 
     set_seed(SEED)
-    device  = DEVICE
-    save_dir = os.path.join('checkpoints', args.tag)
+    device   = DEVICE
+    # Percorso assoluto: checkpoints/<tag> accanto a train.py
+    # Funziona anche se Azure lancia il job con CWD diverso
+    save_dir = os.path.join(_HERE, 'checkpoints', args.tag)
     os.makedirs(save_dir, exist_ok=True)
 
     print(f"\n[CF_FSNN] Device: {device}  |  Tag: {args.tag}  |  SEED: {SEED}")
@@ -474,13 +484,20 @@ def main():
     train_ds = CFDataset(train_data, seq_len=seq_len, stride=stride_trn)
     val_ds   = CFDataset(val_data,   seq_len=seq_len, stride=stride_val)
 
+    # num_workers: 0 su Windows (CUDA context non fork-safe su nt),
+    # min(4, cpu_count) su Linux/Azure — CFDataset e' completamente fork-safe
+    _nw = 0 if os.name == 'nt' else min(4, os.cpu_count() or 1)
+    _pw = _nw > 0   # persistent_workers riduce overhead di spawn su Azure
+
     train_loader = DataLoader(
         train_ds, batch_size=args.batch_size, shuffle=True,
-        num_workers=0, pin_memory=(device.type == 'cuda'),
+        num_workers=_nw, pin_memory=(device.type == 'cuda'),
+        persistent_workers=_pw,
     )
     val_loader = DataLoader(
         val_ds, batch_size=args.batch_size, shuffle=False,
-        num_workers=0, pin_memory=(device.type == 'cuda'),
+        num_workers=_nw, pin_memory=(device.type == 'cuda'),
+        persistent_workers=_pw,
     )
     print(f"[Dataset] Finestre train: {len(train_ds)}  |  val: {len(val_ds)}")
 
@@ -544,78 +561,83 @@ def main():
     print(f"  lam_data={args.lambda_data}  lam_phys={args.lambda_phys}"
           f"  lam_ou={args.lambda_ou}  lam_bc={args.lambda_bc}\n")
 
-    for epoch in range(start_epoch, args.epochs + 1):
-        t_ep = time.time()
-        print(f"-- Epoca {epoch}/{args.epochs} " + "-" * 40)
+    try:
+        for epoch in range(start_epoch, args.epochs + 1):
+            t_ep = time.time()
+            print(f"-- Epoca {epoch}/{args.epochs} " + "-" * 40)
 
-        train_m = train_epoch(
-            model, train_loader, optimizer, device, epoch, lam,
-            scheduler=scheduler if sched_per_batch else None,
-            step_per_batch=sched_per_batch,
-        )
+            train_m = train_epoch(
+                model, train_loader, optimizer, device, epoch, lam,
+                scheduler=scheduler if sched_per_batch else None,
+                step_per_batch=sched_per_batch,
+            )
 
-        val_m = val_epoch(model, val_loader, device, lam)
+            val_m = val_epoch(model, val_loader, device, lam)
 
-        # Step scheduler per-epoch (plateau e cosine)
-        if not sched_per_batch:
-            if args.scheduler == 'plateau':
-                scheduler.step(val_m['total'])
-            else:
-                scheduler.step()
+            # Step scheduler per-epoch (plateau e cosine)
+            if not sched_per_batch:
+                if args.scheduler == 'plateau':
+                    scheduler.step(val_m['total'])
+                else:
+                    scheduler.step()
 
-        # Leggi lr corrente
-        current_lr = optimizer.param_groups[0]['lr']
+            # Leggi lr corrente
+            current_lr = optimizer.param_groups[0]['lr']
 
-        ep_time = time.time() - t_ep
-        print(f"  > train={train_m['total']:.4f}"
-              f"  val={val_m['total']:.4f}"
-              f"  (data={val_m['data']:.4f}"
-              f"  phys={val_m['phys']:.5f}"
-              f"  ou={val_m['ou']:.6f})"
-              f"  spike={val_m['spike_rate']*100:.1f}%"
-              f"  lr={current_lr:.2e}"
-              f"  [{ep_time:.1f}s]\n")
+            ep_time = time.time() - t_ep
+            print(f"  > train={train_m['total']:.4f}"
+                  f"  val={val_m['total']:.4f}"
+                  f"  (data={val_m['data']:.4f}"
+                  f"  phys={val_m['phys']:.5f}"
+                  f"  ou={val_m['ou']:.6f})"
+                  f"  spike={val_m['spike_rate']*100:.1f}%"
+                  f"  lr={current_lr:.2e}"
+                  f"  [{ep_time:.1f}s]\n")
 
-        # CSV logging
-        logger.log({
-            'epoch'       : epoch,
-            'train_total' : train_m['total'],
-            'train_data'  : train_m['data'],
-            'train_phys'  : train_m['phys'],
-            'train_ou'    : train_m['ou'],
-            'train_bc'    : train_m['bc'],
-            'val_total'   : val_m['total'],
-            'val_data'    : val_m['data'],
-            'val_phys'    : val_m['phys'],
-            'val_ou'      : val_m['ou'],
-            'val_bc'      : val_m['bc'],
-            'lr'          : current_lr,
-            'grad_norm'   : train_m['grad_norm'],
-            'spike_rate'  : val_m['spike_rate'],
-            'time_s'      : ep_time,
-        })
+            # CSV logging
+            logger.log({
+                'epoch'       : epoch,
+                'train_total' : train_m['total'],
+                'train_data'  : train_m['data'],
+                'train_phys'  : train_m['phys'],
+                'train_ou'    : train_m['ou'],
+                'train_bc'    : train_m['bc'],
+                'val_total'   : val_m['total'],
+                'val_data'    : val_m['data'],
+                'val_phys'    : val_m['phys'],
+                'val_ou'      : val_m['ou'],
+                'val_bc'      : val_m['bc'],
+                'lr'          : current_lr,
+                'grad_norm'   : train_m['grad_norm'],
+                'spike_rate'  : val_m['spike_rate'],
+                'time_s'      : ep_time,
+            })
 
-        # Checkpoint best model
-        if val_m['total'] < best_val:
-            best_val = val_m['total']
-            ck_path  = os.path.join(save_dir, 'best_model.pt')
-            save_checkpoint(model, optimizer, epoch, best_val, ck_path)
-            print(f"  ** Nuovo best val_loss={best_val:.5f}  -> {ck_path}\n")
+            # Checkpoint best model
+            if val_m['total'] < best_val:
+                best_val = val_m['total']
+                ck_path  = os.path.join(save_dir, 'best_model.pt')
+                save_checkpoint(model, optimizer, epoch, best_val, ck_path)
+                print(f"  ** Nuovo best val_loss={best_val:.5f}  -> {ck_path}\n")
 
-        # Checkpoint finale (sovrascrive ogni epoca)
-        save_checkpoint(model, optimizer, epoch, val_m['total'],
-                        os.path.join(save_dir, 'last_model.pt'))
-
-    logger.close()
+            # Checkpoint finale (sovrascrive ogni epoca)
+            save_checkpoint(model, optimizer, epoch, val_m['total'],
+                            os.path.join(save_dir, 'last_model.pt'))
+    finally:
+        # Garantisce chiusura del CSV anche su Ctrl+C, OOM, CUDA error
+        logger.close()
 
     # ── Raccolta dati G5/G7: un pass finale sul val set ───────────
     # Eseguito sul best_model per dati coerenti con il checkpoint.
     T_pred_arr    = None
     T_true_arr    = None
     param_samples = None
+    # ── Raccolta dati G5/G7: un pass finale sul val set ───────────
+    # Solo FileNotFoundError e KeyError sono recuperabili (ckpt mancante/corrotto).
+    # Tutto il resto (OOM, CUDA, shape mismatch) viene rilasciato per propagare.
+    best_ck_path = os.path.join(save_dir, 'best_model.pt')
     try:
-        best_ck_path = os.path.join(save_dir, 'best_model.pt')
-        best_ck      = torch.load(best_ck_path, map_location=device)
+        best_ck = torch.load(best_ck_path, map_location=device, weights_only=False)
         model.load_state_dict(best_ck['model_state'])
         model.eval()
 
@@ -643,19 +665,21 @@ def main():
             'b':  all_p[:, :, 4].ravel(),
         }
         print(f"[Diagnostics] Dati G5/G7 raccolti: {len(T_pred_arr)} campioni.")
-    except Exception as e:
-        print(f"[Diagnostics] Raccolta G5/G7 saltata: {e}")
+    except (FileNotFoundError, KeyError) as e:
+        print(f"[Diagnostics] Raccolta G5/G7 saltata (checkpoint non disponibile): {e}")
 
     # ── Diagnostics (se matplotlib disponibile) ───────────────────
+    # Cattura solo ImportError (matplotlib assente); altri errori propagano.
     try:
         from utils.plot_diagnostics import load_training_log, plot_all
+    except ImportError as e:
+        print(f"[Diagnostics] matplotlib non disponibile, grafici saltati: {e}")
+    else:
         log_data = load_training_log(log_path)
         plot_dir = os.path.join(save_dir, 'plots')
         plot_all(log_data, plot_dir,
                  T_pred=T_pred_arr, T_true=T_true_arr,
                  param_samples=param_samples)
-    except Exception as e:
-        print(f"[Diagnostics] Saltati: {e}")
 
     print(f"\n[Fine training] Best val_loss = {best_val:.5f}")
     print(f"  Checkpoint: {os.path.join(save_dir, 'best_model.pt')}")

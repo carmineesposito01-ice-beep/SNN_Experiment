@@ -6,8 +6,8 @@
 torch>=2.0.0
 numpy>=1.24.0
 
-# Opzionale: visualizzazione training
-# matplotlib>=3.7.0
+# Visualizzazione training (grafici G1-G7) — richiesto su Azure
+matplotlib>=3.7.0
 
 # Opzionale: snnTorch (per confronto con implementazione canonica SNN)
 # snntorch>=0.9.0
