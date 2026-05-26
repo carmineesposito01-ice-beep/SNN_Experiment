@@ -608,12 +608,52 @@ def main():
 
     logger.close()
 
+    # ── Raccolta dati G5/G7: un pass finale sul val set ───────────
+    # Eseguito sul best_model per dati coerenti con il checkpoint.
+    T_pred_arr    = None
+    T_true_arr    = None
+    param_samples = None
+    try:
+        best_ck_path = os.path.join(save_dir, 'best_model.pt')
+        best_ck      = torch.load(best_ck_path, map_location=device)
+        model.load_state_dict(best_ck['model_state'])
+        model.eval()
+
+        T_pred_list = []
+        T_true_list = []
+        param_list  = []
+
+        with torch.no_grad():
+            for x_v, y_v, mask_v in val_loader:
+                x_v = x_v.to(device)
+                y_v = y_v.to(device)
+                params_seq, _ = model.forward_sequence_with_stats(x_v)
+                T_pred_list.append(params_seq[:, :, 1].cpu().numpy())
+                T_true_list.append(y_v[:, :, 1].cpu().numpy())
+                param_list.append(params_seq.cpu().numpy())
+
+        T_pred_arr = np.concatenate(T_pred_list).ravel()
+        T_true_arr = np.concatenate(T_true_list).ravel()
+        all_p      = np.concatenate(param_list, axis=0)  # (N_win, T, 5)
+        param_samples = {
+            'v0': all_p[:, :, 0].ravel(),
+            'T':  all_p[:, :, 1].ravel(),
+            's0': all_p[:, :, 2].ravel(),
+            'a':  all_p[:, :, 3].ravel(),
+            'b':  all_p[:, :, 4].ravel(),
+        }
+        print(f"[Diagnostics] Dati G5/G7 raccolti: {len(T_pred_arr)} campioni.")
+    except Exception as e:
+        print(f"[Diagnostics] Raccolta G5/G7 saltata: {e}")
+
     # ── Diagnostics (se matplotlib disponibile) ───────────────────
     try:
         from utils.plot_diagnostics import load_training_log, plot_all
         log_data = load_training_log(log_path)
         plot_dir = os.path.join(save_dir, 'plots')
-        plot_all(log_data, plot_dir)
+        plot_all(log_data, plot_dir,
+                 T_pred=T_pred_arr, T_true=T_true_arr,
+                 param_samples=param_samples)
     except Exception as e:
         print(f"[Diagnostics] Saltati: {e}")
 
