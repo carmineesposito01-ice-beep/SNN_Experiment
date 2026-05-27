@@ -44,8 +44,20 @@ class ALIFCell(nn.Module):
         # e ha gradiente nullo solo al confine (abs ha gradiente discontinuo in 0). F9.
         self.fatigue = self.fatigue - fatigue_leak + (spikes * self.thresh_jump.clamp(min=0))
 
-        # Soft Reset HW (Sottrazione pura, niente zeri forzati)
-        self.potential = self.potential - (spikes * eff_thresh).detach()  # B4: spezza BPTT chain (ch22 §22.3 #5)
+        # Soft Reset HW (Sottrazione pura, niente zeri forzati).
+        #
+        # NOTA su detach (P5 — B4 ROLLBACK 2026-05-27):
+        # Era stato applicato `.detach()` qui per spezzare la catena BPTT del reset
+        # (ch22 §22.3 #5 SNN-expert, Bellec 2018). Risultato: training A1_onecycle_v3
+        # esploso a B126/1485 (PRIMA del solito), spike_rate inchiodato all'1-2%.
+        # Causa: SurrogateSpike_Hardware.backward() restituisce None per il gradiente
+        # verso threshold (scelta hardware-friendly per FPGA). L'unico path di gradiente
+        # per base_threshold e thresh_jump era quindi questa via di reset. Detacharla
+        # rendeva i parametri ALIF non-apprendibili → rete dead → catena ricorrenza U·V
+        # esplode prima. Vedi document/P_S.md sezione P5 per analisi completa.
+        # DECISIONE: rollback. Per spezzare la catena BPTT serve un approccio diverso
+        # (es. TBPTT B6, o spike-rate regularizer B5, o riduzione seq_len A2).
+        self.potential = self.potential - (spikes * eff_thresh)
         self.prev_spike = spikes
         
         return spikes

@@ -1,8 +1,8 @@
 # P_S.md — Problemi & Soluzioni CF_FSNN
 
-> **Ultima modifica:** 2026-05-27 01:00 CET
-> **Sessione:** post-commit `4e01bcc` (12 fix SNN-expert review)
-> **Stato:** Smoke training Azure (5 epoche, OneCycleLR max_lr=5e-3) **ABORTITO** a E01 B1026 per exploding gradient.
+> **Ultima modifica:** 2026-05-27 18:30 CET
+> **Sessione:** post-rollback B4 (commit B4 = `3d1fd9a`, rollback commit = questo)
+> **Stato corrente:** Rete tornata allo stato post-`ed4906d` (12 fix SNN-expert + telemetria T + preflight PF + terminologia). NESSUNA modifica strutturale al codice rispetto a quello stato. Prossimo step: smoke diagnostico A1+A2 senza modifiche al codice.
 
 Documento vivo: ogni problema ha (1) descrizione, (2) firma diagnostica, (3) causa root,
 (4) soluzioni in ordine di impatto. Le soluzioni si marcano `[ ] proposta`,
@@ -109,6 +109,116 @@ Il training corrente si è abortito a metà E01, prima del primo `val_epoch` →
 ### 2.4 Raccomandazione operativa
 Applicare D2 (1 riga di codice) come fix permanente + D1 una tantum per pulire
 i residui sul cluster Azure.
+**STATO 2026-05-27:** D2 applicato (commit `1ff3da9`). [x]
+
+---
+
+## P5 — Fallimento di B4: incompatibilità con SurrogateSpike_Hardware
+
+### 5.1 Descrizione
+Commit `3d1fd9a` applicava B4 (`.detach()` sul reset path ALIF). Il training successivo
+`A1_onecycle_v3` (5 epoche, OneCycleLR `max_lr=5e-3`) si è abortito a **E01 B146/1485**
+(primo `inf grad` a B126, EARLY-STOP a B146) — **PRIMA del solito** B1000.
+
+### 5.2 Firme diagnostiche
+| Firma | Valore | Significato |
+|-------|--------|-------------|
+| gn iniziale (B1) | `62.0` | vs ~`4.2` del run pre-B4 → ~15× più alto |
+| Esplosione gn | B100 (gn~10²) → B125 (gn~10¹⁵) in 25 batch | crescita esponenziale rapidissima |
+| `gn_hidden_base_threshold` | **NaN per tutti i 146 batch** | `p.grad is None` → parametro **non apprende** |
+| `gn_hidden_thresh_jump` | **NaN per tutti i 146 batch** | come sopra |
+| Spike rate | inchiodato a **1-2%** | rete dead network (target 10-25%, ch22 §22.2) |
+| Layer esplosivi | `fc`, `rec_U`, `rec_V` insieme da B120 | catena ricorrenza (#3) attivata |
+
+### 5.3 Causa root
+File `core/hardware.py`, classe `SurrogateSpike_Hardware`:
+```python
+def backward(ctx, grad_output):
+    # ...
+    return grad_output * spike_pseudo_derivative, None   # ← None = NO grad to threshold
+```
+Il surrogate restituisce `None` per il gradiente verso threshold (scelta
+hardware-friendly per FPGA: backward più semplice da implementare in VHDL/Verilog).
+
+Conseguenza: l'**unico** path di gradiente per `base_threshold` e `thresh_jump`
+era attraverso il **reset chain** `V ← V − spike·eff_thresh`. Detacharlo
+con B4 ha completamente eliminato la possibilità di apprendere la soglia adattiva.
+
+Senza fatigue learning:
+1. Spike rate non si auto-regola → resta basso (1-2%)
+2. I pochi neuroni che firano concentrano tutto il segnale → variance del gradiente alta
+3. La catena ricorrenza U·V amplifica → esplosione **prima del solito** (B126 vs B1000)
+
+### 5.4 Decisione
+- [!] **B4 SCARTATO** — incompatibile con la nostra `SurrogateSpike_Hardware` custom.
+- Commit di rollback: questo commit (vedi git log).
+- Per spezzare la catena BPTT serve un approccio che NON tocchi il reset path,
+  oppure modifica simultanea di `SurrogateSpike_Hardware.backward` per propagare
+  anche al threshold (ma cambia il design hardware — scelta strutturale).
+
+### 5.5 Lesson learned
+La letteratura SNN (Bellec 2018, ch22 §22.3) consiglia detach reset assumendo un
+surrogate gradient STANDARD (es. SLAYER, snnTorch fast-sigmoid) che propaga su
+ENTRAMBI gli input. I fix da manuale vanno verificati contro l'implementazione
+specifica del surrogate prima di applicarli.
+
+---
+
+## P6 — Nuovo plan diagnostico post-rollback (revisione del piano originale)
+
+Dopo il rollback di B4, lo stato del codice è equivalente a `ed4906d` (post-fix
+terminologico) + telemetria T + preflight PF già attivi. Tutte le **CLI-only**
+soluzioni proposte nel piano originale (Tier 1) sono ancora valide e non
+richiedono modifiche al codice.
+
+### 6.1 Strategia rivista (in ordine di priorità)
+
+| # | Soluzione | Prob. risoluz. | Costo | Razionale post-P5 |
+|---|-----------|----------------|-------|-------------------|
+| **A1+A2** | `max_lr=2e-3` + `seq_len=50` | **~75%** | 2 CLI flag | TESTATO già in Tier 1 del plan originale (preflight era PASS). Da rilanciare per validare su 5 epoche. Zero modifiche al codice → ZERO rischio di regressioni. **PRIMO da provare**. |
+| **A3** | γ surrogate `0.3` → `1.0` in `core/hardware.py` | **~50%** | 1 valore | Surrogate 3× più stretta → meno neuroni near-threshold contribuiscono al sum-grad. Sicura perché non tocca path di gradiente — solo magnitudo. NON propaga comunque al threshold (preservato il design HW). |
+| **B5** | Spike-rate regularizer `λ_sr·(spike_rate − 0.15)²` | **~60%** | ~5 righe | Forza la rete a sparsity target 15% via loss. Non rompe nessun gradient path. Specialmente utile data la firma "spike rate troppo basso" che abbiamo visto in entrambi i run. |
+| **B6** | Truncated BPTT (TBPTT-20) | **~85%** | ~20 righe | Hard cap matematico sulla profondità BPTT. Massima efficacia, ma cambiamento più invasivo. Da escalare solo se A+B falliscono. |
+| ~~B4~~ | ~~detach reset~~ | — | — | [!] SCARTATO definitivamente (vedi P5) |
+
+### 6.2 Combinazioni e prob composte rivedute
+
+| Combinazione | Prob. fix | Razionale |
+|--------------|-----------|-----------|
+| **Tier 1**: A1+A2 (solo CLI) | **~75%** | ZERO modifiche codice. Da fare per primo. |
+| **Tier 2 rivisto**: A1+A2 + A3 | **~88%** | Aggiunge γ=1.0 — modifica minima (1 valore in `core/hardware.py`). |
+| **Tier 3 rivisto**: A1+A2 + A3 + B5 | **~94%** | Aggiunge il regularizer di sparsity. |
+| **Tier 4**: + B6 (TBPTT) | **~98%** | Solo come escalation finale. |
+
+### 6.3 Workflow iterativo (con stop ad ogni step)
+
+```
+Step 1  [A1+A2 — CLI only, no code changes]
+        python scripts/preflight.py --base_tag P6_T1 --extra --max_lr 2e-3 --seq_len 50
+        python train.py --epochs 5 --scheduler onecycle --max_lr 2e-3 --seq_len 50
+                        --data_cache data/cache_1500.pt --tag P6_T1_full
+        → checkpoint utente: condividere risultati
+
+Step 2a [se Step 1 OK]
+        ✅ Diagnosi BPTT confermata, modello converge. Continua con normale
+        tuning (cosine, plateau, lambda weights).
+
+Step 2b [se Step 1 KO]
+        Applicare A3: gamma 0.3 → 1.0 in core/hardware.py
+        python scripts/preflight.py --base_tag P6_T2 --extra --max_lr 2e-3 --seq_len 50
+        python train.py --epochs 5 --scheduler onecycle --max_lr 2e-3 --seq_len 50
+                        --data_cache data/cache_1500.pt --tag P6_T2_full
+        → checkpoint utente
+
+Step 3  [se Step 2b KO]
+        Applicare B5 in train.py pinn_loss()
+        + LAMBDA_SR = 0.01 in config.py
+        Re-test
+        → checkpoint utente
+
+Step 4  [escalation finale]
+        Implementare B6 (TBPTT-20)
+```
 
 ---
 
@@ -117,13 +227,19 @@ i residui sul cluster Azure.
 | Data | Decisione | Stato |
 |------|-----------|-------|
 | 2026-05-27 01:00 | Documento creato a partire dalla diagnosi SNN-expert ch22 §22.4 | — |
+| 2026-05-27 13:51 | Applicato B4 (commit `3d1fd9a`) seguendo plan originale | [x] applicato |
+| 2026-05-27 16:00 | Training A1_onecycle_v3 abortito a B146 con B4 attivo | ❌ FAILED |
+| 2026-05-27 18:30 | P5 documentato, B4 [!] SCARTATO, rollback eseguito | [x] rollback |
+| 2026-05-27 18:30 | P6 nuovo plan: A1+A2 come prossimo step (zero modifiche codice) | proposto |
 
 ---
 
 ## Riferimenti
 
-- **Commit base:** `4e01bcc` (fix snn-expert review — 12 fix, 7 file)
-- **Commit precedente stabile:** `1292b7c` (pre-review)
-- **Skill diagnostica:** `SNN-expert / chapters/ch22-pathologies.md §22.4` (Exploding Gradient)
-- **Report stato:** `document/report_4.md` (post-review)
-- **Log Azure crash:** raccolto inline da console utente, sessione 2026-05-27
+- **Commit base post-12-fix:** `4e01bcc`
+- **Commit telemetria + preflight + P2 D2:** `1ff3da9`
+- **Commit fix terminologia ACC-IDM:** `ed4906d`
+- **Commit B4 (poi rollback):** `3d1fd9a`
+- **Commit rollback B4:** vedi git log
+- **Skill diagnostica:** `SNN-expert / ch22 §22.4` (Exploding Gradient), `§22.2` (Dead Network)
+- **Crash log A1_onecycle_v3:** `results/A1_onecycle_v3/` (CSV + grafici G8-G12)
