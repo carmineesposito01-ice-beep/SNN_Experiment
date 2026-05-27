@@ -1,8 +1,8 @@
 # P_S.md — Problemi & Soluzioni CF_FSNN
 
-> **Ultima modifica:** 2026-05-27 18:30 CET
-> **Sessione:** post-rollback B4 (commit B4 = `3d1fd9a`, rollback commit = questo)
-> **Stato corrente:** Rete tornata allo stato post-`ed4906d` (12 fix SNN-expert + telemetria T + preflight PF + terminologia). NESSUNA modifica strutturale al codice rispetto a quello stato. Prossimo step: smoke diagnostico A1+A2 senza modifiche al codice.
+> **Ultima modifica:** 2026-05-27 19:00 CET
+> **Sessione:** post-rollback B4 + applicazione A3 (γ=1.0)
+> **Stato corrente:** Rollback B4 (commit `858cdc7`) + A3 applicata (questo commit). Prossimo step: FULL training su Azure con TAG `P6_T2_full` e CONFIG `max_lr=2e-3, seq_len=50` (Tier 2: A1+A2+A3). Smoke locale di A3 validato (61 batch, gn max 6.3, no inf).
 
 Documento vivo: ogni problema ha (1) descrizione, (2) firma diagnostica, (3) causa root,
 (4) soluzioni in ordine di impatto. Le soluzioni si marcano `[ ] proposta`,
@@ -176,7 +176,7 @@ richiedono modifiche al codice.
 | # | Soluzione | Prob. risoluz. | Costo | Razionale post-P5 |
 |---|-----------|----------------|-------|-------------------|
 | **A1+A2** | `max_lr=2e-3` + `seq_len=50` | **~75%** | 2 CLI flag | TESTATO già in Tier 1 del plan originale (preflight era PASS). Da rilanciare per validare su 5 epoche. Zero modifiche al codice → ZERO rischio di regressioni. **PRIMO da provare**. |
-| **A3** | γ surrogate `0.3` → `1.0` in `core/hardware.py` | **~50%** | 1 valore | Surrogate 3× più stretta → meno neuroni near-threshold contribuiscono al sum-grad. Sicura perché non tocca path di gradiente — solo magnitudo. NON propaga comunque al threshold (preservato il design HW). |
+| **A3** [x] | γ surrogate `0.3` → `1.0` in `core/hardware.py` | **~50%** | 1 valore | Surrogate 3× più stretta → meno neuroni near-threshold contribuiscono al sum-grad. Sicura perché non tocca path di gradiente — solo magnitudo. NON propaga comunque al threshold (preservato il design HW). **APPLICATA 2026-05-27.** |
 | **B5** | Spike-rate regularizer `λ_sr·(spike_rate − 0.15)²` | **~60%** | ~5 righe | Forza la rete a sparsity target 15% via loss. Non rompe nessun gradient path. Specialmente utile data la firma "spike rate troppo basso" che abbiamo visto in entrambi i run. |
 | **B6** | Truncated BPTT (TBPTT-20) | **~85%** | ~20 righe | Hard cap matematico sulla profondità BPTT. Massima efficacia, ma cambiamento più invasivo. Da escalare solo se A+B falliscono. |
 | ~~B4~~ | ~~detach reset~~ | — | — | [!] SCARTATO definitivamente (vedi P5) |
@@ -231,6 +231,9 @@ Step 4  [escalation finale]
 | 2026-05-27 16:00 | Training A1_onecycle_v3 abortito a B146 con B4 attivo | ❌ FAILED |
 | 2026-05-27 18:30 | P5 documentato, B4 [!] SCARTATO, rollback eseguito | [x] rollback |
 | 2026-05-27 18:30 | P6 nuovo plan: A1+A2 come prossimo step (zero modifiche codice) | proposto |
+| 2026-05-27 19:00 | Revisione strategia: salto a Tier 2 (A1+A2+A3) per evitare fallimento prevedibile | accettato utente |
+| 2026-05-27 19:00 | A3 applicato: γ surrogate 0.3 → 1.0 in core/hardware.py | [x] applicato |
+| 2026-05-27 19:00 | Smoke locale A3 (max_lr=2e-3, seq_len=50): 61 batch, gn max 6.3, no inf | ✅ validato |
 
 ---
 
