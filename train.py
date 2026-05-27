@@ -302,7 +302,8 @@ def _log_batch_diagnostics(tag, comps, gn_total, x, pre_norms, model):
 
 def train_epoch(model, loader, optimizer, device, epoch, lam,
                 scheduler=None, step_per_batch=False,
-                log_every=LOG_EVERY, max_inf_streak=20, diag=False):
+                log_every=LOG_EVERY, max_inf_streak=20, diag=False,
+                batch_logger=None):
     """
     Esegue un'epoca di training con guardie e diagnostica.
 
@@ -310,6 +311,8 @@ def train_epoch(model, loader, optimizer, device, epoch, lam,
     log_every       — frequenza log batch (1 = ogni batch, per smoke mode).
     max_inf_streak  — n. massimo di batch consecutivi con grad=inf prima di abortire.
     diag            — True: calcola norme per-layer pre-clip su OGNI batch (smoke mode).
+    batch_logger    — BatchCSVLogger opzionale (telemetria T): se non None, logga
+                      una riga per OGNI batch (incluse NaN/inf) per analisi post-mortem.
 
     Ritorna dict metriche; se training abortito, include 'aborted': True.
     """
@@ -334,6 +337,12 @@ def train_epoch(model, loader, optimizer, device, epoch, lam,
             tag = f"  [NaN-Guard E{epoch:02d} B{batch_idx+1:04d}]"
             print(f"{tag} loss={loss.item()} — skip backward")
             _log_batch_diagnostics(tag, comps, float('nan'), x, None, model)
+            # T: batch_logger anche su NaN loss — la riga ha is_nan_loss=1 e gn_*=NaN
+            if batch_logger is not None:
+                batch_logger.log(_make_batch_row(
+                    epoch, batch_idx + 1, comps, sr, None,
+                    float('nan'), float('nan'),
+                    model, optimizer, is_nan_loss=True, is_inf_grad=False))
             if step_per_batch and scheduler is not None:
                 scheduler.step()
             spike_acc += sr
@@ -355,6 +364,14 @@ def train_epoch(model, loader, optimizer, device, epoch, lam,
             if p.grad is not None
         }
 
+        # T: gn_total_preclip ricostruito dalle norme per-layer (somma quadratica).
+        # Necessario per il batch_log perché clip_grad_norm_ restituisce il valore
+        # PRIMA del clip (gn_val), ma se gn=inf perdiamo la decomposizione.
+        # Usando pre_norms otteniamo lo stesso numero ma anche le componenti per-layer.
+        gn_total_preclip = math.sqrt(sum(v ** 2 for v in pre_norms.values()
+                                         if math.isfinite(v))) \
+            if all(math.isfinite(v) for v in pre_norms.values()) else float('inf')
+
         gn     = nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
         gn_val = float(gn)
 
@@ -364,6 +381,15 @@ def train_epoch(model, loader, optimizer, device, epoch, lam,
             tag = f"  [NaN-Grad E{epoch:02d} B{batch_idx+1:04d}]"
             print(f"{tag} grad_norm=inf  streak={inf_streak}/{max_inf_streak}")
             _log_batch_diagnostics(tag, comps, gn_val, x, pre_norms, model)
+            # T: batch_logger anche su inf grad — riga con is_inf_grad=1 e per-layer norms
+            if batch_logger is not None:
+                # gn_postclip è 0 perché clip_grad_norm_ ha azzerato tutti i grad
+                # (coeff = max_norm/inf = 0). Lo riportiamo come 0.0 (osservato),
+                # non NaN.
+                batch_logger.log(_make_batch_row(
+                    epoch, batch_idx + 1, comps, sr, pre_norms,
+                    gn_total_preclip, 0.0,
+                    model, optimizer, is_nan_loss=False, is_inf_grad=True))
             optimizer.zero_grad()
             if step_per_batch and scheduler is not None:
                 scheduler.step()
@@ -402,6 +428,13 @@ def train_epoch(model, loader, optimizer, device, epoch, lam,
         spike_acc += sr
         grad_acc  += gn_val
         n_batches  += 1
+
+        # T: batch_logger sul path normale — riga completa con tutti i campi finiti
+        if batch_logger is not None:
+            batch_logger.log(_make_batch_row(
+                epoch, batch_idx + 1, comps, sr, pre_norms,
+                gn_total_preclip, gn_val,
+                model, optimizer, is_nan_loss=False, is_inf_grad=False))
 
         if (batch_idx + 1) % log_every == 0:
             elapsed = time.time() - t0
@@ -497,6 +530,100 @@ class CSVLogger:
 
     def close(self):
         self._f.close()
+
+
+class BatchCSVLogger:
+    """T (telemetria estesa) — scrive training_batch_log.csv riga per riga.
+
+    Differenza con CSVLogger: scrive una riga per BATCH (non per epoca) e flusha ogni
+    `flush_every` righe per non killare le perfo I/O. Append-only: anche su crash i
+    dati raccolti fino a quel punto restano disponibili.
+
+    Costo: ~16 float/batch ≈ 128 byte; su 1485 batch ≈ 190 KB totali.
+    Flush ogni 50 batch ≈ 1 ms. Overhead trascurabile (<1%).
+
+    I dati per le colonne `gn_*` per-layer arrivano dal dict `pre_norms` che è già
+    calcolato ad ogni batch da train_epoch (richiesto dalla diagnostica esistente).
+    """
+
+    COLS = [
+        'epoch', 'batch_idx',
+        # Loss components
+        'loss_total', 'loss_data', 'loss_phys', 'loss_ou', 'loss_bc',
+        # Attività spiking
+        'spike_rate',
+        # Gradient norms
+        'gn_total_preclip', 'gn_total_postclip',
+        # Per-layer (pre-clip) — chiave per identificare quale layer esplode
+        'gn_hidden_fc', 'gn_hidden_recU', 'gn_hidden_recV',
+        'gn_hidden_base_threshold', 'gn_hidden_thresh_jump',
+        'gn_out_fc',
+        # Weight stats
+        'weight_max_abs_global',
+        # Optimizer
+        'lr',
+        # Diagnostic flags
+        'is_nan_loss', 'is_inf_grad',
+    ]
+
+    # Mapping da parametro PyTorch → colonna CSV (parametri non listati → ignorati)
+    LAYER_MAP = {
+        'layer_hidden.fc_weight':           'gn_hidden_fc',
+        'layer_hidden.rec_U':               'gn_hidden_recU',
+        'layer_hidden.rec_V':               'gn_hidden_recV',
+        'layer_hidden.cell.base_threshold': 'gn_hidden_base_threshold',
+        'layer_hidden.cell.thresh_jump':    'gn_hidden_thresh_jump',
+        'layer_out.fc_weight':              'gn_out_fc',
+    }
+
+    def __init__(self, path: str, flush_every: int = 50):
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        self._f = open(path, 'w', newline='', encoding='utf-8')
+        self._w = csv.DictWriter(self._f, fieldnames=self.COLS)
+        self._w.writeheader()
+        self._f.flush()
+        self._flush_every = flush_every
+        self._rows_since_flush = 0
+
+    def log(self, row: dict):
+        self._w.writerow({c: row.get(c, float('nan')) for c in self.COLS})
+        self._rows_since_flush += 1
+        if self._rows_since_flush >= self._flush_every:
+            self._f.flush()
+            self._rows_since_flush = 0
+
+    def close(self):
+        self._f.flush()
+        self._f.close()
+
+
+def _make_batch_row(epoch, batch_idx, comps, sr, pre_norms,
+                    gn_total_preclip, gn_total_postclip,
+                    model, optimizer, is_nan_loss=False, is_inf_grad=False):
+    """Costruisce il dict-riga per BatchCSVLogger. Helper riusato dai 3 path di
+    train_epoch (batch normale, NaN loss, inf grad)."""
+    row = {
+        'epoch':             epoch,
+        'batch_idx':         batch_idx,
+        'loss_total':        comps.get('total', float('nan')),
+        'loss_data':         comps.get('data',  float('nan')),
+        'loss_phys':         comps.get('phys',  float('nan')),
+        'loss_ou':           comps.get('ou',    float('nan')),
+        'loss_bc':           comps.get('bc',    float('nan')),
+        'spike_rate':        sr,
+        'gn_total_preclip':  gn_total_preclip,
+        'gn_total_postclip': gn_total_postclip,
+        'weight_max_abs_global': max(
+            (p.detach().abs().max().item() for p in model.parameters()), default=0.0),
+        'lr':                optimizer.param_groups[0]['lr'],
+        'is_nan_loss':       int(is_nan_loss),
+        'is_inf_grad':       int(is_inf_grad),
+    }
+    # Mappa pre_norms ai nomi colonna
+    if pre_norms is not None:
+        for pname, cname in BatchCSVLogger.LAYER_MAP.items():
+            row[cname] = pre_norms.get(pname, float('nan'))
+    return row
 
 
 # ===========================================================
@@ -713,6 +840,12 @@ def main():
     log_path = os.path.join(save_dir, 'training_log.csv')
     logger   = CSVLogger(log_path)
 
+    # T (telemetria estesa): logger per-batch — flush ogni 50 righe per perfo I/O.
+    # Append-only: anche se il training crasha, il file contiene i dati raccolti
+    # fino a quel punto (utile per analisi post-mortem di anomalie come exploding gn).
+    batch_log_path = os.path.join(save_dir, 'training_batch_log.csv')
+    batch_logger   = BatchCSVLogger(batch_log_path, flush_every=50)
+
     # Pesi PINN come tupla per pinn_loss()
     lam = (args.lambda_data, args.lambda_phys, args.lambda_ou, args.lambda_bc)
 
@@ -734,6 +867,7 @@ def main():
                 log_every=args.log_every,
                 max_inf_streak=args.max_inf_streak,
                 diag=args.smoke,
+                batch_logger=batch_logger,
             )
 
             if train_m.get('aborted'):
@@ -796,21 +930,31 @@ def main():
             save_checkpoint(model, optimizer, epoch, val_m['total'],
                             os.path.join(save_dir, 'last_model.pt'))
     finally:
-        # Garantisce chiusura del CSV anche su Ctrl+C, OOM, CUDA error
+        # Garantisce chiusura dei CSV anche su Ctrl+C, OOM, CUDA error
         logger.close()
+        batch_logger.close()   # T: chiude e flusha training_batch_log.csv
 
     # ── Raccolta dati G5/G7: un pass finale sul val set ───────────
     # Eseguito sul best_model per dati coerenti con il checkpoint.
-    T_pred_arr    = None
-    T_true_arr    = None
-    param_samples = None
+    T_pred_arr       = None
+    T_true_arr       = None
+    param_samples    = None
+    g13_trajectories = None   # T (G13): traiettorie val per il plot segnali↔parametri
     # ── Raccolta dati G5/G7: un pass finale sul val set ───────────
     # Solo FileNotFoundError e KeyError sono recuperabili (ckpt mancante/corrotto).
     # Tutto il resto (OOM, CUDA, shape mismatch) viene rilasciato per propagare.
     best_ck_path = os.path.join(save_dir, 'best_model.pt')
     try:
         best_ck = torch.load(best_ck_path, map_location=device, weights_only=False)
-        model.load_state_dict(best_ck['model_state'])
+        # P2 D2: strict=False per compatibilità con checkpoint pre-F5 (senza decode_scale).
+        # `decode_scale` è un buffer derivato deterministicamente dai bounds nel costruttore:
+        # se manca nel state_dict caricato, mantiene il valore inizializzato (corretto).
+        # Zero rischio funzionale per altri buffer derivati che fossero aggiunti in futuro.
+        missing, unexpected = model.load_state_dict(best_ck['model_state'], strict=False)
+        if missing:
+            print(f"[Checkpoint compat] Buffer mancanti nel checkpoint (ricostruiti dal costruttore): {missing}")
+        if unexpected:
+            print(f"[Checkpoint compat] Chiavi inattese nel checkpoint (ignorate): {unexpected}")
         model.eval()
 
         T_pred_list = []
@@ -837,25 +981,77 @@ def main():
             'b':  all_p[:, :, 4].ravel(),
         }
         print(f"[Diagnostics] Dati G5/G7 raccolti: {len(T_pred_arr)} campioni.")
+
+        # ── G13: 3 traiettorie val rappresentative ────────────────
+        # Selezioniamo: 1 highway-no-cutin, 1 urban-no-cutin, 1 cut_in (qualsiasi).
+        # Forward sequence completa (~1000 step post-warmup) sul modello best.
+        # `raw` (N,7) contiene già i segnali fisici denormalizzati — niente conversione.
+        selectors = [
+            ('highway', lambda d: d['scenario'] == 'highway' and not d['cut_in']),
+            ('urban',   lambda d: d['scenario'] == 'urban'   and not d['cut_in']),
+            ('cut_in',  lambda d: d['cut_in']),
+        ]
+        used_idx = set()
+        g13_trajectories = []
+        for label, pred in selectors:
+            for i, d in enumerate(val_data):
+                if i in used_idx:
+                    continue
+                if pred(d):
+                    used_idx.add(i)
+                    x_norm_t = torch.from_numpy(d['x']).unsqueeze(0).to(device)  # (1,N,4)
+                    with torch.no_grad():
+                        params_seq_t, _ = model.forward_sequence_with_stats(x_norm_t)
+                    params_np = params_seq_t.squeeze(0).cpu().numpy()    # (N, 5)
+                    raw_np    = d['raw']                                  # (N, 7)
+                    g13_trajectories.append({
+                        's':      raw_np[:, 0],
+                        'v':      raw_np[:, 1],
+                        'dv':     raw_np[:, 2],
+                        'v_l':    raw_np[:, 3],
+                        'T_true': raw_np[:, 5],
+                        'T_pred': params_np[:, 1],
+                        'v0_pred': params_np[:, 0],
+                        's0_pred': params_np[:, 2],
+                        'a_pred':  params_np[:, 3],
+                        'b_pred':  params_np[:, 4],
+                        'scenario_params': {
+                            'v0': d['params']['v0'],
+                            's0': d['params']['s0'],
+                            'a':  d['params']['a'],
+                            'b':  d['params']['b'],
+                        },
+                        'scenario':  d['scenario'],
+                        'is_cut_in': d['cut_in'],
+                    })
+                    break
+        print(f"[Diagnostics] G13: selezionate {len(g13_trajectories)} traiettorie val "
+              f"({', '.join(t['scenario'] + ('-cutin' if t['is_cut_in'] else '') for t in g13_trajectories)})")
     except (FileNotFoundError, KeyError) as e:
-        print(f"[Diagnostics] Raccolta G5/G7 saltata (checkpoint non disponibile): {e}")
+        print(f"[Diagnostics] Raccolta G5/G7/G13 saltata (checkpoint non disponibile): {e}")
 
     # ── Diagnostics (se matplotlib disponibile) ───────────────────
     # Cattura solo ImportError (matplotlib assente); altri errori propagano.
     try:
-        from utils.plot_diagnostics import load_training_log, plot_all
+        from utils.plot_diagnostics import load_training_log, load_batch_log, plot_all
     except ImportError as e:
         print(f"[Diagnostics] matplotlib non disponibile, grafici saltati: {e}")
     else:
-        log_data = load_training_log(log_path)
-        plot_dir = os.path.join(save_dir, 'plots')
-        if log_data is not None:
+        log_data       = load_training_log(log_path)
+        batch_log_data = load_batch_log(batch_log_path)   # T: per-batch (G8-G12)
+        plot_dir       = os.path.join(save_dir, 'plots')
+
+        # plot_all gestisce internamente log=None e batch_log=None separatamente:
+        # se almeno uno dei due è valido, genera i grafici corrispondenti.
+        if log_data is not None or batch_log_data is not None:
             plot_all(log_data, plot_dir,
                      T_pred=T_pred_arr, T_true=T_true_arr,
-                     param_samples=param_samples)
+                     param_samples=param_samples,
+                     batch_log=batch_log_data,
+                     trajectories=g13_trajectories)
         else:
-            # F3c: training abortito prima di epoch 1 — log vuoto, grafici saltati
-            print("[Diagnostics] Training terminato prima dell'epoch 1 — grafici saltati.")
+            # F3c esteso: nessun dato né per-epoca né per-batch (caso patologico)
+            print("[Diagnostics] Nessun dato (né epoch né batch) — grafici saltati.")
 
     print(f"\n[Fine training] Best val_loss = {best_val:.5f}")
     print(f"  Checkpoint: {os.path.join(save_dir, 'best_model.pt')}")
