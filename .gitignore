@@ -43,3 +43,9 @@ Thumbs.db
 *.pkl
 *.npy
 *.npz
+
+# Analysis artifacts (CSV + PNG only, weights stay local)
+# La cartella results/ viene popolata da Cella 12 dopo ogni FULL training.
+!results/
+results/**/*.pt
+results/**/*.pth
