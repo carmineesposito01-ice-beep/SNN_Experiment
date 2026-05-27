@@ -44,6 +44,7 @@ from config import (
     DEVICE, SEED, set_seed,
     BATCH_SIZE, LEARNING_RATE, EPOCHS,
     LAMBDA_DATA, LAMBDA_PHYS, LAMBDA_OU, LAMBDA_BC,
+    LAMBDA_SR, SPIKE_RATE_TARGET,                # B5
     NORM_S_MAX, NORM_V_MAX, NORM_DV_MAX, NORM_VL_MAX,
     ACC_COOLNESS, ACC_AL_TAU,
     N_SCENARIOS_TRAIN, N_SCENARIOS_VAL,
@@ -150,9 +151,10 @@ class CFDataset(Dataset):
 # ===========================================================
 
 def pinn_loss(model, x_seq, y_seq, mask_seq,
-              lam_data, lam_phys, lam_ou, lam_bc):
+              lam_data, lam_phys, lam_ou, lam_bc, lam_sr=0.0,
+              spike_target=SPIKE_RATE_TARGET):
     """
-    Loss PINN a quattro componenti con ACC-IDM (IIDM base).
+    Loss PINN a cinque componenti con ACC-IDM (IIDM base).
 
     x_seq:    (batch, T, 4)  -- input normalizzato
     y_seq:    (batch, T, 2)  -- [v_dot [m/s²], T_true [s]]
@@ -160,6 +162,10 @@ def pinn_loss(model, x_seq, y_seq, mask_seq,
 
     Physics: usa CF_FSNN_Net.acc_iidm_accel() con a_l stimata da
     differenze finite su v_l + filtro OU (tau=ACC_AL_TAU).
+
+    B5 — Spike-rate regularizer: L_sr = (avg_spike_rate - spike_target)^2.
+    Penalizza degenerazione verso dead network (firma di P6_T2_full).
+    Quando lam_sr=0.0 il termine è disattivo (backward-compatibile pre-B5).
 
     Ritorna: (loss_scalare, dict_componenti, spike_rate_media)
     """
@@ -225,12 +231,19 @@ def pinn_loss(model, x_seq, y_seq, mask_seq,
     s0_pred = params_seq[:, :, 2]
     L_bc    = torch.mean(torch.relu(s0_pred - s_obs + 0.1) ** 2)
 
+    # ── L_sr (B5): spike-rate regularizer ────────────────────────
+    # Spinge spike_rate verso spike_target. Quando lam_sr=0 contributo nullo.
+    # Usa il tensor (non .item()) per preservare il gradiente verso i pesi della rete.
+    spike_rate_tensor = spike_rates.mean()
+    L_sr = (spike_rate_tensor - spike_target) ** 2
+
     loss = (lam_data * L_data
             + lam_phys * L_phys
             + lam_ou   * L_ou
-            + lam_bc   * L_bc)
+            + lam_bc   * L_bc
+            + lam_sr   * L_sr)
 
-    avg_spike_rate = spike_rates.mean().item()
+    avg_spike_rate = spike_rate_tensor.item()
 
     return loss, {
         'total': loss.item(),
@@ -238,6 +251,7 @@ def pinn_loss(model, x_seq, y_seq, mask_seq,
         'phys' : L_phys.item(),
         'ou'   : L_ou.item(),
         'bc'   : L_bc.item(),
+        'sr'   : L_sr.item(),
     }, avg_spike_rate
 
 
@@ -317,7 +331,7 @@ def train_epoch(model, loader, optimizer, device, epoch, lam,
     Ritorna dict metriche; se training abortito, include 'aborted': True.
     """
     model.train()
-    totals     = {'total': 0.0, 'data': 0.0, 'phys': 0.0, 'ou': 0.0, 'bc': 0.0}
+    totals     = {'total': 0.0, 'data': 0.0, 'phys': 0.0, 'ou': 0.0, 'bc': 0.0, 'sr': 0.0}
     spike_acc  = 0.0
     grad_acc   = 0.0
     n_batches  = 0
@@ -459,7 +473,7 @@ def train_epoch(model, loader, optimizer, device, epoch, lam,
 @torch.no_grad()
 def val_epoch(model, loader, device, lam):
     model.eval()
-    totals    = {'total': 0.0, 'data': 0.0, 'phys': 0.0, 'ou': 0.0, 'bc': 0.0}
+    totals    = {'total': 0.0, 'data': 0.0, 'phys': 0.0, 'ou': 0.0, 'bc': 0.0, 'sr': 0.0}
     spike_acc = 0.0
     n_batches = 0
 
@@ -512,8 +526,8 @@ class CSVLogger:
 
     COLS = [
         'epoch',
-        'train_total', 'train_data', 'train_phys', 'train_ou', 'train_bc',
-        'val_total',   'val_data',   'val_phys',   'val_ou',   'val_bc',
+        'train_total', 'train_data', 'train_phys', 'train_ou', 'train_bc', 'train_sr',
+        'val_total',   'val_data',   'val_phys',   'val_ou',   'val_bc',   'val_sr',
         'lr', 'grad_norm', 'spike_rate', 'time_s',
     ]
 
@@ -548,8 +562,8 @@ class BatchCSVLogger:
 
     COLS = [
         'epoch', 'batch_idx',
-        # Loss components
-        'loss_total', 'loss_data', 'loss_phys', 'loss_ou', 'loss_bc',
+        # Loss components (incl. B5 spike-rate regularizer)
+        'loss_total', 'loss_data', 'loss_phys', 'loss_ou', 'loss_bc', 'loss_sr',
         # Attività spiking
         'spike_rate',
         # Gradient norms
@@ -610,6 +624,7 @@ def _make_batch_row(epoch, batch_idx, comps, sr, pre_norms,
         'loss_phys':         comps.get('phys',  float('nan')),
         'loss_ou':           comps.get('ou',    float('nan')),
         'loss_bc':           comps.get('bc',    float('nan')),
+        'loss_sr':           comps.get('sr',    float('nan')),
         'spike_rate':        sr,
         'gn_total_preclip':  gn_total_preclip,
         'gn_total_postclip': gn_total_postclip,
@@ -653,6 +668,8 @@ def main():
     parser.add_argument('--lambda_phys', type=float, default=LAMBDA_PHYS)
     parser.add_argument('--lambda_ou',   type=float, default=LAMBDA_OU)
     parser.add_argument('--lambda_bc',   type=float, default=LAMBDA_BC)
+    parser.add_argument('--lambda_sr',   type=float, default=LAMBDA_SR,
+                        help='B5: peso spike-rate regularizer (default da config.py)')
     # Ottimizzatore
     parser.add_argument('--optimizer',   type=str,   default='adam',
                         choices=['adam', 'adamw', 'lion'],
@@ -846,14 +863,16 @@ def main():
     batch_log_path = os.path.join(save_dir, 'training_batch_log.csv')
     batch_logger   = BatchCSVLogger(batch_log_path, flush_every=50)
 
-    # Pesi PINN come tupla per pinn_loss()
-    lam = (args.lambda_data, args.lambda_phys, args.lambda_ou, args.lambda_bc)
+    # Pesi PINN come tupla per pinn_loss() — 5 componenti (B5 incluso)
+    lam = (args.lambda_data, args.lambda_phys, args.lambda_ou, args.lambda_bc,
+           args.lambda_sr)
 
     # ── Training loop ─────────────────────────────────────────────
     print(f"\n[Training] {args.epochs} epoche  |  scheduler={args.scheduler}"
           f"  batch={args.batch_size}  lr={args.lr}")
     print(f"  lam_data={args.lambda_data}  lam_phys={args.lambda_phys}"
-          f"  lam_ou={args.lambda_ou}  lam_bc={args.lambda_bc}\n")
+          f"  lam_ou={args.lambda_ou}  lam_bc={args.lambda_bc}"
+          f"  lam_sr={args.lambda_sr}\n")
 
     try:
         for epoch in range(start_epoch, args.epochs + 1):
@@ -908,11 +927,13 @@ def main():
                 'train_phys'  : train_m['phys'],
                 'train_ou'    : train_m['ou'],
                 'train_bc'    : train_m['bc'],
+                'train_sr'    : train_m.get('sr', float('nan')),
                 'val_total'   : val_m['total'],
                 'val_data'    : val_m['data'],
                 'val_phys'    : val_m['phys'],
                 'val_ou'      : val_m['ou'],
                 'val_bc'      : val_m['bc'],
+                'val_sr'      : val_m.get('sr', float('nan')),
                 'lr'          : current_lr,
                 'grad_norm'   : train_m['grad_norm'],
                 'spike_rate'  : val_m['spike_rate'],

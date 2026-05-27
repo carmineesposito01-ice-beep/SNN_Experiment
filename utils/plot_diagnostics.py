@@ -117,11 +117,14 @@ def plot_g2_components(log: dict, out_path: str):
     fig, ax = plt.subplots(figsize=(8, 4))
     ep = log['epoch']
     comps = {
-        'L_data (Masked RMSE)':  log['val_data'],
+        'L_data (Masked RMSE)':     log['val_data'],
         'L_phys (residuo ACC-IDM)': log['val_phys'],
-        'L_OU (vincolo T)':  log['val_ou'],
-        'L_bc (crash pen.)': log['val_bc'],
+        'L_OU (vincolo T)':         log['val_ou'],
+        'L_bc (crash pen.)':        log['val_bc'],
     }
+    # L_sr (B5 spike-rate regularizer) — opzionale, presente solo nei log post-B5
+    if 'val_sr' in log:
+        comps['L_sr (spike-rate reg.)'] = log['val_sr']
     for label, vals in comps.items():
         ax.plot(ep, vals, label=label, linewidth=1.2, marker='o', markersize=4)
     ax.set_xlabel('Epoca')
@@ -362,6 +365,9 @@ def plot_g10_loss_components_per_batch(log: dict, out_path: str):
     ax.plot(x, np.clip(log['loss_phys'], 1e-6, None), label='L_phys', linewidth=0.6, alpha=0.8)
     ax.plot(x, np.clip(log['loss_ou'],   1e-6, None), label='L_OU',   linewidth=0.6, alpha=0.8)
     ax.plot(x, np.clip(log['loss_bc'],   1e-6, None), label='L_bc',   linewidth=0.6, alpha=0.8)
+    # L_sr (B5) — opzionale, presente solo nei batch_log post-B5
+    if 'loss_sr' in log:
+        ax.plot(x, np.clip(log['loss_sr'], 1e-6, None), label='L_sr', linewidth=0.6, alpha=0.8)
     ax.set_xlabel('Step training')
     ax.set_ylabel('Loss component (non pesata)')
     ax.set_yscale('log')

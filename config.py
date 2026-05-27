@@ -46,6 +46,17 @@ LAMBDA_PHYS  = 0.1      # residuo equazione ACC-IDM (con base IIDM)
 LAMBDA_OU    = 0.05     # vincolo processo OU su T (estensione IDM-2d stocastica)
 LAMBDA_BC    = 1.0      # crash prevention: s >= s0
 
+# B5 — Spike-rate regularizer (applicato 2026-05-27 post-P6_T2_full)
+# Aggiunge termine (avg_spike_rate - SPIKE_RATE_TARGET)^2 al loss.
+# Motivazione: P6_T2_full ha mostrato firma "dead network degenerante" — la rete
+# completa E1 con spike rate ~7%, poi degenera a ~3% in E2 e esplode (catena
+# ricorrenza U·V amplifica gradiente concentrato su pochi neuroni attivi).
+# Questo termine spinge attivamente la rete a mantenere ~15% di spike rate.
+# Calibrazione: (spike_rate-target)^2 tipicamente in [1e-4, 1e-2].
+# LAMBDA_SR=0.5 → contributo al loss in [5e-5, 5e-3], comparabile a L_phys (0.1*~0.2).
+SPIKE_RATE_TARGET = 0.15    # 15% — centro della zona sana 10-25% (ch22 §22.5)
+LAMBDA_SR    = 0.5
+
 # -----------------------------------------------------------
 # Simulazione ACC-IDM — parametri fisici (Ch12 Sez.12.4)
 # -----------------------------------------------------------

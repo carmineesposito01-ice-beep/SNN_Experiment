@@ -1,8 +1,8 @@
 # P_S.md — Problemi & Soluzioni CF_FSNN
 
-> **Ultima modifica:** 2026-05-27 19:00 CET
-> **Sessione:** post-rollback B4 + applicazione A3 (γ=1.0)
-> **Stato corrente:** Rollback B4 (commit `858cdc7`) + A3 applicata (questo commit). Prossimo step: FULL training su Azure con TAG `P6_T2_full` e CONFIG `max_lr=2e-3, seq_len=50` (Tier 2: A1+A2+A3). Smoke locale di A3 validato (61 batch, gn max 6.3, no inf).
+> **Ultima modifica:** 2026-05-27 21:00 CET
+> **Sessione:** post-P6_T2_full (A3+A1+A2) — applicazione B5 (spike-rate regularizer)
+> **Stato corrente:** B5 applicato (questo commit). Prossimo step: FULL training su Azure con TAG `P6_T3_full` (Tier 3: A1+A2+A3+B5). Smoke locale validato (61 batch, no inf, L_sr correttamente calcolato).
 
 Documento vivo: ogni problema ha (1) descrizione, (2) firma diagnostica, (3) causa root,
 (4) soluzioni in ordine di impatto. Le soluzioni si marcano `[ ] proposta`,
@@ -177,7 +177,7 @@ richiedono modifiche al codice.
 |---|-----------|----------------|-------|-------------------|
 | **A1+A2** | `max_lr=2e-3` + `seq_len=50` | **~75%** | 2 CLI flag | TESTATO già in Tier 1 del plan originale (preflight era PASS). Da rilanciare per validare su 5 epoche. Zero modifiche al codice → ZERO rischio di regressioni. **PRIMO da provare**. |
 | **A3** [x] | γ surrogate `0.3` → `1.0` in `core/hardware.py` | **~50%** | 1 valore | Surrogate 3× più stretta → meno neuroni near-threshold contribuiscono al sum-grad. Sicura perché non tocca path di gradiente — solo magnitudo. NON propaga comunque al threshold (preservato il design HW). **APPLICATA 2026-05-27.** |
-| **B5** | Spike-rate regularizer `λ_sr·(spike_rate − 0.15)²` | **~60%** | ~5 righe | Forza la rete a sparsity target 15% via loss. Non rompe nessun gradient path. Specialmente utile data la firma "spike rate troppo basso" che abbiamo visto in entrambi i run. |
+| **B5** [x] | Spike-rate regularizer `λ_sr·(spike_rate − 0.15)²` | **~85%** (rivisto post-P6_T2) | ~5 righe | Forza la rete a sparsity target 15% via loss. Non rompe nessun gradient path. **APPLICATA 2026-05-27** dopo che P6_T2_full ha confermato la firma "spike rate degenerante" (7%→3% in E2). |
 | **B6** | Truncated BPTT (TBPTT-20) | **~85%** | ~20 righe | Hard cap matematico sulla profondità BPTT. Massima efficacia, ma cambiamento più invasivo. Da escalare solo se A+B falliscono. |
 | ~~B4~~ | ~~detach reset~~ | — | — | [!] SCARTATO definitivamente (vedi P5) |
 
@@ -234,6 +234,10 @@ Step 4  [escalation finale]
 | 2026-05-27 19:00 | Revisione strategia: salto a Tier 2 (A1+A2+A3) per evitare fallimento prevedibile | accettato utente |
 | 2026-05-27 19:00 | A3 applicato: γ surrogate 0.3 → 1.0 in core/hardware.py | [x] applicato |
 | 2026-05-27 19:00 | Smoke locale A3 (max_lr=2e-3, seq_len=50): 61 batch, gn max 6.3, no inf | ✅ validato |
+| 2026-05-27 20:30 | FULL P6_T2_full su Azure: E1 completa (val=0.37, miglior risultato!), esplode E2 B2395 | ⚠️ stabile poi degenera |
+| 2026-05-27 20:30 | Diagnosi P6_T2: spike rate degenera (7%→3% in E2) → dead network → esplosione | ✓ identificato |
+| 2026-05-27 21:00 | Applicato B5: spike-rate regularizer L_sr=(sr-0.15)², LAMBDA_SR=0.5 | [x] applicato |
+| 2026-05-27 21:00 | Smoke locale B5 OK: L_sr correttamente calcolato (~0.019 per spike=1.3%) | ✅ validato |
 
 ---
 
