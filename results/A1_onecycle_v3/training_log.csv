@@ -1,0 +1,1 @@
+epoch,train_total,train_data,train_phys,train_ou,train_bc,val_total,val_data,val_phys,val_ou,val_bc,lr,grad_norm,spike_rate,time_s
