@@ -261,7 +261,8 @@ class Deep_RSNN_V5(nn.Module):
 
 # ===========================================================
 # CF_FSNN_Net — Car-Following SNN con training PINN
-# Adattamento di FSNN_V5 per IDM-2D + V2X + PYNQ-Z1
+# Adattamento di FSNN_V5 per ACC-IDM (con base IIDM) + V2X + PYNQ-Z1
+# Modello fisico: Ch12 Sez.12.4 Treiber & Kesting 2025
 # ===========================================================
 import math as _math
 
@@ -272,19 +273,19 @@ class CF_FSNN_Net(nn.Module):
 
     Architettura:
         HiddenLayer_ALIF (4 → 32, rank=8, max_delay=6)  ← V2X: [s, v, Δv, v_l]
-        OutputLayer_LI   (32 → 5)                        ← IDM-2D: [v0, T, s0, a, b]
+        OutputLayer_LI   (32 → 5)                        ← parametri IDM: [v0, T, s0, a, b]
 
-    Connessione IDM-2D ↔ ALIF (Ch12 + Ch13):
+    Connessione ACC-IDM ↔ ALIF (Ch12 Sez.12.4 + Ch13):
         max_delay=6  →  ritardo sinaptico hardware = 6 tick × (DT/TICKS_PER_STEP)
                         = 6 × 0.01 s = 0.06 s (ritardo assonale FPGA — F11).
                         Il tempo di reazione biologico Tr ∈ [0.1, 0.6] s è modellato
                         dal buffer delay, non dal singolo tick interno (Ch13).
-        fatica ALIF  →  T(t) stocastico IDM-2D  (banda [T1, T2])
+        fatica ALIF  →  T(t) stocastico (processo IDM-2d su T, Ch12.6, banda [T1, T2])
         rank=8       →  ricorrenza low-rank (U 32×8, V 8×32)
 
     Ogni passo di simulazione (Δt=0.1 s) viene elaborato con TICKS_PER_STEP
     tick SNN interni; il potenziale finale del layer LI viene mappato via
-    sigmoid + scaling nei range fisici dei 5 parametri IDM-2D.
+    sigmoid + scaling nei range fisici dei 5 parametri IDM.
 
     Range fisici (param_lo, param_hi):
         v0 ∈ [8,  45]  m/s
@@ -350,7 +351,7 @@ class CF_FSNN_Net(nn.Module):
     # Decodifica parametri
     # ----------------------------------------------------------
     def _decode_params(self, raw):
-        """Potenziale LI grezzo → parametri IDM-2D fisici via sigmoid.
+        """Potenziale LI grezzo → parametri IDM fisici via sigmoid.
 
         raw:     (batch, 5)
         returns: (batch, 5) in unità fisiche
@@ -371,7 +372,7 @@ class CF_FSNN_Net(nn.Module):
         """Un passo di simulazione = n_ticks tick SNN interni.
 
         x_norm:  (batch, 4)  — input normalizzato [s̃, ṽ, Δṽ, ṽ_l] ∈ [0, 1]
-        returns: (batch, 5)  — parametri IDM-2D in unità fisiche
+        returns: (batch, 5)  — parametri IDM in unità fisiche
 
         Il potenziale LI integra i spike dell'hidden layer su n_ticks tick;
         il valore finale è il readout usato per la decodifica.
@@ -386,7 +387,7 @@ class CF_FSNN_Net(nn.Module):
         """Processa una traiettoria completa (training / validazione).
 
         x_seq_norm: (batch, T, 4)  — sequenza normalizzata
-        returns:    (batch, T, 5)  — parametri IDM-2D nel tempo
+        returns:    (batch, T, 5)  — parametri IDM nel tempo
 
         Lo stato SNN è resettato all'inizio della traiettoria e
         propagato correttamente tra i passi temporali successivi.
@@ -402,11 +403,14 @@ class CF_FSNN_Net(nn.Module):
         return torch.cat(steps, dim=1)   # (batch, T, 5)
 
     # ----------------------------------------------------------
-    # Fisica IDM-2D — componenti della PINN loss
+    # Fisica ACC-IDM — componenti della PINN loss
     # ----------------------------------------------------------
     @staticmethod
     def idm_accel(s, v, dv, params):
-        """Accelerazione IDM-2D dai parametri predetti dalla rete.
+        """Accelerazione IDM plain (Ch12) dai parametri predetti dalla rete.
+
+        NOTA: questa funzione è mantenuta come RIFERIMENTO. Il training usa
+        acc_iidm_accel() (ACC-IDM con base IIDM). Vedi note in pinn_loss().
 
         s, v, dv:  (batch,)   — gap [m], vel. ego [m/s], Δv = v − v_l [m/s]
         params:    (batch, 5) = [v0, T, s0, a, b]

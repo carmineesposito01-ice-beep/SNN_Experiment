@@ -2,7 +2,9 @@ import torch
 
 # ===========================================================
 # CF_FSNN — Configurazione Car-Following
-# Base: FSNN_Project_V5 adattata per IDM-2D + V2X + PYNQ-Z1
+# Base: FSNN_Project_V5 adattata per ACC-IDM (con base IIDM) + V2X + PYNQ-Z1
+# Modello fisico: Ch12 Sez.12.4 Treiber & Kesting 2025
+# Estensione stocastica: T(t) via processo IDM-2d (Ch12.6) — vedi IDM2D_* sotto
 # ===========================================================
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -23,10 +25,10 @@ set_seed(SEED)
 # -----------------------------------------------------------
 # Input V2X:  [s, v, Δv, v_leader]  → 4 segnali
 # Hidden:      32 neuroni ALIF
-# Output:      5 parametri IDM-2D [v0, T, s0, a, b]
+# Output:      5 parametri IDM [v0, T, s0, a, b] (comuni a IDM/IIDM/ACC-IDM)
 CF_INPUT_SIZE  = 4
 CF_HIDDEN_SIZE = 32
-CF_OUTPUT_SIZE = 5      # parametri IDM-2D appresi dalla rete
+CF_OUTPUT_SIZE = 5      # parametri IDM appresi dalla rete
 CF_RANK        = 8      # low-rank recurrence U(32x8) x V(8x32)
 CF_MAX_DELAY   = 6      # delay assionico max = 6 x Dt = 0.6 s ≈ Tr (Ch13)
 
@@ -40,12 +42,12 @@ TICKS_PER_STEP = 10     # tick SNN per ogni step di simulazione Dt
 
 # Pesi loss PINN (Ch17: gap e' MoP primario)
 LAMBDA_DATA  = 1.0      # SRMSE sul gap s
-LAMBDA_PHYS  = 0.1      # residuo equazione IDM-2D
-LAMBDA_OU    = 0.05     # vincolo processo OU su T (IDM-2D stocastico)
+LAMBDA_PHYS  = 0.1      # residuo equazione ACC-IDM (con base IIDM)
+LAMBDA_OU    = 0.05     # vincolo processo OU su T (estensione IDM-2d stocastica)
 LAMBDA_BC    = 1.0      # crash prevention: s >= s0
 
 # -----------------------------------------------------------
-# Simulazione IDM-2D — parametri fisici (Ch12)
+# Simulazione ACC-IDM — parametri fisici (Ch12 Sez.12.4)
 # -----------------------------------------------------------
 DT = 0.1    # passo temporale [s], allineato a V2X 10 Hz
 
@@ -56,7 +58,10 @@ IDM_URB = dict(v0=15.0, T=1.0, s0=2.0, a=1.5, b=2.0, delta=4)
 # Parametri per truck
 IDM_TRK = dict(v0=22.2, T=1.8, s0=3.0, a=0.5, b=1.0, delta=4)
 
-# IDM-2D: banda stocastica su T (Ch12, Sez. 12.6)
+# IDM-2d (Ch12 Sez.12.6): banda stocastica su T del modello IDM
+# Estensione che rende T(t) un processo stocastico OU invece di costante.
+# Applicabile a IDM, IIDM e ACC-IDM — è una proprietà del time-gap, non del modello.
+# I prefissi IDM2D_ sono mantenuti come riferimento al testo originale (Treiber Ch12.6).
 IDM2D_T1  = 0.8    # T_min [s]
 IDM2D_T2  = 1.6    # T_max [s]  ->  DeltaT = 0.8 s
 IDM2D_TAU = 30.0   # tempo di correlazione del processo OU su T [s]
@@ -97,7 +102,7 @@ NORM_DV_MAX =  20.0   # |Deltav| [m/s]
 NORM_VL_MAX =  40.0   # velocita' leader [m/s]
 
 # -----------------------------------------------------------
-# Dataset sintetico IDM-2D
+# Dataset sintetico ACC-IDM
 # -----------------------------------------------------------
 N_SCENARIOS_TRAIN = 5000    # traiettorie training
 N_SCENARIOS_VAL   =  500    # traiettorie validazione

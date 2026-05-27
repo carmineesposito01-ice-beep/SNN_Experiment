@@ -32,7 +32,7 @@ Leader acceleration `a_l` is estimated from OU-filtered finite differences on `v
 | Val   | 100 | 200s each | same mix |
 | Test  | 200 | 200s each | held-out seed |
 
-- **IDM-2D**: stochastic T(t) via Ornstein-Uhlenbeck (τ=30s, band [0.8, 1.6]s)
+- **IDM-2d** (Ch12.6): stochastic T(t) extension via Ornstein-Uhlenbeck (τ=30s, band [0.8, 1.6]s) — applied to ACC-IDM
 - **Cut-in UC2**: 20% of trajectories include an abrupt cut-in event (gap → 5–15m)
 - **V2X packet loss**: 2% (ETSI ITS-G5 simulation)
 - **OU perception noise** on s, v, a (Ch13 Treiber & Kesting)

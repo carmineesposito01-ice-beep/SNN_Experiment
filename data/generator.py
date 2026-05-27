@@ -3,7 +3,7 @@ data/generator.py -- Generatore sintetico ACC-IDM (IIDM base) per CF_FSNN
 ==========================================================================
 Implementa:
   - ACC-IDM con base IIDM  (Ch12 Sez. 12.4 -- modello fisico scelto)
-  - IDM-2D stocastico su T (Ch12 Sez. 12.6 -- processo OU su time gap)
+  - IDM-2d stocastico su T (Ch12 Sez.12.6 -- processo OU sul time gap)
   - CAH (Constant Acceleration Heuristic) -- anticipa frenata del leader
   - Stima a_l con filtro OU da differenze finite V2X
   - Update balistico       (Ch11 -- piu' stabile di Eulero)
@@ -164,7 +164,7 @@ def _ou_step(eta, tau, dt, rng):
 
 def _idm2d_T_step(T_cur, T1, T2, tau_2d, dt, rng):
     """
-    Random walk di T per IDM-2D (Ch12 Sez. 12.6).
+    Random walk di T per IDM-2d (Ch12 Sez.12.6 — estensione stocastica IDM sul time gap).
     p = dt/tau_2d: con questa probabilita' T <- U(T1, T2).
     """
     if rng.random() < dt / tau_2d:
@@ -264,7 +264,7 @@ def simulate_trajectory(params, profile='sinusoidal', seed=None):
     for i in range(N):
         v_l_true = float(v_l_profile[i])
 
-        # IDM-2D: aggiorna T (processo OU su time gap)
+        # IDM-2d: aggiorna T (processo OU sul time gap, Ch12.6)
         T_cur = _idm2d_T_step(T_cur, IDM2D_T1, IDM2D_T2, IDM2D_TAU, DT, rng)
 
         # Rumore OU sui segnali percepiti

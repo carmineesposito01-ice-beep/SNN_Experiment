@@ -408,7 +408,7 @@ def plot_g12_weight_max_per_batch(log: dict, out_path: str):
 
 
 def plot_g13_signals_vs_params(traj_data: dict, out_path: str, dt: float = 0.1):
-    """G13 — Confronto temporale segnali V2V (input) vs parametri IDM-2D predetti (output).
+    """G13 — Confronto temporale segnali V2V (input) vs parametri IDM predetti (output).
 
     Mostra in 3 subplot impilati come il modello "interpreta" una traiettoria di val:
 
@@ -446,7 +446,7 @@ def plot_g13_signals_vs_params(traj_data: dict, out_path: str, dt: float = 0.1):
     ax1.set_ylabel('V2V signals')
     sc = traj_data.get('scenario', 'unknown')
     ci = ' (cut-in)' if traj_data.get('is_cut_in') else ''
-    ax1.set_title(f'G13 — Segnali V2V vs parametri IDM-2D predetti  |  scenario: {sc}{ci}')
+    ax1.set_title(f'G13 — Segnali V2V vs parametri ACC-IDM predetti  |  scenario: {sc}{ci}')
     ax1.legend(fontsize=8, ncol=4, loc='upper right')
     ax1.grid(True, alpha=0.3)
 
@@ -477,7 +477,7 @@ def plot_g13_signals_vs_params(traj_data: dict, out_path: str, dt: float = 0.1):
         if gt_val is not None:
             ax3.axhline(gt_val, color=col, linestyle='--', linewidth=0.8, alpha=0.6)
     ax3.set_xlabel('Tempo [s]')
-    ax3.set_ylabel('Parametri IDM-2D')
+    ax3.set_ylabel('Parametri IDM')
     ax3.legend(fontsize=8, ncol=4, loc='upper right')
     ax3.grid(True, alpha=0.3)
 

@@ -153,7 +153,7 @@ def main():
     print(f"  MAE(T)   = {mae_T:.4f} s")
     print(f"  RMSE(T)  = {rmse_T:.4f} s")
     print(f"  Bias(T)  = {bias_T:+.4f} s  (positivo=sovrastima)")
-    print(f"  Banda IDM-2D attesa: [{IDM2D_T1}, {IDM2D_T2}] s")
+    print(f"  Banda IDM-2d su T attesa: [{IDM2D_T1}, {IDM2D_T2}] s  (estensione stocastica Ch12.6)")
 
     # ── Grafici G5 e G7 ───────────────────────────────────────────
     param_samples = {
