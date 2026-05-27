@@ -45,7 +45,7 @@ class ALIFCell(nn.Module):
         self.fatigue = self.fatigue - fatigue_leak + (spikes * self.thresh_jump.clamp(min=0))
 
         # Soft Reset HW (Sottrazione pura, niente zeri forzati)
-        self.potential = self.potential - (spikes * eff_thresh)
+        self.potential = self.potential - (spikes * eff_thresh).detach()  # B4: spezza BPTT chain (ch22 §22.3 #5)
         self.prev_spike = spikes
         
         return spikes
