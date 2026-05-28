@@ -190,7 +190,25 @@ Significa: la cache esistente è stata generata con scenario_mix diverso dal tuo
 ```python
 !rm data/cache_1500_<...>.pt
 ```
-Oppure cambia il `CACHE_PATH` in Cella 1 (il default include scenario+cut_in nel nome, quindi raramente succede).
+Oppure cambia il `CACHE_PATH` in Cella 1 (il default include scenario+cut_in+n_train nel nome, quindi raramente succede).
+
+### "Your local changes to the following files would be overwritten by merge"
+Succede quando hai eseguito il notebook su Azure (genera outputs nelle celle) e poi fai `git pull`. Le outputs locali entrano in conflitto con la versione del repo.
+
+**Fix**: scarta gli outputs locali (saranno rigenerati al prossimo Run All):
+```bash
+git checkout -- Training_File.ipynb
+git pull origin main
+```
+
+**Alternativa** (se hai edit manuali nella Cella 1 da preservare):
+```bash
+git stash                              # salva edit locali
+git pull origin main                   # pull va liscio
+git stash pop                          # ripristina edit (eventuali conflitti da risolvere)
+```
+
+Pattern raccomandato: **edita SOLO Cella 1**, esegui, push results via Cella 8, poi `git checkout -- Training_File.ipynb` per pulire prima del prossimo pull.
 
 ### Preflight FAIL
 Apri `checkpoints/<TAG>_preflight_1/` e `_preflight_2/`:
@@ -232,11 +250,30 @@ I `results/` restano tracciati in git (sicuri).
 
 ## ⚡ Variations / Modalità avanzate
 
+### Fast iteration mode (STEP 2A — consigliato per esperimenti veloci)
+Quando vuoi iterare rapidamente (testare config, scheduler diversi, sweep parametrici):
+```python
+CONFIG = {
+    'epochs':              10,         # più epoche brevi
+    'n_train':             500,        # dataset 10× più piccolo
+    'n_val':               100,
+    'early_stop_patience': 2,
+    'early_stop_delta':    0.005,      # AGGRESSIVO — ferma quando miglioramento < 0.5%
+    ...
+}
+```
+
+**Tempo**: ~15-25 min vs 2-3h del modo standard.
+
+**Quando NON usare**: per il run finale "di prodotto" usa il dataset completo (n_train=5000) per il modello migliore. Fast iteration è per scoperta/exploration.
+
+**Rationale**: la rete converge nel ~10% di E1 (osservazione utente confermata da `P9_S1_highway_v2` — 90% del miglioramento E1 raggiunto a B298/3047). Vedi `TIMELINE.md` lezione #8.
+
 ### Solo preflight (senza FULL)
 ```python
 RUN_FULL = False
 ```
-Utile per testare modifiche al codice senza spendere 3h di compute.
+Utile per testare modifiche al codice senza spendere compute.
 
 ### Solo display di un run precedente
 ```python

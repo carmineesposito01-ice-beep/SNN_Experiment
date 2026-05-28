@@ -92,6 +92,88 @@
 
 ---
 
+## 🚀 STEP 2A / 2B / 2C — Roadmap post-P9-confermato
+
+Sequenza di esperimenti per risolvere P9 (capacity insufficiency) sfruttando l'osservazione che la rete converge nel 10% di E1 (Eureka 2 utente).
+
+| Codice | Significato | Status | Tempo |
+|--------|-------------|--------|-------|
+| **STEP 2A** | Fast iteration baseline: `n_train=500, epochs=10, early_stop_delta=0.005` con architettura attuale (32/8). Validare il regime fast | 🟡 in attesa Azure | ~15-25 min |
+| **STEP 2B** | Parametric sweep su `CF_HIDDEN_SIZE` (32, 48, 64, 96) ± `CF_RANK` (8, 16). 4-6 run con fast-iteration mode | ⏸️ pianificato post-2A | ~2-3h totali |
+| **STEP 2C** | Architettura definitiva post-sweep: aggiorna `config.py` con valori ottimali, test su dataset full-mix | ⏸️ futuro | variabile |
+
+**Pattern TAG**: `P9_S2A_*`, `P9_S2B_h<HIDDEN>_r<RANK>` (es. `P9_S2B_h64_r16`), `P9_S2C_*`.
+
+---
+
+## 💡 Concetti emersi dalle sessioni (eurekas + diagnosi)
+
+| Concetto | Significato | Riferimento |
+|----------|-------------|-------------|
+| **Plateau val_loss** | Limite asintotico inferiore della val_loss su un dato dataset. Per CF_FSNN: 0.35 su full-mix, 0.28 su highway-only. È strutturale (P9). | P8 |
+| **Plateau dancing** | Pattern oscillatorio della loss quando la rete ha raggiunto il plateau ma il training continua. Std≈0.024 sul nostro modello. Rivelato dall'eureka 1 utente | Eureka 1 |
+| **Fast iteration mode** | Regime di training con `n_train` ridotto (500 vs 5000) + `epochs` aumentate + `early_stop_delta` aggressivo (0.005). Permette parametric sweeps in poche ore | STEP 2A, Eureka 2 |
+| **Capacity insufficiency** | La rete (864 param) è troppo piccola per il task. Sintomi: plateau val_loss, oscillazione spike rate, esplosione gradiente. Conferma: highway 0.28 ≠ full-mix 0.35 | P9 |
+| **Task complexity vs Capacity** | Il plateau scala con la complessità del task: più scenari/cut_in = più capacity richiesta. Permette di "calibrare" capacity al task | P9, Eureka 1 verificata |
+| **Convergenza in 10% di E1** | Il 90% del miglioramento si raggiunge nei primi 298 batch su 3047 (di un dataset 5000). Il resto è plateau dancing. | Eureka 2 |
+| **Po2 ≠ plateau** | Po2 quantization NON determina il plateau (i pesi raw sono float). Determina solo la "forma" del dancing | Eureka 1 corretta |
+
+---
+
+## ⚙️ CLI args di `train.py` (post-STEP 2A)
+
+### Training base
+| Arg | Default | Esempio |
+|-----|---------|---------|
+| `--epochs` | 50 (config) | `--epochs 10` |
+| `--batch_size` | 64 | `--batch_size 128` |
+| `--seq_len` | 100 | `--seq_len 50` |
+| `--lr` | 0.001 | `--lr 1e-3` |
+| `--scheduler` | plateau | `--scheduler onecycle` |
+| `--max_lr` (per onecycle) | 5e-3 | `--max_lr 2e-3` |
+| `--T0` (per cosine) | 5 | `--T0 5` |
+| `--optimizer` | adam | `--optimizer adamw` |
+| `--smoke` | False | `--smoke` (1 epoca, n≤100) |
+| `--tag` | 'run' | `--tag P9_S2A_fast` |
+
+### Dataset (P10)
+| Arg | Default | Esempio |
+|-----|---------|---------|
+| `--n_train` | 5000 | `--n_train 500` |
+| `--n_val` | 500 | `--n_val 100` |
+| `--scenario_mix` | 'default' | `--scenario_mix highway` |
+| `--cut_in_ratio` | None (= config) | `--cut_in_ratio 0.0` |
+| `--data_cache` | None | `--data_cache data/cache_500_highway_cut0.0.pt` |
+
+### PINN loss
+| Arg | Default (config) | Esempio |
+|-----|-----------------|---------|
+| `--lambda_data` | 1.0 | `--lambda_data 1.0` |
+| `--lambda_phys` | 0.1 | `--lambda_phys 0.1` |
+| `--lambda_ou` | 0.05 | `--lambda_ou 0.05` |
+| `--lambda_bc` | 1.0 | `--lambda_bc 1.0` |
+| `--lambda_sr` (B5) | 0.5 | `--lambda_sr 0.5` |
+
+### Early stopping (P11)
+| Arg | Default | Esempio |
+|-----|---------|---------|
+| `--early_stop_patience` | 0 (disabled) | `--early_stop_patience 2` |
+| `--early_stop_delta` | 1e-4 | `--early_stop_delta 0.005` (STEP 2A) |
+
+### Diagnostica
+| Arg | Default | Esempio |
+|-----|---------|---------|
+| `--max_inf_streak` | 20 | `--max_inf_streak 20` |
+| `--log_every` | 50 | `--log_every 50` |
+
+### Da implementare per STEP 2B (NON ancora presenti)
+| Arg | Significato |
+|-----|-------------|
+| `--cf_hidden_size` | Sovrascrive `CF_HIDDEN_SIZE` (default 32) — TBD STEP 2B |
+| `--cf_rank` | Sovrascrive `CF_RANK` (default 8) — TBD STEP 2B |
+
+---
+
 ## 🖼️ G1-G13 — Grafici diagnostici (in `plots/<TAG>/`)
 
 ### Per-epoca (G1-G7) — letti da `training_log.csv`
