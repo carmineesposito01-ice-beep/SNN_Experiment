@@ -159,7 +159,85 @@
 - `WORKFLOW.md` (procedura end-to-end Azure + notebook)
 - `TIMELINE.md` (questo file)
 
-**Status corrente**: in attesa di lancio `P9_S1_highway_v2` su Azure con notebook aggiornato.
+### Sera tarda: P9_S1_highway_v2 → P9 CONFERMATO + eurekas utente
+
+**Run**: `P9_S1_highway_v2` su Azure (notebook con P10+P11, scenario_mix='highway' via CLI)
+
+**Risultato**: ⚠️ **CRASH a E3 B2431** MA **val_loss=0.2786 in E1**, **0.2768 in E2** — **molto sotto** il plateau full-mix 0.354.
+
+**Scoperta cruciale (P9 CONFERMATO)**:
+
+| Dataset | Plateau val_loss | Implicazione |
+|---------|-------------------|--------------|
+| Full-mix (P6_T3) | 0.354 | — |
+| **Highway-only (P9_S1_v2)** | **0.277** | -22% rispetto a full-mix |
+
+Se Po2 quantization fosse il bottleneck, i 2 plateau sarebbero IDENTICI. Sono DIVERSI → il limite è **task complexity vs capacity**. **P9 confermato matematicamente.**
+
+### Sera tarda: 2 eurekas utente
+
+L'utente ha proposto 2 osservazioni che si sono rivelate brillanti:
+
+**Eureka 1 — "Po2 → pesi finiti → la rete balla intorno all'optimum"**
+
+Verifica empirica:
+- E1: loss_range=0.945, std=0.099 (sta IMPARANDO)
+- E2: loss_range=0.163, std=0.024 (oscilla)
+- E3: loss_range=0.171, std=0.024 (stesso pattern)
+
+Verdetto: **parzialmente corretta**. Il "dancing" è reale, ma:
+- I pesi raw sono float continui (Po2 solo nel forward via STE)
+- Il LIVELLO del plateau è dato da P9, non da Po2
+- Prova del nove: highway plateau 0.28 vs full-mix 0.35 — diversi! Quindi Po2 non è la causa
+
+**Eureka 2 — "Training super-rapido + parametric sweeps fattibili"**
+
+Verifica empirica (numero killer):
+- E1 totale improvement: 0.575
+- **90% del miglioramento E1 raggiunto a B298/3047 = 9.8% di E1!**
+- E2-E3 quasi non migliorano (0.371 → 0.277 → 0.276)
+
+Verdetto: ✅ **completamente corretta**. La rete converge in ~5 min, il resto è plateau-dancing. Si sblocca la **strategia parametric sweep** (5-10 configurazioni in poche ore invece di giorni).
+
+### Sera tarda: STEP 2A applicato (commit `ed8debb`)
+
+**Strategia STEP 2A — Fast iteration mode**:
+- `n_train: 500` (era 5000, /10x)
+- `epochs: 10` (più epoche brevi)
+- `early_stop_delta: 0.005` (aggressivo — era 1e-4)
+
+Modifiche:
+- `Training_File.ipynb` Cella 1: nuovo config STEP 2A
+- `Training_File.ipynb` Cella 5: CLI `--n_train`, `--n_val` aggiunti
+- `CACHE_PATH` include `n_train` per evitare collisioni cross-esperimento
+
+Validazione smoke locale:
+- E1 val=0.298 (159s), E2 val=0.293 (250s), E3 val=0.292 → **EARLY-STOP attivato**
+- Best val_loss=0.293, 15 PNG generati, tempo totale ~9.5 min CPU laptop
+- Speedup per epoca: 17× (160s vs 2700s precedenti)
+
+**Status corrente**: in attesa lancio `P9_S2A_fast_baseline` su Azure (atteso ~15-25 min).
+
+### Sera tarda: problemi minori risolti
+
+- **Git push rejected** (Azure): utente ha fatto `git pull --no-rebase` e si è ritrovato in nano (merge commit editor) — risolto guidandolo a `Ctrl+X, Y, Enter`
+- **Cella 9 `KeyError: 'gn_median'`**: inconsistenza nei nomi colonna (`gn_med` vs `gn_median`) — fix manuale fornito all'utente
+- **Git pull bloccato per modifiche locali**: utente ha eseguito notebook prima del pull → outputs creati → conflict. Soluzione: `git checkout -- Training_File.ipynb && git pull origin main`
+
+---
+
+## 📌 Stato al 2026-05-28 sera tarda
+
+- HEAD: `ed8debb` (STEP 2A applicato)
+- **P9 CONFERMATO matematicamente** (val_loss highway 0.277 vs full-mix 0.354)
+- Entrambe le eurekas utente verificate con dati
+- Fast iteration mode validato in locale
+- In attesa: `P9_S2A_fast_baseline` su Azure
+
+**Roadmap futura aggiornata**:
+- STEP 2A (in attesa Azure): validare baseline fast-iteration
+- STEP 2B: parametric sweep su `CF_HIDDEN_SIZE` (32/48/64/96) + opz. `CF_RANK`
+- STEP 2C: architettura definitiva post-sweep
 
 ---
 
@@ -211,6 +289,26 @@ Possibili azioni:
 - Migliorare encoding input (forse normalizzazione subottimale)
 - Migliorare loss formulation (forse i 5 lambda sono mal bilanciati per i 5 parametri)
 
+### 8. La rete converge nel 10% di E1 (eureka utente confermata)
+Su `P9_S1_highway_v2`: 90% del miglioramento E1 raggiunto a B298 su 3047 (= 9.8% di E1). Le epoche 2-3 quasi non migliorano. **Conclusione**: spendere 5 epoche complete è uno spreco.
+
+**Implicazione**: si può iterare 10-20× più velocemente con:
+- Dataset ridotto (`n_train=500` invece di 5000)
+- Più epoche brevi (`epochs=10` con early stopping aggressivo)
+- `early_stop_delta=0.005` (non 1e-4 — quello non ferma mai)
+
+Sblocca **parametric sweeps** (testare 10+ configurazioni in poche ore) che altrimenti richiederebbero giorni. STEP 2A applica esattamente questo (commit `ed8debb`).
+
+### 9. Po2 quantization NON è il bottleneck (eureka utente parzialmente corretta)
+L'utente ha ipotizzato: "i pesi sono Po2, quindi finiti, quindi la rete balla intorno all'optimum". Verifica:
+
+- ✅ Il "dancing" è reale (E2/E3 std=0.024, oscillazione 0.16 attorno alla mediana)
+- ⚠️ MA i pesi raw sono float continui (Po2 solo nel forward via STE)
+- ⚠️ Il LIVELLO del plateau è dato da capacity vs task complexity (P9), non da Po2
+- ⚠️ Prova del nove: highway plateau 0.28 ≠ full-mix plateau 0.35 — sarebbero IDENTICI se Po2 fosse il bottleneck
+
+**Lezione**: il PATTERN osservato dall'utente era reale e importante, ma il **meccanismo** era sbagliato. Verificare sempre i meccanismi con esperimenti di controllo (in questo caso: confrontare 2 dataset di complessità diversa).
+
 ---
 
 ## 🗓️ Riepilogo commit chiave (per archeologia)
@@ -230,32 +328,45 @@ Possibili azioni:
 | `bf0d8c6` | 2026-05-28 | docs P_S.md P7+P8+P9 (diagnosi capacity) |
 | `8004883` | 2026-05-28 | results P9_S1_highway_only (config drift) |
 | `3dedf51` | 2026-05-28 | feat P10+P11 + Training_File.ipynb tracked |
+| `d3dbdf1` | 2026-05-28 | docs 4 nuovi (SESSION_RESUME, GLOSSARY, WORKFLOW, TIMELINE) |
+| `38888c5` | 2026-05-28 | merge results P9_S1_highway_v2 (Azure) |
+| `ed8debb` | 2026-05-28 | feat STEP 2A fast iteration mode (n_train=500, delta=0.005) |
 
 ---
 
-## 🔮 Roadmap futura (post-`P9_S1_highway_v2`)
+## 🔮 Roadmap futura (post-`P9_S2A_fast_baseline` in attesa)
 
-### Caso A — P9_S1_highway_v2 ha val_loss < 0.30
-**P9 confermato**. Capacity insufficiency è il vero problema.
+### STEP 2A (in attesa Azure)
+Validare baseline del regime fast-iteration:
+- Atteso val_loss ~0.28 (simile a P9_S1_highway_v2)
+- Atteso tempo ~15-25 min (vs 2-3h del modo standard)
+- Atteso early_stop attivato a E4-E5
 
-**Next**: STEP 2 — capacity increase
-- `CF_HIDDEN_SIZE = 64` (era 32)
-- `CF_RANK = 16` (era 8)
-- Totale: 864 → ~2700 param (ancora FPGA-friendly)
-- Test su dataset full-mix con tutti i fix (A3+B5+P11)
-- Target: val_loss < 0.25
+### STEP 2B (dopo STEP 2A OK)
+**Parametric sweep capacity** (sfrutta fast-iteration mode):
 
-### Caso B — P9_S1_highway_v2 ha val_loss ≈ 0.35
-**P9 falsificato**. Il limite è dato dal task/loss/encoding, non dalla rete.
+Configurazioni da testare (4-6 run, ~1.5-2h totali):
 
-**Next**: indagine separata
-- Rivedere normalizzazione input (NORM_S_MAX, NORM_V_MAX, ecc.)
-- Rivedere bilanciamento lambda (i 5 termini sono comparabili?)
-- Valutare se l'OU floor (~1.8e-4) è davvero il limite teorico
-- Considerare riformulazione del task (regression diretta di v_dot invece di parametri IDM?)
+| TAG | CF_HIDDEN | CF_RANK | Param totali |
+|-----|-----------|---------|--------------|
+| P9_S2B_h32_r8 (baseline = S2A) | 32 | 8 | 864 |
+| P9_S2B_h48_r8 | 48 | 8 | ~1500 |
+| P9_S2B_h64_r8 | 64 | 8 | ~2400 |
+| P9_S2B_h64_r16 | 64 | 16 | ~3500 |
+| P9_S2B_h96_r16 | 96 | 16 | ~6500 |
 
-### Caso C — P9_S1_highway_v2 va in plateau a ~0.30
-**P9 parziale**. Procediamo a STEP 2 ma con aspettative ridotte.
+Target: trovare il **knee curve** (val_loss vs param count). Sweet spot atteso 64-96 neuroni.
+
+**Requisito tecnico**: parametrizzare `CF_HIDDEN_SIZE` e `CF_RANK` come CLI args.
+
+### STEP 2C (dopo STEP 2B)
+Cementare l'architettura vincitrice:
+- Aggiornare `config.py` con `CF_HIDDEN_SIZE/CF_RANK` ottimali
+- Test su dataset FULL-MIX (non highway-only) con la nuova capacity
+- Aggiornare `report_4.md` con architettura definitiva
+
+### Caso patologico — STEP 2A val_loss > 0.32
+Se il fast-iteration mode produce risultati significativamente peggiori, significa che `n_train=500` è troppo piccolo per imparare. Adatti a `n_train=1000` o `n_train=2000` e ripetere.
 
 ---
 

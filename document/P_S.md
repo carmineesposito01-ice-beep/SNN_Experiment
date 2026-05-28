@@ -5,9 +5,9 @@
 > 🔧 **Per workflow Azure end-to-end**: vedi `WORKFLOW.md`.
 > 🏛️ **Per storia decisioni + lessons learned**: vedi `TIMELINE.md`.
 
-> **Ultima modifica:** 2026-05-28 17:30 CET
-> **Sessione:** post-P9_S1_highway_only (FALLITO per config.py non modificato su Azure) — applicazione P10 + P11
-> **Stato corrente:** Infrastruttura potenziata: notebook `Training_File.ipynb` ora tracciato in git e sincronizzato via pull (zero modifiche manuali a config.py su Azure). Scenari e cut_in controllabili da CLI/CONFIG (P10). Early stopping per evitare training oltre il plateau e prevenire crash post-saturazione (P11, fix preventivo per P7/P8/P9). Smoke locale highway-only OK: val=0.341 in 1 epoca (vs plateau full-mix ~0.37 → -8% già con dataset semplificato).
+> **Ultima modifica:** 2026-05-28 21:30 CET
+> **Sessione:** post-P9_S1_highway_v2 (P9 CONFERMATO) + 2 eurekas utente + STEP 2A applicato
+> **Stato corrente:** P9 (capacity insufficiency) CONFERMATO MATEMATICAMENTE: highway-only val=0.277 vs full-mix 0.354 (-22%). Entrambe le eurekas utente verificate: dancing reale ma Po2 non è il bottleneck (il livello del plateau è dato dalla capacity); training super-rapido confermato (90% miglioramento E1 in 10% di E1). STEP 2A (commit `ed8debb`) applicato: notebook con n_train=500, epochs=10, early_stop_delta=0.005. Smoke locale OK: 3 epoche, EARLY-STOP attivato, val=0.293, tempo ~9.5min CPU laptop (17× speedup per epoca). **NEXT: utente lancia P9_S2A_fast_baseline su Azure (~15-25 min atteso) per validare il regime fast-iteration prima di STEP 2B (parametric sweep capacity)**.
 
 Documento vivo: ogni problema ha (1) descrizione, (2) firma diagnostica, (3) causa root,
 (4) soluzioni in ordine di impatto. Le soluzioni si marcano `[ ] proposta`,
