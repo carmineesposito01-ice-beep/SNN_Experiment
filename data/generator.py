@@ -432,13 +432,68 @@ def normalize(traj):
 # 7. CAMPIONAMENTO SCENARIO
 # ===========================================================
 
-def _sample_scenario(rng):
+def parse_scenario_mix(spec):
+    """Parse stringa scenario_mix in dict {scenario_name: prob}.
+
+    Formati supportati:
+      - "default" → ritorna SCENARIO_MIX da config.py (mix originale)
+      - "highway" → {'highway':1.0, 'urban':0.0, 'truck':0.0, 'mixed':0.0}
+        (singolo scenario al 100%)
+      - "urban", "truck", "mixed" → analogo (100% sul scenario indicato)
+      - "highway:0.7,urban:0.3" → mix custom (somma deve essere 1.0 ±0.01)
+
+    Args:
+        spec: str (nome scenario, "default", o spec custom) | None (→ default)
+
+    Returns:
+        dict {str: float} normalizzato (somma = 1.0)
     """
-    Campiona parametri, profilo e tipo di scenario dalla distribuzione SCENARIO_MIX.
-    Con probabilita' CUT_IN_RATIO lo scenario e' marcato come cut-in (UC2).
+    if spec is None or spec == 'default':
+        return dict(SCENARIO_MIX)
+
+    valid_scenarios = ['highway', 'urban', 'truck', 'mixed']
+
+    # Singolo scenario al 100%
+    if spec in valid_scenarios:
+        return {s: (1.0 if s == spec else 0.0) for s in valid_scenarios}
+
+    # Spec custom "scenario:prob,scenario:prob,..."
+    result = {s: 0.0 for s in valid_scenarios}
+    for item in spec.split(','):
+        item = item.strip()
+        if ':' not in item:
+            raise ValueError(f"Spec scenario_mix invalida: '{item}' "
+                             f"(usa 'scenario:prob' o nome singolo)")
+        name, prob = item.split(':', 1)
+        name = name.strip()
+        if name not in valid_scenarios:
+            raise ValueError(f"Scenario sconosciuto: '{name}'. "
+                             f"Validi: {valid_scenarios}")
+        result[name] = float(prob)
+
+    total = sum(result.values())
+    if abs(total - 1.0) > 0.01:
+        raise ValueError(f"Probabilità scenario_mix non sommano a 1.0 "
+                         f"(somma={total:.3f}): {result}")
+    return result
+
+
+def _sample_scenario(rng, scenario_mix=None, cut_in_ratio=None):
     """
-    types  = list(SCENARIO_MIX.keys())
-    probs  = list(SCENARIO_MIX.values())
+    Campiona parametri, profilo e tipo di scenario dalla distribuzione data.
+
+    Args:
+        rng: np.random.Generator
+        scenario_mix: dict {scenario_name: prob} | None (→ usa SCENARIO_MIX da config)
+        cut_in_ratio: float in [0,1] | None (→ usa CUT_IN_RATIO da config)
+    """
+    if scenario_mix is None:
+        scenario_mix = SCENARIO_MIX
+    if cut_in_ratio is None:
+        cut_in_ratio = CUT_IN_RATIO
+
+    types  = list(scenario_mix.keys())
+    probs  = list(scenario_mix.values())
     stype  = types[rng.choice(len(types), p=probs)]
 
     if stype == 'highway':
@@ -466,8 +521,8 @@ def _sample_scenario(rng):
         p['T']   = rng.uniform(IDM2D_T1, IDM2D_T2)
         prof = rng.choice(['stop_and_go', 'sinusoidal'])
 
-    # Marcatura cut-in (UC2)
-    is_cut_in = rng.random() < CUT_IN_RATIO
+    # Marcatura cut-in (UC2) — usa override se fornito
+    is_cut_in = rng.random() < cut_in_ratio
 
     return p, str(prof), stype, bool(is_cut_in)
 
@@ -476,12 +531,24 @@ def _sample_scenario(rng):
 # 8. GENERAZIONE DEL DATASET COMPLETO
 # ===========================================================
 
-def generate_dataset(n_scenarios, base_seed=SEED):
+def generate_dataset(n_scenarios, base_seed=SEED,
+                     scenario_mix=None, cut_in_ratio=None):
     """
     Genera n_scenarios traiettorie ACC-IDM.
-    Il 20% (CUT_IN_RATIO) include un evento di cut-in (UC2).
+
+    Args:
+        n_scenarios: int
+        base_seed: int (seed RNG)
+        scenario_mix: dict {scenario:prob} | None (→ SCENARIO_MIX da config)
+        cut_in_ratio: float | None (→ CUT_IN_RATIO da config)
+
     Restituisce lista di dict: x, y, mask, raw, params, profile, scenario, cut_in.
     """
+    if scenario_mix is None:
+        scenario_mix = SCENARIO_MIX
+    if cut_in_ratio is None:
+        cut_in_ratio = CUT_IN_RATIO
+
     rng          = np.random.default_rng(base_seed)
     dataset      = []
     warmup_steps = int(WARMUP_DURATION / DT)
@@ -489,7 +556,7 @@ def generate_dataset(n_scenarios, base_seed=SEED):
 
     for i in range(n_scenarios):
         seed_i             = int(rng.integers(0, 2**31))
-        p, prof, stype, is_cutin = _sample_scenario(rng)
+        p, prof, stype, is_cutin = _sample_scenario(rng, scenario_mix, cut_in_ratio)
 
         if is_cutin:
             traj = simulate_cut_in_trajectory(p, profile=prof, seed=seed_i)

@@ -693,6 +693,18 @@ def main():
                         help='Batch consecutivi con grad=inf prima di abortire (default=20)')
     parser.add_argument('--log_every',      type=int,   default=LOG_EVERY,
                         help='Frequenza log batch (default=50; smoke forza 1)')
+    # Dataset scenario override (P10 — CLI controllabili da notebook)
+    parser.add_argument('--scenario_mix', type=str, default='default',
+                        help="Mix scenari: 'default' (config.py) | 'highway' | 'urban' | "
+                             "'truck' | 'mixed' | 'highway:0.7,urban:0.3' (custom)")
+    parser.add_argument('--cut_in_ratio', type=float, default=None,
+                        help='Frazione cut-in [0,1]. Default None usa CUT_IN_RATIO da config.py')
+    # Early stopping (P11 — evita training oltre il plateau, fix per P8)
+    parser.add_argument('--early_stop_patience', type=int, default=0,
+                        help='Stop dopo N epoche senza miglioramento di val_loss. '
+                             '0 = disabilitato (default). Tipico: 2.')
+    parser.add_argument('--early_stop_delta',    type=float, default=1e-4,
+                        help='Soglia minima di miglioramento per resettare patience counter')
     # Checkpoint
     parser.add_argument('--resume',      type=str,   default=None,
                         help='Checkpoint .pt da cui riprendere')
@@ -735,7 +747,17 @@ def main():
         json.dump(config_snap, f, indent=2)
 
     # ── Dataset ───────────────────────────────────────────────────
-    from data.generator import generate_dataset, print_dataset_stats
+    from data.generator import generate_dataset, print_dataset_stats, parse_scenario_mix
+
+    # Parse override scenari/cut_in (P10 — risolve P9_S1 con cache=highway senza modifica config.py)
+    scenario_mix_dict = parse_scenario_mix(args.scenario_mix)
+    cut_in_eff        = args.cut_in_ratio  # None → generator usa CUT_IN_RATIO da config
+    print(f"[Dataset config] scenario_mix={scenario_mix_dict}")
+    print(f"[Dataset config] cut_in_ratio={cut_in_eff if cut_in_eff is not None else 'default (from config.py)'}")
+
+    # Sanity check: se cache esistente, verifica che sia compatibile con la config corrente
+    # (idealmente il tag della cache dovrebbe includere scenario/cut_in, ma per backward
+    # compatibility lasciamo la responsabilità all'utente — il print sopra rende esplicito)
 
     if args.data_cache is not None and os.path.isfile(args.data_cache):
         # ── Carica dalla cache .pt ─────────────────────────────────
@@ -745,6 +767,14 @@ def main():
         val_data   = cache['val']
         print(f"  Train: {len(train_data)} traiettorie  |  "
               f"Val: {len(val_data)} traiettorie  (seed={cache.get('seed', '?')})")
+        # Verifica coerenza cache vs scenario richiesto (warning solo)
+        cache_scenarios = set(d['scenario'] for d in train_data[:50])
+        requested = {s for s, p in scenario_mix_dict.items() if p > 0}
+        unexpected = cache_scenarios - requested
+        if unexpected:
+            print(f"  ⚠️  ATTENZIONE: cache contiene scenari {unexpected} non in scenario_mix={requested}.")
+            print(f"     La cache è stata generata con una config diversa. Considera di rigenerarla:")
+            print(f"     !rm {args.data_cache}")
 
     elif args.load_data is not None:
         # ── Legacy: carica da cartella pkl ────────────────────────
@@ -758,8 +788,12 @@ def main():
     else:
         # ── Genera ex novo ────────────────────────────────────────
         print("[Dataset] Generazione sintetica ACC-IDM ...")
-        train_data = generate_dataset(args.n_train, base_seed=SEED)
-        val_data   = generate_dataset(args.n_val,   base_seed=SEED + 1)
+        train_data = generate_dataset(args.n_train, base_seed=SEED,
+                                      scenario_mix=scenario_mix_dict,
+                                      cut_in_ratio=cut_in_eff)
+        val_data   = generate_dataset(args.n_val,   base_seed=SEED + 1,
+                                      scenario_mix=scenario_mix_dict,
+                                      cut_in_ratio=cut_in_eff)
         print_dataset_stats(train_data, 'train')
         print_dataset_stats(val_data,   'val')
 
@@ -872,7 +906,16 @@ def main():
           f"  batch={args.batch_size}  lr={args.lr}")
     print(f"  lam_data={args.lambda_data}  lam_phys={args.lambda_phys}"
           f"  lam_ou={args.lambda_ou}  lam_bc={args.lambda_bc}"
-          f"  lam_sr={args.lambda_sr}\n")
+          f"  lam_sr={args.lambda_sr}")
+    if args.early_stop_patience > 0:
+        print(f"  Early stop: patience={args.early_stop_patience}, "
+              f"delta={args.early_stop_delta}\n")
+    else:
+        print("  Early stop: DISABILITATO (patience=0)\n")
+
+    # P11 — Early stopping state (attivo solo se patience > 0)
+    es_no_improve = 0
+    es_best_val   = float('inf')
 
     try:
         for epoch in range(start_epoch, args.epochs + 1):
@@ -950,6 +993,29 @@ def main():
             # Checkpoint finale (sovrascrive ogni epoca)
             save_checkpoint(model, optimizer, epoch, val_m['total'],
                             os.path.join(save_dir, 'last_model.pt'))
+
+            # ── P11 Early Stopping ────────────────────────────────
+            # Conta epoche senza miglioramento significativo (> delta).
+            # Quando raggiunge patience, ferma il training per:
+            #   1) evitare di sprecare compute oltre il plateau (P8/P9)
+            #   2) prevenire crash da exploding gradient post-plateau (P6_T2/T3)
+            if args.early_stop_patience > 0:
+                if val_m['total'] < es_best_val - args.early_stop_delta:
+                    es_best_val   = val_m['total']
+                    es_no_improve = 0
+                    print(f"  [EarlyStop] Miglioramento OK — reset counter "
+                          f"(best={es_best_val:.5f})")
+                else:
+                    es_no_improve += 1
+                    print(f"  [EarlyStop] Nessun miglioramento ({es_no_improve}"
+                          f"/{args.early_stop_patience}). val={val_m['total']:.5f} "
+                          f"vs best={es_best_val:.5f} (delta>{args.early_stop_delta})")
+                    if es_no_improve >= args.early_stop_patience:
+                        print(f"\n  [EARLY-STOP] {args.early_stop_patience} epoche senza "
+                              f"miglioramento — training terminato volontariamente.\n"
+                              f"  Best val_loss={es_best_val:.5f} all'epoca "
+                              f"{epoch - args.early_stop_patience}.\n")
+                        break
     finally:
         # Garantisce chiusura dei CSV anche su Ctrl+C, OOM, CUDA error
         logger.close()

@@ -1,8 +1,8 @@
 # P_S.md — Problemi & Soluzioni CF_FSNN
 
-> **Ultima modifica:** 2026-05-28 11:00 CET
-> **Sessione:** post-P6_T3_full (Tier 3 con B5) — analisi rivelatrice
-> **Stato corrente:** SCOPERTA DIAGNOSTICA CRITICA: la rete è UNDERSIZED. val_loss converge a un plateau ~0.35 indipendentemente dai fix applicati (verificato T2 vs T3). L'esplosione del gradiente è SINTOMO di training oltre la capacità rappresentazionale, non causa root da risolvere. Vedi sezioni P7 (saturation), P8 (plateau confermato), P9 (capacity).
+> **Ultima modifica:** 2026-05-28 17:30 CET
+> **Sessione:** post-P9_S1_highway_only (FALLITO per config.py non modificato su Azure) — applicazione P10 + P11
+> **Stato corrente:** Infrastruttura potenziata: notebook `Training_File.ipynb` ora tracciato in git e sincronizzato via pull (zero modifiche manuali a config.py su Azure). Scenari e cut_in controllabili da CLI/CONFIG (P10). Early stopping per evitare training oltre il plateau e prevenire crash post-saturazione (P11, fix preventivo per P7/P8/P9). Smoke locale highway-only OK: val=0.341 in 1 epoca (vs plateau full-mix ~0.37 → -8% già con dataset semplificato).
 
 Documento vivo: ogni problema ha (1) descrizione, (2) firma diagnostica, (3) causa root,
 (4) soluzioni in ordine di impatto. Le soluzioni si marcano `[ ] proposta`,
@@ -419,3 +419,84 @@ Nel nostro caso non abbiamo un ANN baseline, ma:
 - **Commit rollback B4:** vedi git log
 - **Skill diagnostica:** `SNN-expert / ch22 §22.4` (Exploding Gradient), `§22.2` (Dead Network)
 - **Crash log A1_onecycle_v3:** `results/A1_onecycle_v3/` (CSV + grafici G8-G12)
+
+---
+
+## P10 — Config drift: scenario_mix/cut_in non controllabili da CLI
+
+### 10.1 Descrizione
+Test `P9_S1_highway_only` (2026-05-28) lanciato con TAG e CACHE_PATH corretti, ma
+`config.py` su Azure NON era stato modificato. Risultato: dataset generato con
+distribuzione full-mix (highway 50%, urban 30%, truck 10%, mixed 10%, cut_in 20%),
+training BIT-PER-BIT identico a P6_T3_full. Confermato:
+- val_loss E1=0.371, E2=0.363, E3=0.354 identici a P6_T3
+- G13 plots includono `urban` e `highway_cutin` (impossibili in highway-only)
+- Locale: `CUT_IN_RATIO=0.20`, `SCENARIO_MIX` originale
+
+### 10.2 Causa root
+SCENARIO_MIX e CUT_IN_RATIO erano costanti globali in `config.py`, modificabili
+solo via editing manuale del file. Su un sistema cloud con notebook persistente,
+questa è una fonte naturale di errori (dimenticanza, modifica non salvata, ecc.).
+
+### 10.3 Soluzione applicata (questo commit)
+- [x] `data/generator.py`: `parse_scenario_mix()` + `_sample_scenario()` e
+      `generate_dataset()` accettano override opzionali per scenario/cut_in
+- [x] `train.py`: nuovi CLI args `--scenario_mix` (es. 'highway', 'highway:0.7,urban:0.3')
+      e `--cut_in_ratio` (float). Sanity check warning se cache esistente ha
+      scenari inattesi.
+- [x] `Training_File.ipynb`: aggiunti `scenario_mix` e `cut_in_ratio` al CONFIG,
+      cache path include lo scenario per evitare collisioni cross-esperimento.
+- [x] Notebook ora **tracciato in git**: sync via pull, zero modifica manuale.
+
+### 10.4 Validazione smoke
+`python train.py --smoke --scenario_mix highway --cut_in_ratio 0.0 ...`
+- "Scenari: {'highway': 100}, Cut-in: 0 (0.0%)" ✓
+- "[Dataset config] scenario_mix={'highway': 1.0, ...}" ✓
+- val_loss 0.341 in 1 epoca smoke (vs 0.37 plateau full-mix)
+
+---
+
+## P11 — Early stopping: prevenire crash post-plateau + risparmio compute
+
+### 11.1 Descrizione
+Tutti i FULL run precedenti hanno mostrato la stessa firma (vedi P8):
+1. Training migliora val_loss fino a ~0.35 in 2-3 epoche
+2. Oltre il plateau, training continua a girare ma NON migliora
+3. Eventualmente esplode (P6_T2 in E2, P6_T3 in E4) o satura (P7)
+
+Su Azure CPU, una epoca costa ~2700s (~45min). Far girare 5 epoche oltre il
+plateau spreca compute E aumenta la probabilità di crash. Senza early stopping,
+ogni nuovo esperimento rischia di crashare nel finale.
+
+### 11.2 Soluzione applicata (questo commit)
+- [x] `train.py`: nuovi CLI args `--early_stop_patience` e `--early_stop_delta`
+- [x] Loop epoche: conta epoche consecutive senza miglioramento di
+      `val_loss > delta`. Quando raggiunge `patience`, interrompe il training.
+- [x] `Training_File.ipynb`: `early_stop_patience=2` e `delta=1e-4` di default
+      nel CONFIG.
+
+### 11.3 Impatto stimato
+Su 5 epoche con plateau a E3 (caso P6_T3):
+- Senza early stop: 5 epoche × 2700s = 13500s = **3.75 ore**, alto rischio crash
+- Con early stop patience=2: training si ferma a E3 (E2 e E3 non migliorano oltre
+  delta) = 3 epoche × 2700s = **2.25 ore**, no crash post-plateau
+- **Risparmio: ~40% compute + eliminazione rischio crash su run plateau-saturi**
+
+### 11.4 Relazione con altri P
+- **Risolve P7 (saturation post-B5)**: ferma prima che la rete saturi
+- **Mitiga P8 (plateau val~0.35)**: non spreca compute oltre il plateau
+- **Compatibile con P9 (capacity insufficiency)**: per aumentare il plateau servirà
+  cap. increase strutturale, ma early stop ci protegge nel frattempo
+
+---
+
+## Log delle decisioni (aggiornato)
+
+| Data | Decisione | Stato |
+|------|-----------|-------|
+| 2026-05-28 16:53 | Run P9_S1_highway_only fallito (config.py drift) | ❌ identico a P6_T3 |
+| 2026-05-28 17:15 | Decisione: rendere scenario/cut_in CLI-controllabili (P10) | accettato utente |
+| 2026-05-28 17:15 | Decisione: aggiungere early stopping (P11) per evitare plateau crash | accettato utente |
+| 2026-05-28 17:15 | Decisione: trackare Training_File.ipynb in git | accettato utente |
+| 2026-05-28 17:30 | P10 + P11 implementati, smoke locale OK (val=0.341 highway-only) | [x] applicato |
+| 2026-05-28 17:30 | NEXT: ri-eseguire P9_S1 con TAG `P9_S1_highway_v2` | in attesa utente |
