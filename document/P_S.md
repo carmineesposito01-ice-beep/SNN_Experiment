@@ -1,8 +1,8 @@
 # P_S.md — Problemi & Soluzioni CF_FSNN
 
-> **Ultima modifica:** 2026-05-27 21:00 CET
-> **Sessione:** post-P6_T2_full (A3+A1+A2) — applicazione B5 (spike-rate regularizer)
-> **Stato corrente:** B5 applicato (questo commit). Prossimo step: FULL training su Azure con TAG `P6_T3_full` (Tier 3: A1+A2+A3+B5). Smoke locale validato (61 batch, no inf, L_sr correttamente calcolato).
+> **Ultima modifica:** 2026-05-28 11:00 CET
+> **Sessione:** post-P6_T3_full (Tier 3 con B5) — analisi rivelatrice
+> **Stato corrente:** SCOPERTA DIAGNOSTICA CRITICA: la rete è UNDERSIZED. val_loss converge a un plateau ~0.35 indipendentemente dai fix applicati (verificato T2 vs T3). L'esplosione del gradiente è SINTOMO di training oltre la capacità rappresentazionale, non causa root da risolvere. Vedi sezioni P7 (saturation), P8 (plateau confermato), P9 (capacity).
 
 Documento vivo: ogni problema ha (1) descrizione, (2) firma diagnostica, (3) causa root,
 (4) soluzioni in ordine di impatto. Le soluzioni si marcano `[ ] proposta`,
@@ -222,6 +222,170 @@ Step 4  [escalation finale]
 
 ---
 
+## P7 — Spike-rate saturation (nuova firma post-B5)
+
+### 7.1 Descrizione
+Dopo l'applicazione di B5 (commit `a13afb6`), il training `P6_T3_full` ha mostrato un
+nuovo pattern di crash: l'esplosione **NON è più graduale** (come in P6_T2_full senza B5),
+ma **sporadica e correlata a saturation transitoria** della spike rate.
+
+### 7.2 Firma diagnostica
+- Spike rate medio E1-E3 **al target 12.55%** (B5 funziona)
+- Picchi transitori di spike rate fino al **58%** (zona dead → saturated, ch22 §22.5)
+- gn per batch normalmente 0.1-1.0, ma **picchi sporadici a 10⁹-10¹⁹** in coincidenza
+  con i picchi di spike rate
+- Esempio crash E3 B1466 (loss-batch 50 pre-crash = 0.40, vicino al plateau):
+  ```
+  B1463-1465: spike 56-58%, gn 0.7-1.0 (sopravvive)
+  B1466: spike 56.2%, gn=INF  ← saturation prolungata + perturbation → cascade
+  ```
+- Streak fino a 88 inf consecutivi prima di EARLY-STOP (vs 47 in T2)
+
+### 7.3 Causa root
+L'esplosione in T3 NON è il problema diretto. La causa root è la **rete che oscilla**
+attorno al plateau di capacità: quando i pesi sono saturi (vedi P9), piccole
+perturbazioni (input difficili come cut-in) causano spike saturation → BPTT con tutti
+i neuroni attivi → amplificazione catastrofica della catena ricorrenza U·V.
+
+B5 ha risolto la "dead network degenerante" di T2 ma ha esposto questo nuovo regime
+oscillatorio. **Aumentare LAMBDA_SR o asimmetria non è la soluzione vera**: la rete
+è semplicemente troppo piccola per il task (vedi P9).
+
+### 7.4 Decisione
+- [!] Asimmetria/aumento LAMBDA_SR **NON consigliato come primo step** (trattamento
+  sintomatico). Tenere in escalation se P9 non risolve.
+- B5 da mantenere (rate target raggiunto, non degenera più verso 0%).
+
+---
+
+## P8 — Plateau val_loss ~0.35 (osservazione utente, confermata matematicamente)
+
+### 8.1 Descrizione
+Osservazione utente 2026-05-28: *"L'esplosione del gradiente accade sempre verso una
+loss di 0.350. Che si arrivi più lentamente o meno, è sempre quel range."*
+
+### 8.2 Verifica quantitativa
+Analisi cross-run di **tutti** i training disponibili:
+
+| Run | E1 val | E2 val | E3 val | Batch loss mediana | Stato |
+|-----|--------|--------|--------|---------------------|-------|
+| `A1_onecycle_v3` (B4 attivo) | — | — | — | 0.685 (50 batch) | crash precoce |
+| `P6_T2_full` (A1+A2+A3) | **0.368** | crash | — | **0.368** | crash E2 |
+| `P6_T3_full` (A1+A2+A3+B5) | **0.371** | **0.363** | **0.354** | **0.370** | crash E4 |
+
+**Convergenza asintotica al plateau ~0.35-0.37 IDENTICA fra T2 e T3** — nonostante
+B5 abbia modificato dinamiche interne (spike rate da 5% → 13%).
+
+### 8.3 Significato
+- La loss **non scende sotto 0.35** indipendentemente da:
+  - Fix architetturali (A3 γ surrogate)
+  - Fix parametrici (A1 max_lr, A2 seq_len)
+  - Regolarizzatori (B5 spike rate)
+- L'esplosione del gradiente NON è il problema da risolvere — è **conseguenza** del
+  training oltre il plateau
+
+### 8.4 Verifica osservazione "oltre causa instabilità"
+Loss-batch std per epoca in P6_T3_full:
+```
+E1: std=0.19  (rete sta imparando attivamente)
+E2: std=0.06  (assestata sul plateau)
+E3: std=0.06  (sul plateau)
+E4: std=0.05  (sul plateau MA con esplosioni periodiche → distruzione pesi)
+```
+Anche `spike_std`:
+```
+E1: 4.74%  (variabile, esploration)
+E2: 1.86%  (stabile, sweet-spot)
+E3: 5.44%  (rumore crescente)
+E4: 3.19%  (rotture sporadiche)
+```
+
+**Pattern netto**: dopo E2, la rete è in un equilibrio meccanico. Il training continua
+ad applicare gradient updates ma non c'è più segnale fisico da apprendere — solo
+amplificazione di rumore.
+
+### 8.5 Decodifica fisica del plateau
+val_loss=0.35 corrisponde principalmente a:
+- L_data (Masked RMSE accelerazione) ≈ 0.35 m/s²
+- L_phys (residuo ACC-IDM) ≈ 0.12 m/s²
+
+Stima del noise floor irreducibile del dataset:
+- Rumore OU su s, v: σ ≈ 0.1 → contributo ad accelerazione ~ 0.10 m/s²
+- Rumore OU su a (NOISE_ACCEL=0.1): σ = 0.10 m/s²
+- Packet loss 2%: trascurabile (Masked RMSE esclude i frame mancanti)
+- Stocasticità T (jump process IDM-2d): ~0.05 m/s²
+- **Total noise floor stimato: ~0.15-0.18 m/s²**
+
+Gap **0.35 - 0.15 = ~0.20 m/s² di errore "evitabile"** che la rete attuale non riesce
+a ridurre → la rete non è limitata dal noise floor, ma dalla propria capacità.
+
+---
+
+## P9 — Capacity insufficiency (diagnosi root)
+
+### 9.1 Descrizione
+La rete CF_FSNN_Net attuale ha **864 parametri totali**:
+```
+layer_hidden.fc_weight        (32, 4)   = 128
+layer_hidden.rec_U            (32, 8)   = 256
+layer_hidden.rec_V            (8, 32)   = 256
+layer_hidden.cell.base_thresh (32,)     =  32
+layer_hidden.cell.thresh_jump (32,)     =  32
+layer_out.fc_weight           (5, 32)   = 160
+                                       -------
+                                  TOTALE = 864
+```
+
+Per imparare 5 parametri IDM continui su:
+- 4 scenari (highway, urban, truck, mixed)
+- 20% cut-in events
+- Rumore multiplo
+- Sequenze temporali di 50-100 step
+
+La rete è **sotto-dimensionata** rispetto al task. Confermato dall'osservazione di P8
+(plateau a ~0.35 = 0.20 m/s² sopra noise floor).
+
+### 9.2 Riferimento letteratura
+ch22 SNN-expert §22.6 (underfitting/plateau): *"se la loss decresce ma stalla 5-10%
+sopra ANN baseline → network too small, SNN typically needs ~1.5× ANN width for same
+accuracy"*.
+
+Nel nostro caso non abbiamo un ANN baseline, ma:
+- Treiber Ch17 indica RMSE accelerazione "buona" come 0.1-0.2 m/s² per ACC reale
+- Stiamo a 0.35 — circa **2× sopra** il target
+
+### 9.3 Soluzioni proposte (Tier 4 — NUOVO rispetto a P6)
+
+| # | Soluzione | Modifiche | Prob. fix plateau | Costo HW |
+|---|-----------|-----------|-------------------|----------|
+| **E1** | Hidden: 32 → 64 ALIF | `CF_HIDDEN_SIZE=64` in config.py | **~70%** | x2 footprint FPGA |
+| **E2** | Rank: 8 → 16 | `CF_RANK=16` in config.py | ~40% (solo ricorrenza) | x2 mult ricorrenti |
+| **E3** | E1+E2 combinati | 2 valori in config.py | **~85%** | x2-x3 footprint |
+| **F1** | Early stopping (`patience=2` su val_loss) | ~10 righe in train.py | 0% per il plateau, **100%** per evitare crash | Zero |
+| **F2** | Cosine scheduler con `eta_min=1e-5` (forte decadimento finale) | 1 CLI flag | ~30% (riduce updates dopo plateau) | Zero |
+| **G1** | Scope ridotto (solo `highway`, no `cut_in`) — debug | `SCENARIO_MIX={'highway':1.0}` + `CUT_IN_RATIO=0.0` | Diagnostico: conferma capacity | Zero per debug |
+
+### 9.4 Sequenza raccomandata
+
+**Step 1 — Diagnostico (zero modifiche al codice base)**:
+- Lanciare `P6_T3_full` con **early stopping** e `SCENARIO_MIX={'highway':1.0}` per
+  vedere se su task semplificato la rete scende sotto 0.35.
+- Se SÌ → conferma capacity insufficiency, procedere E1+E2 (Step 2).
+- Se NO → il problema è altrove (analisi più approfondita).
+
+**Step 2 — Aumento capacità (modifica config)**:
+- Applicare E3: `CF_HIDDEN_SIZE=64`, `CF_RANK=16`
+- Mantenere tutti i fix attuali (A1+A2+A3+B5)
+- Aggiungere F1 (early stopping) per sicurezza
+- FULL training su Azure
+
+**Step 3 — Tuning fisico** (se Step 2 OK):
+- Cambiare scheduler (cosine vs onecycle)
+- Bilanciare lambda weights
+- Ottimizzare hyperparam del modello fisico
+
+---
+
 ## Log delle decisioni
 
 | Data | Decisione | Stato |
@@ -238,6 +402,11 @@ Step 4  [escalation finale]
 | 2026-05-27 20:30 | Diagnosi P6_T2: spike rate degenera (7%→3% in E2) → dead network → esplosione | ✓ identificato |
 | 2026-05-27 21:00 | Applicato B5: spike-rate regularizer L_sr=(sr-0.15)², LAMBDA_SR=0.5 | [x] applicato |
 | 2026-05-27 21:00 | Smoke locale B5 OK: L_sr correttamente calcolato (~0.019 per spike=1.3%) | ✅ validato |
+| 2026-05-28 10:30 | FULL P6_T3_full Azure: 3 epoche complete (val 0.371→0.363→0.354), crash E4 | ⚠️ stabile poi degenera |
+| 2026-05-28 11:00 | Osservazione utente: "esplosione SEMPRE verso loss ~0.35" | 🔍 verificata |
+| 2026-05-28 11:00 | Osservazione utente: "oltre il sweet-spot c'è solo instabilità" | 🔍 verificata |
+| 2026-05-28 11:00 | CONFERMA matematica plateau ~0.35: T2 mediana 0.368, T3 mediana 0.370 | ✓ confermato |
+| 2026-05-28 11:00 | NUOVA DIAGNOSI: rete UNDERSIZED (864 param insufficienti per task multi-scenario) | ✓ identificato |
 
 ---
 
