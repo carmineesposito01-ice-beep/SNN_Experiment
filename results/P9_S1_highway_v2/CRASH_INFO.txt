@@ -1,0 +1,3 @@
+Crash detected
+Epoch: 3
+val_loss: inf
