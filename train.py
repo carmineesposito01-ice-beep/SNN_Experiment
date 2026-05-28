@@ -705,6 +705,11 @@ def main():
                              '0 = disabilitato (default). Tipico: 2.')
     parser.add_argument('--early_stop_delta',    type=float, default=1e-4,
                         help='Soglia minima di miglioramento per resettare patience counter')
+    # STEP 2B — capacity sweep (None → usa default da config.py)
+    parser.add_argument('--cf_hidden_size', type=int, default=None,
+                        help='Override CF_HIDDEN_SIZE per sweep parametrico (None=default config)')
+    parser.add_argument('--cf_rank',        type=int, default=None,
+                        help='Override CF_RANK per sweep parametrico (None=default config)')
     # Checkpoint
     parser.add_argument('--resume',      type=str,   default=None,
                         help='Checkpoint .pt da cui riprendere')
@@ -840,10 +845,14 @@ def main():
     print(f"[Dataset] Finestre train: {len(train_ds)}  |  val: {len(val_ds)}"
           f"  |  num_workers={_nw}")
 
-    # ── Modello ───────────────────────────────────────────────────
-    model    = CF_FSNN_Net().to(device)
+    # ── Modello (STEP 2B: hidden_size/rank overridabili da CLI) ──
+    model    = CF_FSNN_Net(
+        hidden_size=args.cf_hidden_size,
+        rank=args.cf_rank,
+    ).to(device)
     n_params = sum(p.numel() for p in model.parameters())
-    print(f"\n[Modello] CF_FSNN_Net  --  parametri totali: {n_params:,}")
+    print(f"\n[Modello] CF_FSNN_Net  --  hidden={model.hidden_size}, rank={model.rank}, "
+          f"parametri totali: {n_params:,}")
 
     # ── Ottimizzatore ─────────────────────────────────────────────
     if args.optimizer == 'adam':

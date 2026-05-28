@@ -303,13 +303,24 @@ class CF_FSNN_Net(nn.Module):
         [ 0.5,  3.0],   # 4: b  [m/s²]
     ]
 
-    def __init__(self):
+    def __init__(self, hidden_size=None, rank=None):
+        """
+        Args:
+            hidden_size: override CF_HIDDEN_SIZE (None → usa config). Per STEP 2B sweep.
+            rank: override CF_RANK (None → usa config). Per STEP 2B sweep.
+        """
         super().__init__()
         from config import (
             CF_INPUT_SIZE, CF_HIDDEN_SIZE, CF_OUTPUT_SIZE,
             CF_RANK, CF_MAX_DELAY, TICKS_PER_STEP,
             IDM2D_T1, IDM2D_T2, IDM2D_TAU, DT,
         )
+
+        # STEP 2B: capacity override via kwargs (None → fallback su config).
+        hidden_size = hidden_size if hidden_size is not None else CF_HIDDEN_SIZE
+        rank        = rank        if rank        is not None else CF_RANK
+        self.hidden_size = hidden_size   # esposto per logging/diagnostica
+        self.rank        = rank
 
         self.n_ticks  = TICKS_PER_STEP
         self.T1       = IDM2D_T1
@@ -319,10 +330,10 @@ class CF_FSNN_Net(nn.Module):
         self.ou_alpha = _math.exp(-DT / IDM2D_TAU)
 
         self.layer_hidden = HiddenLayer_ALIF(
-            CF_INPUT_SIZE, CF_HIDDEN_SIZE,
-            rank=CF_RANK, max_delay=CF_MAX_DELAY,
+            CF_INPUT_SIZE, hidden_size,
+            rank=rank, max_delay=CF_MAX_DELAY,
         )
-        self.layer_out = OutputLayer_LI(CF_HIDDEN_SIZE, CF_OUTPUT_SIZE)
+        self.layer_out = OutputLayer_LI(hidden_size, CF_OUTPUT_SIZE)
 
         # Bounds come buffer → si spostano con .to(device)
         bounds = torch.tensor(self._PARAM_BOUNDS, dtype=torch.float32)
