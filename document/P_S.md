@@ -1,5 +1,10 @@
 # P_S.md — Problemi & Soluzioni CF_FSNN
 
+> 📌 **Per il quick-start con zero contesto**: leggi `SESSION_RESUME.md` prima.
+> 📚 **Per decode acronimi P/A/B/F/T/PF/G**: vedi `GLOSSARY.md`.
+> 🔧 **Per workflow Azure end-to-end**: vedi `WORKFLOW.md`.
+> 🏛️ **Per storia decisioni + lessons learned**: vedi `TIMELINE.md`.
+
 > **Ultima modifica:** 2026-05-28 17:30 CET
 > **Sessione:** post-P9_S1_highway_only (FALLITO per config.py non modificato su Azure) — applicazione P10 + P11
 > **Stato corrente:** Infrastruttura potenziata: notebook `Training_File.ipynb` ora tracciato in git e sincronizzato via pull (zero modifiche manuali a config.py su Azure). Scenari e cut_in controllabili da CLI/CONFIG (P10). Early stopping per evitare training oltre il plateau e prevenire crash post-saturazione (P11, fix preventivo per P7/P8/P9). Smoke locale highway-only OK: val=0.341 in 1 epoca (vs plateau full-mix ~0.37 → -8% già con dataset semplificato).
