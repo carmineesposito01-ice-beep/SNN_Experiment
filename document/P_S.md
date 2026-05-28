@@ -505,3 +505,7 @@ Su 5 epoche con plateau a E3 (caso P6_T3):
 | 2026-05-28 17:15 | Decisione: trackare Training_File.ipynb in git | accettato utente |
 | 2026-05-28 17:30 | P10 + P11 implementati, smoke locale OK (val=0.341 highway-only) | [x] applicato |
 | 2026-05-28 17:30 | NEXT: ri-eseguire P9_S1 con TAG `P9_S1_highway_v2` | in attesa utente |
+| 2026-05-28 20:05 | P9_S1_highway_v2 completato: val=0.2768 (-22% vs full-mix plateau 0.354) | ✅ P9 CONFERMATO |
+| 2026-05-28 20:30 | Osservazione utente: 90% miglioramento E1 in ~10% di E1 → fast-iteration mode | accettato |
+| 2026-05-28 20:30 | STEP 2A applicato: notebook con n_train=500, epochs=10, early_stop_delta=0.005 | [x] applicato |
+| 2026-05-28 20:30 | Smoke locale STEP 2A: 3 epoche × ~160s, EARLY-STOP attivato a E3, val=0.292 | ✅ validato |
