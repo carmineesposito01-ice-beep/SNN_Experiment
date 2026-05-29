@@ -460,7 +460,224 @@ po2_zero_thr   = 2**-5   # ~0.031
 
 ---
 
-## 11. Per saperne di più
+## 11. Il modello fisico ACC-IIDM (target del PINN)
+
+La rete identifica i parametri di un controllore ACC (Adaptive Cruise Control) basato su **IIDM + CAH blend** (Treiber & Kesting Ch12 §12.4). Conoscere le equazioni è prerequisito per capire `L_data` e `L_phys`.
+
+### 11.1 IDM base (Intelligent Driver Model)
+
+```
+v̇_IDM = a · [ 1 − (v / v₀)^δ  −  (s*(v, Δv) / s)² ]
+
+s*(v, Δv) = s₀ + max(0,  v·T  +  v·Δv / (2·√(a·b)) )
+```
+
+con:
+- `s`, `v`, `Δv = v − v_leader` = stato osservato
+- `v₀, T, s₀, a, b` = i 5 parametri identificati dalla rete (δ=4 fissato)
+- `s*` = "desired gap" — funzione di v e Δv
+
+### 11.2 IIDM (Improved IDM)
+
+Elimina la "dispersione" di IDM a v≈v₀ separando i due regimi (free vs interacting):
+
+```
+For v ≤ v₀:
+    v̇ = a·(1 − z²)                       se z = s*/s ≥ 1   [interacting]
+    v̇ = a_free·(1 − z^(2a/a_free))       se z < 1           [free]
+For v > v₀:
+    v̇ = a_free + a·(1 − z²)·[z≥1]
+```
+
+dove `a_free = a·(1 − (v/v₀)^δ)`.
+
+### 11.3 CAH (Constant Acceleration Heuristic)
+
+```
+v_CAH = v²·v̇_l / (v_l² − 2·s·v̇_l)            se s > v_l(v−v_l)/(−2v̇_l) AND v̇_l < 0
+      = v̇_l − (v−v_l)²·Θ(v−v_l) / (2·s)     altrimenti
+```
+
+Anticipa che `v_l` continui con la sua attuale `v̇_l` (non worst-case). Riduce le over-reazioni nei cut-in lievi.
+
+### 11.4 Blend ACC-IIDM
+
+```
+v̇_ACC = v̇_IIDM                                                          se v̇_IIDM ≥ v_CAH
+      = (1−c)·v̇_IIDM + c·[v_CAH − b·tanh((v_CAH − v̇_IIDM)/b)]            altrimenti
+```
+
+con **coolness c=0.99** (default Treiber per ACC commerciali). c=0 ⇒ IIDM puro.
+
+Questo è il `v̇_gt` usato come target da `L_data` e `L_phys`.
+
+---
+
+## 12. Esempio numerico: un forward pass
+
+Caso concreto per validare la comprensione end-to-end.
+
+### 12.1 Setup
+
+Driver "highway" (v₀=33.3, T=1.2, s₀=2.5, a=1.1, b=1.5, δ=4). Stato osservato:
+
+```
+s     = 30.0 m          (gap follower-leader)
+v     = 25.0 m/s        (velocità follower)
+v_l   = 28.0 m/s        (velocità leader)
+Δv    = v − v_l = −3.0 m/s
+```
+
+### 12.2 Ground truth ACC-IIDM (target)
+
+```
+s*  = 2.5 + max(0, 25·1.2 + 25·(−3)/(2·√(1.1·1.5)))
+    = 2.5 + max(0, 30 − 29.2)
+    = 2.5 + 0.8 = 3.3 m
+z   = s*/s = 3.3/30 = 0.11
+v̇_IDM = 1.1·(1 − (25/33.3)⁴ − 0.11²) ≈ 1.1·(1 − 0.317 − 0.012) ≈ 0.738 m/s²
+```
+
+(blend con CAH trascurabile in regime free; v̇_gt ≈ 0.74 m/s²)
+
+### 12.3 Input normalizzato alla rete
+
+```
+s_norm    = 30.0 / 150.0  = 0.200
+v_norm    = 25.0 / 40.0   = 0.625
+dv_norm   = (−3.0)/20.0   = −0.150
+v_l_norm  = 28.0 / 40.0   = 0.700
+→ x_in = [0.200, 0.625, −0.150, 0.700]   shape (4,)
+```
+
+### 12.4 Propagazione (1 step temporale = 10 tick SNN)
+
+Per ogni tick:
+1. `fc_weight · x_in` → 32 currenti synaptiche (con delays applicati)
+2. ALIF integra → ~3–5 dei 32 neuroni sparano (spike rate ~10–15%)
+3. `rec_U·rec_V · spike_prev` → ricorrenza low-rank
+4. Output LI accumula → `raw_out ∈ ℝ⁵` (in `raw_eq` = `raw/decode_scale`)
+
+Dopo 10 tick, `raw_out` viene decodato:
+
+```
+raw_eq  = [+0.5, +1.2, −0.3, +0.8, +0.4]      (esempio)
+sig     = [0.622, 0.769, 0.426, 0.690, 0.599]
+params  = lo + (hi − lo) · sig
+        = [8 + 37·0.622, 0.5 + 2·0.769, 1 + 4·0.426, 0.3 + 2.2·0.690, 0.5 + 2.5·0.599]
+        = [31.0, 2.04, 2.70, 1.82, 2.00]
+```
+
+### 12.5 Loss su questo step
+
+Calcoliamo `v̇_pred` usando ACC-IIDM con i `params` predetti e lo stato `[s, v, Δv]`:
+
+```
+s*  = 2.70 + max(0, 25·2.04 + 25·(−3)/(2·√(1.82·2.00))) = 2.70 + (51.0 − 6.21) = 47.5 m
+z   = 47.5/30 = 1.583   (>1 → interacting)
+v̇_pred = 1.82·(1 − (25/31)⁴ − 1.583²) ≈ 1.82·(1 − 0.422 − 2.506) ≈ −3.51 m/s²
+```
+
+Confronto:
+```
+v̇_gt   = +0.74
+v̇_pred = −3.51
+residuo = 4.25 m/s²
+L_data (su questo singolo step) ≈ 4.25² → contribuisce 18 al cumulativo SRMSE
+```
+
+→ la rete predice un decel a freno mentre la fisica dice di continuare ad accelerare. **Questo è ciò che l'allenamento corregge minimizzando `L_data` su milioni di step**.
+
+---
+
+## 13. Criteri quantitativi di "funziona bene"
+
+Il valore di `val_loss` da solo non basta. Definiamo soglie per ogni metrica.
+
+### 13.1 Soglie quantitative
+
+| Metrica | Soglia "OK" | Soglia "Eccellente" | Razionale |
+|---|---|---|---|
+| `val_total` | < 0.20 | < 0.15 | Treiber Ch17: 20% residual floor per intra-driver variation |
+| `L_data / L_total` | > 0.70 | > 0.80 | La rete deve risolvere il task, non barare con L_phys |
+| **RMSE per-param** (vs ground truth IDM): | | | |
+| — v₀ [m/s] | < 5.5 (15% range) | < 2.2 (6%) | Range fisico 37 m/s |
+| — T [s] | < 0.30 (15%) | < 0.10 (5%) | Range 2 s |
+| — s₀ [m] | < 0.60 (15%) | < 0.20 (5%) | Range 4 m |
+| — a [m/s²] | < 0.33 (15%) | < 0.10 (5%) | Range 2.2 m/s² |
+| — b [m/s²] | < 0.38 (15%) | < 0.13 (5%) | Range 2.5 m/s² |
+| **Spike rate medio** | ∈ [5%, 30%] | ∈ [10%, 20%] | Sotto → dead neurons; sopra → no FPGA energy benefit |
+| **Inf grad batches** | 0 per ≥ 5 epoche | 0 per intero training | BPTT stabile |
+| **String stability** | `vₑ'(s) ≤ ½(fₗ−fᵥ)` (Treiber Ch16) | (idem) | Convoglio simulato non amplifica perturbazioni |
+| **Po2 gap** (val FP32 vs Po2) | < 10% | < 3% | Hardware-aware quality |
+
+### 13.2 Risultati attuali (baseline sweep STEP 2B, highway-only)
+
+| Run | h | r | params | val_best | spike% | Stato |
+|---|---|---|---|---|---|---|
+| h32_r8 | 32 | 8 | **864** | 0.2802 | 8.4 | OK |
+| h48_r12 | 48 | 12 | 1685 | 0.2789 | 9.1 | OK |
+| h64_r16 | 64 | 16 | 2757 | 0.2790 | 10.5 | OK |
+| h96_r24 | 96 | 24 | 5669 | 0.2797 | 7.7 | OK |
+| h128_r32 | 128 | 32 | 9605 | 0.2792 | 10.3 | OK |
+
+**Interpretazione**: tutti dentro `< 0.20` no, ma in zona `[0.27, 0.30]` con range 1.3 millesimi tra capacity diverse. Plateau strutturale (causa probabile: minimi locali per early stop + OneCycle troncato; vedi STEP 2C in TIMELINE).
+
+---
+
+## 14. Costi computazionali
+
+### 14.1 Inference (1 step temporale = 10 tick SNN)
+
+Baseline h=32, r=8:
+
+| Layer | Operazione | FLOPs (FP32 equiv.) | Su FPGA Po2 |
+|---|---|---|---|
+| `fc_weight` (4→32) | 1 MAC per tick × 10 tick | 4·32·10 = 1280 | shift+add (no MAC) |
+| `rec_U·rec_V` (32→8→32) | 2 MAC per tick × 10 | (32·8 + 8·32)·10 = 5120 | shift+add |
+| `ALIF` dinamica | leak + threshold + reset | ~3·32·10 = 960 | bit-shift + comparator |
+| `OutputLayer_LI` (32→5) | 1 MAC per tick × 10 | 32·5·10 = 1600 | shift+add |
+| Sigmoid+decode (output) | 1 per step | ~25 | LUT |
+| **Totale per step (Δt=0.1s)** | ~9000 FLOP-equivalenti | ~8.7k shift/add |
+
+A 10 Hz (controllo ACC real-time): **~90 kFLOPs/s** ≪ 1 MFLOPS. PYNQ-Z1 (Zynq-7020, 100+ DSP slice) ha margine 1000×.
+
+### 14.2 Memoria (FP32 → Po2 4-bit)
+
+| Tensore | FP32 (byte) | Po2 (byte) | Riduzione |
+|---|---|---|---|
+| `fc_weight` 128 params | 512 | 64 | 8× |
+| `rec_U+V` 512 params | 2048 | 256 | 8× |
+| `out fc_weight` 160 params | 640 | 80 | 8× |
+| Threshold params (64) | 256 | 256 (FP32) | 1× |
+| **Totale modello** | ~3.5 KB | ~0.66 KB | **5.3×** |
+
+Stato runtime (potenziale + adattamento) per 32 neuroni: 256 byte. Totale memoria PYNQ ≈ **1 KB** → fit completo in BRAM senza DDR access.
+
+### 14.3 Training
+
+- Generazione dataset (5000 traj × 1000 step): ~30 s su CPU laptop
+- 1 epoca con n_train=500, seq_len=50: ~60 s/epoca su Azure CPU (forward+backward+log)
+- Sweep STEP 2B completo (9 runs × ~30 min): ~5h Azure CPU
+
+---
+
+## 15. Comparativa Po2 vs FP32
+
+| Aspetto | FP32 reference | Po2 quantization (forward) | Note |
+|---|---|---|---|
+| Peso range | continuo | {±2^k} per k∈[−4,1] ∪ {0} | 13 livelli totali |
+| Moltiplicazione | hardware MUL (4 cycles) | bit-shift (1 cycle) | 4× speedup |
+| Area FPGA | ~100 LUT/MAC | ~10 LUT/shift | 10× area saving |
+| Energia | ~1 nJ/MAC | ~0.05 nJ/shift | 20× energy |
+| Accuracy gap (STE backward) | reference 0 | ~+3-8% loss (tipico) | accettabile |
+| Training time | normale | normale (STE bypassa quantizzazione in backward) | — |
+
+Decisione progettuale: **accettiamo penalità accuracy minore per moltiplicare l'efficienza FPGA**.
+
+---
+
+## 16. Per saperne di più
 
 | Vuoi sapere... | Vedi |
 |---|---|
@@ -468,5 +685,9 @@ po2_zero_thr   = 2**-5   # ~0.031
 | Decodificare codici (P/A/B/F/T/PF/G) | `document/GLOSSARY.md` |
 | Procedura end-to-end su Azure | `document/WORKFLOW.md` |
 | One-pager per riprendere dopo compaction | `document/SESSION_RESUME.md` |
-| Modello ACC-IIDM teoria | Treiber & Kesting, Ch12 §12.4 (CAH blend), Ch12.6 (IDM-2d stocastico) |
+| Modello ACC-IIDM teoria completa | Treiber & Kesting, *Traffic Flow Dynamics* 2nd ed., Ch12 §12.4 |
+| String stability + Master Criterion | Treiber, Ch16 |
+| SNN training (BPTT, surrogate) | SNN-expert skill, ch08, ch22 |
+| Neftci surrogate gradient paper | Neftci et al. 2019, "Surrogate Gradient Learning in Spiking Neural Networks" |
+| Power-of-two quantization | Vogel et al. 2019, "Efficient Hardware Acceleration of Sparse SNNs" |
 | SNN training (BPTT, surrogate) | SNN-expert skill, ch08, ch22 |
