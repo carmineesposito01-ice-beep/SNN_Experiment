@@ -1,0 +1,19 @@
+# ===========================================================
+# .gitattributes — strip Jupyter notebook outputs automaticamente
+# ===========================================================
+# Problema: ogni volta che esegui un notebook su Azure/laptop, gli output
+# cambiano e git vede una diff. git pull viene bloccato con
+# "local changes would be overwritten by merge".
+#
+# Soluzione: usare nbstripout come filter git → quando git legge il notebook
+# dal working tree, gli output vengono strippati al volo prima della
+# comparazione con HEAD. Risultato: git non vede mai diff di soli output.
+#
+# Setup ONE-SHOT per macchina (Azure + laptop):
+#   pip install nbstripout
+#   nbstripout --install
+#
+# Verifica: git diff sui notebook → mostra solo modifiche al codice/markdown,
+# mai modifiche agli output.
+*.ipynb filter=nbstripout
+*.ipynb diff=ipynb
