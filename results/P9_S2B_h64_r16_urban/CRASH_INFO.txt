@@ -1,0 +1,2 @@
+Crash detected (E3 grad explosion after 20-batch streak)
+Best val_loss: 0.3884 (E2/3)
