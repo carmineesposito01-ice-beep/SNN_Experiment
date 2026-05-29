@@ -50,6 +50,24 @@ git config user.name "Il tuo nome"
 git config user.email "tua@email.com"
 ```
 
+### 4. Setup nbstripout (CRUCIALE post-2026-05-29 — evita conflitti Jupyter)
+**Una volta sola** per ogni nuova compute instance Azure E ogni nuova workstation locale:
+
+```bash
+pip install --quiet nbstripout
+nbstripout --install --attributes .gitattributes
+```
+
+**Cosa fa**: configura un filter git che strippa **automaticamente** gli output dei notebook
+prima di ogni operazione git. Il notebook resta intatto su disco (Jupyter vede output),
+ma git ne vede una versione pulita → mai più `"Your local changes would be overwritten"`.
+
+Operazione idempotente: `--install` non duplica se già attivo.
+
+In alternativa: lo `Training_File_Sweep.ipynb` Cella 0 esegue questo automaticamente al primo run.
+
+**Lezione storica**: abbiamo perso 4 sessioni a fare workaround manuali (`git checkout -- *.ipynb` prima di ogni pull) prima di setupparlo. Da ora è obbligatorio al primo setup.
+
 ---
 
 ## 🔄 WORKFLOW STANDARD (per ogni esperimento)
@@ -193,22 +211,39 @@ Significa: la cache esistente è stata generata con scenario_mix diverso dal tuo
 Oppure cambia il `CACHE_PATH` in Cella 1 (il default include scenario+cut_in+n_train nel nome, quindi raramente succede).
 
 ### "Your local changes to the following files would be overwritten by merge"
-Succede quando hai eseguito il notebook su Azure (genera outputs nelle celle) e poi fai `git pull`. Le outputs locali entrano in conflitto con la versione del repo.
+**Fix permanente (DA SETUPPARE UNA VOLTA, vedi PRIMO SETUP punto 4)**: installa nbstripout. Dopo nbstripout attivo, questo errore non succede mai più.
 
-**Fix**: scarta gli outputs locali (saranno rigenerati al prossimo Run All):
+**Fix immediato se nbstripout non è ancora attivo**: scarta gli outputs locali (saranno rigenerati al prossimo Run All):
 ```bash
-git checkout -- Training_File.ipynb
-git pull origin main
+git checkout -- Training_File.ipynb Training_File_Sweep.ipynb
+git pull --no-rebase --no-edit origin main
 ```
 
-**Alternativa** (se hai edit manuali nella Cella 1 da preservare):
+Pattern raccomandato post-2026-05-29: **setup nbstripout al primo setup della compute instance**. Dopo, `git pull` su notebook girati non si blocca più.
+
+### "fatal: Need to specify how to reconcile divergent branches"
+Git ≥2.27 richiede strategia esplicita per `git pull` quando ci sono commit divergenti. Usa sempre:
 ```bash
-git stash                              # salva edit locali
-git pull origin main                   # pull va liscio
-git stash pop                          # ripristina edit (eventuali conflitti da risolvere)
+git pull --no-rebase --no-edit origin main
+```
+- `--no-rebase`: forza merge (default-agnostic, evita errore "divergent branches")
+- `--no-edit`: evita prompt nano sul merge commit auto-generato
+
+**Alternativa permanente** (una tantum):
+```bash
+git config pull.rebase false      # configura merge di default
+git config core.editor "true"     # niente editor sui merge
 ```
 
-Pattern raccomandato: **edita SOLO Cella 1**, esegui, push results via Cella 8, poi `git checkout -- Training_File.ipynb` per pulire prima del prossimo pull.
+### `git push` rejected dopo commit di results
+Succede se nel frattempo qualcuno (anche tu da un'altra macchina) ha pushato. **Pattern raccomandato**:
+```bash
+git commit -m "..."
+git pull --no-rebase --no-edit origin main   # pull-before-push obbligatorio
+git push origin main
+```
+
+I notebook Sweep/Standard Cella 8 + Cella 6 già seguono questo pattern. Se push manuale, ricordatene.
 
 ### Preflight FAIL
 Apri `checkpoints/<TAG>_preflight_1/` e `_preflight_2/`:
@@ -249,6 +284,35 @@ I `results/` restano tracciati in git (sicuri).
 ---
 
 ## ⚡ Variations / Modalità avanzate
+
+### Sweep parametrico (STEP 2B+, usa `Training_File_Sweep.ipynb`)
+Per testare N configurazioni in batch (es. capacity sweep, scenario diversity):
+
+1. Apri `Training_File_Sweep.ipynb` (NON `Training_File.ipynb`)
+2. **Cella 1**: edita `SWEEP_PLAN = [...]` con lista esperimenti
+   ```python
+   SWEEP_PLAN = [
+       {'tag': 'P9_S2C_h64_r16_run1', 'cf_hidden_size': 64, 'cf_rank': 16, 'scenario_mix': 'highway'},
+       {'tag': 'P9_S2C_h64_r16_run2', 'cf_hidden_size': 64, 'cf_rank': 16, 'scenario_mix': 'urban'},
+       ...
+   ]
+   ```
+3. Flag di controllo:
+   - `RUN_PREFLIGHT = True` — doppio smoke obbligatorio per ogni run
+   - `PUSH_PER_RUN = True` — pusha results subito dopo ogni FULL completato
+   - `SKIP_IF_EXISTS = True` — salta runs già presenti in `results/<tag>/`
+   - `STOP_ON_FAIL = False` — continua sweep anche se un run crash
+4. **Cell → Run All**. Il loop esegue: preflight → train.py → push per ogni run
+5. Cell 4 produce summary table, Cell 5 grafici comparativi (S1-S6), Cell 6 push aggregati
+
+**Caratteristiche**:
+- **Cache condivisa**: runs con stessa `(n_train, scenario_mix, cut_in)` riusano la stessa cache (es. 5 runs capacity highway = 1 generazione dataset)
+- **Continue-on-failure**: se un run fallisce, il sweep va al successivo
+- **Resume parziale**: se interrotto, SKIP_IF_EXISTS riprende dai mancanti
+
+**Bug noti fixati**:
+- Commit `6790019`: preflight propaga `--cf_hidden_size/--cf_rank/--scenario_mix/--cut_in_ratio`
+- Commit `534c2af`: `_push_results` non importa torch (kernel Jupyter Azure non lo ha)
 
 ### Fast iteration mode (STEP 2A — consigliato per esperimenti veloci)
 Quando vuoi iterare rapidamente (testare config, scheduler diversi, sweep parametrici):

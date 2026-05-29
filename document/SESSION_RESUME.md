@@ -5,82 +5,109 @@
 
 ---
 
-## 🎯 Stato attuale (2026-05-28 21:00)
+## 🎯 Stato attuale (2026-05-29 12:00)
 
-**Repo HEAD**: `ed8debb` — `feat: STEP 2A — fast iteration mode (n_train=500, early_stop_delta=0.005)`
+**Repo HEAD**: `534c2af` — `fix: _push_results non importa torch (kernel Jupyter Azure non lo ha)`
 
 **Progetto**: CF_FSNN — Spiking Neural Network per identificazione parametri car-following ACC-IDM (con base IIDM, Treiber Ch12 Sez.12.4). Target hardware: PYNQ-Z1 FPGA.
 
-**Architettura rete corrente**: 864 parametri totali
-- HiddenLayer_ALIF (4→32, rank=8, max_delay=6)
-- OutputLayer_LI (32→5) → params IDM `[v0, T, s0, a, b]`
+**Architettura rete corrente**: CF_FSNN_Net **parametrizzabile** (h=hidden_size, r=rank). Default config.py: h=32, r=8 → 864 params. Sweep STEP 2B testato: h∈{32, 48, 64, 96, 128}.
 
-**Diagnosi finale corrente**: **P9 (capacity insufficiency) CONFERMATO MATEMATICAMENTE** dopo `P9_S1_highway_v2`:
+**🔥 DIAGNOSI ROVESCIATA — P9 FALSIFICATO 2026-05-29**:
 
-| Dataset | Plateau val_loss | Conclusione |
-|---------|-------------------|-------------|
-| Full-mix (highway+urban+truck+mixed+cut-in) | **0.354** | Task complesso → rete satura |
-| Highway-only | **0.277** | Task semplice → -22%, ma satura comunque |
+Il capacity sweep STEP 2B (5 runs highway-only con h=32, 48, 64, 96, 128) ha mostrato:
 
-Se Po2 quantization fosse il bottleneck, i 2 plateau sarebbero IDENTICI. Sono DIVERSI → il limite è **task complexity vs capacity**.
+| h | r | params | val_best | Spike% |
+|---|---|---|---|---|
+| 32 | 8 | 869 | 0.2802 | 8.4 |
+| 48 | 12 | 1685 | **0.2789** ★ | 9.1 |
+| 64 | 16 | 2757 | 0.2790 | 10.5 |
+| 96 | 24 | 5669 | 0.2797 | 7.7 |
+| 128 | 32 | 9605 | 0.2792 | 10.3 |
 
-**Eurekas utente confermate**:
-1. **"Dancing intorno al plateau"**: pattern reale (E2/E3 hanno std=0.024, range 0.16 → oscillazione) ma il **livello** del plateau è dato da P9, non da Po2.
-2. **"Training super-rapido + parametric sweep fattibili"**: ✅ confermato dai dati. **90% del miglioramento E1 raggiunto a B298/3047 = 9.8% di E1**. La rete converge in ~5 min, il resto è plateau-dancing. STEP 2A sfrutta esattamente questo.
+**Range val_best = 0.0013 (1.3 millesimi) su 11× parametri.** Aumentare la rete da 869 a 9605 parametri (+1004%) migliora val_best dello 0.46% — è rumore statistico, non miglioramento.
+
+**P9 (capacity insufficiency) è FALSIFICATO**. Il plateau ≈ 0.28 NON è dovuto a capacity insufficiente.
+
+**Nuovi problemi aperti (P12, P13)**:
+- **P12** — Plateau non-capacity: causa rimane da identificare (ipotesi: minimi locali da OneCycle troncato + early stop aggressivo, saturazione dataset, Pareto PINN, Po2 floor)
+- **P13** — Scenario crashes: **urban** crash E3 per dead-neurons (spike=0.6%), **truck** crash E5 per post-convergence grad explosion. Truck però raggiunge **val_best=0.1601 a E5** (43% migliore di highway!) — la rete CAN scendere sotto 0.20 su task specifici
+
+**Eureka utente confermata + raffinata**: i runs si fermano in 4 epoche per early-stop aggressivo + OneCycleLR che a E4 è solo al 40% del ciclo (decay phase profonda mai raggiunta). Possibili minimi locali — da testare con scheduler con warm restart + più epoche.
 
 **Hardware constraint**: tutti i fix devono mantenere compatibilità FPGA (pesi power-of-2, leak bit-shift, surrogate hardware-friendly senza propagation al threshold).
 
 ---
 
-## 📍 Prossimo step pianificato
+## 📍 Prossimo step pianificato — STEP 2C
 
-**STEP 2A — Fast iteration baseline** (codice già pushato, **in attesa di esecuzione utente**):
+**STEP 2C — Modernist optimizer recipe** (proposto, in attesa decisione utente Q1/Q2/Q3):
 
-Lo scopo è validare il **regime fast-iteration** prima di iniziare gli sweep parametrici. Config:
-- `n_train: 500` (×10 più piccolo di prima)
-- `epochs: 10` (più epoche brevi)
-- `early_stop_delta: 0.005` (aggressivo, ferma quando il miglioramento è < 0.5%)
-- `scenario_mix: 'highway'`, `cut_in_ratio: 0.0`
+Singolo run validation con ricetta SOTA per uscire dai (possibili) minimi locali:
 
-**Tempo atteso Azure CPU**: ~15-25 min (vs 2-3h del modo standard).
+```
+TAG               = P9_S2C_h64r16_hw_modern
+optimizer         = AdamW (weight_decay=1e-4)
+scheduler         = CosineAnnealingWarmRestarts(T_0=10, T_mult=2, eta_min=1e-5)
+                    → cicli a E0-9, E10-29, E30-69 (3 cicli, 2.5 completati)
+epochs            = 40
+warmup            = 5 epoche lineari 0 → max_lr
+max_lr            = 2e-3
+n_train           = 1500 (3× sweep STEP 2B → testa anche dataset saturation)
+early_stop        = patience=8, delta=5e-4 (tollerante)
+SWA               = attivo da epoca 30 in poi (last 25%)
+h, r              = 64, 16 (sweet spot dello sweep)
+scenario          = highway (scenario stabile, no crash)
+```
 
-**Come lanciare** (utente su Azure):
-1. `git pull origin main` (porta `ed8debb`)
-   - Se "Your local changes would be overwritten by merge" → fai prima:
-     `git checkout -- Training_File.ipynb && git pull origin main`
-2. Apre `Training_File.ipynb`
-3. Cella 1 ha già `TAG="P9_S2A_fast_baseline"` + config STEP 2A
-4. `Cell → Run All`
-5. Attesa ~15-25 min (early stopping atteso a E4-E5)
-6. Cella 8 pusha automaticamente `results/P9_S2A_fast_baseline/`
-7. Avvisa l'agente
+**Tempo atteso Azure CPU**: ~5h. **Costo extra a inference**: zero.
 
-**Cosa fa l'agente al ritorno**:
+**Decision tree post-STEP-2C-α**:
 
-1. `git pull`
-2. Analizza `results/P9_S2A_fast_baseline/`
-3. Confronta con `P9_S1_highway_v2` (n_train=5000)
-4. **Decision tree**:
+| val_best | Diagnosi | Action |
+|---|---|---|
+| < 0.20 | ✅ Era minimo locale, recipe SOTA risolve | Espansione multi-scenario con stessa ricetta |
+| 0.20–0.27 | ⚠️ Plateau ammorbidito, non eliminato | STEP 2C-β = + SAM wrapper (rho=0.05), 2× tempo |
+| ≥ 0.27 | 🛑 Plateau strutturale duro | Ablation Po2 (FP32 vs quant) + ablation λ PINN |
 
-| Esito P9_S2A vs P9_S1 | Significato | STEP 2B parametri da sweep |
-|------------------------|-------------|----------------------------|
-| val_loss < 0.30 (≈ P9_S1) | ✅ Fast iteration funziona: stesso risultato con 10× meno dati | OK procedo con sweep capacity (CF_HIDDEN_SIZE 32→48→64→96) su dataset ridotto |
-| val_loss 0.30-0.35 | ⚠️ Dataset troppo piccolo: serve almeno n_train=1000 | Adatto STEP 2B con n_train=1000 |
-| val_loss > 0.35 o crash | ❌ Early stopping troppo aggressivo | Revisione delta o approccio diverso |
+**Decisioni utente da confermare** (vedi sezione "Domande aperte"):
+- Q1: Approccio (A=Compositional / B=Prodigy / C=R&D SurrogateSAM)
+- Q2: 1 run o sweep 2C-α + 2C-β a confronto
+- Q3: Conferma criteri "funziona bene"
 
 ---
 
-## 🛣️ Roadmap completa STEP 2
+## 🎯 Criteri di successo (proposti 2026-05-29)
 
-| Step | Stato | Obiettivo | Variabili sweep | Tempo stimato |
-|------|-------|-----------|-----------------|----------------|
-| **STEP 2A** | 🟡 IN ATTESA Azure | Validare fast-iteration mode con baseline | (nessuna, baseline) | ~15-25 min |
-| **STEP 2B** | ⏸️ pianificato | Trovare capacity ottimale | `CF_HIDDEN_SIZE` (32, 48, 64, 96), opz. `CF_RANK` (8, 16) | ~2-3h totali (4-6 run) |
-| **STEP 2C** | ⏸️ futuro | Cementare architettura definitiva post-sweep | Config vincitrice di 2B | Variabile |
+### Quantitativi — hard targets
 
-**Domanda strategica per STEP 2B** (da discutere dopo STEP 2A):
-- Sweep solo `CF_HIDDEN_SIZE` (4 run) o anche `CF_RANK` (8 combinazioni)?
-- Testare anche cosine vs onecycle vs plateau?
+| Criterio | Soglia | Razionale |
+|---|---|---|
+| **val_loss totale** | **< 0.15** competitivo, **< 0.20** buono, **< 0.10** SOTA | Treiber Ch17: residual error floor ~20% → 0.15 ≈ 10% inferiore = eccellente |
+| **L_data / L_total** | > 0.80 | La rete deve risolvere il task, non barare con L_phys |
+| **RMSE per-param** | < 15% del range fisico | v0±5.5 m/s, T±0.3s, s0±0.6m, a±0.33 m/s², b±0.4 m/s² |
+| **Spike rate** | 10–25% | SNN-expert default. Sotto=dead, sopra=no sparsity gain FPGA |
+| **0 inf grad batches** | per ≥10 epoche | Stabilità BPTT |
+| **String stability** | vₑ'(s) ≤ ½(fₗ-fᵥ) | Treiber Ch16 |
+| **FP32 vs Po2 gap** | < 10% | Funzionalità FPGA preservata |
+
+### Qualitativi
+- Cross-scenario robust: val_{highway, urban, truck} non divergono oltre 2× (oggi: 0.279 vs 0.388 vs 0.160 = range 2.4×, fuori soglia)
+- G7 violin: 80%+ predizioni dentro range fisico IDM
+- G13 trajectory: gap simulato segue ground-truth con MAE < 1m per ≥ 5s
+
+---
+
+## 🛣️ Roadmap aggiornata STEP 2
+
+| Step | Stato | Obiettivo | Esito |
+|------|-------|-----------|-------|
+| **STEP 2A** (fast iteration) | ✅ completato | Validare regime fast-iteration | val=0.2802, 17 min — confirmed |
+| **STEP 2B** (capacity sweep) | ✅ completato 7/9 | Verificare se capacity è bottleneck | **P9 FALSIFICATO** — non lo è |
+| **STEP 2C-α** (modernist recipe) | 🟡 PROPOSTO | Verificare se minimi locali sono causa plateau | TBD |
+| **STEP 2C-β** (+ SAM) | ⏸️ condizionale | Se 2C-α non scende sotto 0.20 | TBD |
+| **STEP 2C-γ** (SurrogateSAM R&D) | ⏸️ opzionale | Variante SAM con perturbazione γ surrogate | TBD |
+| **STEP 2D** (multi-scenario) | ⏸️ futuro | Estendere recipe vincitore a urban+truck (P13) | TBD |
 
 ---
 
@@ -103,20 +130,82 @@ Lo scopo è validare il **regime fast-iteration** prima di iniziare gli sweep pa
 
 ---
 
+## ❓ Domande aperte (decisione utente per STEP 2C)
+
+| ID | Domanda | Opzioni |
+|---|---|---|
+| **Q1** | Approccio STEP 2C | **A** = Compositional best-practice (AdamW+CosineWR+SWA, raccomandato) / **B** = Prodigy drop-in (parameter-free) / **C** = R&D SurrogateSAM (originale) |
+| **Q2** | Granularità | 1 singolo run 2C-α / Sweep 2C-α + 2C-β a confronto |
+| **Q3** | Criteri "funziona bene" | Conferma soglie val < 0.15 competitivo / < 0.20 buono / < 0.10 SOTA (vedi sezione criteri) |
+
+**Default raccomandato in attesa di risposta**: Q1=A, Q2=1 run, Q3=confermato.
+
+---
+
+## 🧮 Catalogo Ottimizzatori (per riferimento STEP 2C)
+
+### Tier 1 — Validati su SNN
+| Ott. | Anno | Pro | Cons | Default skill SNN-expert |
+|---|---|---|---|---|
+| AdamW | 2017 | Decoupled wd, stabile | — | ✅ default consigliato |
+| Cosine warm restart (SGDR) | 2017 | Esce dai minimi locali | 1 hyperparam T_0 | ✅ default scheduler |
+| SAST (SAM applicato a SNN) | 2026 | Flat minima, +generalization | 2× tempo | recente |
+| Lion (Google) | 2023 | Veloce, ½ memoria Adam | sign-only può essere troppo aggressivo | usato in Spyx |
+
+### Tier 2 — Generalist potenti, non testati su SNN
+| Ott. | Anno | Pro | Cons | Per noi |
+|---|---|---|---|---|
+| Prodigy | ICML 2024 | Parameter-free (no lr tuning) | Non testato SNN | ⚠️ rischio |
+| Sophia (Stanford) | 2023 | Hessian-aware, 2× speedup LLM | Costo Hessian | ⚠️ ricerca |
+| AdaBelief | NeurIPS 2020 | Stabile vs Adam | +0.5% marginale | low priority |
+| D-Adaptation | ICML 2023 | Parameter-free predecessore | Sostituito da Prodigy | skip |
+
+### Tier 3 — Wrapper (compongono su altro optimizer)
+| Wrapper | Effetto | Costo | Per noi |
+|---|---|---|---|
+| **SAM** | Flat minima (2 forward+backward) | 2× tempo | ⭐ STEP 2C-β |
+| **Lookahead** | Smooth oscillazioni (k fast + slow pull) | +5% memoria | medio |
+| **SWA** | Average weights ultime N epoche | trascurabile | ✅ STEP 2C-α |
+| **Snapshot ensemble** | Ensemble ai warm restart | trascurabile | future |
+
+### Tier 4 — Specifici SNN (sperimentali, non in production)
+| Metodo | Anno | Note |
+|---|---|---|
+| ADMM-based SNN training | 2025 | Alternating direction, non SGD-derived |
+| Rate-based BP | NeurIPS 2024 | Sfrutta rate coding per ridurre BPTT |
+| e-prop (Bellec) | 2020 | Eligibility traces locali |
+| EventProp (Wunderlich) | 2021 | Adjoint exact, O(spikes) memoria |
+
+### Decision matrix (h64_r16 highway target)
+| Combinazione | Plateau escape | Stabilità BPTT | Po2-friendly | Dataset piccolo | Impl. | Total |
+|---|---|---|---|---|---|---|
+| Adam (attuale) | 1 | 3 | 2 | 2 | 5 | 13 |
+| AdamW + Cosine WR | 4 | 4 | 3 | 4 | 4 | **19** ✓ |
+| AdamW + SAM | 5 | 4 | 5 | 4 | 3 | **21** ⭐ |
+| AdamW + SurrogateSAM (R&D) | 5 | 5 | 5 | 4 | 2 | **21** ⭐ |
+| Prodigy | 4 | 3 | 2 | 3 | 4 | 16 |
+| Lion | 3 | 3 | 3 | 3 | 4 | 16 |
+| Sophia | 5 | 4 | 4 | 3 | 2 | 18 |
+
+---
+
 ## ⚙️ Infrastruttura disponibile
 
 ### Codice principale (NON modificare senza tracking esplicito in P_S.md)
-- `core/network.py` — `CF_FSNN_Net` + layers + funzioni fisica ACC-IDM
+- `core/network.py` — `CF_FSNN_Net(hidden_size=None, rank=None)` + layers + funzioni fisica ACC-IDM (kwargs STEP 2B per sweep)
 - `core/neurons.py` — `ALIFCell`, `LICell` (hardware-friendly)
 - `core/hardware.py` — `SurrogateSpike_Hardware` (γ=1.0 A3), `PowerOf2Quantize`
-- `train.py` — main + `pinn_loss` + `train_epoch` + `BatchCSVLogger` + early stopping + CLI scenario/cut_in/n_train/n_val
+- `train.py` — main + `pinn_loss` + `train_epoch` + `BatchCSVLogger` + early stopping + CLI scenario/cut_in/n_train/n_val/cf_hidden_size/cf_rank
 - `data/generator.py` — generatore sintetico ACC-IDM, `parse_scenario_mix`
 - `config.py` — costanti (NON modificare scenario/cut_in qui: usa CLI da Cella 1)
 - `utils/plot_diagnostics.py` — G1-G13 grafici
+- `scripts/preflight.py` — `_checkpoint_loadable` ora legge h/r da config_snapshot (fix STEP 2B)
 
 ### Workflow
-- `scripts/preflight.py` — doppio smoke obbligatorio prima di FULL
-- `Training_File.ipynb` — notebook universale 10 celle (tracciato in git, sync via pull)
+- `scripts/preflight.py` — doppio smoke obbligatorio prima di FULL (legge h/r da config_snapshot per loadable test STEP 2B)
+- `Training_File.ipynb` — notebook universale per singoli runs approfonditi (10 celle, tracciato in git)
+- `Training_File_Sweep.ipynb` — orchestratore sweep parametrico (7 celle: sweep + summary + plot comparativi + push aggregati)
+- `.gitattributes` — `*.ipynb filter=nbstripout` (one-shot setup, mai più "would be overwritten by merge")
 
 ### Cache & artefatti
 - `data/cache_*.pt` — dataset persistenti (NON committati, .gitignore)
@@ -204,9 +293,19 @@ git push origin main
 | `P6_T3_full` | + B5 | 3 | **0.354** | ❌ crash E4 (47 inf grad) |
 | `P9_S1_highway_only` | (=P6_T3, config.py drift) | 3 | 0.354 | ❌ identico a P6_T3 |
 | `P9_S1_highway_v2` | + P10 + P11 + scenario CLI | 2 | **0.277** | ❌ crash E3 — **P9 CONFERMATO!** (-22% vs full-mix) |
-| **`P9_S2A_fast_baseline`** (in attesa) | + STEP 2A (n_train=500, delta=0.005) | TBD | TBD | TBD |
+| **`P9_S2A_fast_baseline`** | + STEP 2A (n_train=500, delta=0.005, h32_r8, highway) | 4 | **0.2802** | ✅ confermata fast-iteration |
+| **`P9_S2B_h32_r8_hw`** | sweep STEP 2B (h=32, r=8) | 4 | 0.2802 | ✅ baseline replicato |
+| **`P9_S2B_h48_r12_hw`** | sweep STEP 2B (h=48, r=12) | 4 | **0.2789** ★ | ✅ best del sweep |
+| **`P9_S2B_h64_r16_hw`** | sweep STEP 2B (h=64, r=16) | 4 | 0.2790 | ✅ sweet spot |
+| **`P9_S2B_h96_r24_hw`** | sweep STEP 2B (h=96, r=24) | 4 | 0.2797 | ✅ |
+| **`P9_S2B_h128_r32_hw`** | sweep STEP 2B (h=128, r=32) | 4 | 0.2792 | ✅ |
+| **`P9_S2B_h64_r16_urban`** | sweep STEP 2B (urban) | 2 | 0.3884 | ⚠️ crash E3 (dead neurons) |
+| **`P9_S2B_h64_r16_truck`** | sweep STEP 2B (truck) | 5 | **0.1601** ★ | ⚠️ crash E5 (best assoluto!) |
 
-**Pattern**: full-mix plateau ~0.354, highway-only plateau ~0.277. Differenza significativa che esclude Po2 come causa.
+**Pattern aggiornato 2026-05-29**: 
+- Capacity highway: tutti i 5 valori (h=32→128) hanno val_best ∈ [0.279, 0.280] → **P9 FALSIFICATO**
+- Scenario diversity: highway 0.279 ok, urban 0.388 crash (dead neurons), truck 0.160 best ma crash post-converg
+- **Insight chiave**: la rete CAN scendere sotto 0.20 (truck dimostra), il limite è scenario-specific, non capacity.
 
 ---
 
@@ -254,3 +353,4 @@ git push origin main
 |------|--------|--------|
 | 2026-05-28 18:00 | Creato (post commit `3dedf51`) | claude (session 28/05) |
 | 2026-05-28 21:00 | Aggiornato post `ed8debb` (STEP 2A) + P9 confermato + eurekas utente | claude (session 28/05) |
+| 2026-05-29 12:00 | Aggiornato post `534c2af` (sweep STEP 2B 7/9 + analisi optimizer + design STEP 2C). **P9 FALSIFICATO**, apertura P12+P13, decision matrix optimizers, ricetta modernista AdamW+CosineWR+SWA+SAM proposta | claude (session 29/05) |

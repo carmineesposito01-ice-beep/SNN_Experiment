@@ -370,6 +370,102 @@ Se il fast-iteration mode produce risultati significativamente peggiori, signifi
 
 ---
 
+## 🌅 2026-05-29 — Sweep STEP 2B + P9 falsificato + studio optimizer SOTA
+
+### Mattina: Sweep STEP 2B parziale (7 runs su 9)
+Lo sweep notebook `Training_File_Sweep.ipynb` è stato eseguito su Azure durante la notte. Esito:
+- **5 runs highway capacity completati**: h=32, 48, 64, 96, 128 con rank corrispondente h/4
+- **1 run urban**: crash E3 per dead-neurons (spike=0.6%)
+- **1 run truck**: crash E5 per post-convergence grad explosion (val=0.16, best assoluto del sweep!)
+- **2 runs mai partiti** (mixed, hwcut15) — il kernel Jupyter Azure è morto dopo il crash di urban a causa di un bug `_push_results` che importava `torch` (non presente nel kernel Azure)
+
+### Bug fixati durante la mattina
+1. **`scripts/preflight.py`** (commit `6790019`): `_checkpoint_loadable()` ora legge `cf_hidden_size`/`cf_rank` da `config_snapshot.json` adiacente prima di istanziare `CF_FSNN_Net`. Prima fallback a default (h=32) → size mismatch → preflight FAIL su tutti i runs con h≠32 → tutti i FULL skippati
+2. **`Training_File_Sweep.ipynb` Cella 3** (commit `6790019`): `pf_extra` ora include `--scenario_mix` e `--cut_in_ratio` (prima preflight girava su scenario='default')
+3. **`Training_File_Sweep.ipynb` Cella 2** (commit `534c2af`): `_push_results` non importa più torch — usa solo CSV per CRASH_INFO
+4. **nbstripout setup** (commit `29056e1`): `.gitattributes` + install in Cella 0 → mai più "would be overwritten by merge"
+
+### Analisi cross-run dei 7 runs
+
+#### Capacity sweep highway (Block A)
+| h | r | params | val_best | E | spike% | infBatches |
+|---|---|---|---|---|---|---|
+| 32 | 8 | 869 | 0.2802 | E2 | 8.4 | 0 |
+| 48 | 12 | 1685 | **0.2789** | E3 | 9.1 | 0 |
+| 64 | 16 | 2757 | 0.2790 | E3 | 10.5 | 0 |
+| 96 | 24 | 5669 | 0.2797 | E4 | 7.7 | 0 |
+| 128 | 32 | 9605 | 0.2792 | E4 | 10.3 | 0 |
+
+**Range val_best = 0.0013 su 11× parametri**. **P9 FALSIFICATO**: capacity NON è il bottleneck.
+
+#### Scenario diversity (Block B, h64_r16)
+| Scenario | E1 | best | E | spike% | gn_max | Modalità crash |
+|---|---|---|---|---|---|---|
+| highway | 0.2878 | 0.2790 | E3 | 10.5 | 2.4e+01 | ✅ OK |
+| urban | 0.4769 | 0.3884 | E2 | **0.6** | 1.56e+19 | dead neurons → grad inf |
+| truck | 0.1807 | **0.1601** | E5 | 9.8 | 2.10e+19 | post-convergence grad explosion |
+
+**Insight chiave dal truck**: la rete h64_r16 CAN raggiungere val < 0.20 (truck dimostra val=0.16). Quindi il plateau a 0.28 su highway NON è limite intrinseco della rete — è scenario-tuning limited.
+
+### Apertura di P12 e P13 (vedi P_S.md)
+- **P12**: plateau val~0.28 su highway non risolvibile da capacity. Cause candidate: minimi locali (OneCycle troncato + early stop), saturazione dataset, Pareto PINN, Po2 floor
+- **P13**: scenario crashes. Urban = dead neurons (anti-pattern §22.2 + §22.4 dello skill SNN-expert). Truck = post-convergence explosion (nuovo failure mode non in skill)
+
+### Discussione "minimi locali" (utente)
+L'utente ha osservato che i 5 runs highway si fermano tutti a E4 — possibile signature di early stop aggressivo + OneCycle troncato che non vede mai la decay phase profonda. Concordato di testare una recipe modernista con scheduler con warm restart.
+
+### Studio approfondito ottimizzatori SOTA (skill SNN-expert + web search)
+
+Catalogati 4 tier di ottimizzatori (vedi SESSION_RESUME.md sezione "Catalogo Ottimizzatori"):
+
+**Sorgenti consultate**:
+- Skill SNN-expert ch08 (BPTT + surrogate) + ch22 (pathologies) + cheatsheet (defaults)
+- Paper "Sharpness Aware Surrogate Training for Spiking Neural Networks" (SAST, 2026)
+- Paper "Prodigy: An Expeditiously Adaptive Parameter-Free Learner" (ICML 2024)
+- Paper "Symbolic Discovery of Optimization Algorithms" (Lion, Google 2023)
+- Paper "ADMM-based Training for Spiking Neural Networks" (2025)
+- Paper "Rate-based Backpropagation for Deep SNNs" (NeurIPS 2024)
+
+**Decision matrix**:
+- Vincitori ex-aequo: **AdamW+SAM** (21/25) e **AdamW+SurrogateSAM** (R&D, 21/25)
+- Runner-up: AdamW+Cosine WR (19), Sophia (18)
+- Sconsigliati per noi: Adam baseline (13), Prodigy (non testato SNN, 16), Lion (sign-only troppo aggressivo per loss noisy PINN, 16)
+
+### Design STEP 2C (in attesa decisione utente)
+- **2C-α** (raccomandato): AdamW + CosineAnnealingWarmRestarts(T_0=10, T_mult=2) + LR warmup 5 ep + SWA da E30 + epochs=40 + n_train=1500
+- **2C-β** (condizionale): se 2C-α non scende sotto 0.20, aggiungere SAM (rho=0.05), 2× tempo
+- **2C-γ** (opzionale R&D): SurrogateSAM — variante SAM con perturbazione γ del surrogate (idea originale, non in letteratura per quanto so)
+
+### Lezioni learned 2026-05-29
+
+#### Lezione #11 — Lo sweep esaustivo informa più del single long-run
+7 runs hanno falsificato P9 in modo definitivo. Un single long-run avrebbe richiesto ipotesi diverse. Da ora: per diagnosi causali, **prima sweep poi long-run**.
+
+#### Lezione #12 — La verifica E2E deve includere code-paths con configurazioni non-default
+Il preflight tester usava `CF_FSNN_Net()` senza args mentre il training usava `CF_FSNN_Net(h=64)`. Il test locale **passava** perché il default h=32 combaciava. La regressione è esplosa su Azure con sweep h=64. **Pattern**: ogni nuovo parametro deve avere almeno 1 test con valore non-default.
+
+#### Lezione #13 — nbstripout era la soluzione giusta dal day-1
+Abbiamo perso 4 sessioni a fare workaround manuali (`git checkout -- *.ipynb`). I workflow git-friendly per Jupyter sono noti da anni: setupparli subito quando il progetto usa notebook tracciati.
+
+#### Lezione #14 — L'asimmetria scenario è informativa
+Truck val=0.16 a E5 ci dice che il modello È adatto al task. La diagnosi cambia da "aumentare capacità" a "trovare optimizer/scheduler giusto". **Pattern**: prima di concludere "rete insufficiente", testare scenari multipli.
+
+#### Lezione #15 — Sharpness-aware methods sono mainstream SNN 2026
+Paper SAST 2026 conferma. Non è più ricerca esotica. Da ora: AdamW+SAM è un baseline modernista, non una novità.
+
+#### Lezione #16 — Optimizer parameter-free (Prodigy, D-Adapt) non sono ancora validati su SNN
+Estendere ai paper successivi prima di usarli in produzione. Per ora attenersi a quelli con evidenza SNN.
+
+### Decisioni mattina 2026-05-29
+- ✅ P9 marcato falsificato
+- ✅ P12 e P13 aperti in P_S.md
+- ✅ Bug preflight + Cella 3 + Cella 2 fixati su git (commit 6790019, 534c2af)
+- ✅ nbstripout setupato (commit 29056e1)
+- ⏳ STEP 2C-α: proposto, in attesa decisione utente (Q1/Q2/Q3)
+- ⏳ Run mixed + hwcut15: utente sceglie di **non rieseguire** — bastano 7 runs per la diagnosi
+
+---
+
 ## 📌 Note finali
 
 Questo TIMELINE va aggiornato dopo ogni milestone significativa. Mantenere la sezione "Lessons learned" è cruciale per non ripetere errori in future sessioni.

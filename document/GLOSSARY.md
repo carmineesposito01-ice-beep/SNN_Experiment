@@ -4,7 +4,7 @@
 
 ---
 
-## 🩺 P1-P11 — Problemi diagnosticati (vedi `P_S.md` per dettagli)
+## 🩺 P1-P13 — Problemi diagnosticati (vedi `P_S.md` per dettagli)
 
 | Codice | Nome | Status |
 |--------|------|--------|
@@ -14,11 +14,13 @@
 | **P4** | Rischio FULL senza preflight | ✅ risolto da PF (preflight obbligatorio) |
 | **P5** | B4 incompatibile con `SurrogateSpike_Hardware` (rompe ALIF cell learning) | ✅ documentato + rollback |
 | **P6** | Roadmap revisione post-P5 (Tier 1/2/3/4) | strategia: A1+A2+A3+B5 (Tier 3) |
-| **P7** | Spike-rate saturation post-B5 (oscillazione 5%→25%→50%) | ⚠️ collegato a P9 |
-| **P8** | Plateau val_loss ≈ 0.35 in tutti i run (osservazione utente, confermata matematicamente) | confermato |
-| **P9** | Capacity insufficiency (rete UNDERSIZED, 864 param insufficient per task) | diagnosi corrente |
+| **P7** | Spike-rate saturation post-B5 (oscillazione 5%→25%→50%) | ⚠️ collegato a P12 |
+| **P8** | Plateau val_loss ≈ 0.35 in tutti i run (osservazione utente, confermata matematicamente) | confermato (sostituito da P12) |
+| **P9** | Capacity insufficiency (rete UNDERSIZED, 864 param insufficient per task) | ❌ **FALSIFICATO 2026-05-29** (sweep capacity Δval=1.3‰) |
 | **P10** | Config drift: SCENARIO_MIX/CUT_IN_RATIO non controllabili da CLI | ✅ risolto (commit 3dedf51) |
 | **P11** | Early stopping mancante (spreco compute + crash post-plateau) | ✅ risolto (commit 3dedf51) |
+| **P12** | **Plateau val~0.28 non-capacity** (cause candidate: minimi locali, dataset saturation, Pareto PINN, Po2 floor) | 🆕 attivo (target STEP 2C-α) |
+| **P13** | **Scenario crashes**: urban dead-neurons (spike=0.6% E3) + truck post-convergence grad explosion (E5, val=0.16 best) | 🆕 attivo (target post-STEP 2C) |
 
 ---
 
@@ -92,17 +94,43 @@
 
 ---
 
-## 🚀 STEP 2A / 2B / 2C — Roadmap post-P9-confermato
+## 🚀 STEP 2A / 2B / 2C / 2D — Roadmap aggiornata
 
-Sequenza di esperimenti per risolvere P9 (capacity insufficiency) sfruttando l'osservazione che la rete converge nel 10% di E1 (Eureka 2 utente).
+Sequenza di esperimenti per identificare la causa del plateau a val~0.28.
 
 | Codice | Significato | Status | Tempo |
 |--------|-------------|--------|-------|
-| **STEP 2A** | Fast iteration baseline: `n_train=500, epochs=10, early_stop_delta=0.005` con architettura attuale (32/8). Validare il regime fast | 🟡 in attesa Azure | ~15-25 min |
-| **STEP 2B** | Parametric sweep su `CF_HIDDEN_SIZE` (32, 48, 64, 96) ± `CF_RANK` (8, 16). 4-6 run con fast-iteration mode | ⏸️ pianificato post-2A | ~2-3h totali |
-| **STEP 2C** | Architettura definitiva post-sweep: aggiorna `config.py` con valori ottimali, test su dataset full-mix | ⏸️ futuro | variabile |
+| **STEP 2A** | Fast iteration baseline: `n_train=500, epochs=10, early_stop_delta=0.005` con architettura attuale (h=32 r=8) | ✅ completato (val=0.2802) | ~17 min |
+| **STEP 2B** | Parametric sweep capacity (h=32, 48, 64, 96, 128) + scenario diversity (urban, truck) | ✅ completato 7/9 → **P9 FALSIFICATO** | ~3h |
+| **STEP 2C-α** | Modernist optimizer recipe: AdamW + CosineAnnealingWarmRestarts(T_0=10) + warmup 5 ep + SWA + epochs=40 + n_train=1500 + h=64 r=16 highway. Verifica se plateau era minimo locale | 🟡 proposto (in attesa decisione utente Q1/Q2/Q3) | ~5h Azure |
+| **STEP 2C-β** | Condizionale: se 2C-α NON scende sotto 0.20 → aggiungere SAM (rho=0.05). 2× tempo per step | ⏸️ condizionale | ~10h |
+| **STEP 2C-γ** | Opzionale R&D: SurrogateSAM — variante SAM che perturba anche γ del surrogate (idea originale, non in letteratura) | ⏸️ opzionale | ~10h |
+| **STEP 2D** | Multi-scenario: estendere recipe vincitore a urban+truck risolvendo P13 (dead-neurons + post-converg crash) | ⏸️ futuro | variabile |
 
-**Pattern TAG**: `P9_S2A_*`, `P9_S2B_h<HIDDEN>_r<RANK>` (es. `P9_S2B_h64_r16`), `P9_S2C_*`.
+**Pattern TAG**: `P9_S2A_*`, `P9_S2B_h<HIDDEN>_r<RANK>_<scen>`, `P9_S2C<α|β|γ>_*`, `P9_S2D_*`.
+
+---
+
+## 🧮 Ottimizzatori catalogati (riferimento STEP 2C, vedi SESSION_RESUME per matrice completa)
+
+| Sigla | Nome esteso | Tier | Anno | Note per il nostro caso |
+|---|---|---|---|---|
+| **AdamW** | Adam with Decoupled Weight Decay | 1 | 2017 | Default skill SNN-expert. Stable, +regolarizzazione |
+| **CosineAnnealingWarmRestarts (SGDR)** | Stochastic Gradient Descent with Restarts | 1 | 2017 | Warm restart ogni T_0 epochs → esce dai minimi locali |
+| **SWA** | Stochastic Weight Averaging | 3 wrap | 2018 | Average weights ultime N epoche → minimi piatti gratis |
+| **SAM** | Sharpness-Aware Minimization | 3 wrap | 2021 | 2 forward+backward per step. Forza flat minima |
+| **SAST** | Sharpness Aware Surrogate Training | 1 | 2026 | SAM applicato a SNN. Paper recente che valida l'approccio per noi |
+| **Lookahead** | k step fast + slow pull | 3 wrap | 2019 | Smooth oscillazioni |
+| **Snapshot Ensemble** | Ensemble di snapshot ai warm restart | 3 wrap | 2017 | +1-2% gratis al test |
+| **Lion** | EvoLved Sign Momentum (Google) | 1 | 2023 | Sign of momentum. Usato in Spyx (framework JAX SNN) |
+| **Prodigy** | Parameter-free adaptive | 2 | ICML 2024 | No lr tuning. Non testato su SNN |
+| **D-Adaptation** | Parameter-free predecessore di Prodigy | 2 | ICML 2023 | Sostituito da Prodigy |
+| **Sophia** | Second-order with Hessian | 2 | Stanford 2023 | Hessian-aware, 2× speedup LLM. Costoso |
+| **AdaBelief** | Adaptive belief in gradient | 2 | NeurIPS 2020 | +0.5% marginale vs Adam |
+| **ADMM-SNN** | Alternating Direction Multipliers | 4 SNN | 2025 | Non SGD-derived, sperimentale |
+| **Rate-based BP** | Rate-coding shortcut | 4 SNN | NeurIPS 2024 | Riduce complessità BPTT |
+| **e-prop** | Eligibility-trace local BPTT | 4 SNN | Bellec 2020 | Biologicamente plausibile |
+| **EventProp** | Adjoint exact gradient | 4 SNN | Wunderlich 2021 | O(spikes) memoria invece di O(T·N) |
 
 ---
 
@@ -110,13 +138,20 @@ Sequenza di esperimenti per risolvere P9 (capacity insufficiency) sfruttando l'o
 
 | Concetto | Significato | Riferimento |
 |----------|-------------|-------------|
-| **Plateau val_loss** | Limite asintotico inferiore della val_loss su un dato dataset. Per CF_FSNN: 0.35 su full-mix, 0.28 su highway-only. È strutturale (P9). | P8 |
-| **Plateau dancing** | Pattern oscillatorio della loss quando la rete ha raggiunto il plateau ma il training continua. Std≈0.024 sul nostro modello. Rivelato dall'eureka 1 utente | Eureka 1 |
-| **Fast iteration mode** | Regime di training con `n_train` ridotto (500 vs 5000) + `epochs` aumentate + `early_stop_delta` aggressivo (0.005). Permette parametric sweeps in poche ore | STEP 2A, Eureka 2 |
-| **Capacity insufficiency** | La rete (864 param) è troppo piccola per il task. Sintomi: plateau val_loss, oscillazione spike rate, esplosione gradiente. Conferma: highway 0.28 ≠ full-mix 0.35 | P9 |
-| **Task complexity vs Capacity** | Il plateau scala con la complessità del task: più scenari/cut_in = più capacity richiesta. Permette di "calibrare" capacity al task | P9, Eureka 1 verificata |
-| **Convergenza in 10% di E1** | Il 90% del miglioramento si raggiunge nei primi 298 batch su 3047 (di un dataset 5000). Il resto è plateau dancing. | Eureka 2 |
-| **Po2 ≠ plateau** | Po2 quantization NON determina il plateau (i pesi raw sono float). Determina solo la "forma" del dancing | Eureka 1 corretta |
+| **Plateau val_loss** | Limite asintotico inferiore della val_loss. Highway-only ~0.28 (non capacity-related, vedi P12) | P8 → P12 |
+| **Plateau dancing** | Pattern oscillatorio della loss quando la rete è a plateau. Std≈0.024 sul nostro modello | Eureka 1 |
+| **Fast iteration mode** | n_train=500, epochs=10, early_stop_delta=0.005. Permette sweep in poche ore | STEP 2A |
+| **Capacity insufficiency** | ❌ FALSIFICATO 2026-05-29 (sweep h=32→128, Δval=1.3‰) | P9 |
+| **Po2 ≠ plateau** | Po2 quantization NON determina il plateau (i pesi raw sono float) | Eureka 1 corretta |
+| **Convergenza in 10% di E1** | 90% miglioramento nei primi 10% dei batch dell'epoca 1 | Eureka 2 |
+| **Minimi locali da OneCycle troncato** | OneCycle con epochs=10 + early stop aggressivo non vede la decay phase profonda → val=0.28 può essere minimo locale temporaneo | Discussione 2026-05-29 |
+| **Scenario asimmetria informativa** | Truck val=0.16 dimostra che la rete CAN scendere sotto 0.20 → plateau highway non è limite intrinseco | Analisi P13 2026-05-29 |
+| **Sharp landscape da Po2** | Quantization Po2 + low-rank recurrence creano landscape "a scalini" → SAM o SurrogateSAM particolarmente indicati | Studio optimizer 2026-05-29 |
+| **Dead-neurons collapse (urban)** | Spike rate < 1% → niente gradiente effettivo → grad explosion. ch22 §22.2 + §22.4 dello skill SNN-expert | P13 |
+| **Post-convergence explosion (truck)** | La rete "impara troppo bene" → trovati minimi profondi → lr=2e-3 in decay phase ancora troppo alto → step grandi → divergenza | P13 |
+| **SAST (2026)** | Paper recente che applica SAM al training SNN. Valida AdamW+SAM come ricetta moderna SNN | STEP 2C catalogo |
+| **SurrogateSAM** | Variante SAM (idea originale 2026-05-29): perturba (W, γ) insieme — flat sia nello spazio pesi sia nella forma surrogate. R&D opzionale | STEP 2C-γ |
+| **"Funziona bene" (definizione 2026-05-29)** | val < 0.10 SOTA, < 0.15 competitivo con ANN classico, < 0.20 buono per FPGA deployment. Treiber Ch17 floor ~0.20 | SESSION_RESUME |
 
 ---
 

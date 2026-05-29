@@ -5,9 +5,9 @@
 > 🔧 **Per workflow Azure end-to-end**: vedi `WORKFLOW.md`.
 > 🏛️ **Per storia decisioni + lessons learned**: vedi `TIMELINE.md`.
 
-> **Ultima modifica:** 2026-05-28 21:30 CET
-> **Sessione:** post-P9_S1_highway_v2 (P9 CONFERMATO) + 2 eurekas utente + STEP 2A applicato
-> **Stato corrente:** P9 (capacity insufficiency) CONFERMATO MATEMATICAMENTE: highway-only val=0.277 vs full-mix 0.354 (-22%). Entrambe le eurekas utente verificate: dancing reale ma Po2 non è il bottleneck (il livello del plateau è dato dalla capacity); training super-rapido confermato (90% miglioramento E1 in 10% di E1). STEP 2A (commit `ed8debb`) applicato: notebook con n_train=500, epochs=10, early_stop_delta=0.005. Smoke locale OK: 3 epoche, EARLY-STOP attivato, val=0.293, tempo ~9.5min CPU laptop (17× speedup per epoca). **NEXT: utente lancia P9_S2A_fast_baseline su Azure (~15-25 min atteso) per validare il regime fast-iteration prima di STEP 2B (parametric sweep capacity)**.
+> **Ultima modifica:** 2026-05-29 12:00 CET
+> **Sessione:** post-sweep STEP 2B (7 runs su 9 completati) + analisi optimizer SOTA + design STEP 2C
+> **Stato corrente:** **P9 (capacity insufficiency) FALSIFICATO** dal capacity sweep STEP 2B. I 5 valori di hidden_size (32, 48, 64, 96, 128) producono val_best ∈ [0.2789, 0.2802] (Δ=1.3 millesimi). Aumentare i parametri da 869 a 9605 (+1004%) migliora val_best dello 0.46% (rumore). Plateau a ~0.28 è strutturale, NON capacity-related. Apertura di **P12** (plateau non-capacity) e **P13** (scenario crashes urban+truck). **Eureka utente "dancing intorno al plateau" RAFFINATA**: i runs si fermano in 4 epoche per early-stop aggressivo + OneCycle troncato → possibili minimi locali, ricetta SOTA AdamW+CosineWR+SWA+SAM (opzionale) deve testare se sotto i 0.28 si può scendere. **NEXT: STEP 2C — singolo run P9_S2C_h64r16_hw_modern (h=64, r=16, AdamW wd=1e-4, CosineAnnealingWarmRestarts T_0=10 T_mult=2, warmup 5 ep, 40 epoche, n_train=1500, SWA da E30, ~5h Azure CPU).**
 
 Documento vivo: ogni problema ha (1) descrizione, (2) firma diagnostica, (3) causa root,
 (4) soluzioni in ordine di impatto. Le soluzioni si marcano `[ ] proposta`,
@@ -326,7 +326,9 @@ a ridurre → la rete non è limitata dal noise floor, ma dalla propria capacit�
 
 ---
 
-## P9 — Capacity insufficiency (diagnosi root)
+## P9 — Capacity insufficiency (diagnosi root) — **❌ FALSIFICATO 2026-05-29**
+
+> ⚠️ **AGGIORNAMENTO 2026-05-29**: Sweep STEP 2B sui 5 valori di hidden_size (32, 48, 64, 96, 128) ha mostrato val_best ∈ [0.2789, 0.2802] (range 1.3 millesimi su 11× parametri). **Capacity NON è il bottleneck**. Plateau ~0.28 è strutturale, attribuibile ad altre cause (vedi P12). Sezione mantenuta per storico.
 
 ### 9.1 Descrizione
 La rete CF_FSNN_Net attuale ha **864 parametri totali**:
@@ -495,6 +497,132 @@ Su 5 epoche con plateau a E3 (caso P6_T3):
 
 ---
 
+## P12 — Plateau val_loss ~0.28 non risolvibile da capacity (NUOVO — 2026-05-29)
+
+### 12.1 Descrizione
+Dopo il sweep STEP 2B su 5 capacità (h=32, 48, 64, 96, 128 con rank corrispondente
+h/4), i val_best convergono in un range strettissimo:
+
+| h | r | params totali | val_best (best epoca) |
+|---|---|---|---|
+| 32 | 8 | 869 | 0.2802 (E2) |
+| 48 | 12 | 1685 | **0.2789** (E3) ★ best |
+| 64 | 16 | 2757 | 0.2790 (E3) |
+| 96 | 24 | 5669 | 0.2797 (E4) |
+| 128 | 32 | 9605 | 0.2792 (E4) |
+
+**Range**: 0.0013 su 8736 parametri di differenza tra il più piccolo e il più grande.
+
+### 12.2 Firme diagnostiche
+- **Tutti i runs si fermano a E4** per early-stop aggressivo (`delta=0.005, patience=2`)
+- **OneCycleLR con `epochs=10`**: alla E4 siamo solo al 40% del ciclo, la decay phase
+  profonda (E7-E10) non viene MAI raggiunta
+- **Spike rate normale** (8-11%) per tutti — nessun dead-neuron collapse su highway
+- **Zero inf grad batches** su tutti i 5 runs — landscape stabile su highway
+- **Curva val tipo**: 0.288 → 0.280 → 0.279 → 0.282 (oscillation 1-3 millesimi)
+
+### 12.3 Diagnosi al 2026-05-29
+
+**Cause root candidate** (in ordine di probabilità):
+1. **Minimi locali** + OneCycle troncato + early-stop aggressivo:
+   - I 5 runs vedono solo la peak/early-decay phase del lr schedule
+   - Le oscillazioni 0.279 ↔ 0.282 sono tipiche del sample SGD vicino a un minimo locale
+   - **Da testare**: scheduler con warm restart (cosine), più epoche, early-stop tollerante
+2. **Saturazione dataset** (n_train=500 highway-only):
+   - Possibile che 500 trajs ≈ 50k finestre saturino l'informazione apprendibile
+   - **Da testare**: n_train=1500 (3×)
+3. **PINN loss Pareto tradeoff**:
+   - L_data + L_phys + L_ou + L_bc + L_sr formano un fronte di Pareto
+   - Sotto val ~0.28 forse non si può scendere perché ridurre L_data costa troppo
+     su L_phys/L_ou
+   - **Da testare**: ablation pesi λ (e.g., lambda_phys=0.05, lambda_ou=0.01)
+4. **Po2 quantization forward floor**:
+   - Sub-set finito di pesi rappresentabili genera un "floor" strutturale
+   - Coerente con eureka utente originale "Po2 dancing"
+   - **Da testare**: confronto FP32 vs Po2 quantizzato (ablation)
+
+### 12.4 Soluzioni proposte (STEP 2C)
+
+#### Tier 1 — Costo zero, alto ROI
+- [ ] **A1 (STEP 2C-α)**: AdamW (wd=1e-4) invece di Adam
+- [ ] **A2 (STEP 2C-α)**: CosineAnnealingWarmRestarts (T_0=10, T_mult=2, eta_min=1e-5)
+      invece di OneCycle troncato
+- [ ] **A3 (STEP 2C-α)**: LR warmup 5 epoche lineare
+- [ ] **A4 (STEP 2C-α)**: epochs=40, early_stop_patience=8, delta=5e-4
+- [ ] **A5 (STEP 2C-α)**: SWA da epoca 75% (Stochastic Weight Averaging via
+      `torch.optim.swa_utils`)
+
+#### Tier 2 — Costo medio (SAM forza flat minima)
+- [ ] **B1 (STEP 2C-β)**: SAM wrapper sopra AdamW (rho=0.05), 2× tempo per step
+- [ ] **B2 (STEP 2C-β)**: snapshot ensemble (1 ckpt per warm restart, ensemble inference)
+
+#### Tier 3 — R&D originale (opzionale)
+- [ ] **C1 (STEP 2C-γ)**: SurrogateSAM — variante SAM che perturba anche γ del surrogate
+
+### 12.5 Decision tree post-STEP-2C
+
+| val_best STEP 2C-α | Diagnosi | Action |
+|---|---|---|
+| < 0.20 | **Minimi locali confermati** — ricetta SOTA risolve | Espandi a urban+truck con stessa ricetta + B2 |
+| 0.20–0.27 | **Plateau ammorbidito** ma non eliminato | Tier 2 SAM o Tier 3 SurrogateSAM |
+| ≥ 0.27 | **Plateau strutturale duro** | Ablation Po2 (FP32 vs quant.) + ablation λ PINN |
+
+### 12.6 Relazione con altri P
+- **Sostituisce P9 falsificato** come problema attivo
+- **Compatibile con P13 (scenario crashes)**: i fix di P12 sono ortogonali
+
+---
+
+## P13 — Scenario-specific crashes (urban dead-neurons, truck post-converg.) (NUOVO — 2026-05-29)
+
+### 13.1 Descrizione
+Lo sweep STEP 2B ha mostrato che scenarios non-highway crashano in modi
+DIVERSI a parità di h64_r16 + recipe identica:
+
+| Scenario | E1 | best | epoche prima crash | spike% | gn_max | Modalità di crash |
+|---|---|---|---|---|---|---|
+| highway | 0.2878 | **0.2790** | n/a (early stop normale) | 10.5% | 2.4e+01 | ✅ OK |
+| urban | 0.4769 | 0.3884 (E2) | **3** | **0.6%** ⚠️ | 1.56e+19 | Dead-neurons → grad inf |
+| truck | 0.1807 | **0.1601** (E5) | **5** | 9.8% | 2.10e+19 | Post-convergence grad explosion |
+
+### 13.2 Diagnosi differenziale
+
+**Urban (Cause: dead neurons → vanishing → no gradient → explosion)**:
+- Spike rate 0.6% → ~63 dei 64 hidden neurons sono morti
+- I pochi che sparano concentrano TUTTO il gradiente → magnitude amplificate
+- Velocità basse + stop&go aggressivi → input poco diversificati → surrogate
+  attiva solo neuroni in regime molto specifico
+- **Classica ch22 §22.2 "Dead Network" + §22.4 "Exploding Gradient"**
+
+**Truck (Cause: oversconvergence → lr troppo alto in decay phase)**:
+- Spike rate 9.8% → sano, no dead neurons
+- val_best 0.1601 è ECCELLENTE (43% migliore di highway)
+- Crash a E5 quando il modello ha "già imparato": il OneCycle è nella fase di
+  decay ma `max_lr=2e-3` ancora troppo alto per i wide-flat minima trovati
+- **NUOVO failure mode**: "trained too well" + scheduler troppo aggressivo
+
+### 13.3 Soluzioni proposte (post-STEP 2C)
+
+#### Urban (anti dead-neurons)
+- [ ] **D1**: aumentare lambda_sr da 0.5 a 2.0 → forza sparsity 15% indipendentemente
+- [ ] **D2**: threshold annealing iniziale (v_th=0.5 → 1.0 sui primi 5 epoch) per
+      evitare dead-neurons iniziali
+- [ ] **D3**: surrogate γ annealing (1.0 → 5.0 lineare) → inizia larga,
+      restringe verso fine. Più neuroni attivi all'inizio del training.
+
+#### Truck (anti post-convergence explosion)
+- [ ] **D4**: max_lr ridotto a 1e-3 (era 2e-3) per scenario truck
+- [ ] **D5**: aggressive lr decay dopo prima convergenza
+- [ ] **D6**: gradient clipping ridotto a 0.5 (era 1.0) per scenario truck
+
+### 13.4 Implicazione architetturale
+**Truck val=0.16 è la prova che la nostra rete a 864-2757 parametri PUÒ raggiungere
+val < 0.20 su un task specifico**. Non è capacity-limited (vedi P9 falsificato),
+è scenario-tuning limited. Il problema STEP 2C/D è far funzionare la stessa rete
+su TUTTI gli scenari.
+
+---
+
 ## Log delle decisioni (aggiornato)
 
 | Data | Decisione | Stato |
@@ -509,3 +637,17 @@ Su 5 epoche con plateau a E3 (caso P6_T3):
 | 2026-05-28 20:30 | Osservazione utente: 90% miglioramento E1 in ~10% di E1 → fast-iteration mode | accettato |
 | 2026-05-28 20:30 | STEP 2A applicato: notebook con n_train=500, epochs=10, early_stop_delta=0.005 | [x] applicato |
 | 2026-05-28 20:30 | Smoke locale STEP 2A: 3 epoche × ~160s, EARLY-STOP attivato a E3, val=0.292 | ✅ validato |
+| 2026-05-29 00:00 | P9_S2A_fast_baseline completato (h32_r8 highway, n_train=500): val=0.2802 in 4 epoche, riproducendo `P9_S1_highway_v2` (0.2768) con 10× meno dati | ✅ STEP 2A validato |
+| 2026-05-29 02:00 | STEP 2B sweep notebook creato: `Training_File_Sweep.ipynb` (7 celle, 9 runs pianificati: 5 capacity highway + 4 scenario diversity) | [x] applicato |
+| 2026-05-29 04:00 | Sweep eseguito su Azure: 7 runs su 9 completati (h32, h48, h64, h96, h128 highway OK + urban CRASH E3 + truck CRASH E5). Mixed e hwcut15 mai partiti dopo crash _push_results | parziale |
+| 2026-05-29 09:00 | Bug `_push_results` fixato (no import torch nel kernel Jupyter Azure) — commit `534c2af` | [x] applicato |
+| 2026-05-29 09:30 | nbstripout setup: `.gitattributes` + install Cella 0 → mai più "would be overwritten by merge" | [x] applicato |
+| 2026-05-29 10:00 | **Analisi cross-run STEP 2B**: capacity sweep val_best ∈ [0.2789, 0.2802] (Δ=1.3‰ su 11× param) → **P9 FALSIFICATO** | ✅ diagnosi |
+| 2026-05-29 10:30 | **Truck val_best=0.16** rivela che la rete CAN raggiungere val < 0.20 su task specifici → problema non capacity, problema scenario-tuning | ✓ insight |
+| 2026-05-29 10:30 | Apertura P12 (plateau non-capacity) + P13 (scenario crashes) | [x] aperti |
+| 2026-05-29 11:00 | Osservazione utente: "molti test fermati prima → minimi locali?" | ✓ valida |
+| 2026-05-29 11:30 | Studio approfondito ottimizzatori SOTA per SNN (skill + web): AdamW+CosineWR base, SAM/SAST(2026), Prodigy, Lion, Sophia, ADMM-SNN | ✓ catalogato |
+| 2026-05-29 12:00 | Decision matrix: vincitori AdamW+SAM (21) e AdamW+SurrogateSAM R&D (21) | proposto |
+| 2026-05-29 12:00 | STEP 2C-α design: AdamW + CosineWarmRestart(T_0=10) + warmup 5 + SWA + epochs=40 + n_train=1500 + h64_r16 highway | proposto |
+| 2026-05-29 12:00 | STEP 2C-β condizionale: + SAM (rho=0.05) se 2C-α non scende sotto 0.20 | proposto |
+| 2026-05-29 12:00 | STEP 2C-γ opzionale R&D: SurrogateSAM (originale, non in letteratura) | proposto |
