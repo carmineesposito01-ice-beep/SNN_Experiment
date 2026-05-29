@@ -1,0 +1,10 @@
+tag,cf_hidden_size,cf_rank,scenario_mix,cut_in_ratio,status,elapsed_s,best_val,best_epoch,n_epochs,n_inf_batches,spike_pct
+P9_S2B_h32_r8_hw,32,8,highway,0.0,skipped_existing,0.0,,,0,0,
+P9_S2B_h48_r12_hw,48,12,highway,0.0,preflight_fail,199.29899621009827,,,0,0,
+P9_S2B_h64_r16_hw,64,16,highway,0.0,preflight_fail,196.82555150985718,,,0,0,
+P9_S2B_h96_r24_hw,96,24,highway,0.0,preflight_fail,229.15203166007996,,,0,0,
+P9_S2B_h128_r32_hw,128,32,highway,0.0,preflight_fail,248.2040457725525,,,0,0,
+P9_S2B_h64_r16_urban,64,16,urban,0.0,preflight_fail,196.10926723480225,,,0,0,
+P9_S2B_h64_r16_truck,64,16,truck,0.0,preflight_fail,197.1136360168457,,,0,0,
+P9_S2B_h64_r16_mixed,64,16,mixed,0.0,preflight_fail,196.71829533576965,,,0,0,
+P9_S2B_h64_r16_hwcut15,64,16,highway,0.15,preflight_fail,196.1220064163208,,,0,0,
