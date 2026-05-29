@@ -57,16 +57,32 @@ def _count_pngs(plots_dir):
 
 
 def _checkpoint_loadable(ckpt_path):
-    """Verifica che il best_model.pt sia caricabile con strict=False."""
+    """Verifica che il best_model.pt sia caricabile con strict=False.
+
+    STEP 2B fix: legge h/r da config_snapshot.json adiacente al checkpoint
+    per evitare size mismatch quando il modello salvato ha capacita' != default
+    (cf_hidden_size != 32 o cf_rank != 8). Senza questo i sweep capacity
+    fallirebbero tutti sul test loadable anche se il training e' OK.
+    """
     if not os.path.isfile(ckpt_path):
         return False, 'file not found'
     try:
-        import torch
+        import torch, json
         from core.network import CF_FSNN_Net
         ckpt = torch.load(ckpt_path, map_location='cpu', weights_only=False)
-        m = CF_FSNN_Net()
+
+        # Leggi config_snapshot.json adiacente per estrarre cf_hidden_size/cf_rank
+        snap_path = os.path.join(os.path.dirname(ckpt_path), 'config_snapshot.json')
+        h, r = None, None
+        if os.path.isfile(snap_path):
+            with open(snap_path) as f:
+                snap = json.load(f)
+            h = snap.get('cf_hidden_size')   # None se non sweep
+            r = snap.get('cf_rank')
+
+        m = CF_FSNN_Net(hidden_size=h, rank=r)
         m.load_state_dict(ckpt['model_state'], strict=False)
-        return True, 'ok'
+        return True, f'ok (h={m.hidden_size}, r={m.rank})'
     except Exception as e:
         return False, f'{type(e).__name__}: {e}'
 
