@@ -583,6 +583,8 @@ class BatchCSVLogger:
         'weight_max_abs_global',
         # Optimizer
         'lr',
+        # Prodigy adapter (NaN per altri ottimizzatori — STEP 2C-ter)
+        'prodigy_d', 'prodigy_d_max', 'prodigy_lr_eff',
         # Diagnostic flags
         'is_nan_loss', 'is_inf_grad',
     ]
@@ -638,6 +640,13 @@ def _make_batch_row(epoch, batch_idx, comps, sr, pre_norms,
         'weight_max_abs_global': max(
             (p.detach().abs().max().item() for p in model.parameters()), default=0.0),
         'lr':                optimizer.param_groups[0]['lr'],
+        # STEP 2C-ter: Prodigy esporta `d` (adapter) e `d_max` (max storico).
+        # Per altri ottimizzatori la chiave manca → NaN (gestito da BatchCSVLogger.log).
+        # lr_eff = lr × d è la "vera" learning rate di Prodigy.
+        'prodigy_d':         optimizer.param_groups[0].get('d', float('nan')),
+        'prodigy_d_max':     optimizer.param_groups[0].get('d_max', float('nan')),
+        'prodigy_lr_eff':    (optimizer.param_groups[0]['lr']
+                              * optimizer.param_groups[0].get('d', float('nan'))),
         'is_nan_loss':       int(is_nan_loss),
         'is_inf_grad':       int(is_inf_grad),
     }
