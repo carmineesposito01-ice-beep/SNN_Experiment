@@ -684,6 +684,10 @@ def main():
                         choices=['adam', 'adamw', 'lion', 'prodigy'],
                         help='Ottimizzatore: adam|adamw|lion|prodigy '
                              '(prodigy: LR-free, usa --lr 1.0 come stima iniziale)')
+    parser.add_argument('--prodigy_d_coef', type=float, default=1.0,
+                        help='Prodigy d_coef: controlla velocita crescita parametro adattivo d. '
+                             'Default 1.0 (Prodigy standard). <1.0 = piu cauto (utile se grad '
+                             'esplodono), >1.0 = piu aggressivo. Solo per --optimizer prodigy.')
     # Dataset
     parser.add_argument('--load_data',   type=str,   default=None,
                         help='Cartella con train.pkl / val.pkl (legacy, usa --data_cache)')
@@ -899,10 +903,11 @@ def main():
             )
         optimizer = Prodigy(
             model.parameters(),
-            lr=args.lr,                # raccomandato lr=1.0 (auto-adapt)
+            lr=args.lr,                       # raccomandato lr=1.0 (auto-adapt)
             weight_decay=1e-4,
-            decouple=True,             # AdamW-style decoupled wd
-            safeguard_warmup=True,     # evita early-step blowup
+            decouple=True,                    # AdamW-style decoupled wd
+            safeguard_warmup=True,            # evita early-step blowup
+            d_coef=args.prodigy_d_coef,       # STEP 2C — tunable (sweep calibrazione)
         )
     else:
         raise ValueError(f"Ottimizzatore non supportato: {args.optimizer}")
