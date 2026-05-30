@@ -39,6 +39,17 @@ esibire comportamenti diversi — soprattutto perché:
 - `lr × d0` (3×3)
 - `beta3 × slice_p` (2×3)
 
+**📌 Regola empirica scoperta nello sweep 2026-05-30 (6 config tested)**:
+La soglia di stabilità per CF_FSNN è `lr_effective = lr × d_coef`:
+- `lr_eff ≤ 0.10` → converge come AdamW (#1: 0.2823)
+- `0.10 < lr_eff ≤ 0.30` → converge ma rapido poi piatto (#6: 0.2857 @E3)
+- `lr_eff > 0.30` → **frozen immediato in E1** (#2, #3, #4)
+
+Quindi `d_coef` agisce come "freno di sicurezza": consente lr base più alti
+mantenendo stabilità. Per il re-sweep esteso, vale la pena testare combo
+"lr alto + d_coef molto basso" (es. lr=2.0 + d_coef=0.1 → lr_eff=0.2)
+per vedere se aumentare lo spazio adattativo di Prodigy può portare benefici.
+
 **Strumenti già pronti**:
 - `--prodigy_d_coef` esposto in `train.py` (commit `08087bd`)
 - Logging di `prodigy_d`, `prodigy_d_max`, `prodigy_lr_eff` in BatchCSVLogger
