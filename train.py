@@ -317,16 +317,19 @@ def _log_batch_diagnostics(tag, comps, gn_total, x, pre_norms, model):
 def train_epoch(model, loader, optimizer, device, epoch, lam,
                 scheduler=None, step_per_batch=False,
                 log_every=LOG_EVERY, max_inf_streak=20, diag=False,
-                batch_logger=None):
+                batch_logger=None, max_steps_per_epoch=-1):
     """
     Esegue un'epoca di training con guardie e diagnostica.
 
-    step_per_batch  — True per OneCycleLR (step dopo ogni batch).
-    log_every       — frequenza log batch (1 = ogni batch, per smoke mode).
-    max_inf_streak  — n. massimo di batch consecutivi con grad=inf prima di abortire.
-    diag            — True: calcola norme per-layer pre-clip su OGNI batch (smoke mode).
-    batch_logger    — BatchCSVLogger opzionale (telemetria T): se non None, logga
-                      una riga per OGNI batch (incluse NaN/inf) per analisi post-mortem.
+    step_per_batch       — True per OneCycleLR (step dopo ogni batch).
+    log_every            — frequenza log batch (1 = ogni batch, per smoke mode).
+    max_inf_streak       — n. massimo di batch consecutivi con grad=inf prima di abortire.
+    diag                 — True: calcola norme per-layer pre-clip su OGNI batch (smoke mode).
+    batch_logger         — BatchCSVLogger opzionale (telemetria T): se non None, logga
+                           una riga per OGNI batch (incluse NaN/inf) per analisi post-mortem.
+    max_steps_per_epoch  — STEP 2C: cap step processati per epoca (-1 = unlimited).
+                           Usato per bound del budget gradient updates quando il windowing
+                           genera troppi batch.
 
     Ritorna dict metriche; se training abortito, include 'aborted': True.
     """
@@ -339,6 +342,10 @@ def train_epoch(model, loader, optimizer, device, epoch, lam,
     t0         = time.time()
 
     for batch_idx, (x, y, mask) in enumerate(loader):
+        # STEP 2C — cap per budget step. Break PRIMA di altre operazioni: il
+        # contatore n_batches conta solo step effettivamente eseguiti.
+        if max_steps_per_epoch > 0 and batch_idx >= max_steps_per_epoch:
+            break
         x    = x.to(device)
         y    = y.to(device)
         mask = mask.to(device)
@@ -657,8 +664,10 @@ def main():
                         help='Passi per finestra TBPTT')
     # Scheduler
     parser.add_argument('--scheduler',   type=str,   default='plateau',
-                        choices=['plateau', 'onecycle', 'cosine'],
-                        help='Scheduler LR: plateau|onecycle|cosine')
+                        choices=['plateau', 'onecycle', 'cosine', 'none'],
+                        help='Scheduler LR: plateau|onecycle|cosine|none '
+                             '(none = nessun adjustment, per ottimizzatori auto-adattivi '
+                             'come Prodigy)')
     parser.add_argument('--max_lr',      type=float, default=5e-3,
                         help='LR massimo per OneCycleLR')
     parser.add_argument('--T0',          type=int,   default=5,
@@ -711,6 +720,15 @@ def main():
                         help='Override CF_HIDDEN_SIZE per sweep parametrico (None=default config)')
     parser.add_argument('--cf_rank',        type=int, default=None,
                         help='Override CF_RANK per sweep parametrico (None=default config)')
+    # STEP 2C — Optimizer_Exploration: step budget control + val decoupling
+    parser.add_argument('--max_steps_per_epoch', type=int, default=-1,
+                        help='Cap step training per epoca, indipendente da len(train_loader). '
+                             '-1 = unlimited (default). Usato per bound del budget di gradient '
+                             'updates quando il windowing genera troppi batch.')
+    parser.add_argument('--val_batch_size',      type=int, default=-1,
+                        help='Batch size del val_loader, separato dal training. '
+                             '-1 = usa --batch_size (default). Utile per batch_size=1 in train '
+                             'quando si vuole validation veloce.')
     # Checkpoint
     parser.add_argument('--resume',      type=str,   default=None,
                         help='Checkpoint .pt da cui riprendere')
@@ -833,17 +851,22 @@ def main():
             _nw = min(4, os.cpu_count() or 1)  # Azure/Linux — fork-safe
     _pw = _nw > 0   # persistent_workers riduce overhead di spawn su Azure
 
+    # STEP 2C — val_batch_size separato per non penalizzare validation quando
+    # train usa batch=1 (Plan A Prodigy). Default -1 → fallback a --batch_size
+    # (retrocompatibile: tutti i run precedenti continuano a funzionare uguali).
+    val_bs = args.val_batch_size if args.val_batch_size > 0 else args.batch_size
     train_loader = DataLoader(
         train_ds, batch_size=args.batch_size, shuffle=True,
         num_workers=_nw, pin_memory=(device.type == 'cuda'),
         persistent_workers=_pw,
     )
     val_loader = DataLoader(
-        val_ds, batch_size=args.batch_size, shuffle=False,
+        val_ds, batch_size=val_bs, shuffle=False,
         num_workers=_nw, pin_memory=(device.type == 'cuda'),
         persistent_workers=_pw,
     )
     print(f"[Dataset] Finestre train: {len(train_ds)}  |  val: {len(val_ds)}"
+          f"  |  batch_train={args.batch_size}  batch_val={val_bs}"
           f"  |  num_workers={_nw}")
 
     # ── Modello (STEP 2B: hidden_size/rank overridabili da CLI) ──
@@ -885,12 +908,22 @@ def main():
         raise ValueError(f"Ottimizzatore non supportato: {args.optimizer}")
 
     # ── Scheduler LR ──────────────────────────────────────────────
-    if args.scheduler == 'onecycle':
+    # STEP 2C: se max_steps_per_epoch è attivo, OneCycle deve costruire il
+    # profilo sul numero EFFETTIVO di step (altrimenti la curva LR finisce
+    # tagliata a metà perché interrompiamo prima).
+    if args.scheduler == 'none':
+        # STEP 2C — nessun scheduler. Usato per ottimizzatori auto-adattivi
+        # (Prodigy) che gestiscono internamente il LR e non vogliono interferenze.
+        scheduler = None
+        sched_per_batch = False
+    elif args.scheduler == 'onecycle':
+        effective_spe = (min(len(train_loader), args.max_steps_per_epoch)
+                         if args.max_steps_per_epoch > 0 else len(train_loader))
         scheduler = torch.optim.lr_scheduler.OneCycleLR(
             optimizer,
             max_lr=args.max_lr,
             epochs=args.epochs,
-            steps_per_epoch=len(train_loader),
+            steps_per_epoch=effective_spe,
             pct_start=0.30,       # 30% epoche di warmup
             div_factor=10.0,      # lr_start = max_lr / 10
             final_div_factor=100, # lr_end   = lr_start / 100
@@ -959,6 +992,7 @@ def main():
                 max_inf_streak=args.max_inf_streak,
                 diag=args.smoke,
                 batch_logger=batch_logger,
+                max_steps_per_epoch=args.max_steps_per_epoch,
             )
 
             if train_m.get('aborted'):
@@ -971,8 +1005,9 @@ def main():
 
             val_m = val_epoch(model, val_loader, device, lam)
 
-            # Step scheduler per-epoch (plateau e cosine)
-            if not sched_per_batch:
+            # Step scheduler per-epoch (plateau e cosine).
+            # STEP 2C: guard su scheduler=None (caso --scheduler none).
+            if scheduler is not None and not sched_per_batch:
                 if args.scheduler == 'plateau':
                     scheduler.step(val_m['total'])
                 else:
