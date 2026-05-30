@@ -229,7 +229,7 @@ def _leader_profile(profile, N, dt, rng, v0):
 # 4. SIMULATORE DI TRAIETTORIA (normale — no cut-in)
 # ===========================================================
 
-def simulate_trajectory(params, profile='sinusoidal', seed=None):
+def simulate_trajectory(params, profile='sinusoidal', seed=None, noise_scale=1.0):
     """
     Simula una traiettoria follower-leader con ACC-IDM + rumore OU.
     Restituisce array (N_steps, 7) float32.
@@ -238,7 +238,18 @@ def simulate_trajectory(params, profile='sinusoidal', seed=None):
     - IIDM: risolve il bias v0 di IDM plain
     - CAH:  anticipa la frenata del leader (no panic braking su UC2)
     - a_l e' stimata da differenze finite su v_l + filtro OU (tau=ACC_AL_TAU)
+
+    STEP 2D — noise_scale (default 1.0): scaler applicato alle ampiezze del
+    rumore OU sui segnali percepiti (NOISE_GAP_REL, NOISE_VEL_OPT, NOISE_ACCEL).
+    noise_scale=0.0 disattiva il rumore (dataset deterministico ideale, usato
+    per Floor diagnostic 2D.2 — quantificare quanto del floor val~0.28 e'
+    dovuto a OU noise irriducibile).
     """
+    # STEP 2D: applico noise_scale alle ampiezze OU (i tau restano invariati)
+    noise_gap_rel = NOISE_GAP_REL * noise_scale
+    noise_vel_opt = NOISE_VEL_OPT * noise_scale
+    noise_accel   = NOISE_ACCEL   * noise_scale
+
     rng = np.random.default_rng(seed)
     N   = int(SIM_DURATION / DT)
 
@@ -273,8 +284,8 @@ def simulate_trajectory(params, profile='sinusoidal', seed=None):
         eta_a = _ou_step(eta_a, NOISE_TAU_A, DT, rng)
 
         # Segnali percepiti (con errori -- Ch13)
-        s_perc  = s * np.exp(NOISE_GAP_REL * eta_s)
-        vl_perc = v_l_true - s * NOISE_VEL_OPT * eta_v
+        s_perc  = s * np.exp(noise_gap_rel * eta_s)
+        vl_perc = v_l_true - s * noise_vel_opt * eta_v
 
         # Stima a_l da differenze finite + filtro OU
         a_l_raw  = (v_l_true - v_l_prev) / DT
@@ -284,7 +295,7 @@ def simulate_trajectory(params, profile='sinusoidal', seed=None):
         # Accelerazione ACC-IDM con IIDM base
         p_step = dict(params, T=T_cur)
         v_dot  = _acc_iidm_accel(s_perc, v, vl_perc, a_l_filt, p_step) \
-                 + NOISE_ACCEL * eta_a
+                 + noise_accel * eta_a
 
         # Update balistico (Ch11)
         dv_true = v - v_l_true
@@ -304,7 +315,7 @@ def simulate_trajectory(params, profile='sinusoidal', seed=None):
 # 5. SIMULATORE SCENARIO CUT-IN (UC2)
 # ===========================================================
 
-def simulate_cut_in_trajectory(params, profile='sinusoidal', seed=None):
+def simulate_cut_in_trajectory(params, profile='sinusoidal', seed=None, noise_scale=1.0):
     """
     Simula una traiettoria con evento di cut-in (UC2 -- Abrupt Cut-In).
 
@@ -316,8 +327,16 @@ def simulate_cut_in_trajectory(params, profile='sinusoidal', seed=None):
     Il gap post-cut-in e' campionato da U(CUT_IN_S_MIN, CUT_IN_S_MAX).
     La velocita' del veicolo B e' leggermente diversa dall'ego.
 
+    STEP 2D — noise_scale (default 1.0): identico significato di
+    simulate_trajectory(). 0.0 = no OU noise (deterministico).
+
     Restituisce array (N_steps, 7) float32 (stesso formato di simulate_trajectory).
     """
+    # STEP 2D: scaler OU (vedi simulate_trajectory per dettagli)
+    noise_gap_rel = NOISE_GAP_REL * noise_scale
+    noise_vel_opt = NOISE_VEL_OPT * noise_scale
+    noise_accel   = NOISE_ACCEL   * noise_scale
+
     rng = np.random.default_rng(seed)
     N   = int(SIM_DURATION / DT)
 
@@ -378,8 +397,8 @@ def simulate_cut_in_trajectory(params, profile='sinusoidal', seed=None):
         eta_v = _ou_step(eta_v, NOISE_TAU_V, DT, rng)
         eta_a = _ou_step(eta_a, NOISE_TAU_A, DT, rng)
 
-        s_perc  = s * np.exp(NOISE_GAP_REL * eta_s)
-        vl_perc = v_l_true - s * NOISE_VEL_OPT * eta_v
+        s_perc  = s * np.exp(noise_gap_rel * eta_s)
+        vl_perc = v_l_true - s * noise_vel_opt * eta_v
 
         a_l_raw  = (v_l_true - v_l_prev) / DT
         a_l_filt = alpha_al * a_l_filt + (1.0 - alpha_al) * a_l_raw
@@ -387,7 +406,7 @@ def simulate_cut_in_trajectory(params, profile='sinusoidal', seed=None):
 
         p_step = dict(params, T=T_cur)
         v_dot  = _acc_iidm_accel(s_perc, v, vl_perc, a_l_filt, p_step) \
-                 + NOISE_ACCEL * eta_a
+                 + noise_accel * eta_a
 
         dv_true = v - v_l_true
         v_new   = float(np.clip(v + v_dot * DT, 0.0, params['v0'] * 1.2))
@@ -532,7 +551,8 @@ def _sample_scenario(rng, scenario_mix=None, cut_in_ratio=None):
 # ===========================================================
 
 def generate_dataset(n_scenarios, base_seed=SEED,
-                     scenario_mix=None, cut_in_ratio=None):
+                     scenario_mix=None, cut_in_ratio=None,
+                     noise_scale=1.0):
     """
     Genera n_scenarios traiettorie ACC-IDM.
 
@@ -541,6 +561,8 @@ def generate_dataset(n_scenarios, base_seed=SEED,
         base_seed: int (seed RNG)
         scenario_mix: dict {scenario:prob} | None (→ SCENARIO_MIX da config)
         cut_in_ratio: float | None (→ CUT_IN_RATIO da config)
+        noise_scale: float (default 1.0). Scaler delle ampiezze del rumore OU.
+            0.0 = dataset deterministico ideale (STEP 2D.2 floor diagnostic).
 
     Restituisce lista di dict: x, y, mask, raw, params, profile, scenario, cut_in.
     """
@@ -559,10 +581,12 @@ def generate_dataset(n_scenarios, base_seed=SEED,
         p, prof, stype, is_cutin = _sample_scenario(rng, scenario_mix, cut_in_ratio)
 
         if is_cutin:
-            traj = simulate_cut_in_trajectory(p, profile=prof, seed=seed_i)
+            traj = simulate_cut_in_trajectory(p, profile=prof, seed=seed_i,
+                                              noise_scale=noise_scale)
             n_cutin += 1
         else:
-            traj = simulate_trajectory(p, profile=prof, seed=seed_i)
+            traj = simulate_trajectory(p, profile=prof, seed=seed_i,
+                                       noise_scale=noise_scale)
 
         traj       = traj[warmup_steps:]
         x, y, mask = normalize(traj)

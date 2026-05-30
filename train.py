@@ -722,6 +722,11 @@ def main():
                              "'truck' | 'mixed' | 'highway:0.7,urban:0.3' (custom)")
     parser.add_argument('--cut_in_ratio', type=float, default=None,
                         help='Frazione cut-in [0,1]. Default None usa CUT_IN_RATIO da config.py')
+    parser.add_argument('--noise_scale', type=float, default=1.0,
+                        help='STEP 2D: scaler ampiezza rumore OU nel generator '
+                             '(NOISE_GAP_REL/VEL_OPT/ACCEL). Default 1.0 = nominale. '
+                             '0.0 = dataset deterministico ideale (Floor diagnostic). '
+                             'Solo se cache assente (cache esistente NON viene rigenerata).')
     # Early stopping (P11 — evita training oltre il plateau, fix per P8)
     parser.add_argument('--early_stop_patience', type=int, default=0,
                         help='Stop dopo N epoche senza miglioramento di val_loss. '
@@ -824,13 +829,15 @@ def main():
 
     else:
         # ── Genera ex novo ────────────────────────────────────────
-        print("[Dataset] Generazione sintetica ACC-IDM ...")
+        print(f"[Dataset] Generazione sintetica ACC-IDM (noise_scale={args.noise_scale}) ...")
         train_data = generate_dataset(args.n_train, base_seed=SEED,
                                       scenario_mix=scenario_mix_dict,
-                                      cut_in_ratio=cut_in_eff)
+                                      cut_in_ratio=cut_in_eff,
+                                      noise_scale=args.noise_scale)
         val_data   = generate_dataset(args.n_val,   base_seed=SEED + 1,
                                       scenario_mix=scenario_mix_dict,
-                                      cut_in_ratio=cut_in_eff)
+                                      cut_in_ratio=cut_in_eff,
+                                      noise_scale=args.noise_scale)
         print_dataset_stats(train_data, 'train')
         print_dataset_stats(val_data,   'val')
 
