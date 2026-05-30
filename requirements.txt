@@ -11,3 +11,7 @@ matplotlib>=3.7.0
 
 # Opzionale: snnTorch (per confronto con implementazione canonica SNN)
 # snntorch>=0.9.0
+
+# Opzionale: Prodigy (LR-free optimizer, ramo Optimizer_Exploration STEP 2C)
+# Installato automaticamente da Training_File_Optimizer.ipynb Cella 0.
+# prodigyopt>=1.0

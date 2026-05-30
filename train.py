@@ -672,8 +672,9 @@ def main():
                         help='B5: peso spike-rate regularizer (default da config.py)')
     # Ottimizzatore
     parser.add_argument('--optimizer',   type=str,   default='adam',
-                        choices=['adam', 'adamw', 'lion'],
-                        help='Ottimizzatore: adam|adamw|lion')
+                        choices=['adam', 'adamw', 'lion', 'prodigy'],
+                        help='Ottimizzatore: adam|adamw|lion|prodigy '
+                             '(prodigy: LR-free, usa --lr 1.0 come stima iniziale)')
     # Dataset
     parser.add_argument('--load_data',   type=str,   default=None,
                         help='Cartella con train.pkl / val.pkl (legacy, usa --data_cache)')
@@ -861,6 +862,25 @@ def main():
         optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=1e-4)
     elif args.optimizer == 'lion':
         optimizer = LionOptimizer(model.parameters(), lr=args.lr, weight_decay=1e-4)
+    elif args.optimizer == 'prodigy':
+        # Prodigy (Mishchenko & Defazio, 2024) — LR-free adaptive optimizer.
+        # Convention: pass lr=1.0 as the initial estimate; Prodigy auto-tunes.
+        # Reference: https://github.com/konstmish/prodigy
+        # Designed for batch_size=1 + noise-driven exploration (STEP 2C — P12 anti-local-minima).
+        try:
+            from prodigyopt import Prodigy
+        except ImportError as e:
+            raise ImportError(
+                "prodigyopt non installato. Su Azure: !pip install prodigyopt\n"
+                f"Errore originale: {e}"
+            )
+        optimizer = Prodigy(
+            model.parameters(),
+            lr=args.lr,                # raccomandato lr=1.0 (auto-adapt)
+            weight_decay=1e-4,
+            decouple=True,             # AdamW-style decoupled wd
+            safeguard_warmup=True,     # evita early-step blowup
+        )
     else:
         raise ValueError(f"Ottimizzatore non supportato: {args.optimizer}")
 
