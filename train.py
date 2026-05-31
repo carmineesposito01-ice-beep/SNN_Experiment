@@ -50,7 +50,7 @@ from config import (
     N_SCENARIOS_TRAIN, N_SCENARIOS_VAL,
     DT,
 )
-from core.network import CF_FSNN_Net
+from core.network import CF_FSNN_Net, build_model
 
 
 # ===========================================================
@@ -590,6 +590,11 @@ class BatchCSVLogger:
     ]
 
     # Mapping da parametro PyTorch → colonna CSV (parametri non listati → ignorati)
+    # STEP 2E: per le varianti architetturali, i nuovi nomi (es. layers_hidden.0.fc_weight,
+    # skip_weight, Wq, ...) non sono in questa mappa. Il logger li skippa silenziosamente
+    # e registra un warning una sola volta (vedi _make_batch_row). Pattern KISS: niente
+    # NaN silenzioso nel CSV, niente crash, ma il diagnostic gradient è limitato ai
+    # parametri baseline. Le varianti potranno aggiungere mapping qui se serve.
     LAYER_MAP = {
         'layer_hidden.fc_weight':           'gn_hidden_fc',
         'layer_hidden.rec_U':               'gn_hidden_recU',
@@ -598,6 +603,8 @@ class BatchCSVLogger:
         'layer_hidden.cell.thresh_jump':    'gn_hidden_thresh_jump',
         'layer_out.fc_weight':              'gn_out_fc',
     }
+    # Set per loggare il warning UNA SOLA VOLTA per nome param non mappato.
+    _UNMAPPED_WARNED = set()
 
     def __init__(self, path: str, flush_every: int = 50):
         os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -650,10 +657,17 @@ def _make_batch_row(epoch, batch_idx, comps, sr, pre_norms,
         'is_nan_loss':       int(is_nan_loss),
         'is_inf_grad':       int(is_inf_grad),
     }
-    # Mappa pre_norms ai nomi colonna
+    # Mappa pre_norms ai nomi colonna. STEP 2E: warn-once per param non mappato.
     if pre_norms is not None:
         for pname, cname in BatchCSVLogger.LAYER_MAP.items():
             row[cname] = pre_norms.get(pname, float('nan'))
+        # Warning silenzioso una volta per nome non mappato (varianti A2-A8).
+        mapped = set(BatchCSVLogger.LAYER_MAP.keys())
+        for pname in pre_norms.keys():
+            if pname not in mapped and pname not in BatchCSVLogger._UNMAPPED_WARNED:
+                BatchCSVLogger._UNMAPPED_WARNED.add(pname)
+                print(f"[BatchCSVLogger] WARN: param '{pname}' non in LAYER_MAP "
+                      f"-- gradient norm non loggato (variante architetturale)")
     return row
 
 
@@ -740,6 +754,10 @@ def main():
     parser.add_argument('--early_stop_delta',    type=float, default=1e-4,
                         help='Soglia minima di miglioramento per resettare patience counter')
     # STEP 2B — capacity sweep (None → usa default da config.py)
+    parser.add_argument('--arch_variant', type=str, default='baseline',
+        choices=['baseline', 'stacked_2', 'stacked_2_skip', 'stacked_3_thin',
+                 'max_delay_12', 'multi_rate', 'wta', 'attn'],
+        help='STEP 2E: variante architetturale (default baseline = CF_FSNN_Net)')
     parser.add_argument('--cf_hidden_size', type=int, default=None,
                         help='Override CF_HIDDEN_SIZE per sweep parametrico (None=default config)')
     parser.add_argument('--cf_rank',        type=int, default=None,
@@ -902,13 +920,15 @@ def main():
           f"  |  batch_train={args.batch_size}  batch_val={val_bs}"
           f"  |  num_workers={_nw}")
 
-    # ── Modello (STEP 2B: hidden_size/rank overridabili da CLI) ──
-    model    = CF_FSNN_Net(
+    # ── Modello (STEP 2B: hidden_size/rank overridabili. STEP 2E: arch_variant) ──
+    model    = build_model(
+        variant=args.arch_variant,
         hidden_size=args.cf_hidden_size,
         rank=args.cf_rank,
     ).to(device)
     n_params = sum(p.numel() for p in model.parameters())
-    print(f"\n[Modello] CF_FSNN_Net  --  hidden={model.hidden_size}, rank={model.rank}, "
+    print(f"\n[Modello] variant={args.arch_variant}  class={type(model).__name__}  "
+          f"hidden={model.hidden_size}, rank={model.rank}, max_delay={model.max_delay}, "
           f"parametri totali: {n_params:,}")
 
     # ── Ottimizzatore ─────────────────────────────────────────────
