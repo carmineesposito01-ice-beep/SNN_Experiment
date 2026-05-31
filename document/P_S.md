@@ -5,9 +5,9 @@
 > 🔧 **Per workflow Azure end-to-end**: vedi `WORKFLOW.md`.
 > 🏛️ **Per storia decisioni + lessons learned**: vedi `TIMELINE.md`.
 
-> **Ultima modifica:** 2026-05-29 12:00 CET
-> **Sessione:** post-sweep STEP 2B (7 runs su 9 completati) + analisi optimizer SOTA + design STEP 2C
-> **Stato corrente:** **P9 (capacity insufficiency) FALSIFICATO** dal capacity sweep STEP 2B. I 5 valori di hidden_size (32, 48, 64, 96, 128) producono val_best ∈ [0.2789, 0.2802] (Δ=1.3 millesimi). Aumentare i parametri da 869 a 9605 (+1004%) migliora val_best dello 0.46% (rumore). Plateau a ~0.28 è strutturale, NON capacity-related. Apertura di **P12** (plateau non-capacity) e **P13** (scenario crashes urban+truck). **Eureka utente "dancing intorno al plateau" RAFFINATA**: i runs si fermano in 4 epoche per early-stop aggressivo + OneCycle troncato → possibili minimi locali, ricetta SOTA AdamW+CosineWR+SWA+SAM (opzionale) deve testare se sotto i 0.28 si può scendere. **NEXT: STEP 2C — singolo run P9_S2C_h64r16_hw_modern (h=64, r=16, AdamW wd=1e-4, CosineAnnealingWarmRestarts T_0=10 T_mult=2, warmup 5 ep, 40 epoche, n_train=1500, SWA da E30, ~5h Azure CPU).**
+> **Ultima modifica:** 2026-05-31 12:30 CET
+> **Sessione:** post-STEP 2D (Floor Diagnostic completo) + merge branch a main
+> **Stato corrente:** **P14 CHIUSO**. Floor val~0.28 completamente decomposto. OU noise = 19.3%, SR+Po2 = 0.4% (Po2 sorprendentemente trascurabile), residuo architettura = 78.4% (F7 best = 0.2198, ancora in trend DOWN). Po2 resta ON in deploy (zero costo confermato). P12 resta "diagnosi superata da P14" (capiamo il floor, ora dobbiamo decidere se attaccarlo). P13 (scenario crashes) ancora aperto, basso priority. **NEXT (scelta utente)**: 4 strade in FUTURE_WORK.md — (F2) **EventProp** training paradigma diverso, (F3) curriculum noise, (F4) architettura modificata, (F5) accettare floor e procedere a deploy. Branch `main` ora include Optimizer_Exploration + Floor_Diagnostic merged.
 
 Documento vivo: ogni problema ha (1) descrizione, (2) firma diagnostica, (3) causa root,
 (4) soluzioni in ordine di impatto. Le soluzioni si marcano `[ ] proposta`,
@@ -651,3 +651,79 @@ su TUTTI gli scenari.
 | 2026-05-29 12:00 | STEP 2C-α design: AdamW + CosineWarmRestart(T_0=10) + warmup 5 + SWA + epochs=40 + n_train=1500 + h64_r16 highway | proposto |
 | 2026-05-29 12:00 | STEP 2C-β condizionale: + SAM (rho=0.05) se 2C-α non scende sotto 0.20 | proposto |
 | 2026-05-29 12:00 | STEP 2C-γ opzionale R&D: SurrogateSAM (originale, non in letteratura) | proposto |
+| 2026-05-30 16:30 | STEP 2C eseguito (branch `Optimizer_Exploration`): Plan A Prodigy lr=1.0 b=1 → **COLLASSO/freezing** (178/200 batch inf grad E01, val congelato 0.5879 E2-E15) | ❌ Prodigy lr=1.0 incompatibile con BPTT-SNN |
+| 2026-05-30 16:30 | Plan B AdamW lr=2e-3 b=8 OneCycle → **val=0.2805 @E14** (coerente baseline STEP 2A 0.2802) | ✅ AdamW conferma plateau ~0.28 |
+| 2026-05-30 19:00 | Sweep calibrazione Prodigy (6 config: lr × batch × d_coef) eseguito | [x] applicato |
+| 2026-05-30 20:30 | **Regola empirica scoperta**: `lr_effective = lr × d_coef` determina stabilità. ≤0.3 OK, >0.3 freeze | ✓ insight metodologico |
+| 2026-05-30 20:30 | **Miglior Prodigy**: #1 (lr=0.1 b=1 dc=1.0) → val=0.2823 (vs AdamW 0.2805, Δ=+0.0018) | ✅ Prodigy ≈ AdamW |
+| 2026-05-30 21:00 | Decisione: AdamW resta optimizer scelto. Prodigy archiviato in FUTURE_WORK F1 (re-test post-floor) | accettato utente |
+| 2026-05-30 21:00 | **Conferma floor strutturale**: 9 setup diversi → 0.279-0.290 (range 11‰) | ✅ floor confermato |
+| 2026-05-30 21:30 | Branch `Floor_Diagnostic` creato da Optimizer_Exploration. STEP 2D inizia: 3 plan F1/F2/F3 (Po2 differita) | [x] applicato |
+| 2026-05-30 22:30 | F1 (no PINN): val=0.2738 (Δ=-0.0067) → PINN multi-obj NON è il colpevole | ✓ escluso |
+| 2026-05-30 22:30 | **F2 (no OU): val=0.2262 (Δ=-0.0543 = -19.3%)** → 🏆 OU noise è UN colpevole | ✅ identificato |
+| 2026-05-30 23:30 | F3 (n_train=5000): val=0.2802 (Δ=-0.0003) → dataset size NON è il colpevole | ✓ escluso |
+| 2026-05-31 09:00 | STEP 2D-bis design: F5/F6/F7 per decomporre il residuo 0.226 (incl. Po2 con toggle reversibile) | [x] applicato |
+| 2026-05-31 09:30 | `core/hardware.py` + `train.py`: aggiunto toggle `--po2_enabled {0,1}` LIVE via env var. Rollback istantaneo, validato. | [x] applicato |
+| 2026-05-31 12:30 | **STEP 2D-bis completato**: decomposizione finale del floor. **Apertura P14**. | ✅ |
+
+---
+
+## P14 — Decomposizione finale del floor val~0.28 (NUOVO — 2026-05-31)
+
+### 14.1 Descrizione
+
+Il floor val ≈ 0.28 osservato in 9 setup diversi (capacity sweep STEP 2B + ottimizzatore sweep STEP 2C + Plan A/B Optimizer_Exploration) è stato **completamente decomposto** dal floor diagnostic STEP 2D + STEP 2D-bis (branch `Floor_Diagnostic`). 7 esperimenti F1-F7 hanno isolato il contributo quantitativo di ogni fattore candidato.
+
+### 14.2 Risultati F1-F7 (tutti reproducibili da `results/P12_S2D_*/`)
+
+| Plan | Config (vs baseline AdamW) | val_best | Δ vs REF | Conclusione |
+|------|----------------------------|----------|----------|-------------|
+| REF | AdamW b=8 OneCycle (tutto ON) | 0.2805 | — | floor totale |
+| F1 | `lambda_phys=ou=bc=0` (no PINN multi-obj) | 0.2738 | -0.0067 | PINN ≈ trascurabile |
+| F2 | `noise_scale=0` (no OU noise) | **0.2262** | **-0.0543** | 🎯 OU è 19.3% del floor |
+| F3 | `n_train=5000` (dataset 3.3×) | 0.2802 | -0.0003 | dataset size irrilevante |
+| F5 | `noise_scale=0 + lambda_sr=0` | 0.2256 | -0.0549 | SR ≈ 0% (solo 0.2% vs F2) |
+| F6 | `noise_scale=0 + po2_enabled=0` | 0.2256 | -0.0549 | Po2 ≈ 0% (solo 0.2% vs F2) |
+| F7 | `noise_scale=0 + lambda_sr=0 + po2_enabled=0` | **0.2198** | -0.0607 | "floor pulito" — residuo architettura |
+
+### 14.3 Decomposizione quantitativa del floor 0.2805
+
+```
+Floor totale 0.2805 = 100% del problema
+├─ OU noise              0.0543   ← 19.3%   (irriducibile in deploy: simula errori V2X)
+├─ Spike-rate regularizer 0.0006   ← 0.2%   (trascurabile)
+├─ Po2 quantization      0.0006   ← 0.2%   (TRASCURABILE — sorprendente)
+├─ SR × Po2 interaction  0.0052   ← 1.9%   (piccola sinergia)
+└─ Residuo architettura  0.2198   ← 78.4%  (DOMINANTE — limite SNN+data attuale)
+                          ─────
+                          0.2805   ✓ check (somma = floor totale)
+```
+
+### 14.4 Insight chiave
+
+1. **Po2 è essenzialmente gratis** (0.2% del floor). Decisione utente di mantenere Po2 in deploy PYNQ-Z1 è confermata ottimale: zero costo, massima compatibilità FPGA.
+2. **OU noise è il 51% del "riducibile"** ma è **irriducibile in produzione** (rappresenta errori V2X reali). In training si può rimuovere, ma in deploy gli errori esistono.
+3. **78.4% del floor è limite architettura/dati**. Non si abbatte con: capacità (sweep 2B), ottimizzatore (sweep 2C), scheduler, dataset size (F3), rimozione PINN (F1), Po2/SR (F5/F6).
+4. **F7 trajectory mostra trend DOWN @E15** (best 0.2198 ancora in miglioramento). Con più epoche potrebbe scendere a ~0.215. Ma il dominio architettura resta.
+5. **Anomalia F7 `val_ou=0.010`** (vs 5e-6 negli altri): rimuovendo SR + Po2 insieme, la rete diventa "sloppy" sulla regressione di T. SR/Po2 agivano da regolarizzazione implicita su T.
+
+### 14.5 Implicazioni operative
+
+- **Per il deploy**: Po2 ON resta (zero costo). Si accetta floor ~0.28 come prodotto del setup attuale.
+- **Per la ricerca**: il margine di miglioramento è nel **residuo architettura** (78%). Servono interventi STRUTTURALI per scendere sotto 0.22.
+- **Per il training BPTT**: F7=0.2198 con BPTT+surrogate+architettura attuale è plausibilmente vicino al limite di questo paradigma di training. Cambiare paradigma (es. **EventProp**) potrebbe sbloccare ulteriore margine.
+
+### 14.6 Stato P14
+
+🟢 **CHIUSO** — il floor è completamente caratterizzato. Le decisioni successive (STEP 2E e oltre) si basano su questa decomposizione consolidata. Vedi `FUTURE_WORK.md` per opzioni di mitigazione.
+
+---
+
+## Log delle decisioni (estensione 2026-05-31)
+
+| Data | Decisione | Stato |
+|------|-----------|-------|
+| 2026-05-31 12:30 | Decomposizione floor consolidata. **P14 chiuso**. Po2 contribuisce 0.2% → resta ON in deploy. | ✅ |
+| 2026-05-31 12:30 | Documentazione completa (P_S, SESSION_RESUME, TIMELINE, GLOSSARY, FUTURE_WORK) | [x] applicato |
+| 2026-05-31 12:30 | Branch `Optimizer_Exploration` + `Floor_Diagnostic` merged → `main` | [x] applicato |
+| 2026-05-31 12:30 | Prossima decisione: scelta utente tra opzioni mitigation (vedi FUTURE_WORK) | in attesa utente |

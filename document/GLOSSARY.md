@@ -4,7 +4,7 @@
 
 ---
 
-## 🩺 P1-P13 — Problemi diagnosticati (vedi `P_S.md` per dettagli)
+## 🩺 P1-P14 — Problemi diagnosticati (vedi `P_S.md` per dettagli)
 
 | Codice | Nome | Status |
 |--------|------|--------|
@@ -14,13 +14,14 @@
 | **P4** | Rischio FULL senza preflight | ✅ risolto da PF (preflight obbligatorio) |
 | **P5** | B4 incompatibile con `SurrogateSpike_Hardware` (rompe ALIF cell learning) | ✅ documentato + rollback |
 | **P6** | Roadmap revisione post-P5 (Tier 1/2/3/4) | strategia: A1+A2+A3+B5 (Tier 3) |
-| **P7** | Spike-rate saturation post-B5 (oscillazione 5%→25%→50%) | ⚠️ collegato a P12 |
-| **P8** | Plateau val_loss ≈ 0.35 in tutti i run (osservazione utente, confermata matematicamente) | confermato (sostituito da P12) |
+| **P7** | Spike-rate saturation post-B5 (oscillazione 5%→25%→50%) | ⚠️ collegato a P14 |
+| **P8** | Plateau val_loss ≈ 0.35 in tutti i run (osservazione utente, confermata matematicamente) | confermato (sostituito da P12 → P14) |
 | **P9** | Capacity insufficiency (rete UNDERSIZED, 864 param insufficient per task) | ❌ **FALSIFICATO 2026-05-29** (sweep capacity Δval=1.3‰) |
 | **P10** | Config drift: SCENARIO_MIX/CUT_IN_RATIO non controllabili da CLI | ✅ risolto (commit 3dedf51) |
 | **P11** | Early stopping mancante (spreco compute + crash post-plateau) | ✅ risolto (commit 3dedf51) |
-| **P12** | **Plateau val~0.28 non-capacity** (cause candidate: minimi locali, dataset saturation, Pareto PINN, Po2 floor) | 🆕 attivo (target STEP 2C-α) |
-| **P13** | **Scenario crashes**: urban dead-neurons (spike=0.6% E3) + truck post-convergence grad explosion (E5, val=0.16 best) | 🆕 attivo (target post-STEP 2C) |
+| **P12** | Plateau val~0.28 non-capacity (cause candidate: minimi locali, dataset saturation, Pareto PINN, Po2 floor) | ✅ chiuso da P14 (decomposizione 2026-05-31) |
+| **P13** | Scenario crashes: urban dead-neurons + truck post-convergence grad explosion | ⏸️ aperto, basso priority (target post-STEP 2E) |
+| **P14** | **Decomposizione floor val~0.28**: 19% OU + 0.2% Po2 + 0.2% SR + 78% architettura | ✅ **chiuso 2026-05-31** (sweep F1-F7, branch `Floor_Diagnostic`) |
 
 ---
 
@@ -94,20 +95,61 @@
 
 ---
 
-## 🚀 STEP 2A / 2B / 2C / 2D — Roadmap aggiornata
+## 🚀 STEP 2A / 2B / 2C / 2D / 2E — Roadmap completa
 
-Sequenza di esperimenti per identificare la causa del plateau a val~0.28.
+Sequenza di esperimenti per identificare e affrontare la causa del plateau a val~0.28.
 
 | Codice | Significato | Status | Tempo |
 |--------|-------------|--------|-------|
-| **STEP 2A** | Fast iteration baseline: `n_train=500, epochs=10, early_stop_delta=0.005` con architettura attuale (h=32 r=8) | ✅ completato (val=0.2802) | ~17 min |
-| **STEP 2B** | Parametric sweep capacity (h=32, 48, 64, 96, 128) + scenario diversity (urban, truck) | ✅ completato 7/9 → **P9 FALSIFICATO** | ~3h |
-| **STEP 2C-α** | Modernist optimizer recipe: AdamW + CosineAnnealingWarmRestarts(T_0=10) + warmup 5 ep + SWA + epochs=40 + n_train=1500 + h=64 r=16 highway. Verifica se plateau era minimo locale | 🟡 proposto (in attesa decisione utente Q1/Q2/Q3) | ~5h Azure |
-| **STEP 2C-β** | Condizionale: se 2C-α NON scende sotto 0.20 → aggiungere SAM (rho=0.05). 2× tempo per step | ⏸️ condizionale | ~10h |
-| **STEP 2C-γ** | Opzionale R&D: SurrogateSAM — variante SAM che perturba anche γ del surrogate (idea originale, non in letteratura) | ⏸️ opzionale | ~10h |
-| **STEP 2D** | Multi-scenario: estendere recipe vincitore a urban+truck risolvendo P13 (dead-neurons + post-converg crash) | ⏸️ futuro | variabile |
+| **STEP 2A** | Fast iteration baseline: `n_train=500, epochs=10, early_stop_delta=0.005` con h=32 r=8 | ✅ completato (val=0.2802) | ~17 min |
+| **STEP 2B** | Parametric sweep capacity (h=32→128) + scenario diversity | ✅ completato 7/9 → **P9 FALSIFICATO** | ~3h |
+| **STEP 2C** | Optimizer Exploration (branch `Optimizer_Exploration`): AdamW vs Prodigy + sweep 6 config Prodigy | ✅ completato → AdamW marginalmente migliore, Prodigy in FUTURE_WORK F1 | ~6h |
+| **STEP 2D** | Floor Diagnostic (branch `Floor_Diagnostic`): F1/F2/F3 (PINN/OU/dataset) + F5/F6/F7 (decomposizione residuo incl. Po2) | ✅ completato → **P14 chiuso** | ~5h |
+| **STEP 2E** | Mitigation (post-decomposition): 4 opzioni in FUTURE_WORK (F2 EventProp, F3 curriculum, F4 arch mod, F5 accept&deploy) | 🟡 decisione utente | variabile |
 
-**Pattern TAG**: `P9_S2A_*`, `P9_S2B_h<HIDDEN>_r<RANK>_<scen>`, `P9_S2C<α|β|γ>_*`, `P9_S2D_*`.
+**Pattern TAG**:
+- `P9_S2A_*`, `P9_S2B_h<HIDDEN>_r<RANK>_<scen>` (legacy capacity sweep)
+- `P12_S2C_planA|planB_*` (Optimizer_Exploration Plan A=Prodigy, Plan B=AdamW)
+- `P12_S2Cb_*` (sweep Prodigy 6 config: lr × batch × d_coef)
+- `P12_S2D_F<1-7>_*` (Floor Diagnostic ablation per fattore)
+
+---
+
+## 🔬 F1-F7 — Floor Diagnostic ablations (STEP 2D, branch `Floor_Diagnostic`)
+
+| Codice | Tag | Override vs baseline AdamW | val_best | Conclusione |
+|--------|-----|----------------------------|----------|-------------|
+| **F1** | `P12_S2D_F1_no_pinn` | `lambda_phys=ou=bc=0` | 0.2738 | PINN multi-obj NON è il colpevole (Δ=-0.007) |
+| **F2** | `P12_S2D_F2_no_ou` | `noise_scale=0.0` (cache fresh) | **0.2262** | 🎯 OU spiega 19.3% del floor |
+| **F3** | `P12_S2D_F3_dataset_big` | `n_train=5000` (dataset 3.3×) | 0.2802 | Dataset size irrilevante (Δ≈0) |
+| ~~F4~~ | _differita_ | ~~Po2 quantization OFF~~ | — | sostituita da F6 |
+| **F5** | `P12_S2D_F5_no_ou_no_sr` | `noise_scale=0` + `lambda_sr=0` | 0.2256 | SR pesa 0.2% (vs F2) |
+| **F6** | `P12_S2D_F6_no_ou_no_po2` | `noise_scale=0` + `po2_enabled=0` | 0.2256 | Po2 pesa 0.2% (vs F2) — sorprendente |
+| **F7** | `P12_S2D_F7_no_ou_no_sr_no_po2` | tutti e 3 OFF | **0.2198** | Floor pulito = residuo architettura |
+
+**Decomposizione**: vedi `P_S.md` §14.3.
+
+---
+
+## 🎚️ CLI flags introdotte in STEP 2C/2D (post-merge in main)
+
+| Flag | Default | Branch origine | Scopo |
+|------|---------|----------------|-------|
+| `--max_steps_per_epoch N` | -1 (unlimited) | Optimizer_Exploration | Cap step training per epoca (budget control) |
+| `--val_batch_size N` | -1 (fallback `--batch_size`) | Optimizer_Exploration | Disaccoppia val da train (utile per batch=1) |
+| `--scheduler none` | — | Optimizer_Exploration | Nessun scheduler (per ottimizzatori auto-adattivi tipo Prodigy) |
+| `--optimizer prodigy` | adam (default) | Optimizer_Exploration | Prodigy LR-free (lazy import `prodigyopt`) |
+| `--prodigy_d_coef F` | 1.0 | Optimizer_Exploration | Scaler crescita parametro adattivo `d` di Prodigy |
+| `--noise_scale F` | 1.0 | Floor_Diagnostic | Scaler ampiezza OU noise nel generator (0.0 = deterministico) |
+| `--po2_enabled {0,1}` | 1 (legacy) | Floor_Diagnostic | Toggle Po2 quantization su pesi (LIVE via env var `PO2_ENABLED`) |
+
+---
+
+## 🔬 Toggle env-var introdotti
+
+| Env var | Valori | Effetto |
+|---------|--------|---------|
+| `PO2_ENABLED` | `0`/`1` (o `false`/`true`/`OFF`/`on`) | Letto LIVE in `core.hardware.PowerOf2Quantize.forward()`. Default `1` = quantization attiva (legacy). `0` = passthrough fp32. Reversibile istantaneamente. Settato da `train.py` dopo argparse. |
 
 ---
 

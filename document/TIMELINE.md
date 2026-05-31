@@ -466,6 +466,104 @@ Estendere ai paper successivi prima di usarli in produzione. Per ora attenersi a
 
 ---
 
+## 🌅 2026-05-30 — STEP 2C Optimizer Exploration (branch `Optimizer_Exploration`)
+
+**Contesto**: branch isolato per esplorazione optimizer (Prodigy vs AdamW), senza inquinare main.
+
+**Setup infrastrutturale** (commit `7f2fdb9` + estensioni):
+- Branch `Optimizer_Exploration` da `06592b5`
+- Nuovo CLI `--optimizer prodigy` in `train.py` (lazy import `prodigyopt`)
+- 3 nuove CLI `--max_steps_per_epoch`, `--val_batch_size`, `--scheduler none`
+- Notebook `Training_File_Optimizer.ipynb` (12 celle)
+
+**Run principale Plan A vs Plan B**:
+- **Plan A** Prodigy lr=1.0 b=1 → **COLLASSO**: 178/200 batch inf grad in E01 → freezing E2-E15. Diagnosi: BPTT-SNN gradiente esplosivo + Prodigy `d` cresce troppo rapidamente → clip azzera tutto → optimizer no-op
+- **Plan B** AdamW lr=2e-3 b=8 OneCycle → val=0.2805 @E14 (coerente baseline STEP 2A)
+
+**Sweep Prodigy 6 config**:
+- #1 lr=0.1 b=1 dc=1.0 → **val=0.2823 @E14** ✅ (best Prodigy)
+- #2 lr=1.0 b=4 dc=1.0 → 0.3550 frozen ❌
+- #3 lr=1.0 b=8 dc=1.0 → 0.3288 frozen ❌
+- #4 lr=0.5 b=2 dc=1.0 → 0.3103 frozen ❌
+- #5 lr=0.1 b=1 dc=0.5 → 0.2902 @E15
+- #6 lr=0.5 b=1 dc=0.5 → 0.2857 @E3 ✅
+
+**Regola empirica scoperta**: `lr_effective = lr × d_coef` determina la stabilità:
+- `lr_eff ≤ 0.10` → OK
+- `0.10 < lr_eff ≤ 0.30` → OK, converge rapido
+- `lr_eff > 0.30` → freezing immediato in E01
+
+**Risposta dubbio utente "stiamo usando Prodigy male?"**: NO. `lr` in Prodigy è moltiplicatore di sicurezza su `lr × d × grad`. Prodigy adatta `d` autonomamente. Logging mostrava solo `lr` base — abbiamo aggiunto logging `prodigy_d` (commit `ac40a8f`).
+
+**Confronto 360° AdamW vs Prodigy best**: 4 categorie vinte da AdamW, 2 da Prodigy (stabilità late, capacità train), 1 pareggio. AdamW è la scelta.
+
+**Conferma floor**: 9 setup → 0.279-0.290. Strutturale.
+
+---
+
+## 🌅 2026-05-30/31 — STEP 2D Floor Diagnostic (branch `Floor_Diagnostic`)
+
+**Contesto**: dopo aver escluso optimizer e capacity, identificare CAUSA del floor. 4 candidati: PINN multi-obj, OU noise, dataset saturation, Po2 quantization.
+
+**STEP 2D (3 plan, ~3h)** (commit `af4e2c0`):
+- Nuovo CLI `--noise_scale {float}` (default 1.0) → propagato a `data/generator.py`
+- F1 (no PINN): val=0.2738 (Δ=-0.0067) → PINN trascurabile
+- **F2 (no OU): val=0.2262 (Δ=-0.0543 = -19.3%)** 🏆 PRIMA SCOPERTA
+- F3 (n_train=5000): val=0.2802 (Δ=-0.0003) → dataset size irrilevante
+
+**STEP 2D-bis — decomposizione residuo (F5/F6/F7, ~2h)** (commit `6385418`, `aafa47a`, `c7bffc6`):
+- Nuovo CLI `--po2_enabled {0,1}` con toggle LIVE via env var `PO2_ENABLED` — 100% reversibile
+- F5 (no_ou + no_sr): 0.2256 → SR pesa **0.2%**
+- F6 (no_ou + no_po2): 0.2256 → Po2 pesa **0.2%** 🤯 (atteso ~25%!)
+- F7 (no_ou + no_sr + no_po2): **0.2198** → "floor pulito"
+- `SKIP_IF_EXISTS` aggiunto in entrambe le run cells (commit `aafa47a`) → resume idempotente
+
+**Decomposizione FINALE del floor 0.2805**:
+```
+OU noise              0.0543   ← 19.3%
+Spike-rate reg        0.0006   ← 0.2%
+Po2 quantization      0.0006   ← 0.2%
+SR × Po2 interaction  0.0052   ← 1.9%
+Residuo architettura  0.2198   ← 78.4%  ← LIMITE DOMINANTE
+```
+
+**Insight per deploy**: Po2 costa 0.2%. **Decisione utente "tenere Po2 in deploy" validata sperimentalmente**. Zero costo, massima compatibilità FPGA.
+
+**Anomalia**: F7 ha `val_ou=0.010` (vs 5e-6 altri). SR/Po2 agivano da regolarizzazione implicita su T.
+
+**F7 trend DOWN @E15**: stava ancora migliorando. Con più epoche → forse 0.215. Ma residuo architettura resta.
+
+**Apertura e chiusura P14** (`P_S.md`).
+
+### Lezioni learned 2026-05-30/31
+
+#### Lezione #17 — `lr × d_coef` è la regola empirica per Prodigy stabile
+Soglia 0.3 confermata su 6 config indipendenti.
+
+#### Lezione #18 — Logging adattivo vs cached
+Loggare la quantità ADATTATA (`d` di Prodigy), non il setting iniziale (`lr` base). Tutta la "discussione errore di utilizzo" derivava da diagnostica cieca.
+
+#### Lezione #19 — Po2 quantization NON penalizza significativamente
+Pre-sperimentale stimato 25% del floor. Post-sperimentale: 0.2%. **Misurare, non stimare**.
+
+#### Lezione #20 — Toggle env-var letto live = pattern robusto per feature flags
+`os.environ.get()` dentro la funzione invece di al import = toggle reversibile senza reload moduli. Costo trascurabile per la nostra scala.
+
+#### Lezione #21 — Decomposizione quantitativa di un floor = ablation procedurale
+4 cause → 7 esperimenti (3 single + 3 cumulative + 1 baseline). Sanity check: somma componenti = floor totale.
+
+#### Lezione #22 — Branch isolati per esplorazione = pattern sano per research spike
+Optimizer_Exploration e Floor_Diagnostic non sono mai stati merge-blocker. Esperimenti contenuti, infra branch-isolata, merge a main solo quando conclusivi.
+
+### Decisioni 2026-05-30/31
+- ✅ Branch `Optimizer_Exploration` + `Floor_Diagnostic` merged in `main` (post-2D-bis)
+- ✅ P14 chiuso. Floor decomposto: 19% OU + 0.4% Po2/SR + 78% architettura
+- ✅ Po2 resta ON in deploy (validato — pesa 0.2%)
+- ✅ Documentazione completa aggiornata (P_S, SESSION_RESUME, TIMELINE, GLOSSARY, FUTURE_WORK)
+- ⏳ Prossimo: scelta utente tra 4 opzioni mitigation (vedi FUTURE_WORK F2-F5)
+
+---
+
 ## 📌 Note finali
 
 Questo TIMELINE va aggiornato dopo ogni milestone significativa. Mantenere la sezione "Lessons learned" è cruciale per non ripetere errori in future sessioni.

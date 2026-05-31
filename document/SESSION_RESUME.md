@@ -5,9 +5,53 @@
 
 ---
 
-## 🎯 Stato attuale (2026-05-29 12:00)
+## 🎯 Stato attuale (2026-05-31 12:30)
 
-**Repo HEAD**: `534c2af` — `fix: _push_results non importa torch (kernel Jupyter Azure non lo ha)`
+**Repo HEAD branch `main`**: post-merge `Floor_Diagnostic` + `Optimizer_Exploration` (vedi log per SHA esatto)
+
+**Branch attivi su origin** (tutti mergiati su main):
+- `main` ← branch principale, ora contiene tutto STEP 2C + 2D
+- `Optimizer_Exploration` ← sweep Prodigy + AdamW (archivato, contenuto su main)
+- `Floor_Diagnostic` ← sweep F1-F7 decomposizione floor (archivato, contenuto su main)
+
+**🏆 STATO PRINCIPALE: P14 CHIUSO** — decomposizione completa del floor val~0.28:
+
+```
+Floor totale 0.2805 = 100%
+├─ OU noise              0.0543   ← 19.3%   (irriducibile in deploy)
+├─ Spike-rate regularizer 0.0006   ← 0.2%   (trascurabile)
+├─ Po2 quantization      0.0006   ← 0.2%   (TRASCURABILE — Po2 resta ON deploy)
+├─ SR × Po2 interaction  0.0052   ← 1.9%
+└─ Residuo architettura  0.2198   ← 78.4%  (LIMITE DOMINANTE)
+```
+
+**Best assoluto raggiunto**: F7 val=0.2198 (no OU + no SR + no Po2, ancora in trend DOWN @E15).
+
+**Architettura corrente**: CF_FSNN_Net parametrizzabile h=32, r=8 → 864 params. Baseline confermato sufficiente da sweep STEP 2B (capacity falsificata) e Plan B Optimizer_Exploration (val=0.2805 baseline AdamW).
+
+**Optimizer scelto**: AdamW + OneCycleLR + h=32, r=8 + 15 ep × 190 step cap. Prodigy archiviato (≈ AdamW, vedi FUTURE_WORK F1 per re-test post-floor).
+
+---
+
+## 📊 Storia dei 9 setup convergenti al floor (range 0.279-0.290)
+
+| Setup | val_best | Sorgente |
+|-------|----------|----------|
+| 5× capacity sweep (h=32→128) | 0.279-0.280 | STEP 2B (sweep), Optimizer_Exploration |
+| AdamW b=8 OneCycle | 0.2805 | STEP 2C Plan B |
+| Prodigy lr=0.1 b=1 dc=1.0 | 0.2823 | STEP 2C Plan A retry |
+| Prodigy lr=0.5 b=1 dc=0.5 | 0.2857 | STEP 2C-bis #6 |
+| Prodigy lr=0.1 b=1 dc=0.5 | 0.2902* | STEP 2C-bis #5 (* ancora migliorabile) |
+
+**Conclusione robusta**: il floor è strutturale, indipendente da capacità/optimizer/scheduler/batch_size/d_coef/n_train.
+
+---
+
+## 🔬 Decomposizione validata da STEP 2D (Floor_Diagnostic)
+
+7 esperimenti F1-F7 hanno isolato la causa di ogni fattore. **OU noise** (errori percezione V2X simulati nel generator) è la SOLA componente non-architetturale rilevante (19.3% del floor). Po2 e Spike-rate regularizer pesano insieme 0.4% — **decisione utente di mantenere Po2 in deploy è validata**.
+
+**Repo HEAD storico** (per archeologia): `534c2af` — `fix: _push_results non importa torch (kernel Jupyter Azure non lo ha)`
 
 **Progetto**: CF_FSNN — Spiking Neural Network per identificazione parametri car-following ACC-IDM (con base IIDM, Treiber Ch12 Sez.12.4). Target hardware: PYNQ-Z1 FPGA.
 
@@ -39,41 +83,25 @@ Il capacity sweep STEP 2B (5 runs highway-only con h=32, 48, 64, 96, 128) ha mos
 
 ---
 
-## 📍 Prossimo step pianificato — STEP 2C
+## 📍 Prossimo step — DECISIONE STRATEGICA UTENTE (2026-05-31)
 
-**STEP 2C — Modernist optimizer recipe** (proposto, in attesa decisione utente Q1/Q2/Q3):
+Dopo STEP 2C+2D, sappiamo dove c'è margine e dove non c'è. 4 strade per il prossimo capitolo. Vedi `FUTURE_WORK.md` per dettagli ognuna.
 
-Singolo run validation con ricetta SOTA per uscire dai (possibili) minimi locali:
+### Opzioni (descritte in dettaglio in FUTURE_WORK.md)
 
-```
-TAG               = P9_S2C_h64r16_hw_modern
-optimizer         = AdamW (weight_decay=1e-4)
-scheduler         = CosineAnnealingWarmRestarts(T_0=10, T_mult=2, eta_min=1e-5)
-                    → cicli a E0-9, E10-29, E30-69 (3 cicli, 2.5 completati)
-epochs            = 40
-warmup            = 5 epoche lineari 0 → max_lr
-max_lr            = 2e-3
-n_train           = 1500 (3× sweep STEP 2B → testa anche dataset saturation)
-early_stop        = patience=8, delta=5e-4 (tollerante)
-SWA               = attivo da epoca 30 in poi (last 25%)
-h, r              = 64, 16 (sweet spot dello sweep)
-scenario          = highway (scenario stabile, no crash)
-```
+| ID | Mossa | Costo | Potenziale | Rischio |
+|----|-------|-------|------------|---------|
+| **F2** | **Switch a EventProp** (paradigma training diverso) | alto (~2-3 settimane dev) | alto se BPTT è il vero limite | medio (cambio paradigma) |
+| **F3** | Curriculum noise (training su noise_scale crescente) | basso (~1 giorno dev) | basso-medio (-0.05 forse) | basso |
+| **F4** | Architettura modificata (più layer, attention, ALIF mod) | medio (~1 settimana dev) | alto sul residuo 78% | medio |
+| **F5** | **Accettare floor 0.28 → procedere a deploy PYNQ-Z1** | minimo | conclusione progetto | nessuno |
 
-**Tempo atteso Azure CPU**: ~5h. **Costo extra a inference**: zero.
+**EventProp** (Wunderlich & Pehle 2021) è particolarmente interessante: invece di propagare gradienti continui via surrogate function attraverso il tempo (BPTT), calcola gradienti esatti event-based usando aggiunte (Hamiltonian backprop). Se il floor architettura è dovuto a errori di approssimazione del surrogate, EventProp potrebbe sbloccarlo.
 
-**Decision tree post-STEP-2C-α**:
-
-| val_best | Diagnosi | Action |
-|---|---|---|
-| < 0.20 | ✅ Era minimo locale, recipe SOTA risolve | Espansione multi-scenario con stessa ricetta |
-| 0.20–0.27 | ⚠️ Plateau ammorbidito, non eliminato | STEP 2C-β = + SAM wrapper (rho=0.05), 2× tempo |
-| ≥ 0.27 | 🛑 Plateau strutturale duro | Ablation Po2 (FP32 vs quant) + ablation λ PINN |
-
-**Decisioni utente da confermare** (vedi sezione "Domande aperte"):
-- Q1: Approccio (A=Compositional / B=Prodigy / C=R&D SurrogateSAM)
-- Q2: 1 run o sweep 2C-α + 2C-β a confronto
-- Q3: Conferma criteri "funziona bene"
+**Reference EventProp**:
+- Wunderlich & Pehle (2021), "Event-based backpropagation can compute exact gradients for spiking neural networks"
+- snnTorch ha implementazione: `snntorch.functional.eventprop` (recente, da verificare versione)
+- Riferimento skill: `SNN-expert` ch08 §Surrogate Gradient Learning
 
 ---
 
@@ -102,12 +130,11 @@ scenario          = highway (scenario stabile, no crash)
 
 | Step | Stato | Obiettivo | Esito |
 |------|-------|-----------|-------|
-| **STEP 2A** (fast iteration) | ✅ completato | Validare regime fast-iteration | val=0.2802, 17 min — confirmed |
-| **STEP 2B** (capacity sweep) | ✅ completato 7/9 | Verificare se capacity è bottleneck | **P9 FALSIFICATO** — non lo è |
-| **STEP 2C-α** (modernist recipe) | 🟡 PROPOSTO | Verificare se minimi locali sono causa plateau | TBD |
-| **STEP 2C-β** (+ SAM) | ⏸️ condizionale | Se 2C-α non scende sotto 0.20 | TBD |
-| **STEP 2C-γ** (SurrogateSAM R&D) | ⏸️ opzionale | Variante SAM con perturbazione γ surrogate | TBD |
-| **STEP 2D** (multi-scenario) | ⏸️ futuro | Estendere recipe vincitore a urban+truck (P13) | TBD |
+| **STEP 2A** (fast iteration) | ✅ completato | Validare regime fast-iteration | val=0.2802, 17 min |
+| **STEP 2B** (capacity sweep) | ✅ completato 7/9 | Verificare se capacity è bottleneck | **P9 FALSIFICATO** |
+| **STEP 2C** (Optimizer Exploration) | ✅ completato | Sweep AdamW vs Prodigy (6 config Prodigy) | AdamW vince marginale, Prodigy archiviato |
+| **STEP 2D** (Floor Diagnostic) | ✅ completato | Decomporre il floor val~0.28 | **P14 CHIUSO**: 78% architettura, 19% OU, <1% Po2+SR |
+| **STEP 2E** (mitigation) | 🟡 DECISIONE UTENTE | 4 opzioni: EventProp / curriculum / arch mod / accept-and-deploy | vedi FUTURE_WORK |
 
 ---
 
