@@ -1,4 +1,15 @@
+import os
 import torch
+
+# STEP 2D-bis (Floor_Diagnostic, 2026-05-31) — toggle Po2 quantization a runtime.
+# La forward() legge l'env var ad OGNI chiamata, quindi il toggle è "live" anche
+# se l'env var viene settata DOPO l'import (es. dentro main() di train.py).
+# Default: ENABLED (legacy). Per disattivare: PO2_ENABLED=0 nell'env.
+# Rollback: rimuovere env var → comportamento legacy automatico.
+# Costo per-call: 1 dict lookup, trascurabile (~50 ns × ~30k chiamate per training).
+# Architettura PYNQ-Z1 in deploy NON è affetta (deploy usa pipeline separata).
+def _po2_enabled():
+    return os.environ.get('PO2_ENABLED', '1') not in ('0', 'false', 'False', 'OFF', 'off')
 
 class SurrogateSpike_Hardware(torch.autograd.Function):
     @staticmethod
@@ -35,6 +46,11 @@ spike_fn = SurrogateSpike_Hardware.apply
 class PowerOf2Quantize(torch.autograd.Function):
     @staticmethod
     def forward(ctx, weight):
+        # STEP 2D-bis: bypass live se PO2_ENABLED=0 nell'env (letto ad ogni call).
+        # In modalità bypass: passthrough → pesi fp32 invariati (training "ideale"
+        # senza errore di quantizzazione). Backward è già passthrough nominale.
+        if not _po2_enabled():
+            return weight
         sign = torch.sign(weight)
         w_abs = torch.abs(weight).clamp(min=1e-5)
         log2_w = torch.clamp(torch.round(torch.log2(w_abs)), min=-4.0, max=1.0)

@@ -727,6 +727,12 @@ def main():
                              '(NOISE_GAP_REL/VEL_OPT/ACCEL). Default 1.0 = nominale. '
                              '0.0 = dataset deterministico ideale (Floor diagnostic). '
                              'Solo se cache assente (cache esistente NON viene rigenerata).')
+    parser.add_argument('--po2_enabled', type=int, default=1, choices=[0, 1],
+                        help='STEP 2D-bis: toggle Po2 quantization sui pesi (forward). '
+                             '1 = legacy ON (default, deploy PYNQ-Z1). '
+                             '0 = passthrough fp32 (Floor diagnostic — quantifica peso Po2). '
+                             'Set env PO2_ENABLED → letto live dalla forward di '
+                             'core.hardware.PowerOf2Quantize ad ogni chiamata.')
     # Early stopping (P11 — evita training oltre il plateau, fix per P8)
     parser.add_argument('--early_stop_patience', type=int, default=0,
                         help='Stop dopo N epoche senza miglioramento di val_loss. '
@@ -753,6 +759,13 @@ def main():
     parser.add_argument('--tag',         type=str,   default='run',
                         help='Etichetta cartella output (checkpoints/<tag>/)')
     args = parser.parse_args()
+
+    # ── STEP 2D-bis: propaga --po2_enabled all'env var (letto live da core.hardware) ──
+    # Set PRIMA di qualsiasi forward del modello. Sub-process Jupyter eredita env
+    # già pulito quindi va sempre re-applicato qui (no contaminazione tra run).
+    os.environ['PO2_ENABLED'] = str(args.po2_enabled)
+    print(f"[Hardware] PO2_ENABLED={os.environ['PO2_ENABLED']}  "
+          f"({'quant fp32->Po2 attiva (legacy)' if args.po2_enabled else 'BYPASS, pesi fp32 puri'})")
 
     # ── Smoke mode: sovrascrive parametri per run diagnostico rapido ──────────
     # Obiettivo: 1 epoca su ~100 traiettorie con log ogni singolo batch e
