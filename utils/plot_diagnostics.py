@@ -137,17 +137,55 @@ def plot_g2_components(log: dict, out_path: str):
 
 
 def plot_g3_lr_schedule(log: dict, out_path: str):
-    """G3 — Learning rate per epoca (schedule)."""
+    """G3 — Learning rate per epoca (schedule).
+
+    Mostra la LR nominale (passata all'optimizer). Se Prodigy con d_max
+    disponibile (= valori non-NaN in colonna prodigy_lr_eff), plotta anche
+    lr_eff = lr × d in subplot dedicato.
+    """
     if not _MPL:
         return
-    fig, ax = plt.subplots(figsize=(8, 3))
-    ep = log['epoch']
-    ax.plot(ep, log['lr'], color='green', linewidth=1.5, marker='o', markersize=5)
-    ax.set_xlabel('Epoca')
-    ax.set_ylabel('Learning Rate')
-    ax.set_title('G3 — Schedule LR')
-    ax.set_yscale('log')
-    ax.grid(True, alpha=0.3)
+    import math
+    # Check if Prodigy lr_eff data is present and meaningful
+    has_prodigy = False
+    if 'prodigy_lr_eff' in log:
+        vals = log['prodigy_lr_eff']
+        # NaN per altri optimizer -> escludo runs senza Prodigy
+        finite = [v for v in vals if isinstance(v, (int, float)) and not math.isnan(v)]
+        has_prodigy = len(finite) > 0 and any(v > 0 for v in finite)
+
+    if has_prodigy:
+        fig, axes = plt.subplots(2, 1, figsize=(8, 5.5), sharex=True)
+        ep = log['epoch']
+        # Top: nominal lr (constant 1.0 per Prodigy)
+        axes[0].plot(ep, log['lr'], color='green', linewidth=1.5, marker='o', markersize=5)
+        axes[0].set_ylabel('LR nominale')
+        axes[0].set_title('G3 — Schedule LR (nominale + Prodigy effective)')
+        axes[0].set_yscale('log'); axes[0].grid(True, alpha=0.3)
+        # Bottom: lr_eff = lr × d (the real Prodigy learning rate)
+        axes[1].plot(ep, log['prodigy_lr_eff'], color='#D32F2F', linewidth=1.8,
+                       marker='s', markersize=5, label='lr_eff = lr × d')
+        if 'prodigy_d' in log:
+            ax2 = axes[1].twinx()
+            ax2.plot(ep, log['prodigy_d'], color='#1976D2', linewidth=1.2,
+                       linestyle='--', alpha=0.7, label='d (adapter)')
+            ax2.set_ylabel('d (Prodigy adapter)', color='#1976D2')
+            ax2.tick_params(axis='y', labelcolor='#1976D2')
+            ax2.legend(loc='upper right', fontsize=8)
+        axes[1].set_xlabel('Epoca')
+        axes[1].set_ylabel('LR effective (= lr × d)', color='#D32F2F')
+        axes[1].tick_params(axis='y', labelcolor='#D32F2F')
+        axes[1].set_yscale('log'); axes[1].grid(True, alpha=0.3)
+        axes[1].legend(loc='upper left', fontsize=8)
+    else:
+        fig, ax = plt.subplots(figsize=(8, 3))
+        ep = log['epoch']
+        ax.plot(ep, log['lr'], color='green', linewidth=1.5, marker='o', markersize=5)
+        ax.set_xlabel('Epoca')
+        ax.set_ylabel('Learning Rate')
+        ax.set_title('G3 — Schedule LR')
+        ax.set_yscale('log')
+        ax.grid(True, alpha=0.3)
     _save(fig, out_path)
 
 
