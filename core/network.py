@@ -303,11 +303,12 @@ class CF_FSNN_Net(nn.Module):
         [ 0.5,  3.0],   # 4: b  [m/s²]
     ]
 
-    def __init__(self, hidden_size=None, rank=None):
+    def __init__(self, hidden_size=None, rank=None, max_delay=None):
         """
         Args:
             hidden_size: override CF_HIDDEN_SIZE (None → usa config). Per STEP 2B sweep.
             rank: override CF_RANK (None → usa config). Per STEP 2B sweep.
+            max_delay: override CF_MAX_DELAY (None → usa config). Per STEP 2E A5 variant.
         """
         super().__init__()
         from config import (
@@ -317,10 +318,13 @@ class CF_FSNN_Net(nn.Module):
         )
 
         # STEP 2B: capacity override via kwargs (None → fallback su config).
+        # STEP 2E A5: max_delay override per variant max_delay_12.
         hidden_size = hidden_size if hidden_size is not None else CF_HIDDEN_SIZE
         rank        = rank        if rank        is not None else CF_RANK
+        max_delay   = max_delay   if max_delay   is not None else CF_MAX_DELAY
         self.hidden_size = hidden_size   # esposto per logging/diagnostica
         self.rank        = rank
+        self.max_delay   = max_delay
 
         self.n_ticks  = TICKS_PER_STEP
         self.T1       = IDM2D_T1
@@ -331,7 +335,7 @@ class CF_FSNN_Net(nn.Module):
 
         self.layer_hidden = HiddenLayer_ALIF(
             CF_INPUT_SIZE, hidden_size,
-            rank=rank, max_delay=CF_MAX_DELAY,
+            rank=rank, max_delay=max_delay,
         )
         self.layer_out = OutputLayer_LI(hidden_size, CF_OUTPUT_SIZE)
 
@@ -562,3 +566,534 @@ class CF_FSNN_Net(nn.Module):
             spikes.append(spike_h_rate.mean(dim=1, keepdim=True))   # (batch, 1)
             steps.append(self._decode_params(raw_out).unsqueeze(1))  # (batch, 1, 5)
         return torch.cat(steps, dim=1), torch.cat(spikes, dim=1)     # (batch,T,5), (batch,T)
+
+
+# =================================================================
+# STEP 2E — Architecture Exploration variants
+# =================================================================
+# Tutte le varianti ereditano `CF_FSNN_Net` per riusare:
+#   - _PARAM_BOUNDS, _decode_params, decode_scale (F5 pre-scaling)
+#   - param_lo/param_hi buffers
+#   - acc_iidm_accel, idm_accel, ou_residual (fisica condivisa)
+# e override SOLO:
+#   - __init__ (sostituisce layer_hidden/layer_out con topologia variante)
+#   - reset_state
+#   - forward_step
+#   - forward_sequence_with_stats (entry point usato da pinn_loss)
+#
+# Vincoli FPGA mantenuti: po2_quantize su TUTTI i pesi sinaptici, spike_fn (γ=1.0),
+# bit-shift leak (intero, potenza di 2), max_delay come int con deque ring-buffer.
+
+
+class _CF_FSNN_VariantBase(CF_FSNN_Net):
+    """Base per le varianti — riusa fisica + decode, richiede override forward.
+
+    Le sottoclassi NON chiamano super().__init__() perché ricostruiscono interamente
+    la topologia. Usano _init_common(hidden_size, max_delay) per fisica/decode.
+    """
+
+    def __init__(self, hidden_size, max_delay=None):
+        # Bypass CF_FSNN_Net.__init__ (che costruirebbe i layer baseline) e chiama
+        # nn.Module.__init__ direttamente — pattern KISS, evita duplicazione fisica.
+        nn.Module.__init__(self)
+        from config import (
+            CF_INPUT_SIZE, CF_HIDDEN_SIZE, CF_OUTPUT_SIZE,
+            CF_RANK, CF_MAX_DELAY, TICKS_PER_STEP,
+            IDM2D_T1, IDM2D_T2, IDM2D_TAU, DT,
+        )
+        self.hidden_size = hidden_size if hidden_size is not None else CF_HIDDEN_SIZE
+        self.max_delay   = max_delay   if max_delay   is not None else CF_MAX_DELAY
+        self.n_ticks  = TICKS_PER_STEP
+        self.T1       = IDM2D_T1
+        self.T2       = IDM2D_T2
+        self.T_mean   = (IDM2D_T1 + IDM2D_T2) / 2.0
+        self.ou_alpha = _math.exp(-DT / IDM2D_TAU)
+        self.CF_INPUT_SIZE  = CF_INPUT_SIZE
+        self.CF_OUTPUT_SIZE = CF_OUTPUT_SIZE
+        self.CF_MAX_DELAY   = CF_MAX_DELAY
+
+        # Decode bounds + F5 pre-scaling (identici al baseline)
+        bounds = torch.tensor(self._PARAM_BOUNDS, dtype=torch.float32)
+        self.register_buffer('param_lo', bounds[:, 0])
+        self.register_buffer('param_hi', bounds[:, 1])
+        ranges = bounds[:, 1] - bounds[:, 0]
+        self.register_buffer('decode_scale', ranges / ranges.max())
+
+
+# -----------------------------------------------------------------
+# A2 / A4 — Stacked N-hidden ALIF
+# -----------------------------------------------------------------
+class CF_FSNN_Net_Stacked(_CF_FSNN_VariantBase):
+    """N layer ALIF stacked + LI output (PINN-compatible).
+
+    Args:
+        n_hidden: numero layer ALIF consecutivi (≥2 usato in A2=2, A4=3).
+        hidden_sizes: lista (n_hidden,) di neuroni per layer.
+        ranks: lista (n_hidden,) di rank low-rank per layer.
+        max_delay: max axonal delay (default config).
+    """
+
+    def __init__(self, n_hidden=2, hidden_sizes=None, ranks=None, max_delay=None):
+        # hidden_size esposto = primo layer (per logging coerenza)
+        hidden_sizes = hidden_sizes or [32] * n_hidden
+        ranks        = ranks        or [8]  * n_hidden
+        assert len(hidden_sizes) == n_hidden, "hidden_sizes deve avere len = n_hidden"
+        assert len(ranks)        == n_hidden, "ranks deve avere len = n_hidden"
+        super().__init__(hidden_size=hidden_sizes[0], max_delay=max_delay)
+        self.n_hidden     = n_hidden
+        self.hidden_sizes = hidden_sizes
+        self.ranks        = ranks
+        # rank esposto = primo layer (per logging coerenza)
+        self.rank = ranks[0]
+
+        # Layer 0: input = CF_INPUT_SIZE → hidden_sizes[0]
+        # Layer i: input = hidden_sizes[i-1] → hidden_sizes[i]
+        layers = []
+        in_dim = self.CF_INPUT_SIZE
+        for i in range(n_hidden):
+            layers.append(HiddenLayer_ALIF(
+                in_dim, hidden_sizes[i],
+                rank=ranks[i], max_delay=self.max_delay,
+            ))
+            in_dim = hidden_sizes[i]
+        self.layers_hidden = nn.ModuleList(layers)
+        self.layer_out = OutputLayer_LI(hidden_sizes[-1], self.CF_OUTPUT_SIZE)
+
+    def reset_state(self, batch_size, device):
+        for layer in self.layers_hidden:
+            layer.reset_state(batch_size, device)
+        self.layer_out.reset_state(batch_size, device)
+
+    def forward_step(self, x_norm):
+        raw_out = None
+        for _ in range(self.n_ticks):
+            h = x_norm
+            for layer in self.layers_hidden:
+                h = layer(h)
+            raw_out = self.layer_out(h)
+        return self._decode_params(raw_out)
+
+    def forward_sequence_with_stats(self, x_seq_norm):
+        """Spike rate riportato sull'ULTIMO hidden layer (più informativo per diagnosi)."""
+        batch, T_len, _ = x_seq_norm.shape
+        self.reset_state(batch, x_seq_norm.device)
+        last_hidden_size = self.hidden_sizes[-1]
+        steps, spikes = [], []
+        for t in range(T_len):
+            x_t = x_seq_norm[:, t, :]
+            raw_out = None
+            spike_h_acc = torch.zeros(batch, last_hidden_size, device=x_t.device)
+            for _ in range(self.n_ticks):
+                h = x_t
+                for layer in self.layers_hidden:
+                    h = layer(h)
+                spike_h_acc = spike_h_acc + h.float()
+                raw_out = self.layer_out(h)
+            spike_h_rate = spike_h_acc / self.n_ticks
+            spikes.append(spike_h_rate.mean(dim=1, keepdim=True))
+            steps.append(self._decode_params(raw_out).unsqueeze(1))
+        return torch.cat(steps, dim=1), torch.cat(spikes, dim=1)
+
+
+# -----------------------------------------------------------------
+# A3 — Stacked 2-hidden + MS-style membrane skip
+# -----------------------------------------------------------------
+class CF_FSNN_Net_StackedSkip(_CF_FSNN_VariantBase):
+    """A2 + skip Po2-quantizzato dai spike del layer hidden 1 al membrane potential di LI.
+
+    Pattern MS-ResNet (Fang et al. 2021, SNN-expert ch05.11):
+        LI_pot += linear_po2(skip_weight, spikes_layer1)
+
+    Forza l'informazione del primo layer a raggiungere l'output bypassando il secondo,
+    riducendo vanishing temporale.
+    """
+
+    def __init__(self, n_hidden=2, hidden_sizes=None, ranks=None, max_delay=None):
+        hidden_sizes = hidden_sizes or [32] * n_hidden
+        ranks        = ranks        or [8]  * n_hidden
+        assert n_hidden == 2, "StackedSkip è definito su 2 layer (skip da layer 0 a LI)"
+        super().__init__(hidden_size=hidden_sizes[0], max_delay=max_delay)
+        self.n_hidden     = n_hidden
+        self.hidden_sizes = hidden_sizes
+        self.ranks        = ranks
+        self.rank = ranks[0]
+
+        self.layer_hidden_0 = HiddenLayer_ALIF(
+            self.CF_INPUT_SIZE, hidden_sizes[0],
+            rank=ranks[0], max_delay=self.max_delay,
+        )
+        self.layer_hidden_1 = HiddenLayer_ALIF(
+            hidden_sizes[0], hidden_sizes[1],
+            rank=ranks[1], max_delay=self.max_delay,
+        )
+        self.layer_out = OutputLayer_LI(hidden_sizes[1], self.CF_OUTPUT_SIZE)
+        # Skip: hidden_sizes[0] → CF_OUTPUT_SIZE (5), Po2-quantizzato
+        self.skip_weight = nn.Parameter(torch.Tensor(self.CF_OUTPUT_SIZE, hidden_sizes[0]))
+        nn.init.xavier_uniform_(self.skip_weight)
+        # Init scale piccolo: skip è additivo, non deve dominare
+        with torch.no_grad():
+            self.skip_weight.mul_(0.2)
+
+    def reset_state(self, batch_size, device):
+        self.layer_hidden_0.reset_state(batch_size, device)
+        self.layer_hidden_1.reset_state(batch_size, device)
+        self.layer_out.reset_state(batch_size, device)
+
+    def _tick(self, x_norm):
+        spikes_0 = self.layer_hidden_0(x_norm)
+        spikes_1 = self.layer_hidden_1(spikes_0)
+        # Skip additivo Po2 sul potential di LI
+        skip_po2 = po2_quantize(self.skip_weight)
+        skip_curr = torch.nn.functional.linear(spikes_0, skip_po2)
+        raw_out = self.layer_out(spikes_1) + skip_curr
+        return raw_out, spikes_1
+
+    def forward_step(self, x_norm):
+        raw_out = None
+        for _ in range(self.n_ticks):
+            raw_out, _ = self._tick(x_norm)
+        return self._decode_params(raw_out)
+
+    def forward_sequence_with_stats(self, x_seq_norm):
+        batch, T_len, _ = x_seq_norm.shape
+        self.reset_state(batch, x_seq_norm.device)
+        steps, spikes = [], []
+        for t in range(T_len):
+            x_t = x_seq_norm[:, t, :]
+            raw_out = None
+            spike_h_acc = torch.zeros(batch, self.hidden_sizes[1], device=x_t.device)
+            for _ in range(self.n_ticks):
+                raw_out, spikes_1 = self._tick(x_t)
+                spike_h_acc = spike_h_acc + spikes_1.float()
+            spike_h_rate = spike_h_acc / self.n_ticks
+            spikes.append(spike_h_rate.mean(dim=1, keepdim=True))
+            steps.append(self._decode_params(raw_out).unsqueeze(1))
+        return torch.cat(steps, dim=1), torch.cat(spikes, dim=1)
+
+
+# -----------------------------------------------------------------
+# A6 — Multi-rate ALIF (INNOVATION 1)
+# -----------------------------------------------------------------
+class _HiddenLayer_ALIF_MultiRate(nn.Module):
+    """Variante di HiddenLayer_ALIF dove il singolo ALIFCell ha bit_shift per-neurone.
+
+    Group split: divide hidden_size in N gruppi (≈uguali), assegna bit_shifts[i]
+    al gruppo i-esimo. Tutti i bit_shift sono interi (potenze di 2 hardware-friendly).
+    """
+
+    def __init__(self, in_features, out_features, rank=8, max_delay=6, bit_shifts=(2, 3, 4)):
+        super().__init__()
+        self.in_features  = in_features
+        self.out_features = out_features
+        self.max_delay    = max_delay
+
+        self.fc_weight = nn.Parameter(torch.Tensor(out_features, in_features))
+        nn.init.xavier_uniform_(self.fc_weight)
+        self.register_buffer('delays', torch.randint(0, max_delay, (out_features, in_features)))
+
+        self.rec_U = nn.Parameter(torch.Tensor(out_features, rank))
+        self.rec_V = nn.Parameter(torch.Tensor(rank, out_features))
+        nn.init.orthogonal_(self.rec_U, gain=0.2)
+        nn.init.orthogonal_(self.rec_V, gain=0.2)
+
+        # Per-neuron bit_shift: divide out_features in len(bit_shifts) gruppi.
+        n_groups = len(bit_shifts)
+        per_group = out_features // n_groups
+        bs_vec = []
+        for i, bs in enumerate(bit_shifts):
+            if i < n_groups - 1:
+                bs_vec.extend([bs] * per_group)
+            else:
+                # ultimo gruppo prende il resto (compensa divisione non esatta)
+                bs_vec.extend([bs] * (out_features - len(bs_vec)))
+        assert len(bs_vec) == out_features
+
+        self.x_buffer = None
+        self.cell = ALIFCell(out_features, bit_shift=bs_vec)
+
+    def reset_state(self, batch_size, device):
+        self.x_buffer = deque(
+            [torch.zeros(batch_size, self.in_features, device=device)
+             for _ in range(self.max_delay)],
+            maxlen=self.max_delay,
+        )
+        self.cell.reset_state(batch_size, device)
+
+    def forward(self, x):
+        if self.x_buffer is None:
+            self.reset_state(x.size(0), x.device)
+        self.x_buffer.appendleft(x)
+
+        w_po2 = po2_quantize(self.fc_weight)
+        u_po2 = po2_quantize(self.rec_U)
+        v_po2 = po2_quantize(self.rec_V)
+
+        current = torch.zeros(x.size(0), self.out_features, device=x.device)
+        for d in range(self.max_delay):
+            mask_d = (self.delays == d).float()
+            current += torch.nn.functional.linear(self.x_buffer[d], w_po2 * mask_d)
+
+        rec_int  = torch.nn.functional.linear(self.cell.prev_spike, v_po2)
+        rec_curr = torch.nn.functional.linear(rec_int, u_po2)
+        return self.cell(current, rec_curr)
+
+
+class CF_FSNN_Net_MultiRate(_CF_FSNN_VariantBase):
+    """1 hidden ALIF con 3 gruppi (bit_shifts=[2,3,4]) + LI output.
+
+    Crea gerarchia temporale intrinseca senza aumentare layer count.
+    """
+
+    def __init__(self, hidden_size=32, rank=8, max_delay=None, bit_shifts=(2, 3, 4)):
+        super().__init__(hidden_size=hidden_size, max_delay=max_delay)
+        self.rank        = rank
+        self.bit_shifts  = bit_shifts
+
+        self.layer_hidden = _HiddenLayer_ALIF_MultiRate(
+            self.CF_INPUT_SIZE, hidden_size,
+            rank=rank, max_delay=self.max_delay, bit_shifts=bit_shifts,
+        )
+        self.layer_out = OutputLayer_LI(hidden_size, self.CF_OUTPUT_SIZE)
+
+    def reset_state(self, batch_size, device):
+        self.layer_hidden.reset_state(batch_size, device)
+        self.layer_out.reset_state(batch_size, device)
+
+    def forward_step(self, x_norm):
+        raw_out = None
+        for _ in range(self.n_ticks):
+            spikes_h = self.layer_hidden(x_norm)
+            raw_out  = self.layer_out(spikes_h)
+        return self._decode_params(raw_out)
+
+    def forward_sequence_with_stats(self, x_seq_norm):
+        batch, T_len, _ = x_seq_norm.shape
+        self.reset_state(batch, x_seq_norm.device)
+        steps, spikes = [], []
+        for t in range(T_len):
+            x_t = x_seq_norm[:, t, :]
+            raw_out = None
+            spike_h_acc = torch.zeros(batch, self.hidden_size, device=x_t.device)
+            for _ in range(self.n_ticks):
+                spike_h = self.layer_hidden(x_t)
+                raw_out = self.layer_out(spike_h)
+                spike_h_acc = spike_h_acc + spike_h.float()
+            spike_h_rate = spike_h_acc / self.n_ticks
+            spikes.append(spike_h_rate.mean(dim=1, keepdim=True))
+            steps.append(self._decode_params(raw_out).unsqueeze(1))
+        return torch.cat(steps, dim=1), torch.cat(spikes, dim=1)
+
+
+# -----------------------------------------------------------------
+# A7 — WTA inhibition pool
+# -----------------------------------------------------------------
+class CF_FSNN_Net_WTA(_CF_FSNN_VariantBase):
+    """Baseline + 1 neurone inibitorio Po2-quantizzato (lateral inhibition).
+
+    L'inibitore riceve dalla somma dei spike hidden (peso Po2) e ridistribuisce
+    inibizione uniforme su tutti gli hidden al tick successivo (delay 1).
+    Forza sparsità e competizione (ch05.3 + ch05.6).
+    """
+
+    def __init__(self, hidden_size=32, rank=8, max_delay=None, inh_strength=0.5):
+        super().__init__(hidden_size=hidden_size, max_delay=max_delay)
+        self.rank         = rank
+        self.inh_strength = inh_strength
+
+        self.layer_hidden = HiddenLayer_ALIF(
+            self.CF_INPUT_SIZE, hidden_size,
+            rank=rank, max_delay=self.max_delay,
+        )
+        self.layer_out = OutputLayer_LI(hidden_size, self.CF_OUTPUT_SIZE)
+
+        # 1 weight: hidden_size → 1 (collector). Broadcast a (hidden_size,) come inibizione.
+        self.inh_w_in = nn.Parameter(torch.Tensor(1, hidden_size))
+        nn.init.xavier_uniform_(self.inh_w_in)
+        with torch.no_grad():
+            self.inh_w_in.mul_(0.2)
+        # Inh state: 1 scalare per batch
+        self.inh_state = None
+
+    def reset_state(self, batch_size, device):
+        self.layer_hidden.reset_state(batch_size, device)
+        self.layer_out.reset_state(batch_size, device)
+        self.inh_state = torch.zeros(batch_size, 1, device=device)
+
+    def _tick(self, x_norm):
+        # Iniezione inibizione del tick precedente: sottrae a TUTTI gli hidden
+        # tramite la corrente esterna additiva (qui simulata con un boost negativo
+        # passato attraverso il primo input). Pattern KISS: inhibition ridotta sui spike.
+        # Implementazione semplice: applichiamo l'inibizione DIRETTAMENTE sulla soglia
+        # incrementale del ALIFCell — ma serve dispatch più invasivo. Approccio più pulito:
+        # inhibition come termine sottratto dalla corrente ricorrente. Lo facciamo iniettando
+        # un additivo negativo a x_norm prima del layer (= driving force ridotta).
+        # Però x_norm è (batch,4), hidden è (batch,32). Soluzione: aggiungiamo dopo il layer.
+
+        spikes_h = self.layer_hidden(x_norm)
+        # Sottrazione lateral inhibition (broadcast su hidden)
+        spikes_h_inhibited = spikes_h - self.inh_strength * self.inh_state  # (batch, hidden)
+        # Clamp ≥ 0: spike sono bool, ma post-inhibition è float → equivalente a "weakened spikes"
+        spikes_h_inhibited = torch.clamp(spikes_h_inhibited, min=0.0)
+
+        raw_out = self.layer_out(spikes_h_inhibited)
+
+        # Update inh_state: collector Po2-quantizzato sui spike correnti
+        inh_w_po2 = po2_quantize(self.inh_w_in)
+        self.inh_state = torch.nn.functional.linear(spikes_h, inh_w_po2).detach()
+        # detach per evitare grafo BPTT esplodente sul collector (ch22)
+        return raw_out, spikes_h_inhibited
+
+    def forward_step(self, x_norm):
+        raw_out = None
+        for _ in range(self.n_ticks):
+            raw_out, _ = self._tick(x_norm)
+        return self._decode_params(raw_out)
+
+    def forward_sequence_with_stats(self, x_seq_norm):
+        batch, T_len, _ = x_seq_norm.shape
+        self.reset_state(batch, x_seq_norm.device)
+        steps, spikes = [], []
+        for t in range(T_len):
+            x_t = x_seq_norm[:, t, :]
+            raw_out = None
+            spike_h_acc = torch.zeros(batch, self.hidden_size, device=x_t.device)
+            for _ in range(self.n_ticks):
+                raw_out, sp = self._tick(x_t)
+                spike_h_acc = spike_h_acc + sp.float()
+            spike_h_rate = spike_h_acc / self.n_ticks
+            spikes.append(spike_h_rate.mean(dim=1, keepdim=True))
+            steps.append(self._decode_params(raw_out).unsqueeze(1))
+        return torch.cat(steps, dim=1), torch.cat(spikes, dim=1)
+
+
+# -----------------------------------------------------------------
+# A8 — Spike-driven attention lite (INNOVATION 2)
+# -----------------------------------------------------------------
+class CF_FSNN_Net_Attn(_CF_FSNN_VariantBase):
+    """Baseline + spike attention lite (Q/K/V Po2, n_heads, no softmax).
+
+    Tra hidden ALIF e LI output inseriamo:
+        Q = po2_quant(Wq) @ spikes_h    shape (batch, hidden)
+        K = po2_quant(Wk) @ spikes_h    shape (batch, hidden)
+        V = po2_quant(Wv) @ spikes_h    shape (batch, hidden)
+        score = sigmoid(sum(Q*K, dim=heads) / scale)
+        attn  = score * V    (element-wise gating, no softmax)
+        out   = LI(attn)
+
+    Pattern Spikformer-lite (ch05.11, ch21). Tutti i weight Po2 → FPGA-friendly.
+    """
+
+    def __init__(self, hidden_size=32, rank=8, max_delay=None, n_heads=2):
+        super().__init__(hidden_size=hidden_size, max_delay=max_delay)
+        self.rank    = rank
+        self.n_heads = n_heads
+        assert hidden_size % n_heads == 0, "hidden_size deve essere multiplo di n_heads"
+        self.head_dim = hidden_size // n_heads
+
+        self.layer_hidden = HiddenLayer_ALIF(
+            self.CF_INPUT_SIZE, hidden_size,
+            rank=rank, max_delay=self.max_delay,
+        )
+
+        self.Wq = nn.Parameter(torch.Tensor(hidden_size, hidden_size))
+        self.Wk = nn.Parameter(torch.Tensor(hidden_size, hidden_size))
+        self.Wv = nn.Parameter(torch.Tensor(hidden_size, hidden_size))
+        for w in (self.Wq, self.Wk, self.Wv):
+            nn.init.xavier_uniform_(w)
+            with torch.no_grad():
+                w.mul_(0.5)
+
+        self.layer_out = OutputLayer_LI(hidden_size, self.CF_OUTPUT_SIZE)
+        self.attn_scale = float(self.head_dim) ** 0.5
+
+    def reset_state(self, batch_size, device):
+        self.layer_hidden.reset_state(batch_size, device)
+        self.layer_out.reset_state(batch_size, device)
+
+    def _attn(self, spikes_h):
+        """Applica attention block ai spike hidden. Output stesso shape di spikes_h."""
+        wq = po2_quantize(self.Wq); wk = po2_quantize(self.Wk); wv = po2_quantize(self.Wv)
+        Q = torch.nn.functional.linear(spikes_h, wq)   # (B, H)
+        K = torch.nn.functional.linear(spikes_h, wk)
+        V = torch.nn.functional.linear(spikes_h, wv)
+        # Split heads: (B, n_heads, head_dim)
+        B, H = Q.shape
+        Q = Q.view(B, self.n_heads, self.head_dim)
+        K = K.view(B, self.n_heads, self.head_dim)
+        V = V.view(B, self.n_heads, self.head_dim)
+        # Score element-wise per head (no softmax): sigmoid(Q*K / sqrt(d))
+        score = torch.sigmoid((Q * K).sum(dim=-1, keepdim=True) / self.attn_scale)  # (B, n_heads, 1)
+        attn  = (score * V).view(B, H)
+        return attn
+
+    def _tick(self, x_norm):
+        spikes_h = self.layer_hidden(x_norm)
+        attn_out = self._attn(spikes_h)
+        raw_out  = self.layer_out(attn_out)
+        return raw_out, spikes_h
+
+    def forward_step(self, x_norm):
+        raw_out = None
+        for _ in range(self.n_ticks):
+            raw_out, _ = self._tick(x_norm)
+        return self._decode_params(raw_out)
+
+    def forward_sequence_with_stats(self, x_seq_norm):
+        batch, T_len, _ = x_seq_norm.shape
+        self.reset_state(batch, x_seq_norm.device)
+        steps, spikes = [], []
+        for t in range(T_len):
+            x_t = x_seq_norm[:, t, :]
+            raw_out = None
+            spike_h_acc = torch.zeros(batch, self.hidden_size, device=x_t.device)
+            for _ in range(self.n_ticks):
+                raw_out, sp = self._tick(x_t)
+                spike_h_acc = spike_h_acc + sp.float()
+            spike_h_rate = spike_h_acc / self.n_ticks
+            spikes.append(spike_h_rate.mean(dim=1, keepdim=True))
+            steps.append(self._decode_params(raw_out).unsqueeze(1))
+        return torch.cat(steps, dim=1), torch.cat(spikes, dim=1)
+
+
+# =================================================================
+# STEP 2E — Factory build_model
+# =================================================================
+
+def build_model(variant: str = 'baseline', hidden_size=None, rank=None, **kwargs):
+    """Factory per varianti architetturali (STEP 2E Architecture_Exploration).
+
+    Args:
+        variant: nome variante (baseline|stacked_2|stacked_2_skip|stacked_3_thin|
+                 max_delay_12|multi_rate|wta|attn)
+        hidden_size, rank: override capacity (default config).
+
+    Returns:
+        nn.Module con interfaccia (forward_sequence, forward_sequence_with_stats,
+        acc_iidm_accel, idm_accel, ou_residual) compatibile con pinn_loss.
+    """
+    v = variant.lower()
+    if v == 'baseline':
+        return CF_FSNN_Net(hidden_size=hidden_size, rank=rank)
+    if v == 'stacked_2':
+        h = hidden_size or 32
+        r = rank or 8
+        return CF_FSNN_Net_Stacked(n_hidden=2, hidden_sizes=[h, h], ranks=[r, r])
+    if v == 'stacked_2_skip':
+        h = hidden_size or 32
+        r = rank or 8
+        return CF_FSNN_Net_StackedSkip(n_hidden=2, hidden_sizes=[h, h], ranks=[r, r])
+    if v == 'stacked_3_thin':
+        return CF_FSNN_Net_Stacked(n_hidden=3, hidden_sizes=[24, 24, 24], ranks=[6, 6, 6])
+    if v == 'max_delay_12':
+        return CF_FSNN_Net(hidden_size=hidden_size, rank=rank, max_delay=12)
+    if v == 'multi_rate':
+        return CF_FSNN_Net_MultiRate(hidden_size=hidden_size or 32, rank=rank or 8,
+                                      bit_shifts=(2, 3, 4))
+    if v == 'wta':
+        return CF_FSNN_Net_WTA(hidden_size=hidden_size or 32, rank=rank or 8,
+                                inh_strength=0.5)
+    if v == 'attn':
+        return CF_FSNN_Net_Attn(hidden_size=hidden_size or 32, rank=rank or 8, n_heads=2)
+    raise ValueError(
+        f"Variant '{variant}' non supportata. Usa: baseline|stacked_2|stacked_2_skip|"
+        "stacked_3_thin|max_delay_12|multi_rate|wta|attn")

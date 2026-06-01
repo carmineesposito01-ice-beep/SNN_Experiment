@@ -3,15 +3,40 @@ import torch.nn as nn
 from core.hardware import spike_fn
 
 class ALIFCell(nn.Module):
-    def __init__(self, num_neurons):
+    def __init__(self, num_neurons, bit_shift=3):
+        """ALIFCell con bit-shift leak HW-friendly.
+
+        Args:
+            num_neurons: numero di neuroni.
+            bit_shift: int (uniforme) O lista/tensore di shape (num_neurons,)
+                per multi-rate ALIF (STEP 2E variante A6). Default 3 = leak 1/8.
+                Tutti i valori devono essere INTERI (potenze di 2) per restare
+                FPGA-friendly. Buffer `leak_div = 2.0 ** bit_shift` shape (num_neurons,)
+                consente broadcasting nativo nella forward.
+        """
         super().__init__()
         self.num_neurons = num_neurons
-        
+
         # Omeostasi Locale (Fatica Neurale HW-Friendly)
         self.base_threshold = nn.Parameter(torch.ones(num_neurons) * 1.5)
         self.thresh_jump = nn.Parameter(torch.ones(num_neurons) * 0.5)
-        self.bit_shift = 3  # Default hardware bit-shift (>> 3)
-        
+
+        # STEP 2E A6: bit_shift può essere per-neurone (tensore) o scalare.
+        # In entrambi i casi memorizziamo leak_div = 2^bit_shift come buffer (1, N)
+        # per broadcasting con potential di shape (batch, num_neurons).
+        if isinstance(bit_shift, (int, float)):
+            bs_tensor = torch.full((num_neurons,), float(bit_shift))
+        else:
+            bs_tensor = torch.as_tensor(bit_shift, dtype=torch.float32)
+            if bs_tensor.numel() != num_neurons:
+                raise ValueError(
+                    f"bit_shift tensor deve avere {num_neurons} elementi, "
+                    f"ricevuti {bs_tensor.numel()}")
+        self.register_buffer('leak_div', (2.0 ** bs_tensor).unsqueeze(0))  # (1, N)
+        # bit_shift scalare esposto per backcompat con vecchio codice (es. LICell sibling).
+        # Quando multi-rate, vale la media (è solo diagnostico — non usato nei calcoli).
+        self.bit_shift = float(bs_tensor.mean().item())
+
         self.potential = None
         self.prev_spike = None
         self.fatigue = None
@@ -25,8 +50,8 @@ class ALIFCell(nn.Module):
         if self.potential is None:
             self.reset_state(input_current.size(0), input_current.device)
 
-        # Leak HW (Bit-Shift parametrizzato, tipicamente >> 3)
-        leak = self.potential / (2.0 ** self.bit_shift)
+        # Leak HW (Bit-Shift per-neurone, broadcast su batch)
+        leak = self.potential / self.leak_div
         self.potential = self.potential - leak + input_current + rec_current
 
         # La soglia sale in base alla fatica.
@@ -36,8 +61,8 @@ class ALIFCell(nn.Module):
         eff_thresh = self.base_threshold + self.fatigue.clamp(min=0)
         spikes = spike_fn(self.potential, eff_thresh)
 
-        # Leak Fatica HW
-        fatigue_leak = self.fatigue / (2.0 ** self.bit_shift)
+        # Leak Fatica HW (stessa divisione per-neurone del potential)
+        fatigue_leak = self.fatigue / self.leak_div
         # thresh_jump.clamp(min=0): thresh_jump è il salto di soglia per spike.
         # Per design ALIF il salto è sempre positivo — il segno non influenza mai il
         # comportamento. clamp(min=0) è semanticamente più corretto di torch.abs()
