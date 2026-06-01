@@ -31,7 +31,36 @@ COLORS = {
     'spike':    '#1B5E20',     # verde scuro (event)
     'param_true':  '#666666',  # grigio dark per linee horizon true
     'param_pred':  '#E64A19',  # stesso del ego_pred
+    'cut_in':       '#D32F2F', # rosso intenso per cut-in event
+    'cut_in_band':  '#FFCDD2', # rosa pallido per shaded post-cut-in window
 }
+
+
+def _draw_cut_in_marker(ax, r, post_window_s: float = 2.0):
+    """Disegna marker cut-in su un Axes con asse x = time.
+
+    - Banda verticale shaded (rosa pallido) dal cut_in_t a cut_in_t + post_window_s
+    - Linea verticale rossa al cut_in_t
+    - Label 'CUT-IN' in alto a destra della linea
+
+    Se r non ha cut_in_t (= None), no-op.
+    """
+    if r.cut_in_t is None:
+        return
+    t_cut = r.time[r.cut_in_t]
+    t_end_band = min(t_cut + post_window_s, r.time[-1])
+    # Shaded transient window
+    ax.axvspan(t_cut, t_end_band, alpha=0.20, color=COLORS['cut_in_band'],
+                zorder=0, label=f'cut-in transient ({post_window_s:.0f}s)')
+    # Vertical line
+    ax.axvline(t_cut, color=COLORS['cut_in'], linewidth=1.6, linestyle='-',
+                zorder=1, alpha=0.9)
+    # Label CUT-IN
+    ax.text(t_cut, ax.get_ylim()[1] * 0.95, ' CUT-IN',
+             ha='left', va='top', fontsize=8, fontweight='bold',
+             color=COLORS['cut_in'],
+             bbox=dict(boxstyle='round,pad=0.15', facecolor='white',
+                        edgecolor=COLORS['cut_in'], alpha=0.85))
 
 
 # ============================================================
@@ -94,12 +123,17 @@ def plot_simulation_static(r: SimulationResult,
 
     # Title
     if title is None:
-        title = (f'Scenario idx={r.idx} [{r.scenario_type}'
-                 + (', cut-in' if r.is_cut_in else '')
-                 + f']  T={r.seq_len*r.DT:.1f}s  '
+        cut_in_str = ''
+        if r.cut_in_t is not None:
+            cut_in_str = (f', CUT-IN at t={r.time[r.cut_in_t]:.1f}s '
+                          f'(gap drop {r.cut_in_gap_before:.0f}->{r.cut_in_gap_after:.0f}m)')
+        elif r.is_cut_in:
+            cut_in_str = ', cut-in flagged (outside sim window)'
+        title = (f'Scenario idx={r.idx} [{r.scenario_type}{cut_in_str}]  '
+                 + f'T={r.seq_len*r.DT:.1f}s  '
                  + f'gap_rmse={metrics["gap_rmse_m"]:.2f}m  '
                  + f'pos_drift={metrics["pos_cum_err_m"]:.2f}m')
-    fig.suptitle(title, fontsize=12, fontweight='bold', y=0.995)
+    fig.suptitle(title, fontsize=11, fontweight='bold', y=0.995)
 
     return fig
 
@@ -119,6 +153,7 @@ def _plot_spacetime(ax, r: SimulationResult):
     ax.set_title('Panel 1: Spazio-temporale  (leader, ego GT, ego predetto)')
     ax.legend(loc='upper left', fontsize=9, framealpha=0.85)
     ax.grid(alpha=0.3)
+    _draw_cut_in_marker(ax, r)
 
 
 def _plot_velocity(ax, r: SimulationResult):
@@ -131,6 +166,7 @@ def _plot_velocity(ax, r: SimulationResult):
     ax.set_title('Panel 2: Velocita\' temporale')
     ax.legend(loc='best', fontsize=9, framealpha=0.85)
     ax.grid(alpha=0.3)
+    _draw_cut_in_marker(ax, r)
 
 
 def _plot_acceleration(ax, r: SimulationResult):
@@ -142,6 +178,7 @@ def _plot_acceleration(ax, r: SimulationResult):
     ax.set_title('Panel 3: Accelerazione predetta vs ground-truth')
     ax.legend(loc='best', fontsize=9, framealpha=0.85)
     ax.grid(alpha=0.3)
+    _draw_cut_in_marker(ax, r)
     # Inset: scatter correlation
     from mpl_toolkits.axes_grid1.inset_locator import inset_axes
     iax = inset_axes(ax, width='25%', height='40%', loc='upper right',
@@ -227,6 +264,7 @@ def _plot_spike_raster(ax, r: SimulationResult):
     ax.set_xlim(r.time[0], r.time[-1])
     ax.set_ylim(-0.5, hidden - 0.5)
     ax.grid(alpha=0.3, axis='x')
+    _draw_cut_in_marker(ax, r)
 
 
 def _plot_metrics_overlay(ax, metrics: Dict[str, Any]):
@@ -319,10 +357,21 @@ def plot_topdown_snapshot(r: SimulationResult, t_frame: int,
     ax.text((xep + xl) / 2, 0.95, f'gap={gap:.1f}m', ha='center', va='center',
              fontsize=8, bbox=dict(boxstyle='round,pad=0.2', facecolor='white', edgecolor='#888'))
 
+    # Cut-in status (se applicable)
+    cut_in_status = ''
+    if r.cut_in_t is not None:
+        if t_frame < r.cut_in_t:
+            cut_in_status = f'  | pre-cut-in ({r.cut_in_t-t_frame} ticks to event)'
+        elif t_frame == r.cut_in_t:
+            cut_in_status = '  | >>> CUT-IN EVENT <<<'
+        else:
+            elapsed = (t_frame - r.cut_in_t) * r.DT
+            cut_in_status = f'  | post-cut-in (+{elapsed:.1f}s)'
+
     # Time + metric info
     ax.set_title(f't = {r.time[t_frame]:.1f}s  |  '
                   f'v_ego_pred={vep:.1f} m/s  v_lead={vl:.1f} m/s  '
-                  f'a_pred={r.a_pred[t_frame]:+.2f} m/s²', fontsize=9)
+                  f'a_pred={r.a_pred[t_frame]:+.2f} m/s²{cut_in_status}', fontsize=9)
     ax.set_xlabel('position x [m]')
 
     return fig

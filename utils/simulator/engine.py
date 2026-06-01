@@ -91,6 +91,11 @@ class SimulationResult:
     seq_len: int             # T totale (= len di tutti gli array)
     hidden_size: int         # neuroni hidden della rete
 
+    # Cut-in event detection (None se no cut-in detected)
+    cut_in_t: Optional[int] = None       # tick index del cut-in event (0-based, None=no event)
+    cut_in_gap_before: Optional[float] = None  # gap subito prima del cut-in [m]
+    cut_in_gap_after:  Optional[float] = None  # gap subito dopo (= post-cut-in initial) [m]
+
 
 # ============================================================
 # Helper: filtro OU su leader accel (replica train.py:193-200)
@@ -305,6 +310,15 @@ class CFSimulator:
         # Time axis
         time = np.arange(T, dtype=np.float32) * self.DT
 
+        # ── Cut-in event detection (heuristic su gap jump) ──
+        # Solo se scenario marcato is_cut_in=True nel cache: cerco il tick con
+        # max jump in s_obs (drop > 5m in single DT). None se non trovato.
+        cut_in_t = None
+        cut_in_gap_before = None
+        cut_in_gap_after = None
+        if is_cut_in:
+            cut_in_t, cut_in_gap_before, cut_in_gap_after = self._detect_cut_in_event(s_obs)
+
         # params_true_seq (constant broadcast)
         pt_arr = np.array([
             params_true.get('v0', np.nan),
@@ -328,7 +342,30 @@ class CFSimulator:
             x_ego_gt=x_ego_gt, v_ego_gt=v_ego_gt, x_lead=x_lead,
             gap_pred=gap_pred, gap_gt=gap_gt,
             seq_len=T, hidden_size=self.hidden_size,
+            cut_in_t=cut_in_t,
+            cut_in_gap_before=cut_in_gap_before,
+            cut_in_gap_after=cut_in_gap_after,
         )
+
+    # ------------------------------------------------------------
+    # Cut-in event detection
+    # ------------------------------------------------------------
+    @staticmethod
+    def _detect_cut_in_event(s_obs: np.ndarray, jump_threshold_m: float = 5.0):
+        """Cerca il primo cut-in event nella traiettoria di gap osservato.
+
+        Heuristic: cut-in = drop brusco in s_obs maggiore di jump_threshold_m
+        in un singolo DT. Il generator produce eventi cut-in di ~10-30m di drop.
+
+        Returns: (cut_in_t, gap_before, gap_after) tutti optional.
+        """
+        ds = np.diff(s_obs)  # (T-1,) jump per tick (negative = gap decreasing)
+        # Cut-in: ds[t] = s_obs[t+1] - s_obs[t] < -jump_threshold (gap si riduce bruscamente)
+        candidates = np.where(ds < -jump_threshold_m)[0]
+        if len(candidates) == 0:
+            return None, None, None
+        cut_in_t = int(candidates[0]) + 1   # tick DOPO il drop (= when new leader appears)
+        return cut_in_t, float(s_obs[cut_in_t - 1]), float(s_obs[cut_in_t])
 
     # ------------------------------------------------------------
     # Internals
