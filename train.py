@@ -50,7 +50,7 @@ from config import (
     N_SCENARIOS_TRAIN, N_SCENARIOS_VAL,
     DT,
 )
-from core.network import CF_FSNN_Net
+from core.network import CF_FSNN_Net, build_model
 
 
 # ===========================================================
@@ -591,12 +591,23 @@ class BatchCSVLogger:
 
     # Mapping da parametro PyTorch → colonna CSV (parametri non listati → ignorati)
     LAYER_MAP = {
+        # ── Baseline (CF_FSNN_Net, ALIF + surrogate) ──
         'layer_hidden.fc_weight':           'gn_hidden_fc',
         'layer_hidden.rec_U':               'gn_hidden_recU',
         'layer_hidden.rec_V':               'gn_hidden_recV',
         'layer_hidden.cell.base_threshold': 'gn_hidden_base_threshold',
         'layer_hidden.cell.thresh_jump':    'gn_hidden_thresh_jump',
         'layer_out.fc_weight':              'gn_out_fc',
+        # ── EventProp F2.0b (LIFLayer_EventProp, LIF simple ref) ──
+        # I layer hanno nn.Parameter 'weight' diretto (no .fc_weight).
+        'layer_hidden.weight':              'gn_hidden_fc',
+        'layer_out.weight':                 'gn_out_fc',
+        # ── EventProp F2.1-full (ALIFLayer_EventProp_Full) ──
+        # fc_weight, rec_U, rec_V hanno STESSI nomi del baseline (riusano entry sopra).
+        # base_threshold, thresh_jump invece sono diretti sul layer (no .cell.)
+        # perche' ALIFLayer_EventProp_Full e' un layer monolitico (no cell separata).
+        'layer_hidden.base_threshold':      'gn_hidden_base_threshold',
+        'layer_hidden.thresh_jump':         'gn_hidden_thresh_jump',
     }
 
     def __init__(self, path: str, flush_every: int = 50):
@@ -740,6 +751,12 @@ def main():
     parser.add_argument('--early_stop_delta',    type=float, default=1e-4,
                         help='Soglia minima di miglioramento per resettare patience counter')
     # STEP 2B — capacity sweep (None → usa default da config.py)
+    parser.add_argument('--training_method', type=str, default='baseline',
+        choices=['baseline', 'bptt_lif_simple',
+                 'eventprop_lif_simple', 'eventprop_alif_full'],
+        help='2x2 grid (BPTT/EventProp) x (ALIF/LIF): '
+             'baseline=ALIF+BPTT | bptt_lif_simple=LIF+BPTT | '
+             'eventprop_lif_simple=LIF+EventProp | eventprop_alif_full=ALIF+EventProp')
     parser.add_argument('--cf_hidden_size', type=int, default=None,
                         help='Override CF_HIDDEN_SIZE per sweep parametrico (None=default config)')
     parser.add_argument('--cf_rank',        type=int, default=None,
@@ -902,14 +919,15 @@ def main():
           f"  |  batch_train={args.batch_size}  batch_val={val_bs}"
           f"  |  num_workers={_nw}")
 
-    # ── Modello (STEP 2B: hidden_size/rank overridabili da CLI) ──
-    model    = CF_FSNN_Net(
+    # ── Modello (STEP 2B: hidden/rank CLI. F2.0: training_method dispatch via build_model) ──
+    model    = build_model(
+        variant=args.training_method,
         hidden_size=args.cf_hidden_size,
         rank=args.cf_rank,
     ).to(device)
     n_params = sum(p.numel() for p in model.parameters())
-    print(f"\n[Modello] CF_FSNN_Net  --  hidden={model.hidden_size}, rank={model.rank}, "
-          f"parametri totali: {n_params:,}")
+    print(f"\n[Modello] training_method={args.training_method}  class={type(model).__name__}  "
+          f"hidden={model.hidden_size}, rank={model.rank}, parametri totali: {n_params:,}")
 
     # ── Ottimizzatore ─────────────────────────────────────────────
     if args.optimizer == 'adam':
