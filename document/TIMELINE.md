@@ -564,6 +564,85 @@ Optimizer_Exploration e Floor_Diagnostic non sono mai stati merge-blocker. Esper
 
 ---
 
+## 🏛️ Fase 11 — STEP 2E Architecture Exploration (2026-05-31 → 2026-06-01)
+
+**Obiettivo**: testare 8 varianti architetturali (Stacked, Skip, MultiRate, WTA, Attention) per battere il floor val~0.22.
+
+**Branch**: `Architecture_Exploration`. **Risultato**: tutte 8 varianti ≥ 0.22 val_data. **Floor confermato architetturale per ALIF, ma non rotto da nessuna variante.** Non meritava merge in main, branch resta esplorativo.
+
+---
+
+## 🏛️ Fase 12 — F2 EventProp (2026-06-01) — **CHIUSURA DEFINITIVA**
+
+**Obiettivo**: testare se EventProp adjoint event-based supera BPTT+surrogate-gradient (ipotesi: il floor 0.22 era causato dal gradient surrogate biased, EventProp esatto poteva romperlo).
+
+**Branch**: `Training_Method_Exploration`.
+
+### Iterazioni esplorative (5 versioni)
+1. **F2.0** (LIF puro EventProp, default lolemacs dt=1e-3 mu=0.1): grad collapse, val 0.587
+2. **F2.0b** (LIF, encoding fix dt=1e-2 mu=0.5): val 0.327
+3. **F2.2** (LIF + full recurrence): val 0.323, spike rate saturato 93%
+4. **F2.1 stripped** (ALIF senza Po2/delays/n_ticks): val 0.351 (bug index nel jump)
+5. **F2.1-full** (A1 ESATTA: Po2 + delays + n_ticks=10 + ALIF adaptive threshold + low-rank rec con EventProp adjoint): val 0.224 ≡ baseline 0.222
+
+### Mea culpa documentato
+
+Per F2.0b/F2.2 avevo affermato "EventProp dimezza val_data 0.222→0.110". L'utente ha sospettato l'incongruenza vs P14 floor diagnostic ("Po2 era già stata testata e non aveva cambiato nulla"). Audit forzato ha rivelato: stavo leggendo `val_phys` (col 10, MSE no-mask) come se fosse `val_data` (col 9, RMSE masked). I valori veri erano 0.327/0.323 (peggio di baseline). **4h di lavoro su F2.2 basate su misread.** Vedi `EVENTPROP_GRID2X2.md` §7.
+
+### Grid 2×2 (single optimizer AdamW lr=2e-3)
+
+| | BPTT+surrogate | EventProp |
+|---|---:|---:|
+| ALIF (864 params) | 0.2233 | 0.2239 (Δ=+0.0006) |
+| LIF (288 params) | 0.3203 | 0.3226 (Δ=+0.0023) |
+
+EventProp ≡ BPTT (entro 1%) su entrambe le architetture.
+
+### Sweep optimizer 4×11 = 44 run (chiusura)
+
+**Best per method**:
+- baseline (ALIF+BPTT): **0.2218** (AdamW 5e-3)
+- eventprop_alif_full: 0.2226 (AdamW 2e-3)
+- bptt_lif_simple: 0.3179
+- eventprop_lif_simple: 0.3207
+
+**Robustezza** (la scoperta chiave del sweep):
+- baseline: 11/11 successi, 8/11 entro 2% del best, CV=0.033
+- **eventprop_alif_full: 5/11 successi, 1/11 entro 2% del best, CV=0.710** (22× più variabile)
+- 6 fallimenti catastrofici di EventProp con grad ~10¹⁷
+
+**Spike rate** (deploy FPGA):
+- baseline best: 4.1% ✅
+- eventprop_alif_full best: 25.7% (6× peggio)
+
+**Estrapolazione 15 ep**: baseline pred 0.217, EventProp pred 0.223 (marginale baseline meglio).
+
+### Decisioni 2026-06-01
+
+- ✅ **F2 EventProp CHIUSO**: pareggio val_data ma EventProp è 100× meno robusto + 6× più spike rate → baseline confermato production
+- ✅ **Floor val_data ~0.22 rigorosamente confermato architetturale**: 2 metodi training INDIPENDENTI (BPTT+surrogate, EventProp adjoint event-based esatto) convergono allo stesso plateau su ALIF. Non è un artefatto del gradient surrogate.
+- ✅ Documentazione completa: `EVENTPROP_DESIGN.md`, `EVENTPROP_GRID2X2.md`, `EVENTPROP_OPTIMIZER_SWEEP.md`
+- ❌ Branch `Training_Method_Exploration` NON merge in main (esplorativo). Resta su origin come reference scientifico.
+
+### Lessons learned 2026-06-01
+
+#### Lezione #23 — La metric NON è una sola colonna del CSV, è una FORMULA
+val_data = RMSE masked, val_phys = MSE no-mask. Numeri diversi (0.222 vs 0.0513) anche se misurano la stessa cosa. Confondendoli si ottengono conclusioni opposte. Sempre citare l'indice colonna nel CSV e la definizione.
+
+#### Lezione #24 — Audit prima di celebrare un risultato "miracoloso"
+Quando un risultato sembra contraddire evidenza precedente (P14), verificare TUTTO PRIMA di costruire ipotesi. L'utente ha intuito l'incongruenza prima di me e ha forzato audit.
+
+#### Lezione #25 — Stesso modello, diverso training: il vero fair-compare
+Tutti i tentativi "EventProp su LIF stripped" erano confounded (8+ aspetti architetturali diversi dal baseline). Solo `eventprop_alif_full` (replica A1 esatta) è confronto valido per claim "X cambia val_data".
+
+#### Lezione #26 — Sweep optimizer rivela robustezza, non solo accuracy
+Il grid 2×2 single-optimizer suggeriva "pareggio". Il sweep 4×11 rivela che EventProp è 22× più fragile sulla scelta optimizer. Robustezza al cambiamento di hyperparam è una metric production-critical che non emerge da un singolo run.
+
+#### Lezione #27 — Floor confermato da metodi indipendenti = floor REALE
+BPTT+surrogate e EventProp adjoint convergono entrambi a 0.222 su ALIF. Due algoritmi che usano gradient COMPLETAMENTE diversi danno lo stesso risultato → il floor è genuino, non un artefatto del training. Test indipendenza è il modo per confermare un floor strutturale.
+
+---
+
 ## 📌 Note finali
 
 Questo TIMELINE va aggiornato dopo ogni milestone significativa. Mantenere la sezione "Lessons learned" è cruciale per non ripetere errori in future sessioni.

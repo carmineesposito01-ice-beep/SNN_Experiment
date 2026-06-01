@@ -596,12 +596,23 @@ class BatchCSVLogger:
     # NaN silenzioso nel CSV, niente crash, ma il diagnostic gradient è limitato ai
     # parametri baseline. Le varianti potranno aggiungere mapping qui se serve.
     LAYER_MAP = {
+        # ── Baseline (CF_FSNN_Net, ALIF + surrogate) ──
         'layer_hidden.fc_weight':           'gn_hidden_fc',
         'layer_hidden.rec_U':               'gn_hidden_recU',
         'layer_hidden.rec_V':               'gn_hidden_recV',
         'layer_hidden.cell.base_threshold': 'gn_hidden_base_threshold',
         'layer_hidden.cell.thresh_jump':    'gn_hidden_thresh_jump',
         'layer_out.fc_weight':              'gn_out_fc',
+        # ── EventProp F2.0b (LIFLayer_EventProp, LIF simple ref) ──
+        # I layer hanno nn.Parameter 'weight' diretto (no .fc_weight).
+        'layer_hidden.weight':              'gn_hidden_fc',
+        'layer_out.weight':                 'gn_out_fc',
+        # ── EventProp F2.1-full (ALIFLayer_EventProp_Full) ──
+        # fc_weight, rec_U, rec_V hanno STESSI nomi del baseline (riusano entry sopra).
+        # base_threshold, thresh_jump invece sono diretti sul layer (no .cell.)
+        # perche' ALIFLayer_EventProp_Full e' un layer monolitico (no cell separata).
+        'layer_hidden.base_threshold':      'gn_hidden_base_threshold',
+        'layer_hidden.thresh_jump':         'gn_hidden_thresh_jump',
     }
     # Set per loggare il warning UNA SOLA VOLTA per nome param non mappato.
     _UNMAPPED_WARNED = set()
@@ -754,10 +765,20 @@ def main():
     parser.add_argument('--early_stop_delta',    type=float, default=1e-4,
                         help='Soglia minima di miglioramento per resettare patience counter')
     # STEP 2B — capacity sweep (None → usa default da config.py)
-    parser.add_argument('--arch_variant', type=str, default='baseline',
-        choices=['baseline', 'stacked_2', 'stacked_2_skip', 'stacked_3_thin',
-                 'max_delay_12', 'multi_rate', 'wta', 'attn'],
-        help='STEP 2E: variante architetturale (default baseline = CF_FSNN_Net)')
+    # UNIFIED CLI: scegli UNA variante tra 11 totali (8 architecture + 3 training_method).
+    # Manteniamo SOLO --training_method come CLI singolo perche' la factory build_model
+    # ora unifica le scelte di entrambi i branch in un singolo namespace.
+    parser.add_argument('--training_method', type=str, default='baseline',
+        choices=['baseline',
+                 # Architecture variants (da Architecture_Exploration)
+                 'stacked_2', 'stacked_2_skip', 'stacked_3_thin',
+                 'max_delay_12', 'multi_rate', 'wta', 'attn',
+                 # Training method variants (da Training_Method_Exploration)
+                 'bptt_lif_simple', 'eventprop_lif_simple', 'eventprop_alif_full'],
+        help='11 varianti totali: '
+             'baseline (ALIF+BPTT prod) | stacked_2/skip/3_thin/max_delay_12/'
+             'multi_rate/wta/attn (architecture) | bptt_lif_simple/'
+             'eventprop_lif_simple/eventprop_alif_full (training method)')
     parser.add_argument('--cf_hidden_size', type=int, default=None,
                         help='Override CF_HIDDEN_SIZE per sweep parametrico (None=default config)')
     parser.add_argument('--cf_rank',        type=int, default=None,
@@ -920,15 +941,17 @@ def main():
           f"  |  batch_train={args.batch_size}  batch_val={val_bs}"
           f"  |  num_workers={_nw}")
 
-    # ── Modello (STEP 2B: hidden_size/rank overridabili. STEP 2E: arch_variant) ──
+    # ── Modello (UNIFIED: hidden_size/rank/training_method via build_model) ──
     model    = build_model(
-        variant=args.arch_variant,
+        variant=args.training_method,
         hidden_size=args.cf_hidden_size,
         rank=args.cf_rank,
     ).to(device)
     n_params = sum(p.numel() for p in model.parameters())
-    print(f"\n[Modello] variant={args.arch_variant}  class={type(model).__name__}  "
-          f"hidden={model.hidden_size}, rank={model.rank}, max_delay={model.max_delay}, "
+    # Log unificato: max_delay non sempre disponibile (LIF simple non lo espone)
+    max_delay_str = f", max_delay={getattr(model, 'max_delay', 'N/A')}"
+    print(f"\n[Modello] variant={args.training_method}  class={type(model).__name__}  "
+          f"hidden={model.hidden_size}, rank={model.rank}{max_delay_str}, "
           f"parametri totali: {n_params:,}")
 
     # ── Ottimizzatore ─────────────────────────────────────────────

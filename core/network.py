@@ -1058,22 +1058,276 @@ class CF_FSNN_Net_Attn(_CF_FSNN_VariantBase):
 # =================================================================
 # STEP 2E — Factory build_model
 # =================================================================
+# CLEANUP 2026-06-01 (audit utente): rimosse architetture "fake" che non
+# replicavano A1 fairly (F2.0=LIF puro stripped, F2.1=ALIF stripped, F2.2=LIF
+# rec full stripped). Mantenute solo due varianti EventProp ben definite:
+#
+#   * CF_FSNN_Net_EventProp_LIF_Simple  -- F2.0b reference LIF semplice.
+#     Validazione "EventProp adjoint funziona" senza altri confounder.
+#     Pure LIF feedforward, NO Po2, NO delays, NO recurrence, NO ALIF.
+#
+#   * CF_FSNN_Net_EventProp_Full        -- LA TUA A1 con EventProp adjoint.
+#     Replica al 100% l'architettura A1 (Po2 + delays + n_ticks=10 +
+#     bit-shift leak + ALIF adaptive threshold + low-rank rec), cambia
+#     SOLO il training method (EventProp invece di BPTT+surrogate).
+#     Confronto fair vs baseline.
+#
+# Vedi document/EVENTPROP_DESIGN.md.
 
-def build_model(variant: str = 'baseline', hidden_size=None, rank=None, **kwargs):
-    """Factory per varianti architetturali (STEP 2E Architecture_Exploration).
+from core.eventprop import (LIFLayer_EventProp, LIFLayer_BPTT_Simple,
+                             ALIFLayer_EventProp_Full,
+                             LILayer_Standard, LILayer_BitShift_Po2)
+
+
+class CF_FSNN_Net_BPTT_LIF_Simple(CF_FSNN_Net):
+    """LIF semplice con BPTT+surrogate -- gemello di CF_FSNN_Net_EventProp_LIF_Simple.
+
+    Architettura IDENTICA a CF_FSNN_Net_EventProp_LIF_Simple ma training BPTT.
+    Per 2x2 ablation: (BPTT vs EventProp) x (LIF vs ALIF).
+    """
+
+    def __init__(self, hidden_size=None, rank=None, max_delay=None):
+        nn.Module.__init__(self)
+        from config import (
+            CF_INPUT_SIZE, CF_HIDDEN_SIZE, CF_OUTPUT_SIZE,
+            CF_RANK, CF_MAX_DELAY, IDM2D_T1, IDM2D_T2, IDM2D_TAU, DT,
+        )
+        hidden_size = hidden_size if hidden_size is not None else CF_HIDDEN_SIZE
+        self.hidden_size = hidden_size
+        self.rank      = rank if rank is not None else CF_RANK
+        self.max_delay = max_delay if max_delay is not None else CF_MAX_DELAY
+        self.n_ticks  = 1
+        self.T1       = IDM2D_T1
+        self.T2       = IDM2D_T2
+        self.T_mean   = (IDM2D_T1 + IDM2D_T2) / 2.0
+        self.ou_alpha = _math.exp(-DT / IDM2D_TAU)
+
+        # BPTT LIF + LI standard (matches LIF EventProp version)
+        self.layer_hidden = LIFLayer_BPTT_Simple(
+            in_features=CF_INPUT_SIZE, out_features=hidden_size)
+        self.layer_out = LILayer_Standard(
+            in_features=hidden_size, out_features=CF_OUTPUT_SIZE)
+
+        bounds = torch.tensor(self._PARAM_BOUNDS, dtype=torch.float32)
+        self.register_buffer('param_lo', bounds[:, 0])
+        self.register_buffer('param_hi', bounds[:, 1])
+        ranges = bounds[:, 1] - bounds[:, 0]
+        self.register_buffer('decode_scale', ranges / ranges.max())
+
+    def reset_state(self, batch_size, device):
+        pass
+
+    def forward_sequence_with_stats(self, x_seq_norm):
+        spikes_h = self.layer_hidden(x_seq_norm)
+        raw_out  = self.layer_out(spikes_h)
+        B, T, _ = raw_out.shape
+        flat = raw_out.reshape(B * T, -1)
+        params_seq = self._decode_params(flat).reshape(B, T, -1)
+        spike_rate = spikes_h.mean(dim=2)
+        return params_seq, spike_rate
+
+    def forward_sequence(self, x_seq_norm):
+        return self.forward_sequence_with_stats(x_seq_norm)[0]
+
+
+class CF_FSNN_Net_EventProp_LIF_Simple(CF_FSNN_Net):
+    """F2.0b reference: LIF puro EventProp -- NON replica A1.
+
+    Usata SOLO come reference "EventProp funziona su LIF semplice".
+    Architettura stripped: NO Po2, NO delays, NO recurrence, NO ALIF, n_ticks=1.
+    """
+
+    def __init__(self, hidden_size=None, rank=None, max_delay=None):
+        nn.Module.__init__(self)
+        from config import (
+            CF_INPUT_SIZE, CF_HIDDEN_SIZE, CF_OUTPUT_SIZE,
+            CF_RANK, CF_MAX_DELAY, IDM2D_T1, IDM2D_T2, IDM2D_TAU, DT,
+        )
+        hidden_size = hidden_size if hidden_size is not None else CF_HIDDEN_SIZE
+        self.hidden_size = hidden_size
+        self.rank      = rank if rank is not None else CF_RANK
+        self.max_delay = max_delay if max_delay is not None else CF_MAX_DELAY
+        self.n_ticks  = 1
+        self.T1       = IDM2D_T1
+        self.T2       = IDM2D_T2
+        self.T_mean   = (IDM2D_T1 + IDM2D_T2) / 2.0
+        self.ou_alpha = _math.exp(-DT / IDM2D_TAU)
+
+        self.layer_hidden = LIFLayer_EventProp(
+            in_features=CF_INPUT_SIZE, out_features=hidden_size,
+            silent_repair=True)
+        self.layer_out = LILayer_Standard(
+            in_features=hidden_size, out_features=CF_OUTPUT_SIZE)
+
+        bounds = torch.tensor(self._PARAM_BOUNDS, dtype=torch.float32)
+        self.register_buffer('param_lo', bounds[:, 0])
+        self.register_buffer('param_hi', bounds[:, 1])
+        ranges = bounds[:, 1] - bounds[:, 0]
+        self.register_buffer('decode_scale', ranges / ranges.max())
+
+    def reset_state(self, batch_size, device):
+        pass
+
+    def forward_sequence_with_stats(self, x_seq_norm):
+        spikes_h = self.layer_hidden(x_seq_norm)
+        raw_out  = self.layer_out(spikes_h)
+        B, T, _ = raw_out.shape
+        flat = raw_out.reshape(B * T, -1)
+        params_seq = self._decode_params(flat).reshape(B, T, -1)
+        spike_rate = spikes_h.mean(dim=2)
+        return params_seq, spike_rate
+
+    def forward_sequence(self, x_seq_norm):
+        return self.forward_sequence_with_stats(x_seq_norm)[0]
+
+
+class CF_FSNN_Net_EventProp_Full(CF_FSNN_Net):
+    """LA TUA architettura A1 con EventProp adjoint.
+
+    Replica EXACTLY CF_FSNN_Net + HiddenLayer_ALIF + ALIFCell + OutputLayer_LI:
+      * Po2 quantization su TUTTI i pesi (STE backward)
+      * max_delay=6 delayed synapses con mask per delay value
+      * TICKS_PER_STEP=10 internal ticks per ogni step della sequenza
+      * Bit-shift leak alpha_m = 7/8 (NO synaptic current I separato)
+      * Adaptive threshold ALIF: V_th_eff = base_th + fatigue.clamp(0)
+      * base_threshold, thresh_jump learnable (init 1.5, 0.5 -- matches baseline)
+      * Low-rank recurrence rec_U @ rec_V
+      * Soft reset V -= s · V_th_eff
+      * LI output con bit-shift leak (V/8) + Po2 quantize
+
+    Cambia SOLO il training method:
+      Baseline: BPTT + SurrogateSpike_Hardware (γ=1.0)
+      Full:     EventProp adjoint event-based esatto (this class)
+
+    Params attesi (hidden=32, rank=8, max_delay=6, n_ticks=10):
+      fc_weight (32×4=128) + rec_U (32×8=256) + rec_V (8×32=256)
+      + base_th (32) + thresh_jump (32) + W_out (5×32=160) = 864 params
+      ESATTAMENTE come baseline. Fair-compare perfetto.
+
+    Nota gradiente thresh_jump: l'adjoint completo richiederebbe lambda_fatigue
+    propagation. F2.1-full lo lascia a zero (treat as frozen) per semplicita'.
+    Il base_threshold viene appreso via soft reset adjoint (vedi eventprop.py).
+    """
+
+    def __init__(self, hidden_size=None, rank=None, max_delay=None):
+        nn.Module.__init__(self)
+        from config import (
+            CF_INPUT_SIZE, CF_HIDDEN_SIZE, CF_OUTPUT_SIZE,
+            CF_RANK, CF_MAX_DELAY, TICKS_PER_STEP,
+            IDM2D_T1, IDM2D_T2, IDM2D_TAU, DT,
+        )
+        hidden_size = hidden_size if hidden_size is not None else CF_HIDDEN_SIZE
+        rank        = rank        if rank        is not None else CF_RANK
+        max_delay   = max_delay   if max_delay   is not None else CF_MAX_DELAY
+        self.hidden_size = hidden_size
+        self.rank        = rank
+        self.max_delay   = max_delay
+        self.n_ticks  = TICKS_PER_STEP   # 10 -- match baseline
+        self.T1       = IDM2D_T1
+        self.T2       = IDM2D_T2
+        self.T_mean   = (IDM2D_T1 + IDM2D_T2) / 2.0
+        self.ou_alpha = _math.exp(-DT / IDM2D_TAU)
+
+        # Hidden: full ALIF replica with EventProp adjoint
+        self.layer_hidden = ALIFLayer_EventProp_Full(
+            in_features=CF_INPUT_SIZE,
+            out_features=hidden_size,
+            rank=rank,
+            max_delay=max_delay,
+            n_ticks=self.n_ticks,
+            base_th_init=1.5, thresh_jump_init=0.5,   # match baseline ALIFCell
+            alpha_m=7.0/8.0, alpha_f=7.0/8.0,         # bit_shift=3 leak
+            silent_repair=True,
+        )
+        # Output: bit-shift leak + Po2 quantize (matches baseline OutputLayer_LI)
+        self.layer_out = LILayer_BitShift_Po2(
+            in_features=hidden_size,
+            out_features=CF_OUTPUT_SIZE,
+            alpha=7.0/8.0,
+        )
+
+        # Decode bounds + F5 pre-scaling (ereditati concettualmente da baseline)
+        bounds = torch.tensor(self._PARAM_BOUNDS, dtype=torch.float32)
+        self.register_buffer('param_lo', bounds[:, 0])
+        self.register_buffer('param_hi', bounds[:, 1])
+        ranges = bounds[:, 1] - bounds[:, 0]
+        self.register_buffer('decode_scale', ranges / ranges.max())
+
+    def reset_state(self, batch_size, device):
+        """No-op: EventProp processa l'intera sequenza in un singolo manual_forward."""
+        pass
+
+    def forward_sequence_with_stats(self, x_seq_norm):
+        """Forward: T_seq sequence steps x n_ticks internal ticks each.
+
+        x_seq_norm: (B, T_seq, 4)
+        returns:    (params_seq (B, T_seq, 5), spike_rate (B, T_seq))
+
+        - Hidden ALIFLayer_EventProp_Full produce (B, K, hidden) spikes
+          where K = T_seq * n_ticks (internal expansion).
+        - LI output processa tutti i K tick e ritorna (B, K, 5) potentials.
+        - Decode SOLO al fine di ogni n_ticks block (= matches baseline che
+          decode_params(raw_out) dopo l'ultimo tick interno).
+        - spike_rate aggregato per step (mean su n_ticks e hidden).
+        """
+        B, T_seq, _ = x_seq_norm.shape
+        K = T_seq * self.n_ticks
+        # Hidden via custom autograd
+        spikes_all = self.layer_hidden(x_seq_norm)   # (B, K, hidden)
+        # Output via standard autograd
+        raw_all = self.layer_out(spikes_all)          # (B, K, 5)
+        # Decode at end of each n_ticks block: indices [n_ticks-1, 2n_ticks-1, ..., K-1]
+        decode_idx = torch.arange(self.n_ticks - 1, K, self.n_ticks, device=raw_all.device)
+        raw_decoded = raw_all[:, decode_idx, :]       # (B, T_seq, 5)
+        # _decode_params expects (N, 5) -- apply per-step
+        flat = raw_decoded.reshape(B * T_seq, -1)
+        params_seq = self._decode_params(flat).reshape(B, T_seq, -1)
+        # Spike rate per sequence step: mean over (hidden, n_ticks block)
+        spikes_blocked = spikes_all.reshape(B, T_seq, self.n_ticks, -1)
+        spike_rate = spikes_blocked.mean(dim=(2, 3))  # (B, T_seq)
+        return params_seq, spike_rate
+
+    def forward_sequence(self, x_seq_norm):
+        return self.forward_sequence_with_stats(x_seq_norm)[0]
+
+
+# =================================================================
+# Factory build_model -- 3 variants only post-cleanup
+# =================================================================
+
+# =================================================================
+# Factory build_model -- UNIFIED post-merge
+# =================================================================
+# Concentra le scelte di entrambi i branch:
+#   - Architecture_Exploration: 8 architecture variants (baseline + 7 nuove)
+#   - Training_Method_Exploration: 4 training method variants (baseline + 3 nuove)
+# baseline e' presente in entrambi -> singola entry
+def build_model(variant: str = 'baseline', hidden_size=None, rank=None,
+                max_delay=None, **kwargs):
+    """Factory unificata: 8 architecture + 3 EventProp variants + baseline.
 
     Args:
-        variant: nome variante (baseline|stacked_2|stacked_2_skip|stacked_3_thin|
-                 max_delay_12|multi_rate|wta|attn)
-        hidden_size, rank: override capacity (default config).
-
-    Returns:
-        nn.Module con interfaccia (forward_sequence, forward_sequence_with_stats,
-        acc_iidm_accel, idm_accel, ou_residual) compatibile con pinn_loss.
+        variant: nome variante. Choices:
+          --- architecture variants (da Architecture_Exploration) ---
+          - 'baseline'             A1: ALIF + BPTT + surrogate (default, production)
+          - 'stacked_2'            A2: 2 hidden ALIF stacked
+          - 'stacked_2_skip'       A3: A2 + MS-style membrane skip
+          - 'stacked_3_thin'       A4: 3 hidden ALIF thin (24x3)
+          - 'max_delay_12'         A5: baseline + max_delay=12 (vs 6)
+          - 'multi_rate'           A6: bit_shifts=[2,3,4] multi-rate ALIF
+          - 'wta'                  A7: + lateral inhibition (1 inh neuron)
+          - 'attn'                 A8: spike attention lite (Q/K/V Po2, 2 heads)
+          --- training method variants (da Training_Method_Exploration) ---
+          - 'bptt_lif_simple'      LIF simple + BPTT + surrogate (288 params)
+          - 'eventprop_lif_simple' LIF simple + EventProp adjoint (288 params)
+          - 'eventprop_alif_full'  A1 architecture + EventProp adjoint (864 params)
+        hidden_size, rank, max_delay: override capacity (default config).
     """
     v = variant.lower()
+    # --- baseline (shared) ---
     if v == 'baseline':
         return CF_FSNN_Net(hidden_size=hidden_size, rank=rank)
+    # --- Architecture variants ---
     if v == 'stacked_2':
         h = hidden_size or 32
         r = rank or 8
@@ -1094,6 +1348,15 @@ def build_model(variant: str = 'baseline', hidden_size=None, rank=None, **kwargs
                                 inh_strength=0.5)
     if v == 'attn':
         return CF_FSNN_Net_Attn(hidden_size=hidden_size or 32, rank=rank or 8, n_heads=2)
+    # --- Training method variants ---
+    if v == 'bptt_lif_simple':
+        return CF_FSNN_Net_BPTT_LIF_Simple(hidden_size=hidden_size, rank=rank)
+    if v == 'eventprop_lif_simple':
+        return CF_FSNN_Net_EventProp_LIF_Simple(hidden_size=hidden_size, rank=rank)
+    if v == 'eventprop_alif_full':
+        return CF_FSNN_Net_EventProp_Full(hidden_size=hidden_size, rank=rank,
+                                          max_delay=max_delay)
     raise ValueError(
-        f"Variant '{variant}' non supportata. Usa: baseline|stacked_2|stacked_2_skip|"
-        "stacked_3_thin|max_delay_12|multi_rate|wta|attn")
+        f"Variant '{variant}' non supportata. Choices:\n"
+        "  baseline | stacked_2 | stacked_2_skip | stacked_3_thin | max_delay_12 | "
+        "multi_rate | wta | attn | bptt_lif_simple | eventprop_lif_simple | eventprop_alif_full")
