@@ -5,14 +5,22 @@
 
 ---
 
-## 🎯 Stato attuale (2026-05-31 12:30)
+## 🎯 Stato attuale (2026-06-01 fine sessione F2)
 
-**Repo HEAD branch `main`**: post-merge `Floor_Diagnostic` + `Optimizer_Exploration` (vedi log per SHA esatto)
+**🏆 F2 EventProp DEFINITIVAMENTE CHIUSO** — sweep 4×11 = 44 run conferma rigorosamente che EventProp non migliora baseline.
 
-**Branch attivi su origin** (tutti mergiati su main):
-- `main` ← branch principale, ora contiene tutto STEP 2C + 2D
-- `Optimizer_Exploration` ← sweep Prodigy + AdamW (archivato, contenuto su main)
-- `Floor_Diagnostic` ← sweep F1-F7 decomposizione floor (archivato, contenuto su main)
+Risultati chiave:
+- val_data BEST: baseline 0.2218 vs eventprop_alif_full 0.2226 (pareggio, Δ < 0.4%)
+- Robustezza optimizer: baseline 11/11 successi, EventProp 5/11 (CV 22× più alto)
+- Spike rate: baseline 4.1% vs EventProp 25.7% (6× peggio per FPGA event-driven)
+- Estrapolazione 15 ep: baseline 0.217 vs EventProp 0.223 (baseline marginalmente meglio)
+- **DECISIONE production**: baseline ALIF+BPTT+SurrogateSpike confermato. Vedi `document/EVENTPROP_OPTIMIZER_SWEEP.md` per analisi completa.
+
+**Branch attivi su origin**:
+- `main` ← branch principale, contiene STEP 2A-2D
+- `Architecture_Exploration` ← sweep 8 varianti architetturali (tutte ≥0.22, floor confermato architetturale)
+- `Training_Method_Exploration` ← F2 EventProp **chiuso**, baseline confermato
+- `Optimizer_Exploration`, `Floor_Diagnostic` ← archiviati (contenuto su main)
 
 **🏆 STATO PRINCIPALE: P14 CHIUSO** — decomposizione completa del floor val~0.28:
 
