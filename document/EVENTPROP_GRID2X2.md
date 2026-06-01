@@ -184,6 +184,8 @@ Tutti con stesso CLI tag, log CSV per epoca, log per batch, plot G1-G13.
 
 ## 9. Decisione operativa post-grid
 
-**EventProp non è la cura** per il task CF_FSNN.
+**EventProp non è la cura** per il task CF_FSNN (evidenza grid 2x2 single-optimizer).
 
-Prossimo passo: sweep optimizer per tutte e 4 le combinazioni (`EVENTPROP_OPTIMIZER_SWEEP.md`) per chiusura scientifica definitiva. Se anche con Prodigy/Lion/AdamW-multi-lr nessuna config rompe baseline 0.222, la storia EventProp è chiusa con piena evidenza e si torna al baseline production.
+Prossimo passo: sweep optimizer 4×11 = **44 run su Azure** (notebook `Training_File_Optimizer_2x2.ipynb`) per chiusura scientifica definitiva. Se anche con Prodigy/Lion/AdamW-multi-lr nessuna config rompe baseline 0.222, la storia EventProp è chiusa con piena evidenza e si torna al baseline production.
+
+**Tempi Azure stimati**: ~3h (44 run × ~4 min avg, baseline+ALIF lente ~9/7 min, LIF veloci ~20s).
