@@ -725,6 +725,14 @@ def main():
                         help='Prodigy d_coef: controlla velocita crescita parametro adattivo d. '
                              'Default 1.0 (Prodigy standard). <1.0 = piu cauto (utile se grad '
                              'esplodono), >1.0 = piu aggressivo. Solo per --optimizer prodigy.')
+    parser.add_argument('--prodigy_safeguard_warmup', type=int, default=1, choices=[0, 1],
+                        help='Prodigy safeguard_warmup: 1=ON (default, rimuove lr dal denominatore '
+                             'di d_hat per evitare early-step blowup), 0=OFF (canonical paper '
+                             'setting, puo causare frozen d con pochi step). Solo --optimizer prodigy.')
+    parser.add_argument('--prodigy_growth_rate', type=float, default=float('inf'),
+                        help='Prodigy growth_rate: cap moltiplicativo per-step su d (default inf = '
+                             'no cap). Valore 1.02 da "natural warmup" smooth, raccomandato per '
+                             'training instabile. Solo --optimizer prodigy.')
     # Dataset
     parser.add_argument('--load_data',   type=str,   default=None,
                         help='Cartella con train.pkl / val.pkl (legacy, usa --data_cache)')
@@ -978,11 +986,12 @@ def main():
             )
         optimizer = Prodigy(
             model.parameters(),
-            lr=args.lr,                       # raccomandato lr=1.0 (auto-adapt)
+            lr=args.lr,                                       # raccomandato lr=1.0 (auto-adapt)
             weight_decay=1e-4,
-            decouple=True,                    # AdamW-style decoupled wd
-            safeguard_warmup=True,            # evita early-step blowup
-            d_coef=args.prodigy_d_coef,       # STEP 2C — tunable (sweep calibrazione)
+            decouple=True,                                    # AdamW-style decoupled wd
+            safeguard_warmup=bool(args.prodigy_safeguard_warmup),  # R2: CLI tunable
+            growth_rate=args.prodigy_growth_rate,             # R2: CLI tunable (default inf)
+            d_coef=args.prodigy_d_coef,                       # STEP 2C — tunable (sweep calibrazione)
         )
     else:
         raise ValueError(f"Ottimizzatore non supportato: {args.optimizer}")
