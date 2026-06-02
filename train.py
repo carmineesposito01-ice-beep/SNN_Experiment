@@ -701,8 +701,8 @@ def main():
                         help='Passi per finestra TBPTT')
     # Scheduler
     parser.add_argument('--scheduler',   type=str,   default='plateau',
-                        choices=['plateau', 'onecycle', 'cosine', 'none'],
-                        help='Scheduler LR: plateau|onecycle|cosine|none '
+                        choices=['plateau', 'onecycle', 'cosine', 'cosine_no_restart', 'none'],
+                        help='Scheduler LR: plateau|onecycle|cosine|cosine_no_restart|none '
                              '(none = nessun adjustment, per ottimizzatori auto-adattivi '
                              'come Prodigy)')
     parser.add_argument('--max_lr',      type=float, default=5e-3,
@@ -733,6 +733,22 @@ def main():
                         help='Prodigy growth_rate: cap moltiplicativo per-step su d (default inf = '
                              'no cap). Valore 1.02 da "natural warmup" smooth, raccomandato per '
                              'training instabile. Solo --optimizer prodigy.')
+    # R2: parametri Prodigy aggiuntivi esposti per lo studio deep
+    parser.add_argument('--prodigy_betas', type=str, default='0.9,0.999',
+                        help='Prodigy betas come "b1,b2" (default "0.9,0.999"). Community wisdom '
+                             '(Issue #8 madman404): "0.9,0.99" produce "dramatic improvement" '
+                             'perche\' beta3=beta2**0.5 controlla decay del d_numerator. Solo --optimizer prodigy.')
+    parser.add_argument('--prodigy_use_bias_correction', type=int, default=0, choices=[0, 1],
+                        help='Prodigy use_bias_correction: 0=OFF (default Prodigy lib), 1=ON '
+                             '(raccomandato canonical kohya, applica bias correction Adam-style '
+                             'al dlr per boost early steps). Solo --optimizer prodigy.')
+    parser.add_argument('--prodigy_d0', type=float, default=1e-6,
+                        help='Prodigy d0: stima iniziale di D (default 1e-6, lib default). '
+                             'Issue #27 LoganBooker/konstmish: "If d rises very slowly, bump up '
+                             'd0 to 1e-5 or 1e-4". Aumentare se d resta frozen. Solo --optimizer prodigy.')
+    parser.add_argument('--prodigy_weight_decay', type=float, default=-1.0,
+                        help='Prodigy weight_decay: se -1 usa default hardcoded (1e-4 storico). '
+                             'Community/konstmish raccomanda 0.01 (AdamW-style). Solo --optimizer prodigy.')
     # Dataset
     parser.add_argument('--load_data',   type=str,   default=None,
                         help='Cartella con train.pkl / val.pkl (legacy, usa --data_cache)')
@@ -984,15 +1000,41 @@ def main():
                 "prodigyopt non installato. Su Azure: !pip install prodigyopt\n"
                 f"Errore originale: {e}"
             )
+        # R2: parse betas string "b1,b2" -> tuple
+        try:
+            _b1, _b2 = [float(x.strip()) for x in args.prodigy_betas.split(',')]
+            _betas = (_b1, _b2)
+        except Exception as e:
+            raise ValueError(
+                f"--prodigy_betas formato non valido: '{args.prodigy_betas}'. "
+                f"Atteso 'b1,b2' (es. '0.9,0.99'). Errore: {e}"
+            )
+        # R2: weight_decay -1 = sentinel "usa default hardcoded storico"
+        _wd = 1e-4 if args.prodigy_weight_decay < 0 else args.prodigy_weight_decay
         optimizer = Prodigy(
             model.parameters(),
-            lr=args.lr,                                       # raccomandato lr=1.0 (auto-adapt)
-            weight_decay=1e-4,
-            decouple=True,                                    # AdamW-style decoupled wd
-            safeguard_warmup=bool(args.prodigy_safeguard_warmup),  # R2: CLI tunable
-            growth_rate=args.prodigy_growth_rate,             # R2: CLI tunable (default inf)
-            d_coef=args.prodigy_d_coef,                       # STEP 2C — tunable (sweep calibrazione)
+            lr=args.lr,                                              # raccomandato lr=1.0 (auto-adapt)
+            betas=_betas,                                            # R2: CLI tunable (W1 in PRODIGY_DEEP_STUDY.md)
+            weight_decay=_wd,                                        # R2: CLI tunable (W4)
+            decouple=True,                                           # AdamW-style decoupled wd
+            use_bias_correction=bool(args.prodigy_use_bias_correction),  # R2: CLI tunable (W3)
+            safeguard_warmup=bool(args.prodigy_safeguard_warmup),    # R2: CLI tunable
+            growth_rate=args.prodigy_growth_rate,                    # R2: CLI tunable (default inf)
+            d_coef=args.prodigy_d_coef,                              # R2: CLI tunable (W2)
+            d0=args.prodigy_d0,                                      # R2: CLI tunable (V2 — fix per frozen)
         )
+        # Self-check: verifica che Prodigy abbia recepito esattamente i param richiesti
+        _g0 = optimizer.param_groups[0]
+        assert _g0['lr'] == args.lr, f"Prodigy lr mismatch: got {_g0['lr']} vs args {args.lr}"
+        assert _g0['betas'] == _betas, f"Prodigy betas mismatch: got {_g0['betas']} vs args {_betas}"
+        assert _g0['d_coef'] == args.prodigy_d_coef, f"Prodigy d_coef mismatch: got {_g0['d_coef']}"
+        assert _g0['d0'] == args.prodigy_d0, f"Prodigy d0 mismatch: got {_g0['d0']}"
+        assert _g0['safeguard_warmup'] == bool(args.prodigy_safeguard_warmup), f"Prodigy safeguard mismatch"
+        assert _g0['use_bias_correction'] == bool(args.prodigy_use_bias_correction), f"Prodigy bias_corr mismatch"
+        assert _g0['weight_decay'] == _wd, f"Prodigy wd mismatch: got {_g0['weight_decay']} vs {_wd}"
+        print(f"[Prodigy] lr={_g0['lr']} betas={_g0['betas']} d0={_g0['d0']:.2e} d_coef={_g0['d_coef']} "
+              f"wd={_g0['weight_decay']} use_bias_corr={_g0['use_bias_correction']} "
+              f"safeguard={_g0['safeguard_warmup']} growth_rate={_g0['growth_rate']}")
     else:
         raise ValueError(f"Ottimizzatore non supportato: {args.optimizer}")
 
@@ -1021,6 +1063,14 @@ def main():
     elif args.scheduler == 'cosine':
         scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(
             optimizer, T_0=args.T0, T_mult=1, eta_min=1e-6,
+        )
+        sched_per_batch = False
+    elif args.scheduler == 'cosine_no_restart':
+        # R2: cosine PURO senza restarts, raccomandato da konstmish per Prodigy
+        # (Issue #8, #10). T_max = numero totale di scheduler.step() che faremo.
+        # sched_per_batch=False -> step() per-epoca -> T_max = epochs.
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+            optimizer, T_max=args.epochs, eta_min=1e-6,
         )
         sched_per_batch = False
     else:  # plateau (default — usato nel primo run)
