@@ -499,10 +499,93 @@ Riguardando i nostri sweep (SW + T30) con questa lente:
 
 ---
 
-# PARTE 3 (placeholder) — Lessons dai nostri esperimenti R2.2
+# PARTE 3 — Lessons dai nostri esperimenti R2.2
 
-Sarà popolata dopo R2.2 (esperimenti diagnostici sul nostro CF_FSNN BASELINE 864p) con:
-- Tabella confronto setup default vs setup canonical kohya
-- Traiettoria `d` per-batch nei 5 esperimenti
-- Verdetto: Prodigy aggiunge valore al CF_FSNN o no, con setup proper?
-- Aggiornamento skill SNN-expert con pattern Prodigy
+## 16. Risultati 5 esperimenti diagnostici (10 ep × 100 step)
+
+| Exp | Lever isolato | val_total best | val_data @best | d_start | d_max | lr_eff end | spike rate avg |
+|-----|---|---:|---:|---:|---:|---:|---:|
+| **P-A** | Baseline (default Prodigy lib) | **0.3026** ❌ | 0.2921 | 1e-6 | 0.017 | 1.74e-02 | 9.5% |
+| **P-B** | + `betas=(0.9, 0.99)` (W1) | **0.2279** ✅ | 0.2227 | 1e-6 | **0.096** | 9.57e-02 | 19.5% |
+| **P-C** | + `d_coef=2.0` (W2) | 0.2461 | 0.2380 | 1e-6 | 0.195 | 1.95e-01 | 21.7% |
+| **P-D** | + `d0=1e-5` (V2 fix konstmish) | 0.2299 | 0.2227 | **1e-5** | 0.112 | 1.12e-01 | 21.3% |
+| **P-E** | CANONICAL KOHYA + cosine_no_restart | **0.2281** ✅ | 0.2227 | 1e-5 | 0.188 | **4.59e-03** ← cosine | 17.1% |
+
+**Reference BPTT+AdamW (F2 baseline 15ep)**: val_total = 0.2262
+
+## 17. Tre predizioni mie SBAGLIATE (corrette dai dati)
+
+### ❌ Predizione 1 (parte 1 §7): "d frozen a 1e-3 in tutti i nostri T30"
+
+**Reality**: d sale eccome. Tutti i 5 esperimenti raggiungono d > 0.017 entro epoca 1. Anche P-A (default lib) arriva a 0.017 (170× più alto di 1e-6).
+
+**Spiegazione corretta**: nei T30 (5700 step) Prodigy era stabilizzato a d~0.001-0.003 perché aveva avuto tempo di esplorare e si era assestato. Con 1000 step (R2), d sale rapidamente e si ferma a un plateau più alto (0.017-0.195). La differenza tra T30 e R2 è probabilmente dovuta a: (a) diverso dataset n_train=1500 stesso ma random seed/order diverso, (b) `lambda_sr=0.5` attivo qui vs 0 in T30, (c) altre micro-differenze.
+
+**Conclusione**: "d frozen" era una mia caratterizzazione affrettata. **d in realtà si stabilizza presto a un plateau, e quel plateau è il driver della velocità di convergenza.**
+
+### ❌ Predizione 2 (parte 2 §11.W1): "W1 betas=(0.9, 0.99) sblocca Prodigy"
+
+**Reality**: SI sblocca **numericamente** (val_total da 0.303 → 0.228) ma **NON sblocca le distribuzioni params**.
+
+**Evidenza**: violin G7 di P-B mostra **TUTTI e 5 i params completamente collassati ai bounds** (v0=45 max, T=0.5 min, s0=5 max, a=0.3 min, b=0.5 min). La rete predice costanti. Idem P-C, P-D, P-E. Anche P-A ha 4/5 params collassati (solo v0 ha spread 30-45).
+
+**Spiegazione**: in highway-only training, gli scenari hanno TUTTI gli stessi 5 params IDM (IDM_HIGHWAY={v0=33.3, T=1.2, s0=2.5, a=1.1, b=1.5}). La rete che predice CONSTANTS qualunque esse siano ottiene val_total basso perché tutti i target sono uguali. **W1 fa convergere la rete più velocemente a un fitting di costanti, NON a un decoding parametrico vero.**
+
+### ❌ Predizione 3 (implicita in tutti i nostri ranking): "val_total è metric robusta per ranking optimizer"
+
+**Reality**: val_total in highway-only è **INGANNEVOLE**. La rete che predice costanti ottiene val_total decente. Non distingue "ha imparato a decodificare" da "ha imparato una media".
+
+**Evidenza**: P-B/P-D/P-E pareggiano F2 baseline NUMERICAMENTE (val_total 0.228 vs 0.226), ma F2 baseline ha SR=0.5 + 15 ep + AdamW e altrettanto violin probabilmente collassati. Cinque setup diversi (Prodigy + AdamW) **convergono allo stesso val_total perché stanno predicendo tutti la stessa media** — non c'è informazione discriminativa nel ranking.
+
+## 18. Verdetto onesto su Prodigy
+
+### Cosa abbiamo veramente stabilito (alta confidenza)
+
+1. **Prodigy NON è "broken" né "non aggiunge valore"** (AUDIT §2.2 confutato). Con W1 attivo, pareggia BPTT+AdamW numericamente in 10 ep vs 15 ep di F2 (= 33% meno epoche), su setup di confronto degenere.
+2. **W1 (`betas=(0.9, 0.99)`) è il singolo lever più impattante** per la nostra rete: val_total da 0.303 → 0.228 (drop relativo del 25%). Conferma "dramatic improvement" di madman404 (community wisdom Issue #8).
+3. **V2 (`d0=1e-5`) funziona quasi quanto W1**: val_total 0.230. Conferma fix konstmish ufficiale (Issue #27).
+4. **W2 (`d_coef=2.0`) da solo è subottimo**: val_total 0.246. Più alto non sempre meglio.
+5. **Setup CANONICAL kohya completo (P-E)** NON batte P-B singolo: **W1 è il driver principale**, gli altri lever danno guadagno marginale o trascurabile in questo task.
+6. **Cosine_no_restart modula correttamente `lr_eff` sul finale**: P-E `d_max=0.188` ma `lr_eff_end=0.0046` (decay cosine a fine training). Comportamento atteso.
+
+### Cosa NON abbiamo potuto stabilire (impossibile in highway-only)
+
+1. **Prodigy migliora la qualità del fit dei params IDM?** → IMPOSSIBILE rispondere: violin G7 collassati in tutti gli esperimenti.
+2. **Prodigy generalizza meglio di AdamW su scenari diversi?** → IMPOSSIBILE: scenari mai testati, solo highway.
+3. **Setup canonical batte AdamW+OneCycle su training lungo (30+ ep)?** → IMPOSSIBILE: solo 10 ep testate per ragioni di tempo.
+
+### Decisione operativa post-R2
+
+- **Prodigy è OPZIONE VALIDA equivalente a AdamW** sui task in cui abbiamo evidenza (highway, 10 ep). Non superiore, non inferiore. Da preferire se vuoi `lr` "free" (no scheduler tuning manuale).
+- **Setup minimo raccomandato per Prodigy nel nostro CF_FSNN**: `lr=1.0 betas=(0.9, 0.99) safeguard_warmup=True d_coef=1.0 d0=1e-6` (= solo W1 attivo). Il resto è opzionale.
+- **Frase corretta per AUDIT §2.2**: NON più "Prodigy non aggiunge valore" → "Prodigy con setup canonical pareggia AdamW sul setup di test degenere; un verdetto rigoroso richiede scenari misti (R4 futuro)".
+
+## 19. Lezioni meta (le più importanti)
+
+### Lezione #M1 — `val_total` in highway-only è INGANNEVOLE
+Con tutti gli scenari aventi target IDM identici, una rete che predice costanti ottiene val_total decente. Non c'è informazione discriminativa per ranking optimizer/arch. **Tutti i nostri ranking pregress (T30, SW, P15) sono CONFUSI dallo stesso problema** — il "best" e il "worst" potrebbero essere entrambi reti che predicono costanti, solo a valori leggermente diversi.
+
+### Lezione #M2 — VIOLIN G7 è il metro reale di apprendimento
+Per validare che la rete stia veramente decodificando i 5 params IDM e non solo medie, **violin G7 va sempre controllato** prima di celebrare un val_total. Se violin sono collassati, val_total non è confrontabile fairly.
+
+### Lezione #M3 — Studi optimizer su dati degeneri sono inconcludenti
+Tutto questo R2 è un esercizio di calibrazione Prodigy ma NON un test della sua superiorità/inferiorità per il nostro task. **Per conclusioni operative serve scenari diversi** (R4: mixed highway/urban/truck/cut-in con IDM params variabili).
+
+### Lezione #M4 — "d frozen" era una mia caratterizzazione affrettata
+Caratterizzare un sistema come "broken" senza dato granulare per-batch (avevamo solo per-epoch nei T30) porta a diagnosi sbagliate. Il logging per-batch di R2.2 ha mostrato che d sale a 0.017 → 0.195 nei nostri test, NON resta a 1e-3 come pensavo.
+
+## 20. Criterio di chiusura R2 — RIVALUTATO
+
+Dei 5 criteri di chiusura previsti nel plan:
+
+1. ✅ Capisco la formula esatta di update di `d` (parte 1 §3)
+2. ✅ Capisco perché `lr=1.0` canonical NON esplode (parte 1 §5 + parte 2 §10)
+3. ⚠️ "Riprodotto pattern scala" — **NO, non si vede**: i nostri d salgono e si fermano subito (non a scala). Tipico di task convex-like con 864p su data ridotti.
+4. ✅ `PRODIGY_DEEP_STUDY.md` completo (parte 1+2+3, ~750 righe)
+5. ✅ Posso predire qualitativamente cosa Prodigy farà su nuovo setup: setup default = SGD lento, W1 attivo = pareggio AdamW, canonical = idem W1, brake (d_coef<1) = più lento. 
+
+**R2 può essere considerato CHIUSO**, con il caveat che il vero verdetto Prodigy vs AdamW richiede R4 (scenari misti).
+
+## 21. Aggiornamento skill SNN-expert (opzionale, da fare)
+
+Aggiungere a `~/.claude/skills/SNN-expert/` capitolo "Optimizers for SNN": Prodigy lessons (W1, V2, W2), setup canonical, failure modes (highway-only confounder, d plateau caratterizzazione), monitoring (d + violin params). Da fare dopo R3 EventProp per coerenza.

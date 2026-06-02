@@ -5,9 +5,24 @@
 
 ---
 
-## 🎯 Stato attuale (2026-06-02 — R2 esecuzione in corso su Azure)
+## 🎯 Stato attuale (2026-06-02 — R2 CHIUSO con caveat, R3 next)
 
-**Fase corrente**: **R2 — Studio Prodigy CAPIRE** (5 esperimenti diagnostici in esecuzione su Azure).
+**Fase corrente**: **R2 — Studio Prodigy CAPIRE** ✅ chiuso (con caveat). PRODIGY_DEEP_STUDY.md ora ha parte 1+2+3 (~750 righe). Aspetta direzione utente per R3 (EventProp serio) o R4 (scenari misti).
+
+### R2 verdetto (sintesi)
+
+- **Prodigy NON è "broken"** (AUDIT §2.2 confutato): con `betas=(0.9, 0.99)` attivo (W1) pareggia BPTT+AdamW numericamente (val_total 0.228 vs F2 0.226, 10ep vs 15ep).
+- **W1 è il singolo lever più impattante**: val_total da 0.303 (default) → 0.228 (W1). Conferma "dramatic improvement" madman404.
+- **V2 (d0=1e-5)** ≈ W1: val_total 0.230. Conferma fix konstmish ufficiale.
+- **Setup CANONICAL completo** (P-E) ≈ P-B singolo: gli altri lever (d_coef, use_bias, cosine) sono marginali in questo task.
+
+### Caveat critico (Lezioni M1-M4)
+
+⚠️ **TUTTI i 5 esperimenti hanno violin G7 collassati**: la rete predice CONSTANTS per i 5 params IDM, NON decodifica vero. Causa: highway-only training (tutti scenari hanno stessi IDM params target). 
+
+**Implicazione**: val_total è INGANNEVOLE in highway-only. Tutti i ranking pregress (T30, SW, P15) sono confusi dallo stesso problema. **Verdetto Prodigy vs AdamW richiede R4 (scenari misti)** per essere conclusivo.
+
+⚠️ La predizione "d frozen" era SBAGLIATA: d sale a 0.017-0.195 in tutti i 5 esperimenti R2 (era 0.001-0.003 in T30 forse per assestamento lungo). Caratterizzazione affrettata da single-metric per-epoch.
 
 **Doc radice**: [`document/AUDIT_2026-06-02.md`](AUDIT_2026-06-02.md) — bilancio onesto post-T30 che ha generato la roadmap R1+R2+R3.
 

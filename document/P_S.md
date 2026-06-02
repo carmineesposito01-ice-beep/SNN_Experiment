@@ -6,9 +6,9 @@
 > 🏛️ **Per storia decisioni + lessons learned**: vedi `TIMELINE.md`.
 > 📖 **Per audit roadmap R1/R2/R3**: vedi `AUDIT_2026-06-02.md`.
 
-> **Ultima modifica:** 2026-06-02 sera CET
-> **Sessione:** post-AUDIT + R1 chiuso + R2 esecuzione in corso (Azure)
-> **Stato corrente:** **R2 in esecuzione su Azure** (~1.5h, 5 esperimenti P-A..P-E Prodigy). Branch `Prodigy_Deep_Study` HEAD `a29b354`. `AUDIT_2026-06-02.md` ha riaperto 5 affermazioni dichiarate ma non dimostrate (vedi P16). R1 (`Arch_Tested/`) chiuso con snapshot 5 architetture (`BASELINE_PRE_EVENTPROP` canonical + A1 deprecated + A8/A3/EVPROP_ALIF). `PRODIGY_DEEP_STUDY.md` parte 1+2 scritto (paper + community wisdom multi-fonte). R3 EventProp serio è next dopo R2.
+> **Ultima modifica:** 2026-06-02 notte CET
+> **Sessione:** post-AUDIT + R1 chiuso + R2 CHIUSO con caveat (5 esperimenti Azure analizzati)
+> **Stato corrente:** **R2 CHIUSO con caveat**. PRODIGY_DEEP_STUDY.md ora ha parte 1+2+3 (~750 righe). Verdetto: Prodigy NON broken (W1 betas sblocca pareggio con AdamW), ma TUTTI i violin G7 collassati (params predetti = costanti, highway-only è degenere per ranking). Vedi P18 nuovo. R1 ✅ + R2 ✅ con caveat. **NEXT: scelta utente** tra R3 (EventProp serio, sequenziale come da plan) o R4 (scenari misti, prerequisito per verdetto vero Prodigy/AdamW/A8). Branch `Prodigy_Deep_Study` HEAD da push.
 
 Documento vivo: ogni problema ha (1) descrizione, (2) firma diagnostica, (3) causa root,
 (4) soluzioni in ordine di impatto. Le soluzioni si marcano `[ ] proposta`,
@@ -811,6 +811,35 @@ Failure mode F2 documentato in `PRODIGY_DEEP_STUDY.md`:
 - [⏳] Esperimento P-C: `d_coef=2.0` (W2 community consensus)
 - [⏳] Esperimento P-E: SETUP CANONICAL completo + `cosine_no_restart` (vero benchmark)
 - [ ] Verdetto + parte 3 doc da scrivere post-Azure
+
+---
+
+---
+
+## P18 — Highway-only confounder: `val_total` ingannevole, violin G7 collassati universalmente
+
+### 18.1 Descrizione
+R2.3 analisi dei 5 esperimenti Prodigy diagnostici ha rivelato pattern UNIVERSALE: tutti gli esperimenti hanno violin G7 con 4-5 params completamente collassati ai bounds (v0 max, T min, s0 max, a min, b min). La rete predice CONSTANTS, non sta veramente decodificando.
+
+### 18.2 Firma diagnostica
+- Cinque setup Prodigy diversi (default, W1, W2, V2, CANONICAL) → val_total range 0.228-0.303
+- TUTTI hanno G7 violin collassati ai bounds
+- val_total pareggia F2 baseline (0.226) per W1/V2/E ma è "fitting di costanti", non decoding parametrico vero
+- Pattern già osservato in T30 baseline_adamw, A3_stacked_skip, EVPROP_ALIF — è un confounder pregress
+
+### 18.3 Causa root
+Training su `scenario_mix=highway` → tutti gli scenari hanno IDM_HIGHWAY identici (v0=33.3, T=1.2, s0=2.5, a=1.1, b=1.5). Una rete che predice valori CONSTANTS (qualunque) ottiene loss residua bassissima perché tutti i target sono uguali. Non c'è gradient informativo per imparare a decodificare la varianza scenario-specifica.
+
+### 18.4 Implicazioni
+- **`val_total` in highway-only NON è metric robusta per ranking optimizer/arch** (Lezione M1)
+- **Tutti i ranking T30/SW/P15 sono confusi dallo stesso problema** — il "best" e il "worst" potrebbero essere reti che predicono medie diverse, non discriminative learning
+- **Verdetto Prodigy vs AdamW richiede scenari misti** (R4) per essere conclusivo
+- **VIOLIN G7 va sempre controllato** prima di celebrare un val_total (Lezione M2)
+
+### 18.5 Soluzioni proposte
+- [ ] R4 (futuro, prerequisito): training su scenari MISTI (highway+urban+truck+cut-in) con IDM params variabili — sarà il primo training "non-degenere" del progetto
+- [ ] Workflow update: ogni report di esperimento DEVE includere screenshot violin G7 (non solo numero val_total)
+- [x] Doc parte 3 PRODIGY_DEEP_STUDY.md (Lezioni M1-M4) documenta il pattern
 
 ---
 
