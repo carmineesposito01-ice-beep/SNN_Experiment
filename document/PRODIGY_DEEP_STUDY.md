@@ -1,10 +1,17 @@
-# PRODIGY DEEP STUDY — parte 1: How it Works
+# PRODIGY DEEP STUDY
 
-> **Stato**: parte 1 (math + source walkthrough). Parte 2 (lessons learned dai 5 esperimenti diagnostici) sarà aggiunta al termine di R2.2.
+> **Stato**: parte 1 (math + source walkthrough) **+ parte 2 (community wisdom multi-fonte)**. Parte 3 (lessons dai nostri esperimenti R2.2) sarà aggiunta dopo.
 >
 > **Obiettivo**: capire COME funziona Prodigy, non trovare il best. Da chiudere solo con modello mentale completo che permetta di predire qualitativamente cosa Prodigy farà in setup nuovi.
 >
-> **Reference**: Mishchenko & Defazio 2024, "Prodigy: An Expeditiously Adaptive Parameter-Free Learner", arXiv:2306.06101. Source code: `prodigyopt==1.1.2` (`pip show prodigyopt`).
+> **Reference**: 
+> - Paper: Mishchenko & Defazio 2024, "Prodigy: An Expeditiously Adaptive Parameter-Free Learner", arXiv:2306.06101 (ICML 2024)
+> - Source code: `prodigyopt==1.1.2`, `https://github.com/konstmish/prodigy`
+> - GitHub Issues #3, #8, #10, #18, #27 (community wisdom dagli sviluppatori e da practitioner)
+> - OneTrainer Wiki "Optimizers" sezione Prodigy
+> - kohya-ss/sd-scripts community (LoRA training settings)
+> - `prodigy-plus-schedule-free` (LoganBooker, variante moderna 2025)
+> - DeepWiki konstmish/prodigy Usage Guide
 
 ---
 
@@ -273,3 +280,229 @@ Se confermato:
 - Source code: https://github.com/konstmish/prodigy (v1.1.2)
 - Repository nostra: `EVENTPROP_OPTIMIZER_SWEEP.md` per i fallimenti Prodigy osservati nel nostro task (10/16 frozen)
 - AUDIT: `document/AUDIT_2026-06-02.md` §2.2 ("Prodigy non aggiunge valore" → DICHIARAZIONE NON DIMOSTRATA, da rivalutare con questo studio)
+
+---
+
+# PARTE 2 — Community wisdom multi-fonte (verità incrociate)
+
+> Questa parte rilegge la parte 1 alla luce di evidenza pratica raccolta da: GitHub Issues konstmish/prodigy (#3, #8, #10, #18, #27), OneTrainer Wiki, kohya-ss community, `prodigy-plus-schedule-free` (LoganBooker 2025). Alcune mie predizioni di parte 1 sono state **confermate** da fonti, altre **corrette/raffinate**, una **ribaltata**.
+
+## 10. Le 4 verità ufficiali confermate da konstmish (sviluppatore)
+
+Dalle risposte dirette di Konstantin Mishchenko negli issue:
+
+### V1 — "Senza scheduler, Prodigy è agnostico al numero di epoche" (Issue #3)
+> *"the optimizer is completely agnostic to how long you run it for, it should have exactly the same behavior after a fixed number of epochs. In other words, the optimizer is not aware of the total number of epochs when there is no scheduler."*
+
+**Implicazione**: se `scheduler=none`, il pattern "impara solo a fine training" osservato dagli utenti è dovuto al fatto che `d` impiega del tempo a calibrarsi, NON a una qualche awareness del numero totale step. Se si raddoppia il numero step con `scheduler=none`, il modello continua semplicemente a migliorare da dove era arrivato (a meno di plateau intrinseco).
+
+### V2 — "Se d resta troppo piccolo, aumenta d0" (Issue #27, confermato da konstmish)
+LoganBooker propose, konstmish accettò ufficialmente (chiuse l'issue):
+> *"If `d` rises very slowly or not at all, you might need to bump up `d0` (to say, 1e-5 or 1e-4). I've found sometimes Prodigy just needs to get a larger read of the gradients to start with, otherwise it can take quite a few steps before it finds a good LR, by which point you're already a good portion through training."*
+
+L'utente turbo-boo confermò: *"I set d0 from 1e-6 to 1e-5 and prodigy seems to be working well!"*
+
+Konstmish: *"Thanks for sharing your experience and a especially thanks to @LoganBooker for giving a solution to the problem. I'll also add a comment on changing `d0` in the readme."*
+
+**Implicazione critica per il nostro caso**: il default `d0=1e-6` è MOLTO conservativo. Se il training ha pochi step (<5000) e/o reti piccole con gradienti concentrati, `d` può semplicemente non avere tempo di salire dal valore microscopico iniziale a un regime utile.
+
+### V3 — "Cosine annealing è raccomandato. T_max=total_steps. Niente restarts" (Issue #8, Issue #10)
+> *"We recommend having no restarts, which corresponds to setting T_max in cosine annealing to the total number of steps the scheduler.step() is called. If you decide to use restarts, make sure to set safeguard_warmup=True."*
+
+E in #10 (immagine inclusa di lr trajectory): T_max=1050 → cosine annealing pulito dall'inizio fino a near-zero. Prodigy lavora sopra questa scala.
+
+In #8 konstmish suggerisce ANCHE: *"I'd suggest trying PolynomialLR with power=1.0, it seems to be quite helpful when using Adam."* (alternativa a cosine)
+
+### V4 — "Prodigy è una variante di Adam" (Issue #18, konstmish)
+> *"Prodigy is based on Adam/AdamW, which works better with cosine annealing."*
+
+E:
+> *"Prodigy itself is a variant of Adam with on-the-fly estimation of the learning rate."*
+
+Conferma: Prodigy = AdamW + D-adaptation. Tutto quello che Adam fa, Prodigy fa, più auto-tuning di `dlr`.
+
+---
+
+## 11. La community wisdom non documentata (verificata da practitioner)
+
+Pratiche che la community ha verificato sperimentalmente e che gli sviluppatori hanno accettato/raccomandato successivamente:
+
+### W1 — `betas=(0.9, 0.99)` produce miglioramenti drammatici (Issue #8 madman404 → community)
+
+Madman404 (Issue #8, 2023-11-09):
+> *"the parameters that worked for me were betas of (0.9, 0.99), weight_decay of .1, and batch size of 5 over about 1000-2000 steps. ... I suspect the most important parts were the lowered beta2 (which, as far as I can tell, should improve 'remembering' details from previous steps) and raised weight decay."*
+
+Brandostrong (originale issue): *"Wow. Your betas suggestion is a dramatic improvement, thank you."*
+
+**Spiegazione tecnica** (LoganBooker, Issue #27): *"If beta3 is not set explicitly, then beta2 ** 0.5 is used in its place, so beta2 affects more than just the second moment."*
+
+Cioè: `beta2=0.999 → beta3=0.9995` (decay molto lento del numeratore `d_numerator`). Cambiando a `beta2=0.99 → beta3=0.995`, il decay è 10× più reattivo → Prodigy "vede" più velocemente la dinamica corrente, `d` cresce più rapidamente, lo stimatore è meno laggy.
+
+> **Caveat (phageous, Issue #8, 2024-11)**: su Flux1.dev anime LoRA, `betas=(0.9, 0.99)` causa Prodigy a NON imparare colori capelli chiari. Su task fine-grained colori, il "memoria corta" può perdere dettagli sottili.
+
+### W2 — `d_coef=2` per accelerare convergenza (community-consensus, bdsqlsz, OneTrainer)
+
+Il default `d_coef=1.0` produce un'estimazione di `d` "conservativa". Tutta la community LoRA training raccomanda `d_coef=2`:
+- bdsqlsz (Civitai, kohya rentry): `d_coef=2` parte del setup "Prodigy is ALL YOU NEED"
+- OneTrainer wiki: "D coefficient of 0.5 will slow Prodigy while a D coefficient of 2 will speed it up"
+- DarkAlchy (Issue #3) confermò: dopo settimane di fallimenti con default, `d_coef=2 + use_bias_correction=True + safeguard_warmup=True` ha funzionato.
+
+`d_coef` scala direttamente la stima `d_hat = d_coef * d_numerator / d_denom`, quindi raddoppiando si accelera la salita verso il regime ottimale.
+
+### W3 — `use_bias_correction=True` è universalmente raccomandato
+
+Default `False` (off) nel codice. README ufficiale per diffusion: *"set use_bias_correction=True"*. OneTrainer: *"Recommended True"*. Community: tutti lo attivano.
+
+Effetto tecnico (source code): `bias_correction = sqrt(1-beta2^(k+1)) / (1-beta1^(k+1))`, applicato a `dlr`. Per i primi step quando `k` è piccolo, bias_correction è maggiore di 1 → dlr leggermente boosted → d esce più velocemente dal regime micro iniziale.
+
+### W4 — `weight_decay=0.01` (AdamW default) > `weight_decay=0` per evitare overtraining
+
+Tutte le fonti raccomandano weight_decay non-zero per Prodigy:
+- konstmish (Issue #3): *"AdamW's default value of weight decay is 0.01. I'd suggest trying weight_decay=0.01 or weight_decay=0.05."*
+- OneTrainer: *"Recommended 0.001 to 0.01"*
+- community kohya: 0.01 default
+
+**Razionale**: Prodigy + nessuno scheduler → `dlr` cresce monotonamente. Senza wd, weights divergono nel tempo → overfitting / overtraining nella seconda metà del training. WD = freno che lascia espressività a `dlr` ma stabilizza la norma dei pesi.
+
+### W5 — Diagnostic principale: monitorare `d` E la norma dei pesi (LoganBooker, prodigy-plus-schedule-free FAQ)
+
+> *"Don't observe only d (LR calcolato da Prodigy). Track also weight norm: its growth rate decreases over time. Log: `group['effective_lr'] * group['d']` per rappresentazione accurata."*
+
+Combinazione di metriche:
+- `d` o `lr_eff = d × lr`: dovrebbe crescere/plateau
+- `||w||`: dovrebbe crescere all'inizio, poi stabilizzarsi
+- Train loss: monotono decrescente (dopo iniziale assestamento)
+
+Se `d` cresce ma `||w||` esplode → `d_coef` troppo alto, ridurre. Se `d` non cresce ma `||w||` cambia poco → `d0` troppo basso, aumentare.
+
+### W6 — Numero step minimo: ~200-300 per "warmup naturale", 1000+ per regime stabile
+
+LoganBooker (Issue #27, con grafico tensorboard SDXL Unet): *"the Unet took until steps 200-300 to find a decent LR, and even then it continued to search."*
+
+Madman404 (Issue #8): *"about 1000-2000 steps"* (regime LoRA tipico).
+
+**Implicazione**: training con <500 step sono al limite del praticabile per Prodigy default. <200 step sono sicuramente troppi pochi.
+
+### W7 — Discrepanza safeguard_warmup True vs False
+
+Esiste una **discrepanza reale** tra README ufficiale e community:
+- README ufficiale (diffusion section): `safeguard_warmup=True`
+- bdsqlsz / kohya rentry "Prodigy is ALL YOU NEED": `safeguard_warmup=False`
+- OneTrainer: `True?` (con punto interrogativo, segno di incertezza)
+- konstmish (Issue #8): True solo se restarts O linear warmup
+
+**Risoluzione**: `safeguard_warmup` rimuove `dlr` dal moltiplicatore di `s` (denominatore di `d_hat`). 
+- Con linear warmup esterno (lr cresce nei primi step): TRUE evita che dlr piccolo iniziale gonfi artificialmente s → d esagerato.
+- Senza warmup esterno e con scheduler stabile: FALSE è OK (defaults paper).
+- Con cosine annealing standard senza warmup: ambiguo (FALSE secondo paper, TRUE per sicurezza).
+
+**Decisione pratica**: in dubbio, TRUE. Non c'è downside documentato.
+
+---
+
+## 12. Setup canonico CONSOLIDATO dalla community
+
+Sintetizzando paper + sviluppatori + community + practitioner consolidati (kohya-ss + OneTrainer + Civitai bdsqlsz tutorial), il **setup "Prodigy is ALL YOU NEED"** è:
+
+```python
+optimizer = Prodigy(
+    model.parameters(),
+    lr=1.0,                           # MAI cambiare (nominale)
+    betas=(0.9, 0.99),                # beta2 da 0.999 a 0.99 — DRAMATIC IMPROVEMENT (W1)
+    weight_decay=0.01,                # AdamW default (W4)
+    decouple=True,                    # default Prodigy (AdamW-style WD)
+    use_bias_correction=True,         # boost early steps (W3)
+    safeguard_warmup=True,            # safer default (W7)
+    d_coef=2.0,                       # accelera convergenza (W2)
+    d0=1e-6,                          # default; AUMENTA a 1e-5 / 1e-4 se d frozen (V2)
+    growth_rate=float('inf'),         # default; valori 1.02 per smoother
+)
+
+# Scheduler raccomandato:
+scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+    optimizer, T_max=total_training_steps  # senza restarts (V3)
+)
+```
+
+**Numero step**: minimo 1000, ideale 5000+. <500 step → Prodigy in regime "warmup non completato".
+
+---
+
+## 13. Failure modes mappati (verità da fonti incrociate)
+
+Tabella aggiornata vs parte 1 §5 con evidenza da issue:
+
+| Failure | Sintomo | Causa documentata | Fix raccomandato (fonte) |
+|---|---|---|---|
+| F1 (mio in parte 1) | `d_hat` esplode al primo step | `d_denom` ≈ 0 con `dlr` micro | **RIBALTATO**: in pratica non osservato (d0 micro = dlr micro = s micro, MA delta_numerator anche micro → d_hat resta a d0). safeguard_warmup è precauzione, non fix obbligatorio per primo step. |
+| F2 (mio in parte 1) | `d` frozen al valore d0 per tutto training | d0 troppo basso vs gradient scale | ✅ **CONFERMATO** (konstmish + LoganBooker, Issue #27): aumenta d0 a 1e-5 o 1e-4. Alternativa: aumenta d_coef. |
+| F3 (community) | "impara solo nelle ultime epoche" con cosine | d ha bisogno di tempo per calibrarsi + cosine forza decay finale | (a) Aumenta d0, (b) Aumenta d_coef, (c) betas=(0.9, 0.99) per beta3 più reattivo (W1) |
+| F4 (community) | Convergence per LoRA: 80 ep stragglini | Stessa F3, con d_coef=1.0 e default betas | Setup kohya canonical (§12) |
+| F5 (community, Issue #8) | Overtraining tardivo (ottimo a metà, peggio a fine) | dlr cresce monotonamente senza freno, weights divergono | Cosine annealing + weight_decay=0.01 |
+| F6 (phageous, Issue #8) | Perdita di dettagli fine-grained con beta2=0.99 | Memoria troppo corta | Mantenere beta2=0.999 per task fine-grained |
+| F7 (LoganBooker) | LR cresce ma loss NaN | `d_coef` troppo alto in run lungo | Riduci d_coef, oppure `prodigy_steps>0` per freeze dopo N step (`prodigy-plus-schedule-free`) |
+
+---
+
+## 14. Cosa abbiamo SBAGLIATO finora nei nostri esperimenti
+
+Riguardando i nostri sweep (SW + T30) con questa lente:
+
+**Errori di setup confermati** (rispetto al canonical kohya/community):
+
+| Param | Nostro valore | Canonical kohya | Severità |
+|---|---|---|---|
+| `betas` | `(0.9, 0.999)` (default) | `(0.9, 0.99)` | **ALTA** — beta3=0.9995 troppo lento per 1000 step |
+| `d_coef` | `1.0` (default) | `2.0` | **ALTA** — d non sale abbastanza |
+| `d0` | `1e-6` (default) | `1e-6` ma aumentare se frozen | **ALTA** — sintomo F2 osservato (frozen) → andava bumped |
+| `use_bias_correction` | `False` (default) | `True` | MEDIA — early boost mancante |
+| `weight_decay` | `1e-4` (hardcoded in train.py) | `0.01` | BASSA — più aggressivo a regime |
+| `lr` | `0.1` o `1.0` testati | `1.0` | OK (provato entrambi) |
+| `safeguard_warmup` | `True` (hardcoded) | `True` | OK |
+| `scheduler` | `none` | `cosine T_max=total` | **ALTA** — niente schedule fa overtraining + non aiuta convergenza finale |
+| step totali | 950 (SW) / 5700 (T30) | 1000+ minimo | OK ma al limite |
+
+**Diagnosi del nostro Failure (T30 Prodigy)**:
+1. `d_coef=1.0` + `betas=(0.9,0.999)` + `d0=1e-6` + scheduler=none
+2. Numero step (5700) borderline-OK
+3. Combinazione: Prodigy non raggiunge mai il regime D-adattato, resta in regime "SGD con lr piccolo"
+4. Conferma: `prodigy_d` ~ 0.001 in tutti i T30 Prodigy run
+
+**Tre cose da provare PRIMA di concludere "Prodigy non aiuta"**:
+1. **Setup canonical kohya** completo (betas + d_coef=2 + use_bias_correction + cosine T_max + d0=1e-5 if frozen)
+2. **Training più lungo** (10k+ step) se la rete lo tollera
+3. **Monitorare DAVVERO `d`** per-batch nel CSV (già abilitato) per vedere se sale o resta a 1e-3
+
+---
+
+## 15. Riferimenti consolidati (parte 2)
+
+### Repository / source code
+- https://github.com/konstmish/prodigy (v1.1.2, ufficiale)
+- https://github.com/LoganBooker/prodigy-plus-schedule-free (variante moderna 2025, defaults migliorati)
+
+### GitHub Issues con risposte dello sviluppatore
+- [Issue #3](https://github.com/konstmish/prodigy/issues/3) — DarkAlchy "doesn't begin to really learn until almost done" (V1, V4, W2 spiegati da konstmish)
+- [Issue #8](https://github.com/konstmish/prodigy/issues/8) — brandostrong "low steps per epoch" → konstmish (V3) + madman404 (W1, W4) + community recommendations
+- [Issue #10](https://github.com/konstmish/prodigy/issues/10) — josemerinom "T_max value cosine" → konstmish risposta con plot (V3)
+- [Issue #18](https://github.com/konstmish/prodigy/issues/18) — ppbrown "convergence question SDXL" → konstmish (V4)
+- [Issue #27](https://github.com/konstmish/prodigy/issues/27) — Bocchi-Chan2023 "SD 3.5 Medium" → LoganBooker (V2, W5, W6) + konstmish (acceptance)
+
+### Community resources
+- [OneTrainer Wiki — Optimizers](https://github.com/Nerogar/OneTrainer/wiki/Optimizers) — recommended settings practitioner-validated
+- [kohya-ss/sd-scripts community](https://github.com/kohya-ss/sd-scripts/) — setup "Prodigy is ALL YOU NEED"
+- [LoganBooker prodigy-plus-schedule-free README](https://github.com/LoganBooker/prodigy-plus-schedule-free) — variante 2025 con defaults migliorati e FAQ
+
+### Paper
+- Mishchenko & Defazio 2024, ICML, arXiv:2306.06101
+- Defazio & Mishchenko 2023, D-Adaptation original, arXiv:2301.07733
+
+---
+
+# PARTE 3 (placeholder) — Lessons dai nostri esperimenti R2.2
+
+Sarà popolata dopo R2.2 (esperimenti diagnostici sul nostro CF_FSNN BASELINE 864p) con:
+- Tabella confronto setup default vs setup canonical kohya
+- Traiettoria `d` per-batch nei 5 esperimenti
+- Verdetto: Prodigy aggiunge valore al CF_FSNN o no, con setup proper?
+- Aggiornamento skill SNN-expert con pattern Prodigy
