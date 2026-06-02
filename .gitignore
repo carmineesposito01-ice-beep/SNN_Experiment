@@ -49,3 +49,8 @@ Thumbs.db
 !results/
 results/**/*.pt
 results/**/*.pth
+
+# Arch_Tested smoke/reproduce checkpoints (NOT the snapshot_original which IS committed)
+Arch_Tested/**/checkpoints/
+Arch_Tested/**/checkpoint/best_model.pt
+Arch_Tested/**/__pycache__/
