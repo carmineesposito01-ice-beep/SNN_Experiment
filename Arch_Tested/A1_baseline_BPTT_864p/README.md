@@ -1,5 +1,11 @@
 # A1_baseline_BPTT_864p
 
+> ⚠️ **NON USARE PER STUDI R2/R3 (Prodigy, EventProp)**. Questa run ha `lambda_sr=0`, ovvero la pressione esplicita verso il target spike rate è disattivata (errore di setup ricorrente #3.1 documentato in `document/AUDIT_2026-06-02.md`). È stata introdotta da `Architecture_Exploration` step P15 ma **non è la vera baseline production pre-EventProp**.
+>
+> **Per studi seri usa [`../BASELINE_BPTT_864p_PRE_EVENTPROP/`](../BASELINE_BPTT_864p_PRE_EVENTPROP/)** (source P12_S2D_F2_no_ou, `lambda_sr=0.5`, architetturalmente identica ma con il regolarizzatore spike-rate attivo).
+>
+> Questa cartella è preservata come archeologia post-Architecture_Exploration per non perdere l'evidenza dell'errore (utile per documentazione storica).
+
 **Classe Python**: `CF_FSNN_Net`
 **Parametri totali**: 864
 **Training method**: BPTT + SurrogateSpike (γ=1.0)
