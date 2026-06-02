@@ -323,3 +323,89 @@ Sequenza di esperimenti per identificare e affrontare la causa del plateau a val
 | ⚠️ | warning/parziale |
 | ❌ | fallito/scartato |
 | ⏸️ | in stand-by / pianificato per futuro |
+| ⏳ | in esecuzione |
+| ⭐ | canonical/preferito |
+
+---
+
+## 🆕 R1-R3 — Roadmap audit-driven (post 2026-06-02 AUDIT)
+
+| Codice | Nome | Status | Branch git |
+|--------|------|--------|------------|
+| **R1** | `Arch_Tested/` snapshot riproducibile architetture funzionanti | ✅ chiuso 2026-06-02 | `Arch_Tested_Setup` (mergiato + cancellato) |
+| **R1.7** | Aggiunta `BASELINE_BPTT_864p_PRE_EVENTPROP` (vera baseline pre-EventProp, lambda_sr=0.5) | ✅ chiuso 2026-06-02 | `Arch_Tested_Fix_Baseline` (mergiato + cancellato) |
+| **R2** | Studio Prodigy CAPIRE (paper + community wisdom + 5 esperimenti) | ⏳ in esecuzione Azure | `Prodigy_Deep_Study` |
+| **R2.1** | Reading + doc (`PRODIGY_DEEP_STUDY.md` parte 1 + 2) | ✅ chiuso 2026-06-02 | idem |
+| **R2.2** | 5 esperimenti diagnostici P-A..P-E (`Prodigy_Diagnostics.ipynb`) | ⏳ run Azure | idem |
+| **R2.2.fix** | Sub-folder `results/Prodigy_Study/` + Python <3.12 f-string fix | ✅ chiuso 2026-06-02 | idem |
+| **R3** | Studio EventProp serio (paper + 7 lever isolati + fair comparison) | ⏸️ pending (dopo R2) | `EventProp_Deep_Study` (da creare) |
+
+### V1-V4 + W1-W7 — Lever Prodigy emersi da ricerca multi-fonte (R2.1)
+
+Vedi `PRODIGY_DEEP_STUDY.md` parte 2 sezioni 10 e 11 per dettagli + fonti.
+
+| Codice | Origine | Cosa dice |
+|--------|---------|-----------|
+| **V1** | konstmish (Issue #3) | Senza scheduler, Prodigy agnostico al numero step |
+| **V2** | konstmish (Issue #27, fix ufficiale) | Se `d` frozen, bump `d0` da 1e-6 a 1e-5/1e-4 |
+| **V3** | konstmish (Issue #8, #10) | Cosine annealing T_max=total_steps, NIENTE restarts |
+| **V4** | konstmish (Issue #18) | Prodigy = Adam/AdamW + D-adaptation |
+| **W1** | madman404 (Issue #8) | `betas=(0.9, 0.99)` "dramatic improvement" (beta3=beta2^0.5) |
+| **W2** | community kohya/OneTrainer/bdsqlsz | `d_coef=2.0` standard (non 1.0 default) |
+| **W3** | community + README diffusion | `use_bias_correction=True` (boost early steps) |
+| **W4** | konstmish (Issue #3) + OneTrainer | `weight_decay=0.01` AdamW default |
+| **W5** | LoganBooker (`prodigy-plus-schedule-free` FAQ) | Monitorare `d` + norma pesi insieme |
+| **W6** | LoganBooker (Issue #27) | Min 200-300 step warmup naturale, 1000+ stabile |
+| **W7** | community discrepanza | `safeguard_warmup` True se warmup/restarts |
+
+### P-A..P-E — 5 esperimenti diagnostici R2.2
+
+| ID | Setup | Lever isolato |
+|----|-------|---------------|
+| **P-A** | baseline T30 replica (default Prodigy lib + safeguard ON) | conferma d frozen |
+| **P-B** | P-A + `betas=(0.9, 0.99)` | W1 |
+| **P-C** | P-A + `d_coef=2.0` | W2 |
+| **P-D** | P-A + `d0=1e-5` | V2 (fix konstmish) |
+| **P-E** | SETUP CANONICAL KOHYA completo + `cosine_no_restart` | tutti i lever insieme |
+
+### Arch_Tested/ — Snapshot architetture funzionanti (R1)
+
+| Cartella | Source run | Status |
+|----------|------------|--------|
+| ⭐ `BASELINE_BPTT_864p_PRE_EVENTPROP` | `P12_S2D_F2_no_ou` (lambda_sr=0.5) | **Canonical per R2/R3** |
+| `A1_baseline_BPTT_864p` | `T30_A1_BASELINE_adamw` (lambda_sr=0) | ⚠️ DEPRECATED |
+| `A8_attn_BPTT_3936p` | `T30_A8_ATTN_adamw` | 3936p, best architettonico ma overfit possibile |
+| `A3_stacked_skip_BPTT_2624p` | `T30_A3_STACKED_SKIP_adamw` | 2624p |
+| `EVPROP_ALIF_full_864p` | `SW_eventprop_alif_full_adamw_lr2e-3` (5ep sched=none) | EventProp adjoint |
+
+### `results/<Study>/` — Convention sub-folder dedicata (post 2026-06-02)
+
+Ogni studio futuro ha sub-folder dedicata in `results/`:
+- `results/Prodigy_Study/` — R2 (in corso)
+- `results/EventProp_Study/` — R3 (futuro)
+- `results/<Run_Tag>/` — run storiche restano nel root di `results/` per archeologia
+
+### Scheduler `cosine_no_restart` — nuovo (R2.2)
+
+Aggiunto in train.py. `CosineAnnealingLR` puro con `T_max=epochs`. Da NON confondere con `cosine` esistente che usa `CosineAnnealingWarmRestarts` (sconsigliato per Prodigy da konstmish Issue #8).
+
+### CLI flag Prodigy aggiunti (R2.2)
+
+- `--prodigy_betas STR` (default `'0.9,0.999'`) — formato `'b1,b2'`
+- `--prodigy_use_bias_correction {0,1}` (default 0, raccomandato 1)
+- `--prodigy_d0 FLOAT` (default 1e-6, bump a 1e-5 se d frozen)
+- `--prodigy_weight_decay FLOAT` (default -1 = sentinel `1e-4` hardcoded storico, raccomandato 0.01)
+- `--prodigy_safeguard_warmup {0,1}` (default 1, era hardcoded True)
+- `--prodigy_growth_rate FLOAT` (default inf, era hardcoded inf)
+- `--prodigy_d_coef FLOAT` (default 1.0, esistente da STEP 2C)
+
+---
+
+## 📚 Documenti recenti (post 2026-06-02)
+
+| Doc | Scopo |
+|-----|-------|
+| ⭐ `AUDIT_2026-06-02.md` | Bilancio onesto + roadmap R1/R2/R3 (radice di tutto) |
+| `PRODIGY_DEEP_STUDY.md` | Parte 1 math + Parte 2 community wisdom (ricerca multi-fonte) |
+| `SIMULATOR_FINDINGS.md` | Drift T² + cut-in analysis simulator |
+| `Arch_Tested/README.md` | Overview 5 architetture snapshot |

@@ -1,13 +1,14 @@
 # P_S.md — Problemi & Soluzioni CF_FSNN
 
 > 📌 **Per il quick-start con zero contesto**: leggi `SESSION_RESUME.md` prima.
-> 📚 **Per decode acronimi P/A/B/F/T/PF/G**: vedi `GLOSSARY.md`.
+> 📚 **Per decode acronimi P/A/B/F/T/PF/G/R/V/W**: vedi `GLOSSARY.md`.
 > 🔧 **Per workflow Azure end-to-end**: vedi `WORKFLOW.md`.
 > 🏛️ **Per storia decisioni + lessons learned**: vedi `TIMELINE.md`.
+> 📖 **Per audit roadmap R1/R2/R3**: vedi `AUDIT_2026-06-02.md`.
 
-> **Ultima modifica:** 2026-05-31 12:30 CET
-> **Sessione:** post-STEP 2D (Floor Diagnostic completo) + merge branch a main
-> **Stato corrente:** **P14 CHIUSO**. Floor val~0.28 completamente decomposto. OU noise = 19.3%, SR+Po2 = 0.4% (Po2 sorprendentemente trascurabile), residuo architettura = 78.4% (F7 best = 0.2198, ancora in trend DOWN). Po2 resta ON in deploy (zero costo confermato). P12 resta "diagnosi superata da P14" (capiamo il floor, ora dobbiamo decidere se attaccarlo). P13 (scenario crashes) ancora aperto, basso priority. **NEXT (scelta utente)**: 4 strade in FUTURE_WORK.md — (F2) **EventProp** training paradigma diverso, (F3) curriculum noise, (F4) architettura modificata, (F5) accettare floor e procedere a deploy. Branch `main` ora include Optimizer_Exploration + Floor_Diagnostic merged.
+> **Ultima modifica:** 2026-06-02 sera CET
+> **Sessione:** post-AUDIT + R1 chiuso + R2 esecuzione in corso (Azure)
+> **Stato corrente:** **R2 in esecuzione su Azure** (~1.5h, 5 esperimenti P-A..P-E Prodigy). Branch `Prodigy_Deep_Study` HEAD `a29b354`. `AUDIT_2026-06-02.md` ha riaperto 5 affermazioni dichiarate ma non dimostrate (vedi P16). R1 (`Arch_Tested/`) chiuso con snapshot 5 architetture (`BASELINE_PRE_EVENTPROP` canonical + A1 deprecated + A8/A3/EVPROP_ALIF). `PRODIGY_DEEP_STUDY.md` parte 1+2 scritto (paper + community wisdom multi-fonte). R3 EventProp serio è next dopo R2.
 
 Documento vivo: ogni problema ha (1) descrizione, (2) firma diagnostica, (3) causa root,
 (4) soluzioni in ordine di impatto. Le soluzioni si marcano `[ ] proposta`,
@@ -726,4 +727,104 @@ Floor totale 0.2805 = 100% del problema
 | 2026-05-31 12:30 | Decomposizione floor consolidata. **P14 chiuso**. Po2 contribuisce 0.2% → resta ON in deploy. | ✅ |
 | 2026-05-31 12:30 | Documentazione completa (P_S, SESSION_RESUME, TIMELINE, GLOSSARY, FUTURE_WORK) | [x] applicato |
 | 2026-05-31 12:30 | Branch `Optimizer_Exploration` + `Floor_Diagnostic` merged → `main` | [x] applicato |
-| 2026-05-31 12:30 | Prossima decisione: scelta utente tra opzioni mitigation (vedi FUTURE_WORK) | in attesa utente |
+
+---
+
+## P15 — A1 baseline ha `lambda_sr=0` (errato vs F2 vincente con `lambda_sr=0.5`)
+
+### 15.1 Descrizione
+Architecture_Exploration step P15_S2E ha introdotto A1 baseline come "default" della factory `build_model('baseline')`, ma con `lambda_sr=0.0`. Tutte le 6 run T30 successive hanno propagato l'errore. La vera baseline pre-EventProp (`P12_S2D_F2_no_ou`, commit `5a2c7ee`) aveva `lambda_sr=0.5` attivo.
+
+### 15.2 Firma diagnostica
+- T30 baseline run hanno spike rate medio 2.7-5.6% (target era 15-20% definito mesi fa)
+- Nessuna pressione esplicita al target spike rate durante training
+- Violin G7 collassati per 4/5 params (highway-only + nessun regolarizzatore)
+
+### 15.3 Causa root
+Architecture_Exploration → introduzione `--arch_variant baseline` come default factory, con CLI flags hardcoded `lambda_sr=0` invece di `lambda_sr=0.5`. Nessun audit dei lambdas vs run pre-existing.
+
+### 15.4 Soluzioni applicate
+- [x] R1.7 (2026-06-02): aggiunta sub-cartella `Arch_Tested/BASELINE_BPTT_864p_PRE_EVENTPROP/` con setup F2 corretto (`lambda_sr=0.5`) come **riferimento canonico** per studi R2/R3.
+- [x] `A1_baseline_BPTT_864p/README.md` marcato DEPRECATED con avviso "NON usare per studi R2/R3".
+- [x] `Arch_Tested/README.md` evidenzia BASELINE_PRE_EVENTPROP con ⭐ e tabella diff vs A1.
+
+---
+
+## P16 — AUDIT_2026-06-02: 5 affermazioni dichiarate ma non dimostrate
+
+### 16.1 Descrizione
+Audit ascetico user-driven post-8 run T30 ha identificato 5 conclusioni "celebrate" senza basi solide:
+
+| # | Affermazione | Status |
+|---|---|---|
+| (a) | "EventProp non funziona / è fragile" | ❌ non dimostrato — mai testato con tuning serio (clip aggressivo, warmup, init scaling, detach periodico, thresh_jump learnable). Domanda R3. |
+| (b) | "Prodigy non aggiunge valore vs AdamW" | ❌ non dimostrato — config testate erano default Prodigy lib, non setup canonical kohya/community (vedi V1-W7 in GLOSSARY). Domanda R2 in esecuzione. |
+| (c) | "A8 attn è la migliore architettura" | ❌ non dimostrato — mai confrontato con A1 a parità capacity (~3500p, h=64 r=16). Possibile overfit di rumore in highway-only. |
+| (d) | "Spike rate 4% va bene per FPGA" | ❌ contraddice target storico 15-20%. P15 root cause. |
+| (e) | "Capacity non è bottleneck" (P14) | ❌ riaperto — P14 era a 4 ep, A8 a 30 ep. Non comparabile. |
+
+### 16.2 Firma diagnostica
+Pattern ricorrente: "vedo numeri → dichiaro verdetto → vado avanti" senza:
+- verifica che setup abbia testato l'ipotesi giusta
+- chiusura onesta delle sotto-questioni aperte
+- coerenza con conclusioni precedenti
+
+### 16.3 Causa root
+- `lambda_sr=0` sistemico (P15)
+- Training highway-only sistemico → violin collassati universali
+- Scheduler ad-hoc per metodo senza razionale
+- Single-seed per ranking (rumore ≈ margini dichiarati)
+- Mancanza di baseline canonical stabile
+
+### 16.4 Soluzioni in corso
+- [x] `AUDIT_2026-06-02.md` documenta tutte le 5 affermazioni con grado di confidenza
+- [x] R1 (`Arch_Tested/`) — preserva architetture per riproduzione futura
+- [x] R1.7 — fix BASELINE_PRE_EVENTPROP come canonical
+- [x] R2.1 — `PRODIGY_DEEP_STUDY.md` ricerca multi-fonte (paper + 5 GitHub Issues + community)
+- [⏳] R2.2 — 5 esperimenti diagnostici P-A..P-E in esecuzione Azure (~1.5h)
+- [ ] R3 — Studio EventProp serio (pending, post R2)
+- [ ] R4 (futuro) — scenari misti, sweep multi-seed, capacity sweep a 30ep, `lambda_sr` attivo
+
+---
+
+## P17 — Prodigy `d` frozen a ~1e-3 nei nostri T30 (failure mode F2 community-documentato)
+
+### 17.1 Descrizione
+Tutte le 4 run T30 Prodigy hanno `prodigy_d` valore stabile attorno a 1e-3 per tutte le 30 epoche. Prodigy NON sta facendo D-adaptation, sta degenerando in SGD a lr piccolo.
+
+### 17.2 Firma diagnostica
+- `prodigy_lr_eff` ~ 1e-3 plateau
+- `prodigy_d` non sale dal valore iniziale
+- val_data converge come AdamW lr=1e-4 (lento ma stabile)
+
+### 17.3 Causa root (community wisdom, vedi `PRODIGY_DEEP_STUDY.md` §13)
+Failure mode F2 documentato in `PRODIGY_DEEP_STUDY.md`:
+- `d0=1e-6` (default) troppo conservativo vs scala dei gradient nostro BPTT chain 500 tick
+- `betas=(0.9, 0.999)` (default) → `beta3=0.9995` decay troppo lento per 5700 step
+- `d_coef=1.0` (default) — community raccomanda `2.0`
+- `use_bias_correction=False` (default) — community raccomanda True
+- `scheduler=none` — `cosine_no_restart T_max=epochs` raccomandato
+
+### 17.4 Soluzioni in test (R2.2)
+- [⏳] Esperimento P-D: bump `d0` da 1e-6 a 1e-5 (V2 fix konstmish ufficiale)
+- [⏳] Esperimento P-B: `betas=(0.9, 0.99)` (W1 madman404 "dramatic improvement")
+- [⏳] Esperimento P-C: `d_coef=2.0` (W2 community consensus)
+- [⏳] Esperimento P-E: SETUP CANONICAL completo + `cosine_no_restart` (vero benchmark)
+- [ ] Verdetto + parte 3 doc da scrivere post-Azure
+
+---
+
+## Log delle decisioni (estensione 2026-06-02)
+
+| Data | Decisione | Stato |
+|------|-----------|-------|
+| 2026-06-02 mattina | AUDIT_2026-06-02 scritto come radice della nuova roadmap | ✅ |
+| 2026-06-02 pomeriggio | R1 Arch_Tested/ creato (4 arch + smoke 1ep×1step) | ✅ |
+| 2026-06-02 pomeriggio | R1.7 fix: BASELINE_PRE_EVENTPROP aggiunto (vera baseline F2, lambda_sr=0.5) | ✅ |
+| 2026-06-02 sera | R2.1 PRODIGY_DEEP_STUDY.md parte 1+2 (ricerca multi-fonte) | ✅ |
+| 2026-06-02 sera | R2.2 setup: 4 nuovi CLI flag Prodigy + scheduler cosine_no_restart + notebook 5 esperimenti redesigned | ✅ |
+| 2026-06-02 sera | Sub-folder convention `results/<Study>/` adottata | ✅ |
+| 2026-06-02 sera | Azure esecuzione R2.2 in corso (~1.5h, 5 esperimenti × ~15-17 min) | ⏳ |
+| 2026-06-02 notte | R2 verdetto + PRODIGY_DEEP_STUDY.md parte 3 (post-Azure) | pending |
+| TBD | R3 EventProp serio (paper + 7 lever isolati) | pending |
+| TBD | Decisione utente: i 5 branch storici (Architecture_Exploration, Floor_Diagnostic, Optimizer_Exploration, Training_Method_Exploration, Visualizer_Building) restano intatti per ora; archive (tag+delete) rimandato | in attesa utente |

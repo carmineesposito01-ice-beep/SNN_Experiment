@@ -643,6 +643,79 @@ BPTT+surrogate e EventProp adjoint convergono entrambi a 0.222 su ALIF. Due algo
 
 ---
 
+## 🗓️ 2026-06-02 — AUDIT + R1 (Arch_Tested) + R2 setup (Studio Prodigy CAPIRE)
+
+### Mattina: simulator iterazioni + 8 run T30 + analisi → AUDIT
+
+**Branch**: `Visualizer_Building` (poi mergiato in main).
+
+Eventi principali:
+1. Simulator visivo CF_FSNN completato a iterazioni: `utils/simulator/{engine,metrics,plots,anim}.py` + `Simulator_Visual.ipynb`. Scoperta drift cumulativo open-loop T² (vedi `SIMULATOR_FINDINGS.md`).
+2. Run 8 T30 (4 arch × 2 opt × 30 ep) eseguite su Azure, pullate e analizzate.
+3. **Audit ascetico user-driven**: l'utente ha legittimamente criticato 4 errori di setup recenti (Po2 mai disattivato, Prodigy lr=1.0 mai funzionante, A8 mai usata prima ma celebrata BEST, spike rate 4% accettato vs target 15-20%). Ha forzato a FERMARE la corsa.
+4. **`document/AUDIT_2026-06-02.md`** scritto come bilancio onesto: 5 affermazioni dichiarate ma NON dimostrate, 5 errori di setup ricorrenti, 8 domande aperte, roadmap R1+R2+R3.
+
+### Pomeriggio: R1 Arch_Tested/ + R1.7 fix BASELINE_PRE_EVENTPROP
+
+**Branch**: `Arch_Tested_Setup` → merge in main → cancellato. Poi `Arch_Tested_Fix_Baseline` → merge → cancellato.
+
+R1 snapshot riproducibile delle architetture funzionanti in `Arch_Tested/<arch>/`:
+- 4 originali (A1, A8, A3, EVPROP_ALIF) con `core/` cleanup chirurgico, `train.py` CLI ridotta a 1 variant, `snapshot_original/` READ-ONLY (13 plot G + log + config), `reproduce_training.ipynb` (3-4 celle), README dettagliato.
+- 5/5 smoke test 1ep×1step OK end-to-end.
+
+R1.7 fix critico: user feedback "A1 era sbagliata dall'inizio". Ricerca cronologica → vera baseline pre-EventProp è `P12_S2D_F2_no_ou` (commit pre-EventProp `5a2c7ee`). UNICA differenza vs A1: `lambda_sr=0.5` (vs 0). Aggiunta sub-cartella `Arch_Tested/BASELINE_BPTT_864p_PRE_EVENTPROP/` come riferimento canonico per studi R2/R3. A1 marcata DEPRECATED nel README con avviso prominente.
+
+### Sera: R2 setup — Studio Prodigy CAPIRE
+
+**Branch**: `Prodigy_Deep_Study` (in esecuzione su Azure).
+
+1. **R2.1 Reading & doc**: ricerca multi-fonte (paper Mishchenko 2024 + 5 GitHub Issues konstmish/prodigy #3/#8/#10/#18/#27 + OneTrainer Wiki + kohya-ss community + LoganBooker `prodigy-plus-schedule-free`).
+
+   Eureka critici scoperti:
+   - **V2** (konstmish ufficiale, Issue #27): "Se `d` resta troppo piccolo, aumentare `d0` da 1e-6 a 1e-5/1e-4". Confermato sui nostri T30 (d frozen ~1e-3 sempre).
+   - **W1** (madman404, Issue #8): `betas=(0.9, 0.99)` produce "dramatic improvement" perché `beta3=beta2^0.5` controlla decay del `d_numerator`. Default 0.9995 troppo lento per training <2000 step.
+   - **W2** (community consensus kohya/OneTrainer/bdsqlsz): `d_coef=2.0` standard, NON 1.0 default.
+   - **Setup CANONICAL "Prodigy is ALL YOU NEED"**: `lr=1.0 betas=(0.9,0.99) wd=0.01 use_bias_correction=True safeguard=True d_coef=2.0 d0=1e-6→1e-5 if frozen` + `cosine_no_restart T_max=epochs`.
+
+   Doc `document/PRODIGY_DEEP_STUDY.md` (~500 righe): parte 1 (math + source code walkthrough) + parte 2 (community wisdom multi-fonte verificata). Parte 3 (lessons R2.2) sarà aggiunta dopo esperimenti.
+
+2. **R2.2 setup**: train.py esteso con 4 nuovi CLI flag Prodigy (`--prodigy_betas`, `--prodigy_use_bias_correction`, `--prodigy_d0`, `--prodigy_weight_decay`) oltre ai 3 esistenti. Self-check post-init con 7 assert (no silent failure). Scheduler `cosine_no_restart` aggiunto (CosineAnnealingLR puro, T_max=epochs, NIENTE restarts come richiesto da konstmish).
+
+3. Notebook `Prodigy_Diagnostics.ipynb` redesigned con 5 esperimenti P-A..P-E isolanti i 3 lever community:
+   - **P-A**: baseline T30 replica → conferma d frozen
+   - **P-B**: P-A + `betas=(0.9, 0.99)` → isola W1
+   - **P-C**: P-A + `d_coef=2.0` → isola W2
+   - **P-D**: P-A + `d0=1e-5` → isola V2 fix konstmish
+   - **P-E**: SETUP CANONICAL completo + `cosine_no_restart`
+
+   Smoke test 5/5 OK end-to-end con verifica config_snapshot + batch_log (no workaround, hard fail su parametri non recepiti).
+
+4. **Sub-folder dedicata**: risultati in `results/Prodigy_Study/` (separazione visiva per evitare confusione futura). Convention: ogni studio futuro userà `results/<Study_Name>/`.
+
+5. **Fix Python <3.12 compat**: f-string nested quote singolari sostituite con doppie (PEP 701 supportato solo da 3.12).
+
+### Lessons learned 2026-06-02
+
+#### Lezione #28 — Mai dichiarare "X non funziona" senza tuning serio
+Per Prodigy avevamo dichiarato "non aggiunge valore" dopo 10/16 fallimenti del sweep. Ma il sweep usava solo i default Prodigy lib (`d0=1e-6, d_coef=1.0, betas=0.999, no use_bias_correction`). La community wisdom raccomanda un setup completamente diverso. Soluzione corretta: ricerca multi-fonte PRIMA di concludere.
+
+#### Lezione #29 — L'utente vede contraddizioni che noi non vediamo
+"A1 era sbagliata dall'inizio" — intuizione utente non immediatamente verificabile. Verifica cronologica: F2 vincente aveva `lambda_sr=0.5` attivo, A1 (introdotta da Architecture_Exploration) l'ha disattivato silenziosamente. Le 6 successive run T30 hanno propagato l'errore. Solo l'utente ha forzato il check storico.
+
+#### Lezione #30 — Sub-folder dedicate per ogni studio
+Mescolare risultati di studi diversi in `results/` ha causato confusione (T30, SW, P15 tutti insieme — utente non riusciva a trovare il "best vero"). Convention adottata: ogni studio futuro ha `results/<Study_Name>/` dedicata.
+
+#### Lezione #31 — Multi-fonte CRITICO per algoritmi nuovi
+Paper Prodigy NON documenta failure modes pratici (frozen d, betas tuning). 5 GitHub Issues konstmish/prodigy + community LoRA (kohya, OneTrainer, bdsqlsz) hanno svelato la verità. Sempre triangolare paper + source code + issue tracker + practitioner community per algoritmi adottati di recente.
+
+#### Lezione #32 — Smoke test post-modifica deve verificare config_snapshot + batch_log
+Aggiungere CLI flag senza verificare che (a) Prodigy li riceva (self-check assert post-init), (b) config_snapshot li salvi, (c) batch_log continui a funzionare = ricetta per esperimenti silenziosamente sbagliati. Sempre 3 controlli incrociati end-to-end.
+
+#### Lezione #33 — Branch storici NON cancellare prematuramente
+User feedback: "non cancellare i branch storici, crea solo nuovo branch per nuove azioni". I 5 branch storici (Architecture_Exploration, Floor_Diagnostic, Optimizer_Exploration, Training_Method_Exploration, Visualizer_Building) restano come archeologia consultabile (git log/checkout). Decisione di archiviare (tag + delete) rimandata a sessione futura, solo quando saremo CERTI che non servono.
+
+---
+
 ## 📌 Note finali
 
 Questo TIMELINE va aggiornato dopo ogni milestone significativa. Mantenere la sezione "Lessons learned" è cruciale per non ripetere errori in future sessioni.

@@ -5,22 +5,100 @@
 
 ---
 
-## 🎯 Stato attuale (2026-06-01 fine sessione F2)
+## 🎯 Stato attuale (2026-06-02 — R2 esecuzione in corso su Azure)
 
-**🏆 F2 EventProp DEFINITIVAMENTE CHIUSO** — sweep 4×11 = 44 run conferma rigorosamente che EventProp non migliora baseline.
+**Fase corrente**: **R2 — Studio Prodigy CAPIRE** (5 esperimenti diagnostici in esecuzione su Azure).
 
-Risultati chiave:
-- val_data BEST: baseline 0.2218 vs eventprop_alif_full 0.2226 (pareggio, Δ < 0.4%)
-- Robustezza optimizer: baseline 11/11 successi, EventProp 5/11 (CV 22× più alto)
-- Spike rate: baseline 4.1% vs EventProp 25.7% (6× peggio per FPGA event-driven)
-- Estrapolazione 15 ep: baseline 0.217 vs EventProp 0.223 (baseline marginalmente meglio)
-- **DECISIONE production**: baseline ALIF+BPTT+SurrogateSpike confermato. Vedi `document/EVENTPROP_OPTIMIZER_SWEEP.md` per analisi completa.
+**Doc radice**: [`document/AUDIT_2026-06-02.md`](AUDIT_2026-06-02.md) — bilancio onesto post-T30 che ha generato la roadmap R1+R2+R3.
 
-**Branch attivi su origin**:
-- `main` ← branch principale, contiene STEP 2A-2D
-- `Architecture_Exploration` ← sweep 8 varianti architetturali (tutte ≥0.22, floor confermato architetturale)
-- `Training_Method_Exploration` ← F2 EventProp **chiuso**, baseline confermato
-- `Optimizer_Exploration`, `Floor_Diagnostic` ← archiviati (contenuto su main)
+### Cronologia recente
+
+1. **8 run T30** (4 arch × 2 opt × 30 ep) → 5 affermazioni dichiarate ma non dimostrate (vedi AUDIT)
+2. **AUDIT_2026-06-02.md** scritto → fermato la corsa in avanti
+3. **R1 completato** → snapshot 4+1 architetture in `Arch_Tested/`
+4. **R2 setup completato** → 5 esperimenti P-A..P-E pronti, ora in esecuzione Azure
+5. **R3 pending** → studio EventProp serio (dopo R2)
+
+### R1 — Arch_Tested/ (FATTO)
+
+Snapshot self-contained delle 5 architetture funzionanti:
+- ⭐ **`BASELINE_BPTT_864p_PRE_EVENTPROP`** (source P12_S2D_F2_no_ou, lambda_sr=0.5, **vera baseline pre-EventProp**)
+- `A1_baseline_BPTT_864p` (source T30_A1_BASELINE_adamw, lambda_sr=0 — ⚠️ DEPRECATED)
+- `A8_attn_BPTT_3936p` (source T30, 3936p, val_data 0.163 best architettonico ma overfit possibile)
+- `A3_stacked_skip_BPTT_2624p` (source T30)
+- `EVPROP_ALIF_full_864p` (source SW_eventprop_alif_full_adamw_lr2e-3 5ep sched=none)
+
+Per ogni: `core/` cleanup (solo classi necessarie + build_model factory ristretta), `train.py` CLI ridotta, `snapshot_original/` READ-ONLY con 13 plot G + log, `reproduce_training.ipynb`, README.
+
+### R2 — Studio Prodigy CAPIRE (IN ESECUZIONE)
+
+**Branch**: `Prodigy_Deep_Study` HEAD `a29b354`.
+
+**Doc completa**: `document/PRODIGY_DEEP_STUDY.md` (parte 1 math + parte 2 community wisdom da paper Mishchenko 2024 + 5 GitHub Issues konstmish/prodigy + OneTrainer Wiki + kohya-ss community).
+
+**Eureka critici emersi dalla ricerca multi-fonte**:
+- **V2** (konstmish ufficiale, Issue #27): "Se `d` resta troppo piccolo, aumenta `d0` da 1e-6 a 1e-5/1e-4"
+- **W1** (madman404, Issue #8): `betas=(0.9, 0.99)` → "dramatic improvement" (beta3=beta2^0.5)
+- **W2** (community consensus): `d_coef=2.0` standard, non 1.0 default
+- **Setup canonical "Prodigy is ALL YOU NEED"**: `lr=1.0 betas=(0.9,0.99) wd=0.01 use_bias_correction=True safeguard=True d_coef=2.0 d0=1e-6→1e-5 if frozen` + `cosine_no_restart T_max=epochs`
+
+**5 esperimenti R2.2** (in esecuzione Azure, ~1.5h stima):
+- **P-A**: replica T30 baseline (default Prodigy lib) → conferma d frozen
+- **P-B**: P-A + betas=(0.9, 0.99) → isola W1
+- **P-C**: P-A + d_coef=2.0 → isola W2
+- **P-D**: P-A + d0=1e-5 → isola V2 (fix konstmish ufficiale)
+- **P-E**: SETUP CANONICAL KOHYA completo + cosine_no_restart → vero benchmark "Prodigy in azione"
+
+Setup comune: BASELINE_BPTT_864p_PRE_EVENTPROP, 10 ep × 100 step, results in `results/Prodigy_Study/`.
+
+### R3 — Studio EventProp serio (PENDING)
+
+Da iniziare dopo merge R2 in main. Stessa logica: leggere paper Wunderlich&Pehle 2021 + ref impl (Norse, snntorch), 7 lever isolati (clip, lr peak, warmup, init scaling, detach periodico, thresh_jump learnable, full λ_fatigue), trovare almeno UN setup stabile (grad_norm_max < 100), fair comparison vs BPTT.
+
+### Stato branch git
+
+```
+main HEAD efa0639   ← R1 mergiato (Arch_Tested/ + BASELINE_PRE_EVENTPROP)
+├── Prodigy_Deep_Study HEAD a29b354   ← R2 in esecuzione
+├── Architecture_Exploration          ← branch storico (intatto)
+├── Floor_Diagnostic                  ← branch storico (intatto)
+├── Optimizer_Exploration             ← branch storico (intatto)
+├── Training_Method_Exploration       ← branch storico (intatto)
+└── Visualizer_Building               ← branch storico (intatto)
+```
+
+**Decisione utente**: i 5 branch storici NON vengono cancellati (rimangono come archeologia consultabile).
+
+### Doc principali da leggere (priorità)
+
+1. ⭐ [`AUDIT_2026-06-02.md`](AUDIT_2026-06-02.md) — bilancio onesto + roadmap R1/R2/R3
+2. [`PRODIGY_DEEP_STUDY.md`](PRODIGY_DEEP_STUDY.md) — math + community wisdom Prodigy
+3. [`../Arch_Tested/README.md`](../Arch_Tested/README.md) — overview 5 architetture salvate
+4. [`SIMULATOR_FINDINGS.md`](SIMULATOR_FINDINGS.md) — drift T² + cut-in analysis simulator
+5. [`EVENTPROP_OPTIMIZER_SWEEP.md`](EVENTPROP_OPTIMIZER_SWEEP.md) — sweep 4×11 origine SW_eventprop best
+
+### Cosa fare adesso
+
+- ⏳ **Aspettare risultati R2 da Azure** (~1.5h, 5 esperimenti × ~15-17 min)
+- Quando finiti: pull `results/Prodigy_Study/`, analizzare via celle 4-5 notebook, scrivere PRODIGY_DEEP_STUDY.md parte 3 con verdetto
+- Poi: merge R2 → main, iniziare R3 EventProp_Deep_Study
+
+---
+
+## 📜 STORIA PRECEDENTE (pre-R1, 2026-06-01)
+
+> Sezione conservata per archeologia. **Le conclusioni qui sotto sono state riaperte dall'AUDIT_2026-06-02**.
+
+### F2 EventProp chiuso (pre-audit, 2026-06-01)
+
+Sweep 4×11 = 44 run aveva dato:
+- val_data baseline 0.2218 vs eventprop_alif_full 0.2226 (pareggio, Δ < 0.4%)
+- Robustezza optimizer: baseline 11/11 successi, EventProp 5/11
+- Spike rate: baseline 4.1% vs EventProp 25.7%
+
+**Conclusione del momento**: "baseline ALIF+BPTT+SurrogateSpike confermato production". 
+
+⚠️ **Riaperto da AUDIT §2.1**: "EventProp non funziona" è dichiarazione non dimostrata (mai testato con tuning serio: clip aggressivo, warmup, init scaling, detach periodico). Lo studio R3 riparte da capo.
 
 **🏆 STATO PRINCIPALE: P14 CHIUSO** — decomposizione completa del floor val~0.28:
 
