@@ -536,6 +536,9 @@ class CSVLogger:
         'train_total', 'train_data', 'train_phys', 'train_ou', 'train_bc', 'train_sr',
         'val_total',   'val_data',   'val_phys',   'val_ou',   'val_bc',   'val_sr',
         'lr', 'grad_norm', 'spike_rate', 'time_s',
+        # Prodigy: d e' l'adaptive scalar; lr_eff = lr * d e' la "vera" LR (NaN per
+        # altri optimizer). Aggiunto 2026-06-01 per visibility schedule Prodigy.
+        'prodigy_d', 'prodigy_d_max', 'prodigy_lr_eff',
     ]
 
     def __init__(self, path: str):
@@ -1122,6 +1125,10 @@ def main():
                 'grad_norm'   : train_m['grad_norm'],
                 'spike_rate'  : val_m['spike_rate'],
                 'time_s'      : ep_time,
+                # Prodigy adapter (NaN per altri optimizer)
+                'prodigy_d'      : optimizer.param_groups[0].get('d', float('nan')),
+                'prodigy_d_max'  : optimizer.param_groups[0].get('d_max', float('nan')),
+                'prodigy_lr_eff' : (current_lr * optimizer.param_groups[0].get('d', float('nan'))),
             })
 
             # Checkpoint best model
