@@ -13,6 +13,14 @@ class HiddenLayer_ALIF(nn.Module):
 
         self.fc_weight = nn.Parameter(torch.Tensor(out_features, in_features))
         nn.init.xavier_uniform_(self.fc_weight)
+        # FIX-BUG-4 (2026-06-03): compensa penalty 1/max_delay della delay mask.
+        # In forward, current = Σ_d linear(x_buffer[d], w * (delays==d)). Ogni edge
+        # contribuisce solo 1/max_delay del tempo → var(current) ridotta di
+        # 1/max_delay rispetto a un fc layer normale. Scalare i pesi di
+        # sqrt(max_delay) ripristina la varianza target di Xavier.
+        # Vedi document/BUGS_2026-06-03.md criticità #4.
+        with torch.no_grad():
+            self.fc_weight.mul_(max_delay ** 0.5)
         self.register_buffer('delays', torch.randint(0, max_delay, (out_features, in_features)))
 
         self.rec_U = nn.Parameter(torch.Tensor(out_features, rank))
@@ -61,6 +69,13 @@ class OutputLayer_LI(nn.Module):
         super().__init__()
         self.fc_weight = nn.Parameter(torch.Tensor(out_features, in_features))
         nn.init.xavier_uniform_(self.fc_weight)
+        # FIX-BUG-2 (2026-06-03): rimuovi bias per-riga indotto da xavier_uniform.
+        # Con input spike binari {0,1} a firing rate basso, ogni riga senza
+        # mean-subtraction crea un offset deterministico nel current → asimmetria
+        # tra canali di output → combinata con sigmoid determina QUALE bound IDM
+        # viene saturato. Vedi document/BUGS_2026-06-03.md bug #2.
+        with torch.no_grad():
+            self.fc_weight.sub_(self.fc_weight.mean(dim=1, keepdim=True))
         self.cell = LICell(out_features)
 
     def reset_state(self, batch_size, device):
@@ -186,6 +201,14 @@ class RSNN_HiddenLayer(nn.Module):
         # Pesi Feedforward (con ritardi come nella SNN standard)
         self.fc_weight = nn.Parameter(torch.Tensor(out_features, in_features))
         nn.init.xavier_uniform_(self.fc_weight)
+        # FIX-BUG-4 (2026-06-03): compensa penalty 1/max_delay della delay mask.
+        # In forward, current = Σ_d linear(x_buffer[d], w * (delays==d)). Ogni edge
+        # contribuisce solo 1/max_delay del tempo → var(current) ridotta di
+        # 1/max_delay rispetto a un fc layer normale. Scalare i pesi di
+        # sqrt(max_delay) ripristina la varianza target di Xavier.
+        # Vedi document/BUGS_2026-06-03.md criticità #4.
+        with torch.no_grad():
+            self.fc_weight.mul_(max_delay ** 0.5)
         self.register_buffer('delays', torch.randint(0, max_delay, (out_features, in_features)))
 
         # Pesi Ricorrenti Full (Matrice quadrata N x N)
@@ -371,14 +394,16 @@ class CF_FSNN_Net(nn.Module):
         raw:     (batch, 5)
         returns: (batch, 5) in unità fisiche
 
-        F5 — Pre-scaling per gradiente bilanciato:
-            raw_eq_i = raw_i / decode_scale_i
-            d(param_i)/d(raw_i) = (hi-lo)_i * σ'(raw_eq_i) / decode_scale_i
-                                 = max_range * σ'(raw_eq_i)   [uniforme tra i 5 param]
-        Senza scaling raw_v0 avrebbe un gradiente 18.5× maggiore di raw_T.
+        FIX-BUG-1 (2026-06-03): rimosso F5 pre-scaling (raw_eq = raw / decode_scale).
+        decode_scale = [1.0, 0.054, 0.108, 0.0594, 0.0676] amplificava raw di 9-18×
+        per T/s0/a/b → raw_eq cadeva fuori dalla zona lineare di sigmoid →
+        derivata ≈ 0 → gradient → 0 → params bloccati al random init.
+        Vedi document/BUGS_2026-06-03.md bug #1.
+
+        Il buffer `decode_scale` resta registrato per compat con eventuali
+        checkpoint salvati, ma non è più usato.
         """
-        raw_eq = raw / self.decode_scale              # (batch, 5) — scala equalizzata
-        return self.param_lo + (self.param_hi - self.param_lo) * torch.sigmoid(raw_eq)
+        return self.param_lo + (self.param_hi - self.param_lo) * torch.sigmoid(raw)
 
     # ----------------------------------------------------------
     # Forward
@@ -658,6 +683,15 @@ class CF_FSNN_Net_Stacked(_CF_FSNN_VariantBase):
             in_dim = hidden_sizes[i]
         self.layers_hidden = nn.ModuleList(layers)
         self.layer_out = OutputLayer_LI(hidden_sizes[-1], self.CF_OUTPUT_SIZE)
+        # FIX-BUG-3 (2026-06-03): abbassa base_threshold per layer ALIF non-input.
+        # In una cascata, layer i>0 riceve spike binari sparsi del layer i-1
+        # → current piccolo → potential non raggiunge base_threshold=1.5 →
+        # dead cascade. Threshold 1.0 garantisce propagazione del segnale.
+        # Vedi document/BUGS_2026-06-03.md criticità #3.
+        for i, layer in enumerate(self.layers_hidden):
+            if i > 0:
+                with torch.no_grad():
+                    layer.cell.base_threshold.fill_(1.0)
 
     def reset_state(self, batch_size, device):
         for layer in self.layers_hidden:
@@ -733,6 +767,14 @@ class CF_FSNN_Net_StackedSkip(_CF_FSNN_VariantBase):
         # Init scale piccolo: skip è additivo, non deve dominare
         with torch.no_grad():
             self.skip_weight.mul_(0.2)
+        # FIX-BUG-3 (2026-06-03): abbassa base_threshold per layer 1 (non-input).
+        # layer_hidden_1 riceve spike binari sparsi da layer_hidden_0 → current
+        # piccolo → potential non raggiunge base_threshold=1.5 → dead cascade.
+        # Threshold 1.0 garantisce propagazione. Skip Po2 NON sostituisce il fix:
+        # bypassa solo l'output, layer_hidden_1 va comunque sbloccato.
+        # Vedi document/BUGS_2026-06-03.md criticità #3.
+        with torch.no_grad():
+            self.layer_hidden_1.cell.base_threshold.fill_(1.0)
 
     def reset_state(self, batch_size, device):
         self.layer_hidden_0.reset_state(batch_size, device)
@@ -789,6 +831,14 @@ class _HiddenLayer_ALIF_MultiRate(nn.Module):
 
         self.fc_weight = nn.Parameter(torch.Tensor(out_features, in_features))
         nn.init.xavier_uniform_(self.fc_weight)
+        # FIX-BUG-4 (2026-06-03): compensa penalty 1/max_delay della delay mask.
+        # In forward, current = Σ_d linear(x_buffer[d], w * (delays==d)). Ogni edge
+        # contribuisce solo 1/max_delay del tempo → var(current) ridotta di
+        # 1/max_delay rispetto a un fc layer normale. Scalare i pesi di
+        # sqrt(max_delay) ripristina la varianza target di Xavier.
+        # Vedi document/BUGS_2026-06-03.md criticità #4.
+        with torch.no_grad():
+            self.fc_weight.mul_(max_delay ** 0.5)
         self.register_buffer('delays', torch.randint(0, max_delay, (out_features, in_features)))
 
         self.rec_U = nn.Parameter(torch.Tensor(out_features, rank))

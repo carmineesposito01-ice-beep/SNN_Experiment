@@ -313,6 +313,11 @@ class ALIFLayer_EventProp_Full(nn.Module):
         # Parameters (match baseline exactly)
         self.fc_weight = nn.Parameter(torch.Tensor(out_features, in_features))
         nn.init.xavier_uniform_(self.fc_weight)
+        # FIX-BUG-4 (2026-06-03): compensa penalty 1/max_delay della delay mask.
+        # Stesso bug di HiddenLayer_ALIF: solo gli edge con (delays==d) contribuiscono
+        # al tick d → var(current) ridotta di 1/max_delay. Vedi BUGS_2026-06-03.md.
+        with torch.no_grad():
+            self.fc_weight.mul_(max_delay ** 0.5)
         # delays as buffer (non-learnable random integers in [0, max_delay))
         self.register_buffer('delays',
                               torch.randint(0, max_delay, (out_features, in_features)))
@@ -571,6 +576,12 @@ class LILayer_BitShift_Po2(nn.Module):
         self.alpha = alpha
         self.weight = nn.Parameter(torch.Tensor(out_features, in_features))
         nn.init.xavier_uniform_(self.weight)
+        # FIX-BUG-2 (2026-06-03): rimuovi bias per-riga indotto da xavier_uniform.
+        # Stesso bug di OutputLayer_LI: con input spike binari {0,1} a firing rate
+        # basso, row_mean ≠ 0 → bias deterministico per canale → asimmetria
+        # combinata con sigmoid in _decode_params. Vedi document/BUGS_2026-06-03.md.
+        with torch.no_grad():
+            self.weight.sub_(self.weight.mean(dim=1, keepdim=True))
 
     def forward(self, input_spikes):
         """input_spikes: (B, T, in_dim) -> out: (B, T, out_dim)"""
