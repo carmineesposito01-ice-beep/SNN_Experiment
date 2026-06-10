@@ -28,6 +28,8 @@ import pickle
 import sys
 import time
 
+import numpy as np  # R25: per metriche val tracking_corr / pred_mean / intra_std
+
 # Percorso assoluto della directory del file — usato per save_dir
 # Evita il problema del CWD diverso su Azure (SLURM, container, ecc.)
 _HERE = os.path.dirname(os.path.abspath(__file__))
@@ -152,7 +154,9 @@ class CFDataset(Dataset):
 
 def pinn_loss(model, x_seq, y_seq, mask_seq,
               lam_data, lam_phys, lam_ou, lam_bc, lam_sr=0.0,
-              spike_target=SPIKE_RATE_TARGET):
+              lam_T_aux=0.0,
+              spike_target=SPIKE_RATE_TARGET,
+              retain_params_grad=False):
     """
     Loss PINN a cinque componenti con ACC-IDM (IIDM base).
 
@@ -167,13 +171,25 @@ def pinn_loss(model, x_seq, y_seq, mask_seq,
     Penalizza degenerazione verso dead network (firma di P6_T2_full).
     Quando lam_sr=0.0 il termine è disattivo (backward-compatibile pre-B5).
 
-    Ritorna: (loss_scalare, dict_componenti, spike_rate_media)
+    R25 — lam_T_aux > 0 abilita supervisione diretta su T usando y_seq[:, :, 1].
+    L_T_aux = masked MSE tra params_seq[:, :, 1] e y_seq[:, :, 1]. Default 0
+    (backward-compatibile pre-R25).
+
+    R25 — retain_params_grad=True chiama .retain_grad() su params_seq prima del
+    return, permettendo a train_epoch di leggere params_seq.grad dopo backward
+    (per gradient diagnostics per-canale). Default False (no overhead in val).
+
+    Ritorna: (loss_scalare, dict_componenti, spike_rate_media, params_seq)
     """
     batch, T_len, _ = x_seq.shape
 
     # ── Forward SNN ────────────────────────────────────────────────
     params_seq, spike_rates = model.forward_sequence_with_stats(x_seq)
     # params_seq: (batch, T, 5)  spike_rates: (batch, T) — hidden layer
+
+    # R25 — retain grad su params_seq per estrarre d(loss)/d(decoded_i) post backward
+    if retain_params_grad and params_seq.requires_grad:
+        params_seq.retain_grad()
 
     # ── Denormalizza input ─────────────────────────────────────────
     s_obs   = x_seq[:, :, 0] * NORM_S_MAX
@@ -237,11 +253,23 @@ def pinn_loss(model, x_seq, y_seq, mask_seq,
     spike_rate_tensor = spike_rates.mean()
     L_sr = (spike_rate_tensor - spike_target) ** 2
 
+    # ── L_T_aux (R25): supervisione diretta su T ─────────────────
+    # Forza pred_T(t) ≈ T_true(t) usando il GT per-timestep in y_seq[:, :, 1].
+    # Solo se lam_T_aux > 0. Default 0 = backward-compatibile.
+    if lam_T_aux > 0.0:
+        T_pred = params_seq[:, :, 1]                 # (batch, T)
+        T_true = y_seq[:, :, 1]                      # (batch, T) ground truth T
+        sq_err_T = mask_seq * (T_pred - T_true) ** 2
+        L_T_aux = sq_err_T.sum() / N_valid
+    else:
+        L_T_aux = torch.zeros((), device=x_seq.device)
+
     loss = (lam_data * L_data
             + lam_phys * L_phys
             + lam_ou   * L_ou
             + lam_bc   * L_bc
-            + lam_sr   * L_sr)
+            + lam_sr   * L_sr
+            + lam_T_aux * L_T_aux)
 
     avg_spike_rate = spike_rate_tensor.item()
 
@@ -252,7 +280,8 @@ def pinn_loss(model, x_seq, y_seq, mask_seq,
         'ou'   : L_ou.item(),
         'bc'   : L_bc.item(),
         'sr'   : L_sr.item(),
-    }, avg_spike_rate
+        'T_aux': L_T_aux.item(),
+    }, avg_spike_rate, params_seq
 
 
 # ===========================================================
@@ -351,7 +380,9 @@ def train_epoch(model, loader, optimizer, device, epoch, lam,
         mask = mask.to(device)
 
         optimizer.zero_grad()
-        loss, comps, sr = pinn_loss(model, x, y, mask, *lam)
+        # R25: pinn_loss ritorna anche params_seq con retain_grad → leggibile post backward
+        loss, comps, sr, params_seq = pinn_loss(
+            model, x, y, mask, *lam, retain_params_grad=True)
 
         # ── Guardia NaN loss ──────────────────────────────────────
         if not loss.isfinite():
@@ -384,6 +415,29 @@ def train_epoch(model, loader, optimizer, device, epoch, lam,
             for name, p in model.named_parameters()
             if p.grad is not None
         }
+
+        # R25 — Gradient diagnostics per-canale (15 valori):
+        #   Livello 1: gn_out_fc_<param>  = norma del gradient sulla i-esima riga di LI.fc_weight
+        #   Livello 2: gn_decoded_<param> = mean|d(loss)/d(params_seq[:,:,i])|
+        #   Livello 3: grad_dir_<param>   = sign(d(loss)/d(params_seq[:,:,i])).mean()
+        # Catturato via params_seq.retain_grad() + .grad. Costo trascurabile.
+        grad_extras = {}
+        _PARAM_NAMES = ('v0', 'T', 's0', 'a', 'b')
+        # Livello 1: split di gn_out_fc per canale
+        li = model.layer_out
+        li_w = getattr(li, 'fc_weight', None)
+        if li_w is None:
+            li_w = getattr(li, 'weight', None)
+        if li_w is not None and li_w.grad is not None:
+            for i, pn in enumerate(_PARAM_NAMES):
+                grad_extras[f'gn_out_fc_{pn}'] = li_w.grad[i].detach().norm().item()
+        # Livello 2+3: dal gradient su params_seq (post-decode)
+        if params_seq.grad is not None:
+            pg = params_seq.grad.detach()  # (batch, T, 5)
+            for i, pn in enumerate(_PARAM_NAMES):
+                g_i = pg[:, :, i]
+                grad_extras[f'gn_decoded_{pn}'] = g_i.abs().mean().item()
+                grad_extras[f'grad_dir_{pn}']  = g_i.sign().mean().item()
 
         # T: gn_total_preclip ricostruito dalle norme per-layer (somma quadratica).
         # Necessario per il batch_log perché clip_grad_norm_ restituisce il valore
@@ -455,7 +509,8 @@ def train_epoch(model, loader, optimizer, device, epoch, lam,
             batch_logger.log(_make_batch_row(
                 epoch, batch_idx + 1, comps, sr, pre_norms,
                 gn_total_preclip, gn_val,
-                model, optimizer, is_nan_loss=False, is_inf_grad=False))
+                model, optimizer, is_nan_loss=False, is_inf_grad=False,
+                grad_extras=grad_extras))
 
         if (batch_idx + 1) % log_every == 0:
             elapsed = time.time() - t0
@@ -484,11 +539,19 @@ def val_epoch(model, loader, device, lam):
     spike_acc = 0.0
     n_batches = 0
 
+    # R25 — accumulatori per metriche per-canale (5 IDM params)
+    _PARAM_NAMES = ('v0', 'T', 's0', 'a', 'b')
+    # Per T tracking corr serve aggregare T_pred e T_true su tutti i batch (poi corr unica)
+    T_pred_all, T_true_all = [], []
+    # Per altri canali: per-channel mean predicted (per saturation) + intra-seq std
+    chan_pred_mean = {pn: [] for pn in _PARAM_NAMES}
+    chan_intra_std = {pn: [] for pn in _PARAM_NAMES}
+
     for x, y, mask in loader:
         x    = x.to(device)
         y    = y.to(device)
         mask = mask.to(device)
-        _, comps, sr = pinn_loss(model, x, y, mask, *lam)
+        _, comps, sr, params_seq = pinn_loss(model, x, y, mask, *lam)
         # F2: salta batch degeneri — NaN si propaga in tutti i totals silenziosamente
         if not math.isfinite(comps['total']):
             continue
@@ -497,9 +560,34 @@ def val_epoch(model, loader, device, lam):
         spike_acc += sr
         n_batches  += 1
 
+        # R25 — accumula metriche per-canale (no grad needed, già no_grad context)
+        ps = params_seq.detach()                        # (batch, T, 5)
+        T_pred_all.append(ps[:, :, 1].reshape(-1))      # (batch*T,)
+        T_true_all.append(y[:, :, 1].reshape(-1))       # (batch*T,)
+        for i, pn in enumerate(_PARAM_NAMES):
+            chan_pred_mean[pn].append(ps[:, :, i].mean().item())
+            chan_intra_std[pn].append(ps[:, :, i].std(dim=1).mean().item())
+
     nb = max(n_batches, 1)
     avgs = {k: v / nb for k, v in totals.items()}
     avgs['spike_rate'] = spike_acc / nb
+
+    # R25 — Pearson corr(T_pred, T_true) sui campioni val masked-out (no nan se var=0)
+    if T_pred_all:
+        Tp = torch.cat(T_pred_all)
+        Tt = torch.cat(T_true_all)
+        if Tp.std() > 1e-8 and Tt.std() > 1e-8:
+            avgs['val_T_tracking_corr'] = float(((Tp - Tp.mean()) * (Tt - Tt.mean())).mean()
+                                                / (Tp.std() * Tt.std() + 1e-8))
+        else:
+            avgs['val_T_tracking_corr'] = 0.0
+    else:
+        avgs['val_T_tracking_corr'] = float('nan')
+    # Per-channel pred mean + intra-seq std (5 ognuno = 10 metriche)
+    for pn in _PARAM_NAMES:
+        avgs[f'val_{pn}_pred_mean'] = float(np.mean(chan_pred_mean[pn])) if chan_pred_mean[pn] else float('nan')
+        avgs[f'val_{pn}_intra_std'] = float(np.mean(chan_intra_std[pn])) if chan_intra_std[pn] else float('nan')
+
     return avgs
 
 
@@ -539,6 +627,13 @@ class CSVLogger:
         # Prodigy: d e' l'adaptive scalar; lr_eff = lr * d e' la "vera" LR (NaN per
         # altri optimizer). Aggiunto 2026-06-01 per visibility schedule Prodigy.
         'prodigy_d', 'prodigy_d_max', 'prodigy_lr_eff',
+        # R25 — metriche per-canale val (11 colonne):
+        #   1 corr(T_pred, T_true) — solo T (unico canale con GT per-timestep)
+        #   5 pred_mean per canale → permette tracking saturazione bound
+        #   5 intra_seq std per canale → distingue "varia intra-driver" vs "media globale"
+        'val_T_tracking_corr',
+        'val_v0_pred_mean', 'val_T_pred_mean', 'val_s0_pred_mean', 'val_a_pred_mean', 'val_b_pred_mean',
+        'val_v0_intra_std', 'val_T_intra_std', 'val_s0_intra_std', 'val_a_intra_std', 'val_b_intra_std',
     ]
 
     def __init__(self, path: str):
@@ -572,8 +667,9 @@ class BatchCSVLogger:
 
     COLS = [
         'epoch', 'batch_idx',
-        # Loss components (incl. B5 spike-rate regularizer)
+        # Loss components (incl. B5 spike-rate regularizer + R25 T-aux)
         'loss_total', 'loss_data', 'loss_phys', 'loss_ou', 'loss_bc', 'loss_sr',
+        'loss_T_aux',
         # Attività spiking
         'spike_rate',
         # Gradient norms
@@ -590,6 +686,13 @@ class BatchCSVLogger:
         'prodigy_d', 'prodigy_d_max', 'prodigy_lr_eff',
         # Diagnostic flags
         'is_nan_loss', 'is_inf_grad',
+        # R25 — Gradient diagnostics per-canale (15 colonne):
+        #   gn_out_fc_<p>  = norma del gradient sulla riga i-esima di LI.fc_weight (LIVELLO 1, RAW)
+        #   gn_decoded_<p> = mean|d(loss)/d(params_seq[:,:,i])|  (LIVELLO 2, POST-SIGMOID)
+        #   grad_dir_<p>   = sign(d(loss)/d(params_seq[:,:,i])).mean() (LIVELLO 3, DIREZIONE)
+        'gn_out_fc_v0', 'gn_out_fc_T', 'gn_out_fc_s0', 'gn_out_fc_a', 'gn_out_fc_b',
+        'gn_decoded_v0', 'gn_decoded_T', 'gn_decoded_s0', 'gn_decoded_a', 'gn_decoded_b',
+        'grad_dir_v0', 'grad_dir_T', 'grad_dir_s0', 'grad_dir_a', 'grad_dir_b',
     ]
 
     # Mapping da parametro PyTorch → colonna CSV (parametri non listati → ignorati)
@@ -643,7 +746,8 @@ class BatchCSVLogger:
 
 def _make_batch_row(epoch, batch_idx, comps, sr, pre_norms,
                     gn_total_preclip, gn_total_postclip,
-                    model, optimizer, is_nan_loss=False, is_inf_grad=False):
+                    model, optimizer, is_nan_loss=False, is_inf_grad=False,
+                    grad_extras=None):
     """Costruisce il dict-riga per BatchCSVLogger. Helper riusato dai 3 path di
     train_epoch (batch normale, NaN loss, inf grad)."""
     row = {
@@ -670,7 +774,13 @@ def _make_batch_row(epoch, batch_idx, comps, sr, pre_norms,
                               * optimizer.param_groups[0].get('d', float('nan'))),
         'is_nan_loss':       int(is_nan_loss),
         'is_inf_grad':       int(is_inf_grad),
+        # R25: include loss_T_aux (NaN se non logged)
+        'loss_T_aux':        comps.get('T_aux', float('nan')),
     }
+    # R25: merge grad_extras (15 colonne per-canale gradient diagnostics).
+    # Se grad_extras None (path NaN/inf grad o val_epoch), tutte → NaN via .get nel logger.
+    if grad_extras is not None:
+        row.update(grad_extras)
     # Mappa pre_norms ai nomi colonna. STEP 2E: warn-once per param non mappato.
     if pre_norms is not None:
         for pname, cname in BatchCSVLogger.LAYER_MAP.items():
@@ -716,6 +826,11 @@ def main():
     parser.add_argument('--lambda_bc',   type=float, default=LAMBDA_BC)
     parser.add_argument('--lambda_sr',   type=float, default=LAMBDA_SR,
                         help='B5: peso spike-rate regularizer (default da config.py)')
+    parser.add_argument('--lambda_T_aux', type=float, default=0.0,
+                        help='R25: peso supervisione diretta su T. Aggiunge L_T_aux = '
+                             'masked MSE(params_seq[:,:,1], y_seq[:,:,1]) alla loss totale. '
+                             'Default 0.0 = backward-compatibile (no aux loss). >0 forza la '
+                             'rete a tracciare T dinamico per-timestep.')
     # Ottimizzatore
     parser.add_argument('--optimizer',   type=str,   default='adam',
                         choices=['adam', 'adamw', 'lion', 'prodigy'],
@@ -810,6 +925,14 @@ def main():
                         help='Override CF_HIDDEN_SIZE per sweep parametrico (None=default config)')
     parser.add_argument('--cf_rank',        type=int, default=None,
                         help='Override CF_RANK per sweep parametrico (None=default config)')
+    parser.add_argument('--cf_max_delay',   type=int, default=None,
+                        help='R25 ablation A4: override max_delay sinaptico (None=default config). '
+                             'Solo baseline variant — varianti dedicate (max_delay_12, ecc) hanno '
+                             'il loro valore hardcoded.')
+    parser.add_argument('--cf_bit_shift',   type=int, default=None,
+                        help='R25 ablation A5/A6: override bit_shift LIF leak (None=default 3 = '
+                             'leak τ ~80ms). Valori comuni: 2 (leak veloce), 3 (default), 5 (leak '
+                             'lento ~320ms). Solo baseline variant.')
     # STEP 2C — Optimizer_Exploration: step budget control + val decoupling
     parser.add_argument('--max_steps_per_epoch', type=int, default=-1,
                         help='Cap step training per epoca, indipendente da len(train_loader). '
@@ -969,10 +1092,13 @@ def main():
           f"  |  num_workers={_nw}")
 
     # ── Modello (UNIFIED: hidden_size/rank/training_method via build_model) ──
+    # R25: aggiunti max_delay e bit_shift override per ablation asse A4/A5/A6
     model    = build_model(
         variant=args.training_method,
         hidden_size=args.cf_hidden_size,
         rank=args.cf_rank,
+        max_delay=args.cf_max_delay,
+        bit_shift=args.cf_bit_shift,
     ).to(device)
     n_params = sum(p.numel() for p in model.parameters())
     # Log unificato: max_delay non sempre disponibile (LIF simple non lo espone)
@@ -1098,16 +1224,17 @@ def main():
     batch_log_path = os.path.join(save_dir, 'training_batch_log.csv')
     batch_logger   = BatchCSVLogger(batch_log_path, flush_every=50)
 
-    # Pesi PINN come tupla per pinn_loss() — 5 componenti (B5 incluso)
+    # Pesi PINN come tupla per pinn_loss() — 6 componenti (B5 + R25 T_aux)
+    # Ordine MUST match pinn_loss signature: lam_data, lam_phys, lam_ou, lam_bc, lam_sr, lam_T_aux
     lam = (args.lambda_data, args.lambda_phys, args.lambda_ou, args.lambda_bc,
-           args.lambda_sr)
+           args.lambda_sr, args.lambda_T_aux)
 
     # ── Training loop ─────────────────────────────────────────────
     print(f"\n[Training] {args.epochs} epoche  |  scheduler={args.scheduler}"
           f"  batch={args.batch_size}  lr={args.lr}")
     print(f"  lam_data={args.lambda_data}  lam_phys={args.lambda_phys}"
           f"  lam_ou={args.lambda_ou}  lam_bc={args.lambda_bc}"
-          f"  lam_sr={args.lambda_sr}")
+          f"  lam_sr={args.lambda_sr}  lam_T_aux={args.lambda_T_aux}")
     if args.early_stop_patience > 0:
         print(f"  Early stop: patience={args.early_stop_patience}, "
               f"delta={args.early_stop_delta}\n")
@@ -1165,8 +1292,8 @@ def main():
                   f"  lr={current_lr:.2e}"
                   f"  [{ep_time:.1f}s]\n")
 
-            # CSV logging
-            logger.log({
+            # CSV logging (R25 — 11 colonne tracking aggiunte)
+            row = {
                 'epoch'       : epoch,
                 'train_total' : train_m['total'],
                 'train_data'  : train_m['data'],
@@ -1188,7 +1315,15 @@ def main():
                 'prodigy_d'      : optimizer.param_groups[0].get('d', float('nan')),
                 'prodigy_d_max'  : optimizer.param_groups[0].get('d_max', float('nan')),
                 'prodigy_lr_eff' : (current_lr * optimizer.param_groups[0].get('d', float('nan'))),
-            })
+            }
+            # R25 — copia tutte le val_* metric da val_m al row (tracking_corr + per-canale)
+            for k in ('val_T_tracking_corr',
+                      'val_v0_pred_mean', 'val_T_pred_mean', 'val_s0_pred_mean',
+                      'val_a_pred_mean', 'val_b_pred_mean',
+                      'val_v0_intra_std', 'val_T_intra_std', 'val_s0_intra_std',
+                      'val_a_intra_std', 'val_b_intra_std'):
+                row[k] = val_m.get(k, float('nan'))
+            logger.log(row)
 
             # Checkpoint best model
             if val_m['total'] < best_val:

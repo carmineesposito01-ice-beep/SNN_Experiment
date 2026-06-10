@@ -529,6 +529,102 @@ def plot_g13_signals_vs_params(traj_data: dict, out_path: str, dt: float = 0.1):
 
 
 # ===========================================================
+# R25 — Diagnostica gradiente per-canale (G16/G17/G18)
+# ===========================================================
+
+_R25_PARAMS = ('v0', 'T', 's0', 'a', 'b')
+_R25_COLORS = ('tab:blue', 'tab:purple', 'tab:orange', 'tab:green', 'tab:red')
+
+
+def _r25_grad_plot(batch_log: dict, key_prefix: str, title: str, ylabel: str,
+                   out_path: str, log_scale: bool = True, ylim=None):
+    """Helper comune per G16/G17/G18 — plotta 5 curve gradient per canale nel tempo.
+
+    batch_log:  dict da load_batch_log() — chiavi attese: <key_prefix>_<param>
+    key_prefix: 'gn_out_fc' | 'gn_decoded' | 'grad_dir'
+    log_scale:  True per G16/G17 (gradient magnitude), False per G18 (sign mean [-1,1])
+    """
+    if not _MPL:
+        return
+    fig, ax = plt.subplots(figsize=(12, 4))
+    x = _batch_xaxis(batch_log)
+    plotted = 0
+    for pn, col in zip(_R25_PARAMS, _R25_COLORS):
+        ckey = f'{key_prefix}_{pn}'
+        if ckey not in batch_log:
+            continue
+        arr = batch_log[ckey]
+        if log_scale:
+            arr = np.where((arr > 0) & np.isfinite(arr), arr, np.nan)
+        ax.plot(x, arr, label=pn, color=col, linewidth=0.8, alpha=0.85)
+        plotted += 1
+    if plotted == 0:
+        # Niente dati R25 (CSV pregress) — disegna fig vuota con messaggio
+        ax.text(0.5, 0.5, f'No data for {key_prefix}_* (CSV pre-R25)',
+                ha='center', va='center', transform=ax.transAxes, fontsize=11, color='gray')
+        ax.set_xticks([])
+        ax.set_yticks([])
+        ax.set_title(title)
+        _save(fig, out_path)
+        return
+    if log_scale:
+        ax.set_yscale('log')
+    if ylim is not None:
+        ax.set_ylim(ylim)
+    if not log_scale:
+        ax.axhline(0, color='gray', linewidth=0.4, linestyle='--')
+    ax.set_xlabel('Step training (epoca·N_batch + batch_idx)')
+    ax.set_ylabel(ylabel)
+    ax.set_title(title)
+    ax.legend(fontsize=9, ncol=5, loc='upper right')
+    ax.grid(True, alpha=0.3)
+    _save(fig, out_path)
+
+
+def plot_g16_grad_raw_per_channel(batch_log: dict, out_path: str):
+    """G16 — Gradient RAW sui pesi LI per i 5 canali (v0, T, s0, a, b), log-scale.
+
+    Mostra ||d(loss)/d(LI.fc_weight[i, :])|| per ogni i ∈ {v0..b} nel tempo.
+    Pre-fix bug #1 vedevamo unbalance 5000×; post-fix ancora 100-300× su v0.
+    Curve quasi piatte = canale stuck. Curve molto diverse = unbalance."""
+    _r25_grad_plot(batch_log,
+                   key_prefix='gn_out_fc',
+                   title='G16 — Gradient RAW per canale LI (||d(loss)/d(W[i,:])||)',
+                   ylabel='Gradient norm (log)',
+                   out_path=out_path, log_scale=True)
+
+
+def plot_g17_grad_decoded_per_channel(batch_log: dict, out_path: str):
+    """G17 — Gradient DECODED (post-sigmoid) sui parametri IDM nel tempo, log-scale.
+
+    Mostra mean|d(loss)/d(decoded_param_i)| per ogni i. Distingue da G16:
+      G16 piccolo ma G17 grande = sigmoid satura (gradient muore al bound)
+      G16 grande e G17 grande = canale impara attivamente
+      Entrambi piccoli = canale fermo (sub-ottimo locale o gradient vanishing)."""
+    _r25_grad_plot(batch_log,
+                   key_prefix='gn_decoded',
+                   title='G17 — Gradient DECODED per canale (post-sigmoid, mean|d(loss)/d(p_i)|)',
+                   ylabel='Gradient magnitude (log)',
+                   out_path=out_path, log_scale=True)
+
+
+def plot_g18_grad_direction_per_channel(batch_log: dict, out_path: str):
+    """G18 — Direzione gradient (sign mean) per canale, scala [-1, +1].
+
+    +1 = tutti i sample del batch vogliono aumentare il canale i (gradient discendente).
+    -1 = tutti vogliono diminuirlo.
+     0 = 50/50 (i sample voto in modi opposti → cancellazione cross-sample).
+
+    Firma del problema #1 (T flat): se grad_dir_T ≈ 0 ma G7 mostra distribuzione larga,
+    la rete vorrebbe variare T per-sample ma il gradient si cancella sul batch."""
+    _r25_grad_plot(batch_log,
+                   key_prefix='grad_dir',
+                   title='G18 — Direzione gradient per canale (sign mean ∈ [-1, +1])',
+                   ylabel='sign(grad).mean()',
+                   out_path=out_path, log_scale=False, ylim=(-1.05, 1.05))
+
+
+# ===========================================================
 # 3. Funzione principale
 # ===========================================================
 
@@ -588,8 +684,12 @@ def plot_all(log: dict, out_dir: str,
         plot_g10_loss_components_per_batch(batch_log, os.path.join(od, 'G10_loss_per_batch.png'))
         plot_g11_spike_rate_per_batch(batch_log,    os.path.join(od, 'G11_spike_rate_per_batch.png'))
         plot_g12_weight_max_per_batch(batch_log,    os.path.join(od, 'G12_weight_max_per_batch.png'))
+        # R25 — gradient diagnostics per-canale (G16/G17/G18). Skip silenzioso se CSV pre-R25.
+        plot_g16_grad_raw_per_channel(batch_log,      os.path.join(od, 'G16_grad_raw_per_ch.png'))
+        plot_g17_grad_decoded_per_channel(batch_log,  os.path.join(od, 'G17_grad_decoded_per_ch.png'))
+        plot_g18_grad_direction_per_channel(batch_log, os.path.join(od, 'G18_grad_direction_per_ch.png'))
     else:
-        print("  G8-G12 saltati (batch_log non fornito)")
+        print("  G8-G12 + G16-G18 saltati (batch_log non fornito)")
 
     # G13 (signals vs params) — 1 PNG per traiettoria val
     if trajectories:

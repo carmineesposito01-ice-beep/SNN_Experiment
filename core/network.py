@@ -5,7 +5,9 @@ from core.hardware import po2_quantize
 from core.neurons import ALIFCell, LICell
 
 class HiddenLayer_ALIF(nn.Module):
-    def __init__(self, in_features, out_features, rank=16, max_delay=3):
+    def __init__(self, in_features, out_features, rank=16, max_delay=3, bit_shift=3):
+        """R25: bit_shift esposto per ablation asse A5 (LIF leak τ vs default 3).
+        Propagato ad ALIFCell come scalare (uniform leak per tutti i neuroni)."""
         super().__init__()
         self.in_features = in_features
         self.out_features = out_features
@@ -29,7 +31,7 @@ class HiddenLayer_ALIF(nn.Module):
         nn.init.orthogonal_(self.rec_V, gain=0.2)
 
         self.x_buffer = None
-        self.cell = ALIFCell(out_features)
+        self.cell = ALIFCell(out_features, bit_shift=bit_shift)
 
     def reset_state(self, batch_size, device):
         # F8: deque(maxlen) come ring-buffer — appendleft() è O(1) vs list.insert() O(n).
@@ -326,12 +328,13 @@ class CF_FSNN_Net(nn.Module):
         [ 0.5,  3.0],   # 4: b  [m/s²]
     ]
 
-    def __init__(self, hidden_size=None, rank=None, max_delay=None):
+    def __init__(self, hidden_size=None, rank=None, max_delay=None, bit_shift=None):
         """
         Args:
             hidden_size: override CF_HIDDEN_SIZE (None → usa config). Per STEP 2B sweep.
             rank: override CF_RANK (None → usa config). Per STEP 2B sweep.
             max_delay: override CF_MAX_DELAY (None → usa config). Per STEP 2E A5 variant.
+            bit_shift: override leak (None → default ALIFCell=3). R25 ablation asse A5/A6.
         """
         super().__init__()
         from config import (
@@ -342,12 +345,15 @@ class CF_FSNN_Net(nn.Module):
 
         # STEP 2B: capacity override via kwargs (None → fallback su config).
         # STEP 2E A5: max_delay override per variant max_delay_12.
+        # R25: bit_shift override per ablation asse A5/A6 (default 3 in ALIFCell).
         hidden_size = hidden_size if hidden_size is not None else CF_HIDDEN_SIZE
         rank        = rank        if rank        is not None else CF_RANK
         max_delay   = max_delay   if max_delay   is not None else CF_MAX_DELAY
+        bit_shift   = bit_shift   if bit_shift   is not None else 3
         self.hidden_size = hidden_size   # esposto per logging/diagnostica
         self.rank        = rank
         self.max_delay   = max_delay
+        self.bit_shift   = bit_shift
 
         self.n_ticks  = TICKS_PER_STEP
         self.T1       = IDM2D_T1
@@ -358,7 +364,7 @@ class CF_FSNN_Net(nn.Module):
 
         self.layer_hidden = HiddenLayer_ALIF(
             CF_INPUT_SIZE, hidden_size,
-            rank=rank, max_delay=max_delay,
+            rank=rank, max_delay=max_delay, bit_shift=bit_shift,
         )
         self.layer_out = OutputLayer_LI(hidden_size, CF_OUTPUT_SIZE)
 
@@ -1353,7 +1359,7 @@ class CF_FSNN_Net_EventProp_Full(CF_FSNN_Net):
 #   - Training_Method_Exploration: 4 training method variants (baseline + 3 nuove)
 # baseline e' presente in entrambi -> singola entry
 def build_model(variant: str = 'baseline', hidden_size=None, rank=None,
-                max_delay=None, **kwargs):
+                max_delay=None, bit_shift=None, **kwargs):
     """Factory unificata: 8 architecture + 3 EventProp variants + baseline.
 
     Args:
@@ -1376,7 +1382,9 @@ def build_model(variant: str = 'baseline', hidden_size=None, rank=None,
     v = variant.lower()
     # --- baseline (shared) ---
     if v == 'baseline':
-        return CF_FSNN_Net(hidden_size=hidden_size, rank=rank)
+        # R25: passa max_delay e bit_shift al baseline per ablation asse A4/A5/A6
+        return CF_FSNN_Net(hidden_size=hidden_size, rank=rank,
+                            max_delay=max_delay, bit_shift=bit_shift)
     # --- Architecture variants ---
     if v == 'stacked_2':
         h = hidden_size or 32
