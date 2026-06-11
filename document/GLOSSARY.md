@@ -409,3 +409,96 @@ Aggiunto in train.py. `CosineAnnealingLR` puro con `T_max=epochs`. Da NON confon
 | `PRODIGY_DEEP_STUDY.md` | Parte 1 math + Parte 2 community wisdom (ricerca multi-fonte) |
 | `SIMULATOR_FINDINGS.md` | Drift T² + cut-in analysis simulator |
 | `Arch_Tested/README.md` | Overview 5 architetture snapshot |
+| ⭐ `BUGS_2026-06-03.md` | 4 bug strutturali in `core/network.py` + fix |
+
+---
+
+## 🔬 Studi R24F, R25, R26 (post-fix BUGS_2026-06-03)
+
+### Tag prefix per identificare i run
+
+| Prefix | Studio | Notebook | # run | Output dir |
+|---|---|---|---:|---|
+| `R24F_*` | R2.4 Fixed — Prodigy MultiParam PostFix | `Prodigy_MultiParam_Study_PostFix.ipynb` | 93 | `results/Prodigy_Study/MultiParam_PostFix/` |
+| `R25_*` | R25 Ablation causale 5 assi | `Prodigy_Ablation_Study_R25.ipynb` | 18 | `results/Prodigy_Study/Ablation_R25/` |
+| `R26_F*` | R26 Fusion — combina top win R25 | `Prodigy_Fusion_Study_R26.ipynb` | 6 | `results/Prodigy_Study/Fusion_R26/` |
+
+### R25 — 5 assi di ablation
+
+| Asse | Cosa varia | Best | ΔT_corr | Δval |
+|---|---|---|---:|---:|
+| **A** memoria temporale | seq_len, max_delay, bit_shift | **A4** (max_delay 18) | +0.090 | -0.015 |
+| **B** loss balancing | lambda_T_aux | **B1** (T_aux=0.1) ⭐ | **+0.147** | -0.006 |
+| **C** spike rate | lambda_sr | **C1** (sr=0) | +0.088 | -0.014 |
+| **D** capacity | hidden_size, rank | D2 (h=64) marginale | +0.068 | -0.004 |
+| **E** training duration | epochs | E1 (5ep) ~baseline | -0.010 | -0.006 |
+
+Baseline R25_A1: val_total=0.195, T_corr=0.353 (replica V08 mixed da R24F).
+
+### R26 — 6 esperimenti fusion
+
+| Tag | Composizione | Scopo |
+|---|---|---|
+| `R26_F0_baseline_replica` | tutti default (=R25_A1) | sanity replica |
+| `R26_F1_TRIPLE_win` | A4+B1+C1 | TOP candidato |
+| `R26_F2_A4_B1` | A4+B1 (no sr_off) | isola sr |
+| `R26_F3_B1_C1` | B1+C1 (no memoria) | isola memoria |
+| `R26_F4_A4_C1` | A4+C1 (no T_aux) | isola T_aux |
+| `R26_F5_TRIPLE_short` | F1 + epochs=5 | combina asse E |
+
+---
+
+## 🆕 Nuove CLI flag (R25)
+
+- `--lambda_T_aux FLOAT` (default 0.0, backward-compat) — peso supervisione diretta T:
+  `L_T_aux = masked MSE(params_seq[:,:,1], y_seq[:,:,1])`. Aggiunge un termine alla loss totale che forza la rete a tracciare T_true dinamico per timestep.
+- `--cf_max_delay INT` (default None=usa config) — override max_delay sinaptico per ablation asse A4
+- `--cf_bit_shift INT` (default None=usa 3) — override leak LIF singolo neurone (3=default, 5=leak τ 4× più lungo)
+
+---
+
+## 🆕 Nuove colonne CSV (R25)
+
+### `training_log.csv` (epoch-level, 11 colonne nuove)
+- `val_T_tracking_corr` — Pearson(T_pred, T_true) aggregato su val set
+- `val_v0_pred_mean`, `val_T_pred_mean`, `val_s0_pred_mean`, `val_a_pred_mean`, `val_b_pred_mean` — media predetta per canale (indica saturazione bound)
+- `val_v0_intra_std`, `val_T_intra_std`, `val_s0_intra_std`, `val_a_intra_std`, `val_b_intra_std` — std intra-sequenza per canale (distingue "varia intra-driver" vs "costante intra-driver")
+
+### `training_batch_log.csv` (per-batch, 16 colonne nuove)
+- `loss_T_aux` — valore L_T_aux scalare
+- **Livello 1** (raw gradient): `gn_out_fc_v0`, `gn_out_fc_T`, `gn_out_fc_s0`, `gn_out_fc_a`, `gn_out_fc_b` — norma del gradient sulla i-esima riga di `LI.fc_weight`
+- **Livello 2** (decoded post-sigmoid): `gn_decoded_v0`, ..., `gn_decoded_b` — `mean|d(loss)/d(params_seq[:,:,i])|`
+- **Livello 3** (direzione): `grad_dir_v0`, ..., `grad_dir_b` — `sign(d(loss)/d(params_seq[:,:,i])).mean()` ∈ [-1, +1]. Vicino a 0 → cancellazione cross-sample; vicino a ±1 → direzione coerente
+
+---
+
+## 🆕 Nuovi plot (R25)
+
+- **G16** `G16_grad_raw_per_ch.png` — gradient raw per canale, log scale, 5 curve (v0/T/s0/a/b)
+- **G17** `G17_grad_decoded_per_ch.png` — gradient decoded post-sigmoid, log scale
+- **G18** `G18_grad_direction_per_ch.png` — sign mean, scala lineare [-1, +1]. Cattura **cancellazione cross-sample**
+
+---
+
+## 🐛 4 bug fix BUGS_2026-06-03
+
+| # | File | Sintomo | Fix |
+|---|---|---|---|
+| 1 | `core/network.py:380-381` | F5 sigmoid satura T/s0/a/b al random init (97% T saturated, 96% s0) | Rimosso `raw / decode_scale`. Ora `sigmoid(raw)` puro |
+| 2 | `core/network.py:59-64`, `core/eventprop.py:567-580` | Xavier row_mean ≠ 0 → asimmetria per canale con spike binari | `fc_weight.sub_(fc_weight.mean(dim=1, keepdim=True))` post-init |
+| 3 | `CF_FSNN_Net_Stacked`, `CF_FSNN_Net_StackedSkip` | ALIF cascata dead output (base_threshold=1.5 troppo alto per layer non-input) | `layer.cell.base_threshold.fill_(1.0)` per layer i>0 |
+| 4 | `HiddenLayer_ALIF` + `ALIFLayer_EventProp_Full` | Delay mask 1/max_delay penalty (var(current) ridotta) | `fc_weight.mul_(max_delay**0.5)` post-Xavier |
+
+**Tag git pre-fix**: `pre_bug_fix_2026-06-03`. Documentato in `BUGS_2026-06-03.md`.
+
+---
+
+## 📓 Notebook attivi nel repo (2026-06-10)
+
+| Notebook | Status | Note |
+|---|---|---|
+| `Prodigy_MultiParam_Study_PostFix.ipynb` | ✅ Completato (93 run) | R24F — 3 scenari × 31 run |
+| `Prodigy_Ablation_Study_R25.ipynb` | ✅ Completato (18 run) | R25 — 5 assi causali |
+| `Prodigy_Fusion_Study_R26.ipynb` | 🔄 In esecuzione (6 run) | R26 — test ortogonalità win R25 |
+| `Prodigy_MultiParam_Study.ipynb` | ❌ Archiviato | R2.4 pregress, CSV bugged |
+| `Prodigy_Diagnostics.ipynb` | ❌ Archiviato | R2.2 pregress, CSV bugged |

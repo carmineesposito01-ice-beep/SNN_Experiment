@@ -589,3 +589,175 @@ Dei 5 criteri di chiusura previsti nel plan:
 ## 21. Aggiornamento skill SNN-expert (opzionale, da fare)
 
 Aggiungere a `~/.claude/skills/SNN-expert/` capitolo "Optimizers for SNN": Prodigy lessons (W1, V2, W2), setup canonical, failure modes (highway-only confounder, d plateau caratterizzazione), monitoring (d + violin params). Da fare dopo R3 EventProp per coerenza.
+
+---
+
+# PARTE 4 — Post-fix BUGS_2026-06-03 + R24F + R25 + R26 (2026-06-04 → 10)
+
+> **Contesto**: la parte 3 ha chiuso R2 con il caveat "violin G7 collassati universalmente — verdetto richiede R4 scenari misti". Prima di R4 abbiamo scoperto i 4 bug strutturali (`BUGS_2026-06-03.md`), che spiegano IL caveat. Post-fix, abbiamo rifatto R2.4 (R24F) e poi avviato R25 (ablation causale) + R26 (fusion). Parte 4 documenta i nuovi findings.
+
+## 22. R24F — Rerun Prodigy MultiParam post-fix (93 esperimenti)
+
+### 22.1 Setup
+- Branch: `Prodigy_Deep_Study` post-fix (HEAD `d9d558a`)
+- Arch: `baseline` (864p, post-fix), 10 ep × 100 step
+- 90 Prodigy: 3 scenari (highway, mixed, full) × 3 LR × 10 varianti (V01..V10)
+- 3 AdamW baseline (1/scenario, lr=1e-3) per misurare valore aggiunto
+- Notebook: `Prodigy_MultiParam_Study_PostFix.ipynb`, results `MultiParam_PostFix/`
+
+### 22.2 Risultati (best per scenario)
+
+| Scenario | Best Prodigy | LR | val_total | AdamW ref | Guadagno |
+|---|---|---:|---:|---:|---:|
+| highway | V08 cosine_no_restart | 1.0 | **0.169** | 0.186 | -9% |
+| mixed | V08 cosine_no_restart | 0.5 | **0.189** | 0.230 | -18% |
+| full | V08 cosine_no_restart | 1.0 | **0.222** | 0.253 | -12% |
+
+**V08 (cosine_no_restart) DOMINA su tutti e 3 gli scenari**:
+```
+lr=1.0 (o 0.5 mixed), d_coef=1.0, d0=1e-6, growth=inf
+scheduler=cosine_no_restart, betas=(0.9, 0.99), use_bias_correction=1
+safeguard_warmup=1, weight_decay=0.01
+```
+
+### 22.3 Problema scoperto: T-tracking flat
+Da G7 + G13:
+- v0 satura vicino MAX (40-45)
+- s0 satura vicino MAX (3-5) o MIN (1-1.5) a seconda dello scenario
+- `a` sempre vicino MIN (0.3-0.45)
+- **T predetto piatto intra-sample**: T_pred(t)=costante, ignora T_true(t) step
+- Cross-driver: rete distingue driver con T diversi (corr ~0.35), ma intra-driver no
+
+La rete fa **"average estimation cross-driver"**, NON **"system identification intra-driver"**.
+
+## 23. R25 — Ablation causale (18 esperimenti, 5 assi)
+
+### 23.1 Setup
+- Scenario `mixed` (più informativo), Prodigy V08 lr=1.0, seed=42
+- 5 assi: A memoria, B loss balancing, C spike rate, D capacity, E training duration
+- Notebook: `Prodigy_Ablation_Study_R25.ipynb`
+
+### 23.2 Infrastruttura R25
+
+**`train.py` modifiche**:
+- `pinn_loss` 4-tuple `(loss, comps, sr, params_seq)` + `lam_T_aux` + `retain_params_grad`
+- Nuovo termine: `L_T_aux = masked MSE(params_seq[:,:,1], y_seq[:,:,1])` se `lam_T_aux > 0`
+- Train epoch: cattura `params_seq.grad` post backward → 15 gradient values per canale
+- Val epoch: Pearson `val_T_tracking_corr` + 5×pred_mean + 5×intra_std
+- CSV: +11 col epoch + 16 col batch
+- CLI: `--lambda_T_aux`, `--cf_max_delay`, `--cf_bit_shift`
+
+**`utils/plot_diagnostics.py`**:
+- **G16** gradient raw per canale (log scale)
+- **G17** gradient decoded post-sigmoid (log scale)
+- **G18** gradient direction sign mean ([-1, +1]) — cattura cancellazione cross-sample
+
+### 23.3 Risultati — 3 WIN INDIPENDENTI
+
+**Baseline R25_A1** (replica V08 mixed): val=0.195, T_corr=**0.353**.
+
+| Asse | Run | Modifica | ΔT_corr | Δval |
+|---|---|---|---:|---:|
+| **A** | A4 | max_delay 6→18 | **+0.090** | -0.015 |
+| **B** | **B1** | lambda_T_aux 0→0.1 | **+0.147** | -0.006 |
+| **C** | C1 | lambda_sr 0.5→0 | **+0.088** | -0.014 |
+| D | D2 | h=64, r=16 | +0.068 | -0.004 |
+| E | E1 | epochs=5 | -0.010 | -0.006 |
+
+### 23.4 Findings critici R25
+
+**1. L_sr regularizer è CONTROPRODUCENTE per T-tracking**
+- C2 (sr=5): spike rate 14% (target FPGA) MA T_corr crolla del 70%
+- Trade-off duro spike rate ↔ T-tracking
+
+**2. Più training PEGGIORA T-tracking**
+- E2 (20ep): val_data ↓ MA T_corr ↓ a 0.23
+- E3 (30ep): val_total esplode, T_corr 0.08
+- **Early stop ≈ 10 ep è la scelta giusta**
+
+**3. Capacity NON è bottleneck**
+- D3 (128h) crasha (best_ep=1)
+- D2 (64h) solo +0.07 su T_corr
+
+**4. A6 COMBO — interazione negativa**
+- A6 = seq_len=100 + max_delay=18 + bit_shift=5
+- Atteso: somma effetti ≈ +0.06
+- **Misurato: T_corr = 0.20 (peggio di baseline!)**
+- Sospetto colpevole: bit_shift=5 (A5 isolato già aveva -0.07)
+
+**5. Gradient unbalance INVERTITO post-fix**
+- Pre-fix: v0 dominante (gradient 10× degli altri)
+- Post-fix: **T dominante** (gn_out_fc_T=0.23 vs v0=0.01, 23×)
+- B1 NON cambia magnitudo gradient T (0.23→0.24) ma cambia la **direzione semantica**
+- B3 (T_aux=10) gn_out_fc_T → **2.43**: budget gradient tutto su T, fisica esplode
+
+**6. Caveat metric T_tracking_corr**
+La Pearson aggregato cattura 2 fenomeni:
+- (1) **Cross-driver alignment** (driver con T_true diversi → T_pred diversi)
+- (2) **Intra-driver dynamics** (T_pred(t) segue T_true(t) intra-seq)
+
+I 0.35 baseline sono quasi tutti (1). Il +0.15 di B1 è probabilmente (2). Per disambiguare servirebbe `val_T_intra_corr` (Pearson dopo aver rimosso la media per-sample). TODO post-R26.
+
+## 24. R26 — Fusion Study (6 esperimenti, IN ESECUZIONE)
+
+### 24.1 Ipotesi
+Se A4, B1, C1 sono ortogonali:
+- Somma teorica: ΔT_corr = 0.090 + 0.147 + 0.088 = **+0.325**
+- T_corr atteso F1 TRIPLE = 0.353 + 0.325 = **0.678** (linearity 100%)
+- Realisticamente per non-linearità: **0.55-0.62** (linearity 70-90%)
+
+### 24.2 Design (6 run, ~1h Azure)
+
+| Tag | max_delay | T_aux | sr | epochs | Scopo |
+|---|---:|---:|---:|---:|---|
+| F0_baseline_replica | 6 | 0.0 | 0.5 | 10 | sanity |
+| **F1_TRIPLE_win** | 18 | 0.1 | 0.0 | 10 | TOP candidato (A4+B1+C1) |
+| F2_A4_B1 | 18 | 0.1 | 0.5 | 10 | isola C1 |
+| F3_B1_C1 | 6 | 0.1 | 0.0 | 10 | isola A4 |
+| F4_A4_C1 | 18 | 0.0 | 0.0 | 10 | isola B1 |
+| F5_TRIPLE_short | 18 | 0.1 | 0.0 | 5 | F1 + asse E |
+
+### 24.3 Linearity test automatico (Cell 6 notebook)
+```
+R25 sum predicted: dval=-0.035, dTcorr=+0.325
+F1 measured:        dval=??       dTcorr=??
+Ratio T_corr:       (measured/predicted)*100 = ??%
+```
+- ratio > 80% → effetti sommano (success)
+- 50-80% → saturazione
+- < 50% → forte non-linearità
+
+### 24.4 Decision tree post-R26
+
+- **Caso A — F1 batte F2/F3/F4**: i 3 fattori sommano. R26_F1 nuovo champion.
+- **Caso B — F1 ≈ max(coppie)**: saturazione, un fattore dominante.
+- **Caso C — F5 > F1**: early stop conferma asse E.
+- **Caso D — F1 < max(coppie)**: interazione negativa (raro).
+
+## 25. Criteri di chiusura aggiornati
+
+1. ✅ Math di Prodigy capita (parte 1+2)
+2. ✅ Setup canonical kohya identificato (W1+V2+bias_corr+safeguard)
+3. ✅ R2.4 → V08 cosine_no_restart è il setup vincente (R24F)
+4. ✅ T-tracking flat scoperto + diagnosticato (R24F)
+5. ✅ R25 ablation → 3 win indipendenti (A4, B1, C1)
+6. ⏳ R26 in corso — verifica ortogonalità
+7. ⏳ Post-R26 candidato risolutivo per T-tracking
+8. ⏳ R3 EventProp riapre quando T sotto controllo
+
+## 26. Lessons learned post-R24F (Lezioni N1-N5)
+
+### N1 — Il floor 0.22 era BUG-INDOTTO, non architetturale
+Pre-fix tutti gli optimizer raggiungevano val ~0.22 → "floor architetturale". Post-fix V08 fa 0.169 → il floor era sigmoid saturation. **Sempre testare config minime prima di concludere "architettura ha plateau"**.
+
+### N2 — Il gradient unbalance può INVERTIRSI tra fix
+Pre-fix v0 dominava. Post-fix T domina. Un fix corretto su un asse può spostare il problema su un altro asse. **Misurare gradient per canale è OBBLIGATORIO**.
+
+### N3 — Le ablation "ortogonali" possono interagire negativamente
+A6 COMBO ha mostrato che A3+A4+A5 ensemble = peggio della baseline. **Test combinatorio prima di concludere ortogonalità**.
+
+### N4 — Spike rate target FPGA può essere incompatibile con T-tracking
+C2/C3 hanno mostrato trade-off duro: 14% spike rate impone -70% T_corr. Per FPGA target serve approccio diverso (weight decay anti-saturation, non loss penalty).
+
+### N5 — Linearity test prima di "ortogonali"
+Da R25 abbiamo 3 win singoli. Da R26 capiamo se sommano. Pattern: ablation 1-at-a-time → ipotesi → test combinatorio. Senza step 3 le ablation sono solo correlate.

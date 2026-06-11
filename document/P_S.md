@@ -6,9 +6,9 @@
 > 🏛️ **Per storia decisioni + lessons learned**: vedi `TIMELINE.md`.
 > 📖 **Per audit roadmap R1/R2/R3**: vedi `AUDIT_2026-06-02.md`.
 
-> **Ultima modifica:** 2026-06-02 notte CET
-> **Sessione:** post-AUDIT + R1 chiuso + R2 CHIUSO con caveat (5 esperimenti Azure analizzati)
-> **Stato corrente:** **R2 CHIUSO con caveat**. PRODIGY_DEEP_STUDY.md ora ha parte 1+2+3 (~750 righe). Verdetto: Prodigy NON broken (W1 betas sblocca pareggio con AdamW), ma TUTTI i violin G7 collassati (params predetti = costanti, highway-only è degenere per ranking). Vedi P18 nuovo. R1 ✅ + R2 ✅ con caveat. **NEXT: scelta utente** tra R3 (EventProp serio, sequenziale come da plan) o R4 (scenari misti, prerequisito per verdetto vero Prodigy/AdamW/A8). Branch `Prodigy_Deep_Study` HEAD da push.
+> **Ultima modifica:** 2026-06-10 sera CET
+> **Sessione:** R26 Fusion Study (in esecuzione su Azure)
+> **Stato corrente:** **R26 IN CORSO** (6 run, ~1h Azure, HEAD `6075a96`). Tre fix sequenziali avanzati: (1) **BUGS_2026-06-03**: 4 bug strutturali risolti → tutti i ranking pregress invalidati. (2) **R24F**: rerun 93 esperimenti Prodigy MultiParam → V08 cosine_no_restart è il setup vincente (val 0.169/0.189/0.222 su highway/mixed/full, batte AdamW del 9-18%). Problema scoperto: **T predetto piatto intra-sample**. (3) **R25 Ablation causale** 18 run: **3 WIN INDIPENDENTI** trovati per T-tracking: A4 (max_delay 18, ΔT_corr +0.090), B1 (lambda_T_aux 0.1, ΔT_corr +0.147), C1 (lambda_sr 0, ΔT_corr +0.088). (4) **R26 Fusion** testa se i 3 win sommano → F1 TRIPLE atteso T_corr ~0.55-0.62 vs baseline 0.353. Branch `Prodigy_Deep_Study`. Vedi **P19** (T-tracking flat) per dettagli completi.
 
 Documento vivo: ogni problema ha (1) descrizione, (2) firma diagnostica, (3) causa root,
 (4) soluzioni in ordine di impatto. Le soluzioni si marcano `[ ] proposta`,
@@ -840,6 +840,89 @@ Training su `scenario_mix=highway` → tutti gli scenari hanno IDM_HIGHWAY ident
 - [ ] R4 (futuro, prerequisito): training su scenari MISTI (highway+urban+truck+cut-in) con IDM params variabili — sarà il primo training "non-degenere" del progetto
 - [ ] Workflow update: ogni report di esperimento DEVE includere screenshot violin G7 (non solo numero val_total)
 - [x] Doc parte 3 PRODIGY_DEEP_STUDY.md (Lezioni M1-M4) documenta il pattern
+
+---
+
+## P19 — 4 bug strutturali in core/network.py (BUGS_2026-06-03)
+
+### 19.1 Descrizione
+Audit codice profondo richiesto dall'utente dopo aver notato che TUTTI i run R2.4 mostravano violin G7 con saturazione universale dei params (T fisso a 2.5 o 0.5, s0 al MAX/MIN, ecc.). 4 bug strutturali trovati in `core/network.py` + `core/eventprop.py`.
+
+### 19.2 Firma diagnostica
+- Random init (no training): saturation **96-97%** per T/s0 (`(|raw_eq|>5).mean()` post-`sigmoid`)
+- Gradient s0/b ≈ **0.00004** (5000× più piccoli di a)
+- 78% dei pesi LI con gradient zero
+- A8 (attn) funziona "by accident" perché `attn=sigmoid(QK)·V` comprime magnitudo PRIMA del LI → raw_out piccolo → sigmoid non satura
+
+### 19.3 Cause + Fix (dettagli in BUGS_2026-06-03.md)
+
+| # | File | Sintomo | Fix applicato |
+|---|---|---|---|
+| 1 | `core/network.py:380-381` `_decode_params` | `raw_eq = raw / decode_scale` amplifica 9-18× per T/s0/a/b → sigmoid satura | Rimosso, ora `sigmoid(raw)` puro |
+| 2 | `core/network.py:59-64` `OutputLayer_LI` | `xavier_uniform_` ha row_mean ≠ 0 → con spike binari, bias deterministico | `fc_weight.sub_(fc_weight.mean(dim=1, keepdim=True))` post-Xavier |
+| 3 | `CF_FSNN_Net_Stacked`, `_StackedSkip` | base_threshold=1.5 troppo alto per ALIF non-input riceventi spike sparsi | `base_threshold.fill_(1.0)` per layer i>0 |
+| 4 | `HiddenLayer_ALIF` + `ALIFLayer_EventProp_Full` | Delay mask 1/max_delay → var(current) ridotta di max_delay | `fc_weight.mul_(max_delay**0.5)` post-Xavier |
+
+### 19.4 Soluzioni
+- [x] **Fix 1+2+3+4 applicati** (commit `d9d558a`, tag `pre_bug_fix_2026-06-03`)
+- [x] Verifica empirica post-fix: saturation **0%** (vs 96-97%), spike rate 6-10%, gradient ≠ 0 su 5/5 canali
+- [x] Smoke A1 2ep × 50 step: val_total = **0.213** in 100 step (vs floor pregress 0.22 dopo 5700 step) → convergenza 57× più veloce
+- [x] R24F rerun completo 93 esperimenti su codice fixato (commit successivi)
+
+### 19.5 Conseguenze
+- **TUTTI i ranking pregress** (T30, P15, SW, R2.2, R2.4 highway, **R24 multiparam pre-fix**) sono CORROTTI
+- Il floor val_total ≈ 0.22 NON era architetturale — era il floor della sigmoid saturation
+- A8 era best "by accident" — pre-fix solo A8 imparava davvero (compensava il bug)
+
+---
+
+## P20 — T-tracking flat: la rete fa "average estimation" non "system identification"
+
+### 20.1 Descrizione
+Post-fix BUGS_2026-06-03, R24F (93 esperimenti, scenario mixed, Prodigy V08 cosine) ha rivelato: la rete impara MOLTO meglio (val_total da 0.22 → 0.169-0.189), MA visualmente in G13 il `T_pred(t)` è una **linea piatta intra-sample** che NON segue `T_true(t)` quando fa step. La rete predice valore costante = media globale, non identifica il T del driver corrente.
+
+### 20.2 Firma diagnostica
+- G13 trajectory: T_predicted = costante con rumore (~1.1-1.2), T_true fa step 1.0↔1.5 ignorati
+- G7 violin: distribuzione T larga (cross-driver OK) → la rete distingue driver diversi
+- ma intra-driver: T predetto è quasi costante (std intra-seq bassa)
+- val_T_tracking_corr Pearson aggregato baseline ≈ **0.35** (intermedio, non zero)
+- Anche v0/s0 saturano vicino ai bound (v0 → 30-45, s0 → 1.2-5 con peak vicino al MAX)
+- `a` sempre vicino al MIN (0.3-0.4) cross-scenario
+
+### 20.3 Causa
+Più ipotesi (R25 ablation 18 run ha indagato):
+- **Memoria temporale insufficiente**: max_delay=6 → 60ms memoria sinaptica, troppo corta per identificare dinamica T che cambia ogni ~5-10s
+- **Mancanza di supervisione diretta su T**: `L_data` lavora sull'output ACC-IDM (accelerazione), non direttamente sui params decoded. La rete non riceve gradient esplicito "T deve essere X"
+- **L_sr regularizer**: la pressione su spike rate altera la dinamica della rete in modo dannoso per T-tracking
+- **Più training PEGGIORA T**: la rete continua a affinare la fisica (val_data ↓) ma deprime T-tracking (corr ↓)
+
+### 20.4 Soluzioni testate in R25 — 3 WIN INDIPENDENTI
+
+| ID R25 | Modifica | ΔT_corr | Δval | Note |
+|---|---|---:|---:|---|
+| **A4** | `max_delay 6→18` | **+0.090** | -0.015 | ✅ memoria sinaptica più lunga sblocca T |
+| **B1** | `--lambda_T_aux 0.1` (nuovo flag) | **+0.147** | -0.006 | ⭐ supervisione diretta T, NESSUN trade-off |
+| **C1** | `--lambda_sr 0.0` | **+0.088** | -0.014 | ✅ L_sr era controproducente per T |
+
+**Diminishing returns + trade-off**:
+- B2 (T_aux=1.0): T_corr +0.21 ma val_total +0.04 (rete sacrifica fisica per T)
+- B3 (T_aux=10): T_corr +0.22 ma val_total ESPLODE a 0.54 (10× il gradient su T schiaccia gli altri)
+- C2/C3 (sr alto): spike rate raggiunge 14% target FPGA, MA T_corr crolla del 70%
+
+**Insight tecnico**: gradient unbalance INVERTITO post-fix. Pre-fix v0 dominante. Post-fix T è il canale dominante (gn_out_fc_T=0.23 vs v0=0.01, 23× sbilanciato). Quindi T_corr=0.35 non è limitato da gradient magnitude ma dalla **direzione semantica**: B1 NON cambia magnitudo ma fa puntare il gradient T verso T_true GT.
+
+### 20.5 R26 Fusion (in corso)
+Test ortogonalità: F1=A4+B1+C1 (TOP candidato). Atteso T_corr ~0.55-0.62 se sommano linearmente.
+- F2/F3/F4 = coppie controllo per isolare interazioni
+- F5 = F1 + epochs=5 (E asse R25 suggerisce meno training)
+- Linearity test automatico in Cell 6: ratio F1_measured/R25_predicted
+
+### 20.6 Caveat sulla metrica
+`val_T_tracking_corr` cattura 2 fenomeni mescolati:
+1. **Cross-driver alignment**: driver con T_true=1.2 → T_pred basso; T_true=2 → T_pred alto
+2. **Intra-driver dynamics**: T_pred(t) segue T_true(t) dentro la stessa sequenza
+
+I 0.35 baseline sono quasi tutti (1). Il +0.15 di B1 è probabilmente (2). Per disambiguare servirebbe `val_T_intra_corr` (Pearson dopo aver rimosso la media per-sample). TODO post-R26.
 
 ---
 

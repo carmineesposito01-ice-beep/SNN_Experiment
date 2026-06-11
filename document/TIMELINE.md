@@ -716,6 +716,139 @@ User feedback: "non cancellare i branch storici, crea solo nuovo branch per nuov
 
 ---
 
+## 🏛️ Fase 8 — Bug fix + R24F + R25 + R26 Fusion (2026-06-03 → 10)
+
+### 2026-06-03 — **BUGS_2026-06-03.md**: 4 bug strutturali trovati
+
+Durante l'analisi di R2.4 Prodigy MultiParam (90 run in corso su Azure con violin G7 fortemente collassati), l'utente ha chiesto un **audit profondo del codice** prima di lanciare nuovi studi.
+
+**Risultato**: 4 bug strutturali in `core/network.py` + `core/eventprop.py`:
+
+1. **F5 sigmoid saturation** (`_decode_params`, riga 380): `raw_eq = raw / decode_scale` amplificava `raw` di 9-18× per T/s0/a/b. Con bound Xavier `±0.4`, raw_eq cadeva in zona sigmoid satura → derivata ≈ 0 → params bloccati al random init. **97% dei sample T saturato, 96% s0 saturato** post-init.
+2. **Xavier asymmetric bias** in `OutputLayer_LI` (riga 63): row_mean ≠ 0 → con input spike binari `{0,1}` creava offset deterministico per canale → determinava QUALE bound veniva saturato.
+3. **A2/A4 stacked dead output** (in cascate ALIF, base_threshold=1.5 troppo alto per layer non-input riceventi spike sparsi).
+4. **Delay mask penalty** 1/max_delay: ogni edge contribuisce solo 1/max_delay del tempo → var(current) ridotta di max_delay rispetto a fc layer normale.
+
+**A8 attn funziona "by accident"**: `attn = sigmoid(QK)·V` comprime la magnitudo PRIMA del LI → raw_out piccolo → sigmoid non satura nonostante #1.
+
+**Conseguenza**: TUTTI i ranking pregress (T30, P15, SW, R2.2, R2.4 in corso, ecc.) sono **CORROTTI**. Il floor val_total ≈ 0.22 era il floor della sigmoid saturation, non architetturale.
+
+### 2026-06-03 sera — Fix applicati
+
+| # | File | Modifica |
+|---|---|---|
+| 1 | `core/network.py:380-381` (+ 5 snapshot) | Rimosso `raw / decode_scale`, ora `sigmoid(raw)` puro |
+| 2 | `core/network.py:59-64` (+ 5 snapshot + `core/eventprop.py:567-580`) | `fc_weight.sub_(fc_weight.mean(dim=1, keepdim=True))` post-Xavier |
+| 3 | `core/network.py` Stacked + StackedSkip | `base_threshold.fill_(1.0)` per ALIF non-input |
+| 4 | `core/network.py:14-16` (3 occorrenze + 5 snapshot + `core/eventprop.py:314`) | `fc_weight.mul_(max_delay**0.5)` |
+
+**Verifica empirica post-fix** (3 seeds × A1/A8/A3): saturation = **0%** (vs 96-97% pre-fix), spike rate ∈ [6%, 10%], gradient ≠ 0 su tutti i 5 canali, parametri count invariati (864/2624/3936/864). Smoke 4 arch forward+backward: 0 errori.
+
+**Smoke training A1 2ep × 50 step**: val_total = **0.213** (vs floor pregress 0.22 dopo 5700 step) → convergenza **57× più veloce**.
+
+**Tag git**: `pre_bug_fix_2026-06-03` (rollback). HEAD post-fix: `d9d558a`.
+
+### 2026-06-04 → 06 — R24F Prodigy MultiParam PostFix (93 esperimenti)
+
+Rerun completo del piano R2.4 con codice fixato. Tag prefix `R24F_*`, results in `MultiParam_PostFix/`.
+
+**Setup**:
+- 90 Prodigy: 3 LR × 10 varianti × 3 scenari (highway, mixed, full)
+- 3 AdamW baseline (1/scenario) per misurare valore aggiunto Prodigy
+- Arch: `baseline` (864p, post-fix), 10ep × 100 step
+
+**Best per scenario**:
+| Scenario | Best Prodigy | AdamW ref | Guadagno |
+|---|---:|---:|---:|
+| highway | **0.169** (V08 lr=1.0) | 0.186 | -9% |
+| mixed | **0.189** (V08 lr=0.5) | 0.230 | -18% |
+| full | **0.222** (V08 lr=1.0) | 0.253 | -12% |
+
+**V08 (cosine_no_restart) domina su tutti e 3 gli scenari**. Setup V08: `lr=1.0, d_coef=1.0, d0=1e-6, growth=inf, scheduler=cosine_no_restart, betas=(0.9, 0.99), use_bias_correction=1, safeguard=1, wd=0.01`.
+
+⚠️ **Problema scoperto in violin G7 + G13 trajectory**: T predetto è quasi una **linea piatta** intra-sample (non segue T_true che fa step). v0 e s0 saturano ancora vicino ai bound MAX/MIN (anche post-fix). `a` stuck vicino MIN. Solo v0 varia inter-sample (cross-driver), ma intra-driver tutto è quasi costante. La rete fa **"average estimation" cross-driver**, NON **"system identification" intra-driver**.
+
+### 2026-06-07 → 09 — R25 Ablation Study (18 esperimenti)
+
+Studio causale **one-at-a-time** per identificare cosa abilita T-tracking dinamico. Setup: scenario `mixed`, Prodigy V08 lr=1.0, seed=42.
+
+**5 assi**:
+- **A — Memoria temporale** (6 run incluso baseline replica): seq_len, max_delay, bit_shift
+- **B — Loss balancing** (3 run): `lambda_T_aux` ∈ {0.1, 1.0, 10.0}
+- **C — Spike rate** (3 run): `lambda_sr` ∈ {0.0, 5.0, 20.0}
+- **D — Capacity** (3 run): hidden_size ∈ {16, 64, 128}
+- **E — Training duration** (3 run): epochs ∈ {5, 20, 30}
+
+**Modifiche infrastruttura R25** (committate in `train.py` + `utils/plot_diagnostics.py`):
+- **`pinn_loss`** ritorna 4-tuple `(loss, comps, sr, params_seq)` + nuovo parametro `lam_T_aux` + `retain_params_grad`
+- **CLI**: `--lambda_T_aux`, `--cf_max_delay`, `--cf_bit_shift` (3 nuove)
+- **11 colonne CSV epoch**: `val_T_tracking_corr` + 5×`val_<p>_pred_mean` + 5×`val_<p>_intra_std`
+- **16 colonne CSV batch**: `loss_T_aux` + 3 livelli × 5 canali (gn_out_fc_*, gn_decoded_*, grad_dir_*)
+- **3 nuovi plot**: G16 (grad raw per canale), G17 (grad decoded post-sigmoid), G18 (grad direction sign mean)
+- Helper `_robust_rmtree` per NFS Azure
+- `core/network.py`: `bit_shift` kwarg propagato a CF_FSNN_Net + HiddenLayer_ALIF
+
+**Risultati R25 — 3 WIN INDIPENDENTI** (ognuno migliora T_tracking_corr senza danneggiare val_total):
+
+| Run | Modifica | ΔT_corr | Δval | Verdetto |
+|---|---|---:|---:|---|
+| **A4** | `max_delay 6→18` | **+0.090** | -0.015 | ✅ WIN puro (memoria sinaptica più lunga) |
+| **B1** | `lambda_T_aux 0→0.1` | **+0.147** | -0.006 | ⭐ WIN ASSOLUTO (supervisione T diretta) |
+| **C1** | `lambda_sr 0.5→0` | **+0.088** | -0.014 | ✅ WIN puro (L_sr era controproducente!) |
+
+**Altri findings importanti**:
+- **A5 (bit_shift 5)** è CONTROPRODUCENTE (T_corr -0.072). Leak singolo neurone non aiuta.
+- **A6 COMBO** è il MISTERO: combinare seq_len=100 + max_delay=18 + bit_shift=5 dà T_corr=0.20 (peggio della baseline!). C'è **interazione negativa**. Sospetto: bit_shift=5.
+- **B2/B3** (lambda_T_aux 1.0/10.0): T_corr migliora ancora a 0.56/0.58 ma **val_total ESPLODE** a 0.24/0.54 → la rete sacrifica L_data e L_phys per tracciare T.
+- **C2/C3** (lambda_sr alto): forzando spike rate al target FPGA 14%, T_corr crolla del 70%. **Trade-off duro spike_rate ↔ T-tracking**.
+- **D — Capacity NON è bottleneck**: D3 large (128h) crasha (best_ep=1). D2 mid solo +0.07 su T_corr.
+- **E — SHOCKING**: più training **PEGGIORA** T_corr. E2 (20ep, best_ep=19): T_corr 0.226 vs baseline 0.353. La rete **dimentica T** durante l'apprendimento esteso (continua a migliorare val_data ma peggiora val_T_corr). **Early stop ≈ 10 ep è la scelta giusta**.
+
+**Insight tecnico fondamentale post-R25**: post-fix il gradient unbalance si è **INVERTITO**. Pre-fix v0 dominante (gradient 10× degli altri). Post-fix **T è dominante** (gn_out_fc_T = 0.23 vs v0=0.01, 23× sbilanciato verso T). Quindi T_corr=0.35 baseline non è limitato da gradient magnitude — è qualcos'altro (capacity di rappresentazione? minimi locali?). B1 NON cambia magnitudo gradient T ma cambia la **direzione semantica** (T_aux punta a T_true) → riallineamento informazionale.
+
+### 2026-06-10 — R26 Fusion Study (6 esperimenti, in esecuzione)
+
+Test di **ortogonalità** dei 3 win R25.
+
+**6 esperimenti**:
+| Tag | max_delay | T_aux | sr | epochs | Note |
+|---|---:|---:|---:|---:|---|
+| F0_baseline_replica | 6 | 0.0 | 0.5 | 10 | sanity = R25_A1 |
+| **F1_TRIPLE_win** | 18 | 0.1 | 0.0 | 10 | A4+B1+C1 (TOP candidato) |
+| F2_A4_B1 | 18 | 0.1 | 0.5 | 10 | no sr_off |
+| F3_B1_C1 | 6 | 0.1 | 0.0 | 10 | no memoria |
+| F4_A4_C1 | 18 | 0.0 | 0.0 | 10 | no T_aux |
+| F5_TRIPLE_short | 18 | 0.1 | 0.0 | 5 | F1 + early stop |
+
+**Linearity test atteso**: somma R25 predetta = +0.325 su T_corr, -0.035 su val_total. Realistic 0.55-0.62 di T_corr (linearity ratio 70-90%).
+
+**Bug NFS Azure incontrato e risolto**: `shutil.rmtree` + `os.makedirs` race condition su NFS. Fix: tag univoco con timestamp (`_R26_PREFLIGHT_<unixtime>`), no cleanup prima del train.py, cleanup finale best-effort. Commit `6075a96`.
+
+### Lessons learned 2026-06-03 → 10
+
+#### Lezione #34 — Audit codice quando i ranking sono confusi
+3 sintomi convergenti (T30 violin collassati + R2.4 risultati strani + utente che nota "v0 satura sempre") ci hanno portato all'audit. **Mai assumere che il codice base sia corretto solo perché "ha sempre funzionato"**. I 4 bug erano latenti da settimane.
+
+#### Lezione #35 — Tag pre-fix prima di applicare correzioni a impatto sistemico
+`git tag pre_bug_fix_2026-06-03` ci dà rollback istantaneo se i fix introducono problemi peggiori. Sempre tag prima di toccare core/.
+
+#### Lezione #36 — Backward-compatibility dei CSV
+Le 11+16 nuove colonne CSV R25 hanno default NaN per i CSV pregress (R24F). Tutti gli script di analisi continuano a funzionare. **Non rinominare colonne esistenti, sempre append**.
+
+#### Lezione #37 — Metric scalar prima di "guardare i plot"
+G13 trajectory mostrava T flat. Ma G7 violin mostrava distribuzione T cross-sample larga. Il `val_T_tracking_corr` Pearson ci ha permesso di **quantificare** che la corr era 0.35 (cross-driver alignment), non zero. Senza metric scalar non si confrontano ablation.
+
+#### Lezione #38 — Sospetta gli effetti combinati (interazioni)
+R25 ha mostrato: A4 + B1 + C1 sono singolarmente win, ma A4+A5+A3 (COMBO A6) è LOSS. **Le ortogonalità sono ipotesi da TESTARE**, non assumere. R26 fa proprio questo: 4 combinazioni controllo (F1/F2/F3/F4) per isolare interazioni.
+
+#### Lezione #39 — Filesystem NFS richiede pattern di accesso speciali
+Su Azure cluster con NFS shared, `rmtree + makedirs` ha race condition (metadata stale). Soluzioni: tag univoco timestamp, `_robust_rmtree` con retry+backoff, ignore_errors=True su cleanup non critici.
+
+#### Lezione #40 — La metrica T_tracking_corr cattura 2 fenomeni
+`val_T_tracking_corr` Pearson aggregato cattura **(1) cross-driver alignment** (driver diversi → T diversi) **+ (2) intra-driver dynamics** (T(t) variabile dentro la stessa sequenza). I 0.35 baseline sono quasi tutti (1). Il +0.15 di B1 è probabilmente il vero (2). Per disambiguare servirebbe `val_T_intra_corr` (Pearson dopo aver rimosso la media per-sample). **TODO post-R26 se utile**.
+
+---
+
 ## 📌 Note finali
 
 Questo TIMELINE va aggiornato dopo ogni milestone significativa. Mantenere la sezione "Lessons learned" è cruciale per non ripetere errori in future sessioni.

@@ -5,7 +5,100 @@
 
 ---
 
-## 🎯 Stato attuale (2026-06-02 — R2 CHIUSO con caveat, R3 next)
+## 🎯 Stato attuale (2026-06-10 — R26 Fusion **in esecuzione su Azure**)
+
+**Fase corrente**: **R26 — Fusion Study Prodigy** (6 esperimenti). Costruito su R25 (18 ablation completati), che ha identificato 3 fattori indipendenti ortogonali. R26 testa se gli effetti **sommano** quando combinati.
+
+### Stato cronologico ultimi 7 giorni (2026-06-03 → 2026-06-10)
+
+1. **2026-06-03 mattina** — **Audit codice approfondito** post-R2.4 (Prodigy MultiParam 90 run): individuati **4 bug strutturali** in `core/network.py` + `core/eventprop.py` (vedi `BUGS_2026-06-03.md`). I ranking pregress (T30, P15, SW, R2.2, R2.4) sono **CORROTTI**.
+
+2. **2026-06-03 pomeriggio** — **Fix applicati** (4 bug risolti):
+   - **#1** F5 sigmoid saturation → rimosso `raw / decode_scale` in `_decode_params`
+   - **#2** Xavier asymmetric bias → row-mean subtraction in `OutputLayer_LI` + `LILayer_BitShift_Po2`
+   - **#3** ALIF cascade dead output → `base_threshold=1.0` per layer non-input in Stacked/StackedSkip
+   - **#4** Delay mask 1/max_delay penalty → `fc_weight.mul_(sqrt(max_delay))` post-Xavier
+   - Tag git: `pre_bug_fix_2026-06-03` (rollback se servisse)
+   - **Verifica empirica**: saturation 0% (vs 96-97% pre-fix), spike rate 6-10%, gradient ≠ 0 su 5/5 canali
+
+3. **2026-06-04 → 06** — **R2.4F — Prodigy MultiParam PostFix** (93 esperimenti, ~15h Azure):
+   - 90 Prodigy (3 LR × 10 varianti × 3 scenari) + 3 AdamW baseline
+   - **Best mixed**: V08 (cosine_no_restart) lr=0.5 → val_total **0.1887** (vs floor pregress 0.22)
+   - V08 batte AdamW del 9-18% su tutti gli scenari
+   - **Problema scoperto post-fix**: violin G7 mostra che `T` predetto è quasi PIATTO intra-sample (linea piatta intorno alla media), NON segue la dinamica `T_true(t)`. v0/s0 saturano ancora ai bound. `a` stuck al MIN.
+
+4. **2026-06-07 → 09** — **R25 — Ablation Study causale** (18 esperimenti × 10ep, ~3h Azure):
+   - 5 assi: A memoria temporale, B loss balancing (λ_T_aux), C spike rate regularizer, D capacity, E training duration
+   - **R25 changes a `train.py`**: nuova `--lambda_T_aux` CLI + 11 colonne CSV tracking + 16 colonne batch CSV con gradient diagnostics per canale (3 livelli × 5 IDM params)
+   - **R25 plot diagnostics**: G16 (gradient raw per channel), G17 (gradient decoded post-sigmoid), G18 (gradient direction sign mean)
+   - **3 WIN INDIPENDENTI identificati** (ognuno migliora T_tracking_corr senza danneggiare val_total):
+     - **A4**: `max_delay 6→18` → ΔT_corr = **+0.090**, Δval = -0.015
+     - **B1**: `lambda_T_aux 0→0.1` → ΔT_corr = **+0.147**, Δval = -0.006 ⭐ BEST PURO
+     - **C1**: `lambda_sr 0.5→0` → ΔT_corr = **+0.088**, Δval = -0.014 (lambda_sr regulariz era CONTROPRODUCENTE)
+   - **D (capacity)**: NON è bottleneck. D3 large (128h) crasha (best_ep=1).
+   - **E (training duration)**: SHOCKING — più training **PEGGIORA** T_corr. E2 (20ep) → T_corr 0.226 vs baseline 0.353. La rete "dimentica T" col tempo. **Early stop ≈ 10 ep è la scelta giusta.**
+
+5. **2026-06-10 — R26 Fusion Study** (6 esperimenti, ~1h Azure, **IN ESECUZIONE**):
+   - F0 baseline replica (sanity)
+   - **F1 TRIPLE_win** = A4+B1+C1 (TOP candidato, atteso T_corr 0.55-0.62 se sommano)
+   - F2 A4+B1 (no sr_off), F3 B1+C1 (no memoria), F4 A4+C1 (no T_aux) — controlli per isolare interazioni
+   - F5 TRIPLE+epochs=5 (asse E)
+   - Linearity test automatico in Cell 6: confronta F1 measured vs somma R25 predetta
+   - Bug fix lungo la strada: `_robust_rmtree` per NFS Azure + tag univoco timestamp (race rmtree↔makedirs)
+
+### Stato infrastruttura corrente
+
+**Branch git**: `Prodigy_Deep_Study` HEAD **`6075a96`** (fix R26 NFS).
+
+**File codice modificati post-2026-06-03**:
+- `core/network.py` (4 fix + bit_shift kwarg)
+- `core/eventprop.py` (fix #2 + #4)
+- `train.py` (R25: pinn_loss + 4-tuple + CLI lambda_T_aux/cf_max_delay/cf_bit_shift + 27 colonne CSV totali)
+- `utils/plot_diagnostics.py` (G16/G17/G18)
+- `eval_report.py` (4-tuple compat)
+- 5 snapshot in `Arch_Tested/` (4 fix replicati)
+
+**Notebook attivi**:
+- `Prodigy_MultiParam_Study_PostFix.ipynb` — R24F (93 run completate, archiviato)
+- `Prodigy_Ablation_Study_R25.ipynb` — R25 (18 run completate, archiviato)
+- `Prodigy_Fusion_Study_R26.ipynb` — R26 in esecuzione
+
+**Results dir**:
+- `results/Prodigy_Study/MultiParam_PostFix/` — 93 run R24F (3 scenari × 31 run = highway/mixed/full)
+- `results/Prodigy_Study/Ablation_R25/` — 18 run R25 (5 assi)
+  - `_aggregate_full.csv` — tabella sintesi con tutte le metriche tracking + delta vs baseline
+- `results/Prodigy_Study/Fusion_R26/` — popolata progressivamente da R26
+
+### Verdetto Prodigy (post R24F + R25)
+
+- **Prodigy V08 (cosine_no_restart, lr=1.0, d_coef=1.0, d0=1e-6, growth=inf, safeguard=1, bias_corr=1, betas=0.9,0.99, wd=0.01)** è **chiaramente superiore ad AdamW** post-fix:
+  - highway: Prodigy V08 0.169 vs AdamW 0.186 (-9%)
+  - mixed: 0.189 vs 0.230 (-18%)
+  - full: 0.222 vs 0.253 (-12%)
+- **V08 vince su tutti i 3 scenari**. Cosine_no_restart è il scheduler ottimale.
+- Verdetto Prodigy considerato STABILE per ora. R26 verifica se ulteriori miglioramenti sono ottenibili.
+
+### Cosa fare adesso (priorità)
+
+1. **Aspettare risultati R26 da Azure** (~1h, 6 run × ~10 min)
+2. Quando completati:
+   - `git pull` per sincronizzare risultati
+   - Cell 6 del notebook fa il **Linearity Test automatico** (F1 measured vs somma R25 predetta)
+   - Cell 7 mostra G7/G13/G16/G18 per F0/F1/F5
+   - Cell 8 mostra il summary best per T-tracking e val_total
+3. **Decisione operativa post-R26**:
+   - Se F1 raggiunge T_corr > 0.55 → abbiamo un nuovo champion `R26_F1_TRIPLE_win`. Procedere a validazione su highway/full (scenari pregress R24F)
+   - Se F5 batte F1 → confermare asse E (early stop = giusto)
+   - Se F1 ≈ max(F2,F3,F4) → c'è saturazione; un fattore è dominante → scegliere quello + ulteriore esplorazione
+   - Se F1 < max(F2,F3,F4) → interazione negativa (raro); investigare quale coppia è ottimale
+
+### R3 — Studio EventProp (RIMANDATO)
+
+Originariamente pianificato dopo R2, ora rimandato dopo R26+. Da iniziare quando il problema "T-tracking flat" sarà chiuso (R26 candidato risolutivo). Stessa logica R25: ablation lever-by-lever (clip, lr peak, warmup, init scaling, detach periodico, thresh_jump learnable, full λ_fatigue), trovare almeno UN setup stabile.
+
+---
+
+## 🎯 Stato precedente (2026-06-02 — R2 CHIUSO con caveat, R3 next) — SUPERATO da R24F+R25+R26
 
 **Fase corrente**: **R2 — Studio Prodigy CAPIRE** ✅ chiuso (con caveat). PRODIGY_DEEP_STUDY.md ora ha parte 1+2+3 (~750 righe). Aspetta direzione utente per R3 (EventProp serio) o R4 (scenari misti).
 
