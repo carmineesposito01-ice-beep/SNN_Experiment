@@ -561,9 +561,11 @@ def val_epoch(model, loader, device, lam):
         n_batches  += 1
 
         # R25 — accumula metriche per-canale (no grad needed, già no_grad context)
+        # R27 — mantieni shape (batch, T) per consentire T_intra_corr (mean-removed
+        # per-sample Pearson). Il flatten viene fatto a fine epoca.
         ps = params_seq.detach()                        # (batch, T, 5)
-        T_pred_all.append(ps[:, :, 1].reshape(-1))      # (batch*T,)
-        T_true_all.append(y[:, :, 1].reshape(-1))       # (batch*T,)
+        T_pred_all.append(ps[:, :, 1])                  # (batch, T)
+        T_true_all.append(y[:, :, 1])                   # (batch, T)
         for i, pn in enumerate(_PARAM_NAMES):
             chan_pred_mean[pn].append(ps[:, :, i].mean().item())
             chan_intra_std[pn].append(ps[:, :, i].std(dim=1).mean().item())
@@ -573,16 +575,36 @@ def val_epoch(model, loader, device, lam):
     avgs['spike_rate'] = spike_acc / nb
 
     # R25 — Pearson corr(T_pred, T_true) sui campioni val masked-out (no nan se var=0)
+    # R27 — aggiunto val_T_intra_corr: Pearson DOPO rimozione media per-sample.
+    #   val_T_tracking_corr = corr(T_pred, T_true) flat = CROSS-DRIVER + INTRA-DRIVER mixed
+    #   val_T_intra_corr    = corr(T_pred - T̄_pred_per_seq, T_true - T̄_true_per_seq)
+    #                       = solo dinamica intra-driver (cross-driver rimosso).
+    # Disambigua se la rete impara dinamiche T(t) o solo media-cross-sample.
     if T_pred_all:
-        Tp = torch.cat(T_pred_all)
-        Tt = torch.cat(T_true_all)
+        Tp_seq = torch.cat(T_pred_all, dim=0)           # (N_samples, T)
+        Tt_seq = torch.cat(T_true_all, dim=0)           # (N_samples, T)
+        Tp = Tp_seq.reshape(-1)
+        Tt = Tt_seq.reshape(-1)
+        # 1) Tracking corr (storica R25, flat cross+intra)
         if Tp.std() > 1e-8 and Tt.std() > 1e-8:
             avgs['val_T_tracking_corr'] = float(((Tp - Tp.mean()) * (Tt - Tt.mean())).mean()
                                                 / (Tp.std() * Tt.std() + 1e-8))
         else:
             avgs['val_T_tracking_corr'] = 0.0
+        # 2) Intra corr (R27, mean-removed per-sample → dinamica vera)
+        Tp_ctr = Tp_seq - Tp_seq.mean(dim=1, keepdim=True)
+        Tt_ctr = Tt_seq - Tt_seq.mean(dim=1, keepdim=True)
+        Tp_ctr_flat = Tp_ctr.reshape(-1)
+        Tt_ctr_flat = Tt_ctr.reshape(-1)
+        if Tp_ctr_flat.std() > 1e-8 and Tt_ctr_flat.std() > 1e-8:
+            avgs['val_T_intra_corr'] = float(
+                ((Tp_ctr_flat - Tp_ctr_flat.mean()) * (Tt_ctr_flat - Tt_ctr_flat.mean())).mean()
+                / (Tp_ctr_flat.std() * Tt_ctr_flat.std() + 1e-8))
+        else:
+            avgs['val_T_intra_corr'] = 0.0
     else:
         avgs['val_T_tracking_corr'] = float('nan')
+        avgs['val_T_intra_corr']    = float('nan')
     # Per-channel pred mean + intra-seq std (5 ognuno = 10 metriche)
     for pn in _PARAM_NAMES:
         avgs[f'val_{pn}_pred_mean'] = float(np.mean(chan_pred_mean[pn])) if chan_pred_mean[pn] else float('nan')
@@ -632,6 +654,8 @@ class CSVLogger:
         #   5 pred_mean per canale → permette tracking saturazione bound
         #   5 intra_seq std per canale → distingue "varia intra-driver" vs "media globale"
         'val_T_tracking_corr',
+        # R27 — intra-driver Pearson (per-sample mean-removed). Disambigua cross vs intra.
+        'val_T_intra_corr',
         'val_v0_pred_mean', 'val_T_pred_mean', 'val_s0_pred_mean', 'val_a_pred_mean', 'val_b_pred_mean',
         'val_v0_intra_std', 'val_T_intra_std', 'val_s0_intra_std', 'val_a_intra_std', 'val_b_intra_std',
     ]
@@ -783,8 +807,19 @@ def _make_batch_row(epoch, batch_idx, comps, sr, pre_norms,
         row.update(grad_extras)
     # Mappa pre_norms ai nomi colonna. STEP 2E: warn-once per param non mappato.
     if pre_norms is not None:
+        # R27 FIX: LAYER_MAP contiene piu' pname che mappano alla stessa cname
+        # (es. 'layer_hidden.fc_weight' baseline + 'layer_hidden.weight' EventProp →
+        # entrambi → 'gn_hidden_fc'). Iterare e assegnare incondizionatamente
+        # sovrascriveva il valore baseline con NaN (perche' la pname EventProp non
+        # esiste in pre_norms del modello baseline). Fix: "first hit wins" — assegna
+        # solo se la pname e' realmente presente in pre_norms E la cname non e' gia'
+        # stata scritta. Inizializza poi a NaN tutte le cname non risolte.
         for pname, cname in BatchCSVLogger.LAYER_MAP.items():
-            row[cname] = pre_norms.get(pname, float('nan'))
+            if pname in pre_norms and cname not in row:
+                row[cname] = pre_norms[pname]
+        for cname in {'gn_hidden_fc', 'gn_hidden_recU', 'gn_hidden_recV',
+                      'gn_hidden_base_threshold', 'gn_hidden_thresh_jump', 'gn_out_fc'}:
+            row.setdefault(cname, float('nan'))
         # Warning silenzioso una volta per nome non mappato (varianti A2-A8).
         mapped = set(BatchCSVLogger.LAYER_MAP.keys())
         for pname in pre_norms.keys():
@@ -1317,7 +1352,8 @@ def main():
                 'prodigy_lr_eff' : (current_lr * optimizer.param_groups[0].get('d', float('nan'))),
             }
             # R25 — copia tutte le val_* metric da val_m al row (tracking_corr + per-canale)
-            for k in ('val_T_tracking_corr',
+            # R27 — aggiunto val_T_intra_corr (Pearson per-sample mean-removed).
+            for k in ('val_T_tracking_corr', 'val_T_intra_corr',
                       'val_v0_pred_mean', 'val_T_pred_mean', 'val_s0_pred_mean',
                       'val_a_pred_mean', 'val_b_pred_mean',
                       'val_v0_intra_std', 'val_T_intra_std', 'val_s0_intra_std',
