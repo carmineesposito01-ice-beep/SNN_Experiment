@@ -968,6 +968,31 @@ def main():
                         help='R25 ablation A5/A6: override bit_shift LIF leak (None=default 3 = '
                              'leak τ ~80ms). Valori comuni: 2 (leak veloce), 3 (default), 5 (leak '
                              'lento ~320ms). Solo baseline variant.')
+    # R29 DEC-1 (logit τ annealing) + DEC-3 (init bias shift) — attacca rank-collapse
+    parser.add_argument('--cf_init_bias_shift', type=int, default=0, choices=[0, 1],
+                        help='R29 DEC-3: 1 = calibra decode_offset PRIMA del training '
+                             'usando il primo batch del train_loader. Centra il raw output '
+                             'su 0 -> sigmoid(0)=0.5 -> params al midpoint dei bound al t=0. '
+                             '0 (default) = backward-compat (no shift).')
+    parser.add_argument('--cf_logit_tau_init',  type=float, default=1.0,
+                        help='R29 DEC-1: temperatura iniziale sigmoid per _decode_params. '
+                             '1.0 (default) = nessuna modifica. >1.0 = sigmoid piu\' piatta '
+                             '(zona lineare estesa, evita saturazione iniziale).')
+    parser.add_argument('--cf_logit_tau_final', type=float, default=1.0,
+                        help='R29 DEC-1: temperatura finale sigmoid (epoch=epochs). '
+                             'Annealed lineare/esp dal valore init a quello final.')
+    parser.add_argument('--cf_logit_tau_schedule', type=str, default='const',
+                        choices=['const', 'linear', 'exp'],
+                        help='R29 DEC-1: schedule annealing della temperatura. '
+                             'const=resta al cf_logit_tau_init (ignora _final), '
+                             'linear=interpolazione lineare init->final, '
+                             'exp=interpolazione esponenziale (geometrica) init->final.')
+    parser.add_argument('--cf_logit_tau_per_channel', type=str, default=None,
+                        help='R29 DEC-1 advanced: 5 valori comma-separated "v0,T,s0,a,b" '
+                             'che SOVRASCRIVONO cf_logit_tau_init come vettore per-canale. '
+                             'Es: "10,3,10,3,3" = canali v0/s0 saturati ricevono temperatura '
+                             'maggiore (sigmoid piu\' piatta) di T/a/b. None (default) = uso '
+                             'cf_logit_tau_init scalare per tutti i 5 canali.')
     # STEP 2C — Optimizer_Exploration: step budget control + val decoupling
     parser.add_argument('--max_steps_per_epoch', type=int, default=-1,
                         help='Cap step training per epoca, indipendente da len(train_loader). '
@@ -1276,6 +1301,49 @@ def main():
     else:
         print("  Early stop: DISABILITATO (patience=0)\n")
 
+    # ── R29 DEC-3: calibrazione decode_offset PRIMA del training ──
+    # Backward-compat: skip se --cf_init_bias_shift=0 (default).
+    if args.cf_init_bias_shift == 1:
+        try:
+            x_cal, _, _ = next(iter(train_loader))
+            x_cal = x_cal.to(device)
+            model.calibrate_decode_offset(x_cal)
+            print(f"[R29 DEC-3] decode_offset calibrato (batch {x_cal.shape[0]}x{x_cal.shape[1]}):")
+            print(f"           {[f'{v:.3f}' for v in model.decode_offset.tolist()]}")
+        except Exception as e:
+            print(f"[R29 DEC-3] WARN: calibrazione fallita ({e}), uso default 0")
+
+    # ── R29 DEC-1: parse logit_tau init values ──
+    # cf_logit_tau_per_channel override (5 valori CSV) ha precedenza su scalare.
+    if args.cf_logit_tau_per_channel is not None:
+        try:
+            tau_init_vec = [float(x.strip()) for x in args.cf_logit_tau_per_channel.split(',')]
+            assert len(tau_init_vec) == 5, f'attesi 5 valori, got {len(tau_init_vec)}'
+            model.set_logit_tau(tau_init_vec)
+            print(f"[R29 DEC-1] logit_tau per-channel init: {tau_init_vec}")
+        except Exception as e:
+            print(f"[R29 DEC-1] ERR parsing cf_logit_tau_per_channel: {e}")
+            raise
+    elif args.cf_logit_tau_init != 1.0 or args.cf_logit_tau_schedule != 'const':
+        model.set_logit_tau(args.cf_logit_tau_init)
+        print(f"[R29 DEC-1] logit_tau init={args.cf_logit_tau_init} final={args.cf_logit_tau_final} schedule={args.cf_logit_tau_schedule}")
+
+    def _logit_tau_at_epoch(epoch):
+        """R29: calcola tau per epoca corrente in [1, args.epochs] secondo schedule.
+
+        const  : sempre cf_logit_tau_init
+        linear : tau_init + (tau_final - tau_init) * (epoch - 1) / max(epochs - 1, 1)
+        exp    : geometric interp: tau_init * (tau_final / tau_init) ** (e_norm)
+        """
+        if args.cf_logit_tau_schedule == 'const':
+            return args.cf_logit_tau_init
+        e_norm = (epoch - 1) / max(args.epochs - 1, 1)
+        if args.cf_logit_tau_schedule == 'linear':
+            return args.cf_logit_tau_init + (args.cf_logit_tau_final - args.cf_logit_tau_init) * e_norm
+        # exp
+        ratio = args.cf_logit_tau_final / max(args.cf_logit_tau_init, 1e-9)
+        return args.cf_logit_tau_init * (ratio ** e_norm)
+
     # P11 — Early stopping state (attivo solo se patience > 0)
     es_no_improve = 0
     es_best_val   = float('inf')
@@ -1284,6 +1352,14 @@ def main():
         for epoch in range(start_epoch, args.epochs + 1):
             t_ep = time.time()
             print(f"-- Epoca {epoch}/{args.epochs} " + "-" * 40)
+
+            # R29 DEC-1: aggiorna logit_tau a inizio epoca (skip se per_channel attivo
+            # o schedule=const con default tau=1).
+            if (args.cf_logit_tau_per_channel is None
+                and args.cf_logit_tau_schedule != 'const'):
+                tau_e = _logit_tau_at_epoch(epoch)
+                model.set_logit_tau(tau_e)
+                print(f"  [R29 DEC-1] epoch {epoch}: logit_tau = {tau_e:.3f}")
 
             train_m = train_epoch(
                 model, train_loader, optimizer, device, epoch, lam,

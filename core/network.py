@@ -383,6 +383,18 @@ class CF_FSNN_Net(nn.Module):
         ranges = bounds[:, 1] - bounds[:, 0]                  # (5,) = [37, 2, 4, 2.2, 2.5]
         self.register_buffer('decode_scale', ranges / ranges.max())  # (5,) normalizzato
 
+        # R29 — DecoderFix buffer:
+        #   decode_offset (5,): sottratto a raw_logits PRIMA del sigmoid. Default 0
+        #     = backward-compat. Quando calibrato via calibrate_decode_offset() rimuove
+        #     l'asimmetria osservata empiricamente (v0_pred=37 ep1 invece di midpoint 27.5,
+        #     vedi document/BUGS_2026-06-03.md fix #2 incompleto).
+        #   logit_tau (5,): temperatura della sigmoid PER-CANALE. sigmoid(raw / tau).
+        #     tau=1 = identità, tau>1 = sigmoid piu' "piatta" (zona lineare estesa),
+        #     tau<1 = sigmoid piu' "ripida". Default 1 = backward-compat. Annealed
+        #     via set_logit_tau() ad ogni epoch dal training loop (R29 DEC-1).
+        self.register_buffer('decode_offset', torch.zeros(5, dtype=torch.float32))
+        self.register_buffer('logit_tau',     torch.ones(5, dtype=torch.float32))
+
     # ----------------------------------------------------------
     # Stato SNN
     # ----------------------------------------------------------
@@ -408,8 +420,64 @@ class CF_FSNN_Net(nn.Module):
 
         Il buffer `decode_scale` resta registrato per compat con eventuali
         checkpoint salvati, ma non è più usato.
+
+        R29 DEC-1/DEC-3 (2026-06-12): applica decode_offset + logit_tau.
+          (raw - decode_offset[i]) / logit_tau[i] poi sigmoid.
+          Con default decode_offset=0, logit_tau=1: comportamento identico al pre-R29.
         """
-        return self.param_lo + (self.param_hi - self.param_lo) * torch.sigmoid(raw)
+        adj = (raw - self.decode_offset) / self.logit_tau
+        return self.param_lo + (self.param_hi - self.param_lo) * torch.sigmoid(adj)
+
+    # ----------------------------------------------------------
+    # R29 — Decoder calibration / tau scheduling
+    # ----------------------------------------------------------
+    @torch.no_grad()
+    def calibrate_decode_offset(self, x_sample):
+        """R29 DEC-3 (init_bias_shift): centra raw output su 0.
+
+        Misura il raw output medio (pre-sigmoid, post-LI) su un campione di input,
+        poi imposta decode_offset = raw_mean. Dopo la calibrazione, _decode_params
+        produce sigmoid(0) = 0.5 in media → params al midpoint dei bound al t=0.
+
+        Sostituisce il pattern fix-#2 (row-mean subtraction post Xavier) che era
+        incompleto: rimuoveva solo la componente DI BIAS pura dei pesi ma non
+        l'asimmetria emergente dall'interazione (spike rate non uniforme × pesi
+        per-riga × n_ticks accumulazione).
+
+        x_sample: (batch, T, 4) input normalizzati (es. primo batch del train_loader).
+        """
+        was_training = self.training
+        self.eval()
+        self.reset_state(x_sample.size(0), x_sample.device)
+        raw_collected = []
+        for t in range(x_sample.size(1)):
+            raw_out = None
+            for _ in range(self.n_ticks):
+                spikes_h = self.layer_hidden(x_sample[:, t, :])
+                raw_out  = self.layer_out(spikes_h)
+            raw_collected.append(raw_out)
+        # (T, batch, 5) → mean over T+batch = (5,)
+        raw_stack = torch.stack(raw_collected, dim=0)
+        self.decode_offset.copy_(raw_stack.mean(dim=(0, 1)))
+        if was_training:
+            self.train()
+
+    def set_logit_tau(self, tau):
+        """R29 DEC-1 (logit τ-annealing): aggiorna temperatura sigmoid.
+
+        tau può essere:
+          - float / 0-d tensor → applicato a tutti i 5 canali
+          - 1-d tensor / iterable di lunghezza 5 → per-channel
+        """
+        if isinstance(tau, (int, float)):
+            self.logit_tau.fill_(float(tau))
+        else:
+            t = torch.as_tensor(tau, dtype=torch.float32, device=self.logit_tau.device)
+            if t.numel() == 1:
+                self.logit_tau.fill_(float(t.item()))
+            else:
+                assert t.numel() == 5, f'logit_tau deve essere scalare o vettore len-5 (got {t.numel()})'
+                self.logit_tau.copy_(t.view(5))
 
     # ----------------------------------------------------------
     # Forward
