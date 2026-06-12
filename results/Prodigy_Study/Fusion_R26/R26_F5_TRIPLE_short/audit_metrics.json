@@ -1,0 +1,59 @@
+{
+  "tag": "R26_F5_TRIPLE_short",
+  "run_dir": "results/Prodigy_Study/Fusion_R26/R26_F5_TRIPLE_short",
+  "checkpoint": "checkpoints/R26_F5_TRIPLE_short/best_model.pt",
+  "ckpt_epoch": 5,
+  "ckpt_val_loss": 0.2053423070923445,
+  "val_metrics": {
+    "total": 0.1991147841624123,
+    "data": 0.18813372593610844,
+    "phys": 0.038931196931987364,
+    "ou": 0.010073824129265515,
+    "bc": 0.00110575072707291,
+    "sr": 0.006561211819334471,
+    "spike_rate": 0.07040295759810412,
+    "val_T_tracking_corr": 0.23610195517539978,
+    "val_T_intra_corr": 0.0088002048432827,
+    "val_v0_pred_mean": 38.446994943821686,
+    "val_v0_intra_std": 1.305563074873483,
+    "val_T_pred_mean": 1.199628602951131,
+    "val_T_intra_std": 0.07355388707699294,
+    "val_s0_pred_mean": 1.284764750206724,
+    "val_s0_intra_std": 0.06360458939068733,
+    "val_a_pred_mean": 0.4114626810905781,
+    "val_a_intra_std": 0.04369884863634534,
+    "val_b_pred_mean": 1.2406426471598604,
+    "val_b_intra_std": 0.12595711624685754
+  },
+  "rank_metrics": {
+    "rank_effective": 1,
+    "rank_threshold_pct": 1.0,
+    "cond_number": 24467.33545959647,
+    "singular_values": [
+      40.827274618571025,
+      0.06675581234819064,
+      0.020761175961426858,
+      0.005908191433217095,
+      0.0016686440861527457
+    ],
+    "singular_values_normalized": [
+      1.0,
+      0.0016350788283532782,
+      0.0005085124137084395,
+      0.00014471187431476623,
+      4.087081740679631e-05
+    ]
+  },
+  "config": {
+    "cf_hidden_size": 32,
+    "cf_rank": 8,
+    "cf_max_delay": 18,
+    "cf_bit_shift": 3,
+    "lambda_T_aux": 0.1,
+    "lambda_sr": 0.0,
+    "scenario_mix": "highway:0.4,urban:0.3,truck:0.2,mixed:0.1",
+    "optimizer": "prodigy",
+    "epochs": 5
+  },
+  "audited_at": "2026-06-11 18:54:01"
+}
