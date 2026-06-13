@@ -112,20 +112,41 @@ class CFDataset(Dataset):
     """
     Dataset car-following su finestre temporali di lunghezza seq_len.
 
-    Ogni elemento restituisce:
-        x    (seq_len, 4)  -- input normalizzato [s̃, ṽ, Δṽ, ṽ_l]
-        y    (seq_len, 2)  -- ground truth [v_dot [m/s²], T_true [s]]
-        mask (seq_len,)    -- V2X packet mask (1=ricevuto, 0=lost)
+    Ogni elemento restituisce (4-tuple):
+        x         (seq_len, 4)  -- input normalizzato [s̃, ṽ, Δṽ, ṽ_l]
+        y         (seq_len, 2)  -- ground truth [v_dot [m/s²], T_true [s]]
+        mask      (seq_len,)    -- V2X packet mask (1=ricevuto, 0=lost)
+        params_gt (4,)          -- R30: GT [v0, s0, a, b] constante per scenario
+                                   (T_true e' gia' in y[:,1] per supervisione T_aux).
+                                   Estratto dal dict 'params' di generate_dataset().
+                                   Default zeros se 'params' non disponibile (backward-compat).
+
+    R30 (2026-06-12): aggiunto params_gt come 4-tuple element. Tutti i v2 notebook usano
+    questa interfaccia. Backward-compat: se lambdas v0/s0/a/b_aux=0 (default), params_gt
+    e' ignorato in pinn_loss → comportamento identico al pre-R30.
     """
 
     def __init__(self, dataset_list, seq_len=100, stride=50):
         self.seq_len = seq_len
         self.windows = []
 
+        # R30 — indice canali in CF_FSNN_Net._PARAM_BOUNDS: 0=v0, 1=T, 2=s0, 3=a, 4=b
+        # params_gt salva i 4 NON-temporali: v0, s0, a, b (T e' dinamico in y).
         for item in dataset_list:
             x    = item['x']
             y    = item['y']
             mask = item['mask']
+            # Estrai GT params se presenti; fallback zeros per backward-compat.
+            p_dict = item.get('params', None)
+            if p_dict is None:
+                params_gt = np.zeros(4, dtype=np.float32)
+            else:
+                params_gt = np.array([
+                    p_dict.get('v0', 0.0),
+                    p_dict.get('s0', 0.0),
+                    p_dict.get('a',  0.0),
+                    p_dict.get('b',  0.0),
+                ], dtype=np.float32)
             N     = x.shape[0]
             start = 0
             while start + seq_len <= N:
@@ -133,6 +154,7 @@ class CFDataset(Dataset):
                     x[start:start + seq_len],
                     y[start:start + seq_len],
                     mask[start:start + seq_len],
+                    params_gt,
                 ))
                 start += stride
 
@@ -140,11 +162,12 @@ class CFDataset(Dataset):
         return len(self.windows)
 
     def __getitem__(self, idx):
-        x, y, mask = self.windows[idx]
+        x, y, mask, params_gt = self.windows[idx]
         return (
             torch.from_numpy(x),
             torch.from_numpy(y),
             torch.from_numpy(mask),
+            torch.from_numpy(params_gt),
         )
 
 
@@ -155,6 +178,8 @@ class CFDataset(Dataset):
 def pinn_loss(model, x_seq, y_seq, mask_seq,
               lam_data, lam_phys, lam_ou, lam_bc, lam_sr=0.0,
               lam_T_aux=0.0,
+              lam_v0_aux=0.0, lam_s0_aux=0.0, lam_a_aux=0.0, lam_b_aux=0.0,
+              params_gt=None,
               spike_target=SPIKE_RATE_TARGET,
               retain_params_grad=False):
     """
@@ -264,16 +289,35 @@ def pinn_loss(model, x_seq, y_seq, mask_seq,
     else:
         L_T_aux = torch.zeros((), device=x_seq.device)
 
+    # ── L_<p>_aux (R30 ID-1): supervisione su v0, s0, a, b ──
+    # GT params sono COSTANTI per scenario (estratti da generate_dataset dict).
+    # params_gt: (batch, 4) = [v0, s0, a, b]. Indici in params_seq: 0=v0, 2=s0, 3=a, 4=b.
+    # L_<p>_aux = mean_over_(B,T) (pred_<p>(t) - gt_<p>)^2
+    _aux_cfg = [(lam_v0_aux, 0, 0), (lam_s0_aux, 2, 1),
+                (lam_a_aux,  3, 2), (lam_b_aux,  4, 3)]
+    aux_losses = {}
+    L_params_aux_total = torch.zeros((), device=x_seq.device)
+    if params_gt is not None and any(lam > 0.0 for lam, _, _ in _aux_cfg):
+        for lam_p, idx_pred, idx_gt in _aux_cfg:
+            if lam_p > 0.0:
+                p_pred = params_seq[:, :, idx_pred]                    # (B, T)
+                p_gt   = params_gt[:, idx_gt].unsqueeze(1).expand_as(p_pred)
+                sq_err = mask_seq * (p_pred - p_gt) ** 2
+                L_p    = sq_err.sum() / N_valid
+                aux_losses[idx_pred] = L_p
+                L_params_aux_total = L_params_aux_total + lam_p * L_p
+
     loss = (lam_data * L_data
             + lam_phys * L_phys
             + lam_ou   * L_ou
             + lam_bc   * L_bc
             + lam_sr   * L_sr
-            + lam_T_aux * L_T_aux)
+            + lam_T_aux * L_T_aux
+            + L_params_aux_total)
 
     avg_spike_rate = spike_rate_tensor.item()
 
-    return loss, {
+    comps_out = {
         'total': loss.item(),
         'data' : L_data.item(),
         'phys' : L_phys.item(),
@@ -281,7 +325,13 @@ def pinn_loss(model, x_seq, y_seq, mask_seq,
         'bc'   : L_bc.item(),
         'sr'   : L_sr.item(),
         'T_aux': L_T_aux.item(),
-    }, avg_spike_rate, params_seq
+        # R30 aux losses (0 se non calcolati)
+        'v0_aux': aux_losses.get(0, torch.zeros(())).item() if 0 in aux_losses else 0.0,
+        's0_aux': aux_losses.get(2, torch.zeros(())).item() if 2 in aux_losses else 0.0,
+        'a_aux':  aux_losses.get(3, torch.zeros(())).item() if 3 in aux_losses else 0.0,
+        'b_aux':  aux_losses.get(4, torch.zeros(())).item() if 4 in aux_losses else 0.0,
+    }
+    return loss, comps_out, avg_spike_rate, params_seq
 
 
 # ===========================================================
@@ -368,9 +418,18 @@ def train_epoch(model, loader, optimizer, device, epoch, lam,
     grad_acc   = 0.0
     n_batches  = 0
     inf_streak = 0          # batch consecutivi con grad_norm=inf
+    max_gn_preclip = 0.0    # R30 explosion guard: max gn_total_preclip osservato in epoca
     t0         = time.time()
 
-    for batch_idx, (x, y, mask) in enumerate(loader):
+    for batch_idx, batch in enumerate(loader):
+        # R30: 4-tuple loader (x, y, mask, params_gt). Backward-compat: se loader
+        # ritorna 3-tuple, params_gt resta None e pinn_loss ignora le lambdas R30.
+        if len(batch) == 4:
+            x, y, mask, params_gt = batch
+            params_gt = params_gt.to(device)
+        else:
+            x, y, mask = batch
+            params_gt = None
         # STEP 2C — cap per budget step. Break PRIMA di altre operazioni: il
         # contatore n_batches conta solo step effettivamente eseguiti.
         if max_steps_per_epoch > 0 and batch_idx >= max_steps_per_epoch:
@@ -382,7 +441,7 @@ def train_epoch(model, loader, optimizer, device, epoch, lam,
         optimizer.zero_grad()
         # R25: pinn_loss ritorna anche params_seq con retain_grad → leggibile post backward
         loss, comps, sr, params_seq = pinn_loss(
-            model, x, y, mask, *lam, retain_params_grad=True)
+            model, x, y, mask, *lam, params_gt=params_gt, retain_params_grad=True)
 
         # ── Guardia NaN loss ──────────────────────────────────────
         if not loss.isfinite():
@@ -447,6 +506,12 @@ def train_epoch(model, loader, optimizer, device, epoch, lam,
                                          if math.isfinite(v))) \
             if all(math.isfinite(v) for v in pre_norms.values()) else float('inf')
 
+        # R30 (2026-06-12) — tracking max gn_total_preclip nell'epoca per
+        # explosion guard a livello epoca. Ignora inf (gestito separatamente
+        # da inf_streak).
+        if math.isfinite(gn_total_preclip) and gn_total_preclip > max_gn_preclip:
+            max_gn_preclip = gn_total_preclip
+
         gn     = nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
         gn_val = float(gn)
 
@@ -479,6 +544,7 @@ def train_epoch(model, loader, optimizer, device, epoch, lam,
                 avgs = {k: v / nb for k, v in totals.items()}
                 avgs['spike_rate'] = spike_acc / nb
                 avgs['grad_norm']  = float('inf')
+                avgs['max_gn_preclip'] = max_gn_preclip
                 avgs['aborted']    = True
                 return avgs
             continue
@@ -528,6 +594,7 @@ def train_epoch(model, loader, optimizer, device, epoch, lam,
     avgs = {k: v / nb for k, v in totals.items()}
     avgs['spike_rate'] = spike_acc / nb
     avgs['grad_norm']  = grad_acc  / nb
+    avgs['max_gn_preclip'] = max_gn_preclip   # R30: per explosion guard epoch-level
     avgs['aborted']    = False
     return avgs
 
@@ -547,11 +614,18 @@ def val_epoch(model, loader, device, lam):
     chan_pred_mean = {pn: [] for pn in _PARAM_NAMES}
     chan_intra_std = {pn: [] for pn in _PARAM_NAMES}
 
-    for x, y, mask in loader:
+    for batch in loader:
+        # R30: 4-tuple loader (x, y, mask, params_gt). Backward-compat su 3-tuple.
+        if len(batch) == 4:
+            x, y, mask, params_gt = batch
+            params_gt = params_gt.to(device)
+        else:
+            x, y, mask = batch
+            params_gt = None
         x    = x.to(device)
         y    = y.to(device)
         mask = mask.to(device)
-        _, comps, sr, params_seq = pinn_loss(model, x, y, mask, *lam)
+        _, comps, sr, params_seq = pinn_loss(model, x, y, mask, *lam, params_gt=params_gt)
         # F2: salta batch degeneri — NaN si propaga in tutti i totals silenziosamente
         if not math.isfinite(comps['total']):
             continue
@@ -866,6 +940,16 @@ def main():
                              'masked MSE(params_seq[:,:,1], y_seq[:,:,1]) alla loss totale. '
                              'Default 0.0 = backward-compatibile (no aux loss). >0 forza la '
                              'rete a tracciare T dinamico per-timestep.')
+    # R30 ID-1 (2026-06-12): supervisione esplicita su v0/s0/a/b (costanti per scenario)
+    # GT esposto via dataset CFDataset 4-tuple. Default 0 = backward-compat.
+    parser.add_argument('--lambda_v0_aux', type=float, default=0.0,
+                        help='R30 ID-1: peso supervisione v0 (cost per scenario). 0 = off.')
+    parser.add_argument('--lambda_s0_aux', type=float, default=0.0,
+                        help='R30 ID-1: peso supervisione s0 (cost per scenario). 0 = off.')
+    parser.add_argument('--lambda_a_aux',  type=float, default=0.0,
+                        help='R30 ID-1: peso supervisione a (cost per scenario). 0 = off.')
+    parser.add_argument('--lambda_b_aux',  type=float, default=0.0,
+                        help='R30 ID-1: peso supervisione b (cost per scenario). 0 = off.')
     # Ottimizzatore
     parser.add_argument('--optimizer',   type=str,   default='adam',
                         choices=['adam', 'adamw', 'lion', 'prodigy'],
@@ -993,6 +1077,18 @@ def main():
                              'Es: "10,3,10,3,3" = canali v0/s0 saturati ricevono temperatura '
                              'maggiore (sigmoid piu\' piatta) di T/a/b. None (default) = uso '
                              'cf_logit_tau_init scalare per tutti i 5 canali.')
+    # R30 (2026-06-12) — Explosion guard a livello EPOCA (oltre al max_inf_streak per-batch).
+    # Discovery 2026-06-12: tutti i baseline lr=1.0 da R25 in poi avevano gn_total_preclip
+    # 10^5-10^17, mascherati dal clip_grad_norm_(1.0). Servono detection finita-ma-esplosa.
+    parser.add_argument('--max_epoch_explosion_streak', type=int, default=-1,
+                        help='R30: N epoche consecutive con max(gn_total_preclip) > soglia '
+                             '-> abort training. Difesa contro gradient explosion mascherato '
+                             'dal clip. -1 (default) = OFF (backward-compat). Raccomandato per '
+                             'studi su baselines instabili: 2.')
+    parser.add_argument('--epoch_explosion_threshold', type=float, default=100.0,
+                        help='R30: soglia per gn_total_preclip che definisce "esploding" a '
+                             'livello epoca. Default 100.0 (R24F CLEAN ha gn_max=21.8, soglia '
+                             '~5x). Solo se --max_epoch_explosion_streak > 0.')
     # STEP 2C — Optimizer_Exploration: step budget control + val decoupling
     parser.add_argument('--max_steps_per_epoch', type=int, default=-1,
                         help='Cap step training per epoca, indipendente da len(train_loader). '
@@ -1284,10 +1380,12 @@ def main():
     batch_log_path = os.path.join(save_dir, 'training_batch_log.csv')
     batch_logger   = BatchCSVLogger(batch_log_path, flush_every=50)
 
-    # Pesi PINN come tupla per pinn_loss() — 6 componenti (B5 + R25 T_aux)
-    # Ordine MUST match pinn_loss signature: lam_data, lam_phys, lam_ou, lam_bc, lam_sr, lam_T_aux
+    # Pesi PINN come tupla per pinn_loss() — 10 componenti (B5 + R25 T_aux + R30 4 params)
+    # Ordine MUST match pinn_loss signature: lam_data, lam_phys, lam_ou, lam_bc, lam_sr,
+    # lam_T_aux, lam_v0_aux, lam_s0_aux, lam_a_aux, lam_b_aux.
     lam = (args.lambda_data, args.lambda_phys, args.lambda_ou, args.lambda_bc,
-           args.lambda_sr, args.lambda_T_aux)
+           args.lambda_sr, args.lambda_T_aux,
+           args.lambda_v0_aux, args.lambda_s0_aux, args.lambda_a_aux, args.lambda_b_aux)
 
     # ── Training loop ─────────────────────────────────────────────
     print(f"\n[Training] {args.epochs} epoche  |  scheduler={args.scheduler}"
@@ -1348,6 +1446,9 @@ def main():
     es_no_improve = 0
     es_best_val   = float('inf')
 
+    # R30 (2026-06-12) — epoch-level explosion guard state
+    epoch_explosion_streak = 0
+
     try:
         for epoch in range(start_epoch, args.epochs + 1):
             t_ep = time.time()
@@ -1371,6 +1472,28 @@ def main():
                 batch_logger=batch_logger,
                 max_steps_per_epoch=args.max_steps_per_epoch,
             )
+
+            # R30 (2026-06-12) — Epoch-level explosion guard.
+            # Difesa contro gradient explosion mascherato dal clip_grad_norm_(1.0).
+            # Solo attivo se --max_epoch_explosion_streak > 0 (default off).
+            if args.max_epoch_explosion_streak > 0:
+                max_gn_e = train_m.get('max_gn_preclip', 0.0)
+                if max_gn_e > args.epoch_explosion_threshold:
+                    epoch_explosion_streak += 1
+                    print(f"  [R30 ExplosionGuard] epoca {epoch}: max_gn_preclip="
+                          f"{max_gn_e:.2e} > {args.epoch_explosion_threshold:.0f} "
+                          f"(streak {epoch_explosion_streak}/{args.max_epoch_explosion_streak})")
+                    if epoch_explosion_streak >= args.max_epoch_explosion_streak:
+                        print(f"\n  [EARLY-STOP] {epoch_explosion_streak} epoche consecutive "
+                              f"con gn_preclip>soglia. Training abortito.")
+                        crash_path = os.path.join(save_dir, 'crash_model.pt')
+                        save_checkpoint(model, optimizer, epoch, float('inf'), crash_path)
+                        print(f"  Crash dump salvato: {crash_path}")
+                        break
+                else:
+                    if epoch_explosion_streak > 0:
+                        print(f"  [R30 ExplosionGuard] reset streak (gn_max={max_gn_e:.2e} ok)")
+                    epoch_explosion_streak = 0
 
             if train_m.get('aborted'):
                 print(f"[Training] Abortito per esplosione del gradiente."
@@ -1503,7 +1626,10 @@ def main():
         param_list  = []
 
         with torch.no_grad():
-            for x_v, y_v, mask_v in val_loader:
+            for batch in val_loader:
+                # R30: 4-tuple loader. mask_v/params_gt non usati in questo collector.
+                x_v = batch[0]
+                y_v = batch[1]
                 x_v = x_v.to(device)
                 y_v = y_v.to(device)
                 params_seq, _ = model.forward_sequence_with_stats(x_v)
