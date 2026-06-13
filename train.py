@@ -1403,7 +1403,9 @@ def main():
     # Backward-compat: skip se --cf_init_bias_shift=0 (default).
     if args.cf_init_bias_shift == 1:
         try:
-            x_cal, _, _ = next(iter(train_loader))
+            # R30 fix: loader e' 4-tuple (x, y, mask, params_gt). Prendi solo x.
+            _batch = next(iter(train_loader))
+            x_cal = _batch[0]
             x_cal = x_cal.to(device)
             model.calibrate_decode_offset(x_cal)
             print(f"[R29 DEC-3] decode_offset calibrato (batch {x_cal.shape[0]}x{x_cal.shape[1]}):")
