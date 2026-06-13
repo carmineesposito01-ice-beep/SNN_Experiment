@@ -847,6 +847,80 @@ Su Azure cluster con NFS shared, `rmtree + makedirs` ha race condition (metadata
 #### Lezione #40 — La metrica T_tracking_corr cattura 2 fenomeni
 `val_T_tracking_corr` Pearson aggregato cattura **(1) cross-driver alignment** (driver diversi → T diversi) **+ (2) intra-driver dynamics** (T(t) variabile dentro la stessa sequenza). I 0.35 baseline sono quasi tutti (1). Il +0.15 di B1 è probabilmente il vero (2). Per disambiguare servirebbe `val_T_intra_corr` (Pearson dopo aver rimosso la media per-sample). **TODO post-R26 se utile**.
 
+### 2026-06-11 — R27 Observability Audit (24 run R25+R26 auditati)
+
+Implementato in `train.py` + `scripts/audit_checkpoints.py`:
+- **Fix bug LAYER_MAP** (`train.py:704-722`): 4/6 colonne gradient erano SEMPRE NaN dal 2026-06-07 a causa di entry duplicate per varianti EventProp. Fix "first hit wins".
+- **Nuova metrica `val_T_intra_corr`** (Lezione #40): Pearson(T_pred, T_true) dopo rimozione media per-sample.
+- **Audit script**: rilancia val_epoch sui 24 best_model.pt R25+R26, calcola `rank_effective` + `cond_number` su `Cov(decoded_params)`.
+
+**Risultati shock**:
+- T_intra_corr ≤ 0.058 in tutti i 24 run (top: R25_A3 = 0.058). Il T_tracking_corr=0.5 di B1 era illusione cross-driver quasi totale.
+- rank_effective = 1 in 18/24 run, ≤2 in 22/24. Rank-collapse universale.
+- v0_pred saturato a 38-44 in 22/24 run.
+
+### 2026-06-12 mattina — R28 ProdigyTuning (5 esperimenti)
+
+Test fix konstmish Issue #27 (`d0=1e-5`), step budget 3×, warm restart cosine T0=5.
+
+- **A1 (d0=1e-5)**: Prodigy `d` sblocca a 0.474 (19× baseline) MA val_data esplode (+31%), T_intra crolla. d alto destabilizza.
+- **C1/D1**: best_ep=1 (rete locka minimo locale al primo epoch). Warm restart non interviene.
+- T_intra ≤ 0.035 in tutti i 5 setup. **Prodigy NON era il bottleneck.**
+
+### 2026-06-12 pomeriggio — R29 DecoderFix (12 esperimenti, disastro)
+
+Modifiche `core/network.py`: buffer `decode_offset` + `logit_tau` + `calibrate_decode_offset()` + `set_logit_tau()`. CLI flag opt-in in `train.py` (default no-op = backward-compat).
+
+12 run su 6 assi (controlli, init, τ-sweep, combo, long, no-Po2).
+
+**Risultati**:
+- E0 baseline A3 replica: val_data 0.174 (drift +2% vs A3 originale)
+- A1 init_shift alone: v0_pred_ep1=44.5 (PIÙ saturato di baseline!) → init annullato in 100 step → identifiability vs init asymmetry
+- B/C/D run con τ-anneal: best_ep=1 in 7/12 run → τ-anneal + cosine + lr=1.0 = locka minimo precoce
+- C1 init+τ5: val_data 0.253 (+45% peggio di baseline)
+- E1 no_po2: rank 1→2 lieve ma val_data crolla → **Po2 non è il colpevole del rank-collapse**
+
+**3 conferme negative cristalline da R29**:
+- init_shift INUTILE (loss landscape lo annulla)
+- Po2 quantization NON è la causa
+- τ-anneal mal interagisce con cosine scheduler
+
+### 2026-06-12 sera — SCOPERTA CRITICA: gradienti esplosi nascosti dal clip
+
+Utente solleva ipotesi: "stiamo usando una baseline instabile (LR 1)". Verifica su `gn_total_preclip`:
+
+| Run | inf grads | gn>100 | gn_max | giudizio |
+|---|---:|---:|---:|---|
+| ⭐ **R24F mixed V08 lr=0.5** | **0** | **0** | **21.79** | ✅ CLEAN |
+| R24F mixed V08 lr=1.0 | 20 | 13 | 4.2e+13 | ⚠ mascherato |
+| R25_B1 (= R28_A0) | 0 | 2 | 6.7e+5 | ⚠ mascherato |
+| R25_A3 (= R29_E0) | 2 | 9 | 8.6e+17 | ❌ mascherato |
+| R26_F1 TRIPLE | 0 | 5 | 7.3e+17 | ❌ mascherato |
+| R29_C1_init_tau5 | 1778 | 902 | 2.2e+17 | ❌ totalmente rotto |
+
+**Discovery**: TUTTI i baseline da R25 in poi avevano `gn_total_preclip` ∈ [10⁵, 10¹⁷], mascherati dal `clip_grad_norm_(1.0)`. R24F_mixed_lr0.5_V08 è l'UNICO setup post-fix con gradienti CLEAN.
+
+R24F LR sweep aggregato:
+- lr=0.1: 0% exploding ma val_data 0.7-1.0 (non converge)
+- lr=0.5: 0-20% exploding, val_data competitivo
+- lr=1.0: 20-50% exploding (mixed 50%, full 30%, highway 20%)
+
+### 2026-06-12 sera — RESET strategico
+
+**Decisione utente**: tornare al vero baseline post-fix `R24F_mixed_lr0.5_V08`. Snapshot creato in `Arch_Tested/R24F_MIXED_lr0.5_V08_TRUE_CHAMPION/` con README + reproduce_training.ipynb + snapshot_original + codice corrente. R27/R28/R29 mantengono valore informativo (rank-collapse confermato, Prodigy non colpevole, decoder fix non sufficienti, init irrelevant, Po2 innocent) MA misure numeriche vanno re-fatte sul baseline pulito.
+
+#### Lezione #41 — Sempre verificare `gn_total_preclip` (NON solo `gn_postclip`)
+Il `clip_grad_norm_(max_norm=1.0)` maschera completamente l'instabilità: log post-clip sempre = 1.0, dando illusione di sanità. Vero indicatore è `gn_total_preclip`. **Aggiungere assertion `gn_max < 25` come gate per qualunque baseline**.
+
+#### Lezione #42 — Sweep LR è la prima cosa per qualunque optimizer adattivo
+Per Prodigy: `d0` adatta dlr ma `lr` nominale modula la dinamica scheduler (cosine). lr=1.0 può sembrare giusto per Prodigy paper ma per il NOSTRO regime SNN+surrogate è instabile.
+
+#### Lezione #43 — Convenzioni paper non sostituiscono verifiche empiriche
+Ho seguito "lr=1.0 per Prodigy" (paper konstmish) per 4 sessioni senza verificare nel NOSTRO regime. R24F aveva già la risposta (lr=0.5 V08 per mixed) ma l'ho ignorata. **Mai assumere convenzione paper universale**.
+
+#### Lezione #44 — Strategic reset is OK
+4 sessioni costruite su baseline sbagliato sembrerebbero sprecate. MA: hanno comunque prodotto 3 risultati negativi rigorosi (init irrelevant, Po2 not the cause, Prodigy not bottleneck) E introdotto metriche valide (T_intra_corr, rank_effective). Reset al baseline pulito è OK, le lezioni restano.
+
 ---
 
 ## 📌 Note finali

@@ -5,7 +5,68 @@
 
 ---
 
-## 🎯 Stato attuale (2026-06-10 — R26 Fusion **in esecuzione su Azure**)
+## 🎯 Stato attuale (2026-06-12 — **RESET strategico al vero baseline R24F_mixed_lr0.5_V08**)
+
+**Fase corrente**: **VERO baseline identificato**: `R24F_mixed_lr0.5_V08` (val_data 0.181, val_total 0.189, gn_max 21.79 CLEAN). Snapshot salvato in `Arch_Tested/R24F_MIXED_lr0.5_V08_TRUE_CHAMPION/`. R27-R29 completati ma su baseline instabile (Prodigy lr=1.0 con gradienti esplosi mascherati dal clip). R30 (next step) parte da QUESTO baseline pulito.
+
+### Cronologia ultimi 9 giorni post-fix (2026-06-03 → 2026-06-12)
+
+1. **2026-06-03** — Audit codice + 4 bug fix in `core/network.py` + `core/eventprop.py` (vedi `BUGS_2026-06-03.md`). Tag git `pre_bug_fix_2026-06-03`.
+
+2. **2026-06-04 → 06** — **R24F (Prodigy MultiParam PostFix, 93 esperimenti)**: sweep LR × variant × scenario. ⭐ **Best mixed: R24F_mixed_lr0.5_V08** = val_data 0.181, val_total 0.189, **gn_max 21.79 (CLEAN)**. Best highway: R24F_highway_lr1.0_V08 = 0.162 (con caveat 20% run esplosi).
+
+3. **2026-06-07 → 09** — **R25 Ablation Study (18 esp.)** + **R26 Fusion (6 esp.)**. Errore strategico: baseline scelto `lr=1.0` (NON `lr=0.5`). Tutti i run con gn_max 10⁵-10¹⁷ (gradienti esplosi mascherati dal clip).
+
+4. **2026-06-11** — **R27 Audit (24 run R25+R26)**: introdotte metriche `val_T_intra_corr` + `rank_effective`. Scoperto rank-collapse universale (rank=1 in 18/24). Fix bug LAYER_MAP (4/6 colonne gradient sempre NaN dal 2026-06-07).
+
+5. **2026-06-11 → 12** — **R28 ProdigyTuning (5 esp.)** + **R29 DecoderFix (12 esp.)**. Confermato: Prodigy non era bottleneck (R28), decoder fix non aiutano (R29 disastrosi, init_shift annullato in 100 step, τ-anneal breaks training). Ma tutto ancora su baseline lr=1.0 instabile.
+
+6. **2026-06-12 — RESET strategico**: utente solleva ipotesi instabilità baseline → verifica numerica conferma. **R24F_mixed_lr0.5_V08 è il SOLO setup post-fix con gradienti CLEAN** (gn_max 21.79 vs 10⁵-10¹⁷ degli altri). Snapshot fissato in Arch_Tested. R27-R29 mantengono valore informativo (rank-collapse confermato, Prodigy non colpevole) ma vanno re-misurati sul baseline vero.
+
+### Stato infrastruttura corrente (2026-06-12)
+
+**Branch git**: `Prodigy_Deep_Study` HEAD post-R29. Tag rollback: `pre_R27`, `pre_R28`, `pre_R29`.
+
+**Codice principale** (post-fix 2026-06-03 + R27 LAYER_MAP fix + R27 val_T_intra_corr + R29 DEC-1/DEC-3 opt-in):
+- `train.py`: full features ma R29 flags DEFAULT no-op (backward-compat verificato)
+- `core/network.py`: decode_offset + logit_tau buffer opt-in (default 0/1 = identity)
+- `data/generator.py`: invariato (y_phys = [v_dot, T_true] only)
+
+**Vero baseline ufficiale**: `Arch_Tested/R24F_MIXED_lr0.5_V08_TRUE_CHAMPION/`
+- Prodigy `lr=0.5` (NON 1.0), cosine_no_restart, seq_len=50, mixed scenario
+- val_data 0.181, val_total 0.189, gn_max 21.79 CLEAN
+- spike_rate 7.3% (basso ma stabile)
+- `prodigy_d` arriva a 0.0192 (sano)
+
+**Results dir attive**:
+- `results/Prodigy_Study/MultiParam_PostFix/` — R24F (93 run originali, fonte verità)
+- `results/Prodigy_Study/Ablation_R25/` — R25 (18 run, baseline lr=1.0 instabile)
+- `results/Prodigy_Study/Fusion_R26/` — R26 (6 run, baseline lr=1.0 instabile)
+- `results/Prodigy_Study/Audit_R27/` — R27 (24 run R25+R26 auditati)
+- `results/Prodigy_Study/ProdigyTuning_R28/` — R28 (5 run, lr=1.0)
+- `results/Prodigy_Study/DecoderFix_R29/` — R29 (12 run, lr=1.0 + R29 fixes)
+
+### Cosa fare adesso (priorità)
+
+1. **Sanity replica del baseline R24F_mixed_lr0.5_V08** con codice corrente → conferma val_data ≈ 0.181 e gn_max < 25
+2. **Audit R30 sul baseline replicato** con metriche R27 (T_intra_corr, rank_effective) → verifica se i sintomi rank-collapse persistono anche con gradienti puliti
+3. **R30 Identifiability**: supervisione ausiliaria su v0/s0/a/b (originale piano DEC-1) sopra il baseline R24F_mixed_lr0.5_V08, non più su R25_A3 instabile
+4. **Decisione strategica post-R30**: se rank-collapse persiste anche con baseline pulito + supervisione → bottleneck è capacità rete 864p → considerare A8 attn 3936p re-testato post-fix
+
+### Verità chiave 2026-06-12
+
+- **lr=0.1 Prodigy NON funziona** (val_data 0.7-1.0, la rete non converge)
+- **lr=1.0 Prodigy è instabile** (20-50% dei run esplodono, anche quelli "non esplosi" hanno gn 10⁵-10¹⁷)
+- **lr=0.5 Prodigy V08 cosine_no_restart è l'UNICO setup CLEAN** post-fix
+- **T30_A8 (val=0.166)** è stato un evento fortuito (lambda_sr=0, highway-only, NON riproducibile cross-scenario)
+- **Tutti R25/R26/R28/R29 hanno gradienti esplosi mascherati**: metriche numeriche corrette ma dinamica corrotta
+- **rank-collapse e identifiability sono problemi REALI** (visti da R27/R29) ma vanno re-misurati su baseline stabile
+
+---
+
+## 🎯 Stato precedente (2026-06-10 — R26 Fusion in esecuzione su Azure) — superato dalla scoperta lr=0.5 V08
+
+**Fase corrente**: **R26 — Fusion Study Prodigy** (6 esperimenti). Costruito su R25 (18 ablation completati), che ha identificato 3 fattori indipendenti ortogonali. R26 testa se gli effetti **sommano** quando combinati.
 
 **Fase corrente**: **R26 — Fusion Study Prodigy** (6 esperimenti). Costruito su R25 (18 ablation completati), che ha identificato 3 fattori indipendenti ortogonali. R26 testa se gli effetti **sommano** quando combinati.
 
