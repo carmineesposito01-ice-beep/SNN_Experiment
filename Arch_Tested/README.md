@@ -1,14 +1,19 @@
 # Arch_Tested/ — Snapshot riproducibili delle architetture funzionanti
 
+> **Aggiornamento 2026-06-15**: aggiunte 3 entry post-R31 (champion validation): C3 CLEAN, A3 PEAK, E1 STABLE. Ognuna ottimizza un trade-off diverso.
+
 Snapshot self-contained delle architetture CF_FSNN che hanno prodotto risultati significativi nel corso del progetto. Ogni sottocartella contiene il **codice minimale** (solo le classi necessarie), il **train.py con CLI ristretto**, lo **snapshot della run originale** (training_log.csv + config + plot G1-G13) e un **notebook di riproduzione** (`reproduce_training.ipynb`).
 
 **Scopo**: non perdere il know-how + tracciare quali setup hanno gradienti effettivamente sani (non solo metriche "alle apparenze").
 
-## Le 6 architetture
+## Le 9 architetture / setup
 
-| Tag | Classe Python | Params | Training | val_total best | val_data | gn_max | spike_rate avg | Source run | Note |
-|---|---|---:|---|---:|---:|---:|---:|---|---|
-| ⭐⭐ [`R24F_MIXED_lr0.5_V08_TRUE_CHAMPION`](R24F_MIXED_lr0.5_V08_TRUE_CHAMPION/) | `CF_FSNN_Net` | 864 | BPTT + surrogate | **0.1887** | **0.1806** | **21.79** ✅ | 7.3% | `R24F_mixed_lr0.5_V08` | ⭐ **VERO BASELINE 2026-06-12. Prodigy lr=0.5, mixed scenario, lambda_sr=0.5, gradienti CLEAN (gn_max<25). Da usare per R30+.** |
+| Tag | Classe Python | Params | Training | val_total best | val_data | T_intra peak | gn_max | spike_rate | Note |
+|---|---|---:|---|---:|---:|---:|---:|---:|---|
+| ⭐⭐ [`R24F_MIXED_lr0.5_V08_TRUE_CHAMPION`](R24F_MIXED_lr0.5_V08_TRUE_CHAMPION/) | `CF_FSNN_Net` | 864 | Prodigy lr=0.5 | 0.1887 | 0.1806 | 0.015 | 21.79 ✅ | 7.3% | **Baseline pulito 2026-06-12** |
+| ⭐⭐ [`R29v2_C3_CLEAN`](R29v2_C3_CLEAN/) | `CF_FSNN_Net + DEC` | 864 | Prodigy lr=0.5 + init+per-ch τ | 0.1864 | 0.1771 | **0.0407** | **40.6** ✅ | 11.7% | **CLEAN CHAMPION 2026-06-14.** Riferimento scientifico riproducibile. 4/4 obj |
+| ⭐⭐ [`R31_A3_PEAK`](R31_A3_PEAK/) | `CF_FSNN_Net + DEC` | 864 | Prodigy lr=0.5 + warm restart T0=15 | 0.1759 | **0.1667** | **0.0599** | 4280 ⚠ | 12.5% | **PEAK CHAMPION 2026-06-15.** Best operativo @ ep15 (pre-explosion). 3/4 obj |
+| ⭐⭐ [`R31_E1_STABLE`](R31_E1_STABLE/) | `CF_FSNN_Net + DEC` | **232** | Prodigy lr=0.5 + h=16 + λ_sr=5 | 0.1830 | 0.1731 | 0.0377 | 1.3e+06 ⚠ | 14.5% | **STABILITY CHAMPION 2026-06-15.** Unico 50/50 ep completati. 3/4 obj |
 | [`BASELINE_BPTT_864p_PRE_EVENTPROP`](BASELINE_BPTT_864p_PRE_EVENTPROP/) | `CF_FSNN_Net` | 864 | BPTT + surrogate (AdamW) | 0.2262 | 0.2211 | (basso) | (sano) | `P12_S2D_F2_no_ou` | Backup pre-EventProp con `lambda_sr=0.5`. Highway only. AdamW lr=2e-3 + OneCycleLR. |
 | [`A1_baseline_BPTT_864p`](A1_baseline_BPTT_864p/) | `CF_FSNN_Net` | 864 | BPTT + surrogate | 0.2231 | 0.2177 | n/a | 4.8% | `T30_A1_BASELINE_adamw` | ⚠️ `lambda_sr=0` (errato). NON usare per R3. |
 | [`A8_attn_BPTT_3936p`](A8_attn_BPTT_3936p/) | `CF_FSNN_Net_Attn` | 3,936 | BPTT + surrogate | 0.1665 | 0.1632 | n/a | 3.0% | `T30_A8_ATTN_adamw` | ⚠️ `lambda_sr=0` + highway-only + spike rate degenere. "Evento fortuito" (vedi AUDIT). NON è il vero champion. |
