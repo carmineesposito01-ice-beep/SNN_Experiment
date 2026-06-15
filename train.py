@@ -920,10 +920,31 @@ def main():
                         help='Passi per finestra TBPTT')
     # Scheduler
     parser.add_argument('--scheduler',   type=str,   default='plateau',
-                        choices=['plateau', 'onecycle', 'cosine', 'cosine_no_restart', 'none'],
-                        help='Scheduler LR: plateau|onecycle|cosine|cosine_no_restart|none '
+                        choices=['plateau', 'onecycle', 'cosine', 'cosine_no_restart', 'custom_restart', 'none'],
+                        help='Scheduler LR: plateau|onecycle|cosine|cosine_no_restart|custom_restart|none '
                              '(none = nessun adjustment, per ottimizzatori auto-adattivi '
                              'come Prodigy)')
+    # R32 (2026-06-15) — Custom restart scheduler con decay + 2-tier + adaptive + warmup.
+    # Discovery R31: cosine warm restart standard (T0=15) produce peak T_intra ma poi
+    # esplode al 2° restart (lr salta 90× istantaneo). I 5 meccanismi sotto regolano
+    # questo restart in modo piu' soft.
+    parser.add_argument('--restart_T0', type=int, default=15,
+                        help='R32: periodo di restart in epoche per scheduler=custom_restart. '
+                             'Solo se restart_adaptive=0.')
+    parser.add_argument('--restart_decay', type=float, default=1.0,
+                        help='R32 Opzione 1: decay geometrico per max_lr ad ogni restart. '
+                             '1.0 = no decay (Opzione 0 standard). 0.3 = max_lr × 0.3 ogni ciclo.')
+    parser.add_argument('--restart_lr_after', type=float, default=-1.0,
+                        help='R32 Opzione 2: lr_max fisso dal primo restart in poi. '
+                             '-1 (default) = usa restart_decay. >0 (es 0.15) = override per Opzione 2.')
+    parser.add_argument('--restart_warmup_epochs', type=int, default=0,
+                        help='R32 Opzione 4: epoche di ramp-up lineare DOPO ogni restart. '
+                             '0 = no warmup (restart violento). Es 2 = lr cresce '
+                             'da max_lr/2 a max_lr nelle prime 2 epoche post-restart.')
+    parser.add_argument('--restart_adaptive', type=int, default=0, choices=[0, 1],
+                        help='R32 Opzione 3: trigger restart quando val_T_intra_corr '
+                             'degrada per 2 epoche consecutive (sovrascrive T0 fisso). '
+                             '0 (default) = OFF, 1 = adaptive.')
     parser.add_argument('--max_lr',      type=float, default=5e-3,
                         help='LR massimo per OneCycleLR')
     parser.add_argument('--T0',          type=int,   default=5,
@@ -1355,6 +1376,15 @@ def main():
             optimizer, T_max=args.epochs, eta_min=1e-6,
         )
         sched_per_batch = False
+    elif args.scheduler == 'custom_restart':
+        # R32 (2026-06-15) — Custom restart scheduler gestito MANUALMENTE nel main loop
+        # (post val_epoch). Setting None qui significa "no auto scheduler step".
+        # La logica vive in main loop: vedi `compute_custom_lr()` + restart trigger.
+        scheduler = None
+        sched_per_batch = False
+        print(f"[R32 Custom Restart] T0={args.restart_T0} decay={args.restart_decay} "
+              f"lr_after={args.restart_lr_after} warmup={args.restart_warmup_epochs} "
+              f"adaptive={args.restart_adaptive}")
     else:  # plateau (default — usato nel primo run)
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
             optimizer, mode='min', factor=0.5, patience=10, min_lr=1e-6,
@@ -1428,6 +1458,64 @@ def main():
         model.set_logit_tau(args.cf_logit_tau_init)
         print(f"[R29 DEC-1] logit_tau init={args.cf_logit_tau_init} final={args.cf_logit_tau_final} schedule={args.cf_logit_tau_schedule}")
 
+    # R32 (2026-06-15) — Custom restart scheduler state + helpers
+    cr_last_restart_epoch = 0   # epoca dell'ultimo restart (0 = no restart yet, ciclo 0)
+    cr_cycle_num = 0            # numero di restart eseguiti
+    cr_T_intra_history = []     # storia val_T_intra_corr per adaptive trigger
+
+    def _custom_restart_lr(epoch):
+        """R32: calcola lr per epoca corrente nello scheduler custom_restart.
+
+        epoch:  epoca CORRENTE (1-indexed).
+        Usa cr_last_restart_epoch + cr_cycle_num come stato esterno.
+
+        Logica:
+          1. cycle_max_lr = lr × decay^cycle (Opzione 1) OR fissato (Opzione 2)
+          2. Cosine decay entro il ciclo: cosine_factor = 0.5(1+cos(pi × t/T0))
+          3. Warmup (Opzione 4): se warmup_epochs > 0, scala cycle_max_lr
+             linearmente nelle prime warmup_epochs DOPO restart.
+        """
+        epochs_since_restart = epoch - cr_last_restart_epoch - 1  # 0 = epoca subito dopo restart
+        # cycle's max_lr
+        if cr_cycle_num == 0:
+            cycle_max_lr = args.lr
+        elif args.restart_lr_after > 0:
+            cycle_max_lr = args.restart_lr_after        # Opzione 2: lr fissato
+        else:
+            cycle_max_lr = args.lr * (args.restart_decay ** cr_cycle_num)  # Opzione 1: decay
+        # Warmup ramp (Opzione 4): solo per cicli > 0 (no ramp al primo ciclo)
+        if cr_cycle_num > 0 and args.restart_warmup_epochs > 0 \
+                and epochs_since_restart < args.restart_warmup_epochs:
+            ramp = (epochs_since_restart + 1) / args.restart_warmup_epochs
+            cycle_max_lr = cycle_max_lr * ramp
+        # Cosine decay entro il ciclo
+        cycle_T = max(args.restart_T0, 1)
+        e_in_cycle = max(0, min(epochs_since_restart, cycle_T))
+        cosine_factor = 0.5 * (1.0 + math.cos(e_in_cycle * math.pi / cycle_T))
+        # Floor minimo (evita 0)
+        return max(cycle_max_lr * cosine_factor, 1e-6)
+
+    def _check_restart_trigger(epoch, T_intra_history):
+        """R32: decide se questo è il momento di un restart.
+
+        Opzione 3 (adaptive): trigger se T_intra cala per 2 epoche consecutive.
+        Opzione 0/1/2/4 (fixed): trigger ogni args.restart_T0 epoche.
+        """
+        if args.restart_adaptive:
+            # Adaptive: cala per 2 epoche?
+            if len(T_intra_history) >= 3:
+                a, b, c = T_intra_history[-3:]
+                # NB: nan-safe
+                if not (math.isnan(a) or math.isnan(b) or math.isnan(c)):
+                    if c < b < a:
+                        return True
+            return False
+        else:
+            # Fixed period
+            if args.restart_T0 > 0 and (epoch - cr_last_restart_epoch) >= args.restart_T0:
+                return True
+            return False
+
     def _logit_tau_at_epoch(epoch):
         """R29: calcola tau per epoca corrente in [1, args.epochs] secondo schedule.
 
@@ -1463,6 +1551,13 @@ def main():
                 tau_e = _logit_tau_at_epoch(epoch)
                 model.set_logit_tau(tau_e)
                 print(f"  [R29 DEC-1] epoch {epoch}: logit_tau = {tau_e:.3f}")
+
+            # R32 (2026-06-15) — Custom restart: aggiorna lr a inizio epoca.
+            if args.scheduler == 'custom_restart':
+                new_lr = _custom_restart_lr(epoch)
+                optimizer.param_groups[0]['lr'] = new_lr
+                print(f"  [R32 CustomRestart] ep{epoch}: lr={new_lr:.5f} "
+                      f"(cycle={cr_cycle_num}, since_restart={epoch-cr_last_restart_epoch-1})")
 
             train_m = train_epoch(
                 model, train_loader, optimizer, device, epoch, lam,
@@ -1507,8 +1602,18 @@ def main():
 
             val_m = val_epoch(model, val_loader, device, lam)
 
+            # R32 (2026-06-15) — Custom restart: aggiorna history + trigger check
+            if args.scheduler == 'custom_restart':
+                cr_T_intra_history.append(val_m.get('val_T_intra_corr', float('nan')))
+                if _check_restart_trigger(epoch, cr_T_intra_history):
+                    cr_cycle_num += 1
+                    cr_last_restart_epoch = epoch
+                    trigger_type = 'adaptive(T_intra↓)' if args.restart_adaptive else 'fixed_T0'
+                    print(f"  [R32 CustomRestart] RESTART @ epoch {epoch} ({trigger_type}) "
+                          f"-> cycle {cr_cycle_num}")
+
             # Step scheduler per-epoch (plateau e cosine).
-            # STEP 2C: guard su scheduler=None (caso --scheduler none).
+            # STEP 2C: guard su scheduler=None (caso --scheduler none o custom_restart).
             if scheduler is not None and not sched_per_batch:
                 if args.scheduler == 'plateau':
                     scheduler.step(val_m['total'])
