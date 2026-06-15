@@ -189,10 +189,14 @@ for e in EXPERIMENTS:
 print(f"\\nTotale stimato: {total_min:.0f} min = {total_min/60:.1f}h (con guard abort: ~50-70%)")'''
 
 
-CELL_3_CACHE = """# Cell 3 -- Cache check
+CELL_3_CACHE = """# Cell 3 -- Cache check (Python 3.10 compatible: no backslash in f-string expr)
 import os
 cache = C3_BASE['cache_path']
-print(f'Cache {cache}: {"OK ("+str(os.path.getsize(cache)/1e6)+" MB)" if os.path.isfile(cache) else "VERRA\\' GENERATA"}')"""
+if os.path.isfile(cache):
+    sz_mb = os.path.getsize(cache) / 1e6
+    print(f'  [OK] cache {cache}  ({sz_mb:.1f} MB)')
+else:
+    print(f'  [INFO] cache mancante: {cache} -- verra generata al primo run')"""
 
 
 CELL_4_PREFLIGHT = """# Cell 4 -- Pre-flight: C3 base + Opt1 (decay 0.3) 1ep×3step
