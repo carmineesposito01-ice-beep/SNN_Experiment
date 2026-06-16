@@ -928,9 +928,11 @@ def main():
     # Discovery R31: cosine warm restart standard (T0=15) produce peak T_intra ma poi
     # esplode al 2° restart (lr salta 90× istantaneo). I 5 meccanismi sotto regolano
     # questo restart in modo piu' soft.
-    parser.add_argument('--restart_T0', type=int, default=15,
-                        help='R32: periodo di restart in epoche per scheduler=custom_restart. '
-                             'Solo se restart_adaptive=0.')
+    parser.add_argument('--restart_T0', type=int, default=12,
+                        help='R32/R33: periodo di restart in epoche per scheduler=custom_restart. '
+                             'Default 12 (R33): per epochs=50 dà 4 cicli pieni che chiudono '
+                             'esattamente a ep48, evitando il ciclo monco T0=15→ep45→5 ep '
+                             'troncati che spreca un restart. Solo se restart_adaptive=0.')
     parser.add_argument('--restart_decay', type=float, default=1.0,
                         help='R32 Opzione 1: decay geometrico per max_lr ad ogni restart. '
                              '1.0 = no decay (Opzione 0 standard). 0.3 = max_lr × 0.3 ogni ciclo.')
@@ -1106,10 +1108,14 @@ def main():
                              '-> abort training. Difesa contro gradient explosion mascherato '
                              'dal clip. -1 (default) = OFF (backward-compat). Raccomandato per '
                              'studi su baselines instabili: 2.')
-    parser.add_argument('--epoch_explosion_threshold', type=float, default=100.0,
-                        help='R30: soglia per gn_total_preclip che definisce "esploding" a '
-                             'livello epoca. Default 100.0 (R24F CLEAN ha gn_max=21.8, soglia '
-                             '~5x). Solo se --max_epoch_explosion_streak > 0.')
+    parser.add_argument('--epoch_explosion_threshold', type=float, default=10000.0,
+                        help='R30/R33: soglia per gn_total_preclip che definisce "esploding" a '
+                             'livello epoca. Default 10000.0 (alzato da 100 in R33 dopo R32: '
+                             'soglia 100 era troppo sensibile, un singolo batch rumoroso poteva '
+                             'forzare streak=1 e 2 epoche rumorose consecutive triggeravano abort '
+                             'precoce di run altrimenti recuperabili. R32_A4 peak gn=1.2e13, '
+                             'R32_B5 peak gn=5.3e9, R31_A3 peak gn=4.3e3 — 10000 distingue spike '
+                             'transienti da divergenza vera). Solo se --max_epoch_explosion_streak > 0.')
     # STEP 2C — Optimizer_Exploration: step budget control + val decoupling
     parser.add_argument('--max_steps_per_epoch', type=int, default=-1,
                         help='Cap step training per epoca, indipendente da len(train_loader). '
