@@ -5,7 +5,136 @@
 
 ---
 
-## 🎯 Stato attuale (2026-06-12 — **RESET strategico al vero baseline R24F_mixed_lr0.5_V08**)
+## 🎯 Stato attuale (2026-06-16 — **STUDIO PRODIGY CHIUSO. Merge → main**)
+
+**Fase corrente**: **Prodigy Study CLOSED**. R33 Closure ha prodotto 2 nuovi champion finali con record assoluti del progetto. Tutti i 5 branch di esplorazione (Architecture_Exploration, Floor_Diagnostic, Optimizer_Exploration, Training_Method_Exploration, Visualizer_Building) sono antenati di `Prodigy_Deep_Study` → un singolo merge `Prodigy_Deep_Study → main` integra l'intera storia (307 commit).
+
+### Champion finali (4 entries attive in `Arch_Tested/`)
+
+| Ruolo | Tag | Tp | val_data | ep | gn_max | Note |
+|---|---|---:|---:|---:|---:|---|
+| **PEAK** | `R33_C1_A4_T12_PEAK` | **0.0642** | **0.1589** 🏆 | 49/50 | 1.78e19 | Record val_data assoluto |
+| **CLEAN** | `R33_C2_A1_T12_CLEAN` | 0.0518 | 0.1654 | **50/50** | **52** ✅ | 1° setup 50ep+gn<100 |
+| **STABLE** | `R32_B5_E1_STABLE` | 0.0519 | 0.163 | 50/50 | 5.3e9 | h=16, 232 params, FPGA-friendly |
+| **BASELINE** | `R24F_MIXED_lr0.5_V08` | 0.015 | 0.181 | 30/30 | 21.79 ✅ | Storico, certificato CLEAN |
+
+### Cronologia ultimi 4 giorni (2026-06-13 → 2026-06-16)
+
+1. **2026-06-13 R30 Identifiability** (10 esp.) — supervisione ausiliaria 4-tuple sblocca rank-collapse (rank≥3 in 8/10 run).
+2. **2026-06-14 R31 Champion Validation** (14 esp.) — 3 champion candidati: C3 CLEAN, A3 PEAK, E1 STABLE.
+3. **2026-06-15 R32 Restart Mechanisms** (10 esp.) — 5 meccanismi soft × 2 baseline. Soppianta R31_A3/E1. Identificato peak val_data record (B2=0.161). Bug A1≡A2 per cycle_max coincidenza.
+4. **2026-06-16 mattina — R33 Closure preparato**: 2 correzioni in `train.py` (`epoch_explosion_threshold` 100→10000, `restart_T0` 15→12). 5 esp. (3 champion replica + 2 isolation controls).
+5. **2026-06-16 pomeriggio — R33 eseguito**: scoperti 2 NUOVI champion:
+   - **R33_C1** (A4 con T0=12): 49/50 ep, Tp=0.0642, **val_data=0.1589 RECORD ASSOLUTO**
+   - **R33_C2** (A1 con T0=12): 50/50 ep, **gn=52 CLEAN**, primo setup mai osservato a combinare 50 ep + gn<100
+   - Isolation controls (D1, D2) confermano che il guadagno viene SOLO da T0=12 (la soglia rilassata da sola non basta)
+
+### Stato infrastruttura corrente (2026-06-16)
+
+**Branch git**: `Prodigy_Deep_Study` HEAD `f7cbd73`. Tag: `pre_R27`, `pre_R28`, `pre_R29`, `pre_R30`, `pre_R31`, `pre_R32`, `pre_R33`. **Da creare**: `R33_closure` post-merge.
+
+**Codice principale**:
+- `train.py`: nuovi default R33 (`epoch_explosion_threshold=10000.0`, `restart_T0=12`)
+- 5 nuovi CLI flag R32 invariati (`--restart_decay`, `--restart_lr_after`, `--restart_warmup_epochs`, `--restart_adaptive`, `--restart_T0`)
+- `core/network.py`: decoder fix C3 opt-in (DEC-1 + DEC-3)
+- `data/generator.py`: 4-tuple loader R30
+
+**Results dir attive**:
+- `results/Prodigy_Study/R31_ChampionValidation/` (14 run)
+- `results/Prodigy_Study/R32_RestartMechanisms/` (10 run + diagnostic)
+- `results/Prodigy_Study/R33_Closure/` (5 run + side-by-side)
+- `results/Prodigy_Study/_COMPLETE_360_analysis.csv`, `_TRUE_Tintra_ranking.csv`
+
+**Arch_Tested**: 14 entry totali (4 attive + 10 storiche/superseded)
+
+### Cosa fare adesso (priorità)
+
+1. **Merge `Prodigy_Deep_Study` → `main`** (no-ff per preservare storia 307 commit)
+2. **Tag finale**: `R33_closure` su `main` post-merge
+3. **Cleanup branch obsoleti**: i 5 branch ancestor (Architecture/Floor/Optimizer/Training_Method/Visualizer) sono sicuri da rimuovere — il merge li integra automaticamente
+4. **Push `main` + delete remote dei 5 branch obsoleti**
+5. **Fase successiva (post-merge)**: deployment/quantizzazione PYNQ-Z1 con R33_C2 come baseline (clean + 50ep complete + 864 params) o R33_C1 se serve max accuracy
+
+### Verità chiave 2026-06-16 (closure)
+
+- **T0=12 batte T0=15 sistematicamente**: 4 cicli pieni in 50 ep, no ciclo monco sprecato. +8 ep su A4, +25 ep su A1.
+- **Decay 0.3 + T0=12 = combinazione CLEAN**: dopo 4 cicli lr lavora a ~1e-2, dinamica BPTT quasi lineare, gn pulito.
+- **Warmup 2ep + T0=12 = combinazione PEAK**: smussa il restart abbastanza da mantenere il peak Tp ma porta a esplosioni tardive irrilevanti per la completion.
+- **Lo studio è chiuso**: i 4 champion coprono tutti i ruoli operativi richiesti. Non ci sono motivi scientifici per ulteriori sweep prima del deploy.
+
+---
+
+## 🎯 Stato precedente (2026-06-15 — R30/R31 completati, R32 pronto su Azure) — superseded by R33 closure
+
+**Fase corrente**: **3 champions validati** post-R31 (Champion Validation 14 esp.). R30 (Identifiability) confermato che la supervisione ausiliaria + decoder fix risolvono il rank-collapse. R31 ha identificato 3 trade-off ottimali distinti. R32 (Restart Mechanisms, 10 esp.) è **pronto su Azure** ma non ancora eseguito.
+
+### I 3 champion attuali (snapshot in `Arch_Tested/`)
+
+| Tag | Categoria | T_intra peak | val_data | gn_max | Note |
+|---|---|---:|---:|---:|---|
+| ⭐ `R29v2_C3_CLEAN` | **Scientific reference** | 0.0407 | 0.177 | **40.6** ✅ | 4/4 obiettivi, riproducibile, baseline pulito |
+| ⭐ `R31_A3_PEAK` | **Operational best** | **0.0599** | **0.167** | 4280 ⚠ | Best val_data @ ep15 pre-explosion (cosine warm restart T0=15) |
+| ⭐ `R31_E1_STABLE` | **Long-run stable** | 0.038 | 0.173 | 1.3e6 ⚠ | 50/50 ep completati, 232 params (h=16, rank=4), λ_sr=5 |
+
+Tutti e 3 usano: Prodigy `lr=0.5`, DEC-1 (per-channel τ=[10,3,10,3,3]) + DEC-3 (init_bias_shift=1), R30 4-tuple loader (supervisione ausiliaria).
+
+### Cronologia ultimi 3 giorni (2026-06-13 → 2026-06-15)
+
+1. **2026-06-13 — R30 Identifiability (10 esp.)** — applicata supervisione ausiliaria su v0/s0/a/b (4-tuple loader) + decoder fix C3 (init_bias + per-ch τ). Rank-collapse risolto (rank_effective ≥ 3 in 8/10 run). Conferma: il bottleneck principale era identifiability, non capacità rete.
+
+2. **2026-06-14 — R31 Champion Validation (14 esp.)** — sweep 50 ep su 4 dimensioni (decoder/scheduler/spike-pressure/capacity). Scoperti **3 champion** distinti:
+   - **C3** (no restart, 10 ep): CLEAN reference scientifico
+   - **A3** (cosine T0=15, 50 ep abort@32): peak operativo @ep15 prima dell'esplosione
+   - **E1** (h=16, λ_sr=5): unico 50/50 ep completati senza abort
+
+3. **2026-06-15 mattina — Analisi numerica 360°** su R31 (49 run totali aggregati con R28/R29/R30). Identificato pattern critico: **warm restart al primo trigger (ep15) genera SEMPRE il peak T_intra**, ma successivamente il loss landscape implode. → ipotesi: restart troppo violento (lr salta 90× istantaneamente).
+
+4. **2026-06-15 pomeriggio — R32 Restart Mechanisms preparato**: implementati nel `train.py` 5 meccanismi soft per il restart:
+   - **Opt 1 (decay)**: `cycle_max_lr *= restart_decay^cycle_num` (0.5 → 0.15 → 0.045)
+   - **Opt 2 (2-tier)**: `restart_lr_after` per cicli successivi (lr fisso post-restart)
+   - **Opt 3 (adaptive)**: trigger basato su T_intra↓×2 invece di T0 fisso
+   - **Opt 4 (warmup)**: linear warmup di N epoche post-restart
+   - **Opt 5 (combo 1+4)**: decay + warmup combinati
+   - 10 esperimenti × 50 ep: 5 mech × {C3 base, E1 base}. Notebook `Prodigy_Restart_Mechanisms_R32.ipynb` audit Python 3.10 OK su tutte le 9 celle.
+
+### Stato infrastruttura corrente (2026-06-15)
+
+**Branch git**: `Prodigy_Deep_Study` HEAD `a552f55` (post-fix Python 3.10 Cell 3). Tag rollback: `pre_R27`, `pre_R28`, `pre_R29`, `pre_R30`, `pre_R31`, `pre_R32`.
+
+**Codice principale** (cumulative state):
+- `train.py`: + 5 nuovi CLI flag `--restart_T0`, `--restart_decay`, `--restart_lr_after`, `--restart_warmup_epochs`, `--restart_adaptive` (default no-op, backward-compat verificato)
+- `train.py`: helper `_custom_restart_lr(epoch)` + `_check_restart_trigger()` (R32)
+- `core/network.py`: decoder fix opt-in (DEC-1 + DEC-3) confermati nei 3 champion
+- `data/generator.py`: 4-tuple loader R30 (x, y, mask, params_gt) attivo
+
+**Results dir attive (aggiornate)**:
+- `results/Prodigy_Study/R30_Identifiability/` — R30 (10 run, baseline pulito + supervisione)
+- `results/Prodigy_Study/R31_ChampionValidation/` — R31 (14 run, sweep 50 ep su 4 dimensioni)
+- `results/Prodigy_Study/_COMPLETE_360_analysis.csv` — 49 run totali aggregati
+- `results/Prodigy_Study/_TRUE_Tintra_ranking.csv` — re-ranking per peak T_intra (non val_total)
+
+**Arch_Tested aggiornato** (9 entry totali):
+- 3 nuovi champion: `R29v2_C3_CLEAN`, `R31_A3_PEAK`, `R31_E1_STABLE`
+- README master aggiornato con tabella T_intra + sezione "Note critiche"
+
+### Cosa fare adesso (priorità)
+
+1. **Eseguire R32 sweep su Azure** (~4.6h, 10 esp. × 50 ep). User trigger richiesto: notebook `Prodigy_Restart_Mechanisms_R32.ipynb`. Output atteso in `results/Prodigy_Study/R32_RestartMechanisms/`.
+2. **Analisi post-R32**: confrontare i 5 meccanismi soft vs warm restart standard (R31_A3 baseline). Domanda: il decay/warmup permette di MANTENERE il peak T_intra senza l'esplosione successiva?
+3. **Decisione strategica post-R32**: se almeno 1 meccanismo soft regge 50 ep con T_intra > 0.05 e gn_max < 1000 → nuovo champion. Altrimenti, accettare R31_A3_PEAK come definitivo e chiudere Prodigy Study.
+4. **Merge `Prodigy_Deep_Study` → main** dopo chiusura Prodigy Study, con tag finale `R32_closure`.
+
+### Verità chiave 2026-06-15
+
+- **Warm restart standard (cosine T0=15) è una lama a doppio taglio**: il primo restart coincide quasi sempre con il peak T_intra ma la rete poi implode (gn esplode +3 OOM).
+- **Capacity ridotta = stabilità**: E1 (232 params) è l'unico setup con 50/50 ep, ma a costo di T_intra inferiore (0.038 vs 0.060).
+- **Identifiability era il vero bottleneck**: la supervisione ausiliaria R30 ha sbloccato il rank-collapse universale visto in R27.
+- **R32 è l'ultimo esperimento prima della chiusura**: 5 meccanismi soft per capire se il peak R31_A3 è sostenibile o solo un evento di transizione.
+- **Codice train.py è ora ricco di feature opt-in (R29 DEC-1/DEC-3, R30 4-tuple, R32 5 restart mech)**: tutti default no-op = backward-compat. Configurazione corrente attiva via CLI flag.
+
+---
+
+## 🎯 Stato precedente (2026-06-12 — **RESET strategico al vero baseline R24F_mixed_lr0.5_V08**)
 
 **Fase corrente**: **VERO baseline identificato**: `R24F_mixed_lr0.5_V08` (val_data 0.181, val_total 0.189, gn_max 21.79 CLEAN). Snapshot salvato in `Arch_Tested/R24F_MIXED_lr0.5_V08_TRUE_CHAMPION/`. R27-R29 completati ma su baseline instabile (Prodigy lr=1.0 con gradienti esplosi mascherati dal clip). R30 (next step) parte da QUESTO baseline pulito.
 

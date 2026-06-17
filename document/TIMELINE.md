@@ -923,6 +923,170 @@ Ho seguito "lr=1.0 per Prodigy" (paper konstmish) per 4 sessioni senza verificar
 
 ---
 
+## 📅 2026-06-13 — R30 Identifiability (10 esp.) post-RESET
+
+**Setup**: prima campagna sul vero baseline `R24F_mixed_lr0.5_V08`. Applicate decoder fix R29 opt-in (DEC-1 per-channel τ, DEC-3 init_bias_shift) + supervisione ausiliaria su v0/s0/a/b via 4-tuple loader (`data/generator.py` emette `params_gt`).
+
+**Implementazione**:
+- `generator.py`: aggiunto `params_gt` (4 valori per traiettoria) al dataset → loader 4-tuple `(x, y, mask, params_gt)`.
+- `train.py`: `pinn_loss` ora accetta `lambda_aux` su `MSE(decoded_params, params_gt)` come 4° componente.
+- 10 esperimenti: lambda_aux ∈ {0.0, 0.1, 0.5, 1.0}, decoder cfg ∈ {C0, C3}, plus 2 controlli.
+
+**Risultati**:
+- Rank-collapse **risolto** dove era universale: rank_effective ≥ 3 in 8/10 run con lambda_aux ≥ 0.5.
+- T_intra_corr migliorato a 0.038-0.043 nei migliori (vs ≤0.058 su 24 run R27 audit).
+- v0_pred desaturato (range 25-42 invece di clamp a 38-44).
+- **C3 emergente come decoder cfg vincente**: init_bias_shift=1 + per-channel τ=[10,3,10,3,3] migliora T_intra E rank.
+
+**Lezione #45 — Identifiability era il bottleneck primario, non capacità**: la rete da 864 params è sufficiente. Senza ground-truth sui parametri latenti, la rete impara una mappa costante (rank=1). Supervisione ausiliaria + decoder calibrato risolvono. R30 chiude la domanda aperta di R27 (rank-collapse) e R28 (Prodigy non era colpevole).
+
+---
+
+## 📅 2026-06-14 — R31 Champion Validation (14 esp.)
+
+**Setup**: sweep esaustivo a 50 epoche su 4 dimensioni ortogonali (decoder, scheduler, spike-pressure, capacity) per validare i 3 champion candidati emersi da R30.
+
+**Dimensioni**:
+- **Decoder**: C0 (none), C1 (init), C3 (init + per-ch τ) ← winner R30
+- **Scheduler**: cosine_no_restart, cosine_T0=15, cosine_T0=10
+- **Spike pressure**: λ_sr ∈ {0.5, 1.0, 5.0}
+- **Capacity**: h ∈ {32 (baseline 864p), 16 (232p ridotto)}
+
+**Risultati shock** (3 champion distinti, ognuno ottimo su un trade-off):
+
+| Tag | Config | T_intra | val_data | gn_max | Ep done | Categoria |
+|---|---|---:|---:|---:|---:|---|
+| ⭐ **C3** | C3 + no restart, 10 ep | **0.0407** | 0.177 | **40.6** ✅ | 10/10 | Scientific reference (CLEAN) |
+| ⭐ **A3** | C3 + cosine T0=15, 50 ep | **0.0599** | **0.167** | 4280 ⚠ | 32/50 abort | Operational best (peak @ ep15) |
+| ⭐ **E1** | C3 + h=16 + λ_sr=5 | 0.038 | 0.173 | 1.3e6 ⚠ | **50/50** ✅ | Long-run stable |
+
+**Pattern critico identificato**:
+- A3 (cosine T0=15): T_intra peak coincide **esattamente** con il primo restart @ep15, poi loss landscape implode (gn cresce di 3 OOM nelle 17 ep successive prima di abort).
+- E1 (capacity ridotta): l'unico setup che completa 50 ep senza abort, ma T_intra inferiore. h=16 (232 params) sacrifica capacità per stabilità.
+- C3 (no restart, 10 ep): l'unico CLEAN (gn=40.6 < 100). Trade-off: 4/4 obiettivi raggiunti su solo 10 ep, T_intra inferiore al peak A3.
+
+**Snapshot 3 champion** in `Arch_Tested/R29v2_C3_CLEAN/`, `Arch_Tested/R31_A3_PEAK/`, `Arch_Tested/R31_E1_STABLE/` con README + reproduce_training.ipynb + snapshot_original (config + training_log + plots G1-G13). README master `Arch_Tested/README.md` aggiornato (9 entry totali con colonna T_intra).
+
+#### Lezione #46 — Warm restart è lama a doppio taglio
+Il primo restart cosine T0=15 sblocca temporaneamente il peak T_intra (probabile uscita da minimo locale grazie al jump di lr da 0.0002→0.0178, 90×). Ma il jump è troppo violento: amplifica i gradienti accumulati, esplode poco dopo. **Hypothesis R32**: meccanismi soft (decay, warmup, adaptive trigger) possono catturare il beneficio del restart senza la successiva esplosione.
+
+#### Lezione #47 — Tre champion ≠ un champion
+Il concetto di "best model" è ambiguo se gli obiettivi sono multipli (T_intra, val_data, stabilità, riproducibilità). R31 ha mostrato che esistono **3 frontiere di Pareto distinte**. Documentare tutte e 3 in `Arch_Tested/` (con etichette "CLEAN"/"PEAK"/"STABLE") è meglio che forzare una scelta arbitraria.
+
+#### Lezione #48 — T_intra peak ≠ val_total best
+Il file `_TRUE_Tintra_ranking.csv` mostra che 12/49 run hanno peak T_intra a epoca DIVERSA dal best val_total (idxmin). Aggregatori standard (best.pt selezionato per val_total) **perdono** il peak T_intra. Per Prodigy Study estratto via re-scan completo dei training_log.csv per epoca con T_intra.idxmax() per run.
+
+---
+
+## 📅 2026-06-15 — R32 Restart Mechanisms (preparato, non eseguito)
+
+**Setup**: 5 meccanismi soft per warm restart + 2 baseline cfg (C3, E1) → 10 esperimenti × 50 ep.
+
+**Codice (`train.py`)**: aggiunti 5 nuovi CLI flag, tutti default no-op (backward-compat verificato con smoke test):
+```python
+parser.add_argument('--restart_T0', type=int, default=15)
+parser.add_argument('--restart_decay', type=float, default=1.0)     # 1.0 = no decay
+parser.add_argument('--restart_lr_after', type=float, default=-1.0) # -1 = disabled
+parser.add_argument('--restart_warmup_epochs', type=int, default=0)
+parser.add_argument('--restart_adaptive', type=int, default=0, choices=[0, 1])
+```
+
+Helper `_custom_restart_lr(epoch)`:
+```python
+# Per ciclo n: cycle_max_lr = base_lr * (restart_decay ** n)
+# OR cycle_max_lr = restart_lr_after se > 0
+# Cosine all'interno del ciclo, warmup linear opzionale nelle prime restart_warmup_epochs
+cosine_factor = 0.5 * (1.0 + math.cos(e_in_cycle * math.pi / cycle_T))
+```
+
+Helper `_check_restart_trigger()`: fixed T0 (epoch >= cycle_start + T0) OR adaptive (T_intra↓×2 vs cycle max).
+
+**5 meccanismi**:
+- **Opt 1 (decay 0.3)**: lr cicli 0.5 → 0.15 → 0.045 (smorzamento progressivo)
+- **Opt 2 (2-tier)**: ciclo 0 con lr=0.5, cicli successivi con lr_after=0.1
+- **Opt 3 (adaptive)**: restart triggerato da T_intra calo ×2 invece di T0 fisso
+- **Opt 4 (warmup 3 ep)**: linear warmup post-restart per 3 epoche
+- **Opt 5 (combo 1+4)**: decay 0.3 + warmup 3 ep
+
+**10 esperimenti**: 5 mech × {C3 base (h=32, λ_sr=1), E1 base (h=16, λ_sr=5)}. Notebook `Prodigy_Restart_Mechanisms_R32.ipynb` (9 celle).
+
+**Audit Python 3.10**: tutte le 9 celle passano `ast.parse(feature_version=(3,10))`. Fix Cell 3 (era SyntaxError per `\'` in f-string expression — vietato fino a 3.12, rilassato in 3.12+). Tag git `pre_R32`. HEAD `a552f55` pushed.
+
+**Stato**: pronto su Azure, **non ancora eseguito**. ~4.6h compute stimato. Output atteso: `results/Prodigy_Study/R32_RestartMechanisms/`.
+
+#### Lezione #49 — Python 3.10 compatibility check obbligatorio prima di pushare su Azure
+Azure ML cluster usa Python 3.10. `\'` (backslash) in f-string expression è vietato fino a 3.12 (PEP 701). Local Python 3.13 compila ma Azure 3.10 fallisce. **Aggiungere `ast.parse(src, feature_version=(3,10))` come step di pre-push** per ogni notebook.
+
+---
+
+## 📅 2026-06-16 — R32 RestartMechanisms eseguito + R33 Closure (CHIUSURA STUDIO)
+
+### Mattina — R32 eseguito (10 esp.)
+
+5 meccanismi soft (decay, 2-tier, adaptive, warmup, combo) × 2 baseline (C3, E1). Risultati chiave:
+
+| Rank Tp | Tag | Tp | val_data | ep | gn_max |
+|---:|---|---:|---:|---:|---:|
+| 1 | R32_A3_adaptive | 0.0651 | 0.170 | 25/50 | 1e19 |
+| 2 | R32_A4_warmup2ep | 0.0635 | 0.165 | 41/50 | 1.2e13 |
+| 3 | R32_B3_E1_adaptive | 0.0626 | 0.175 | 19/50 | 4e18 |
+| 4 | R32_A1_decay03 | 0.0577 | **0.163** | 25/50 | 6.5e5 |
+| 4 | R32_A2_2tier_015 | 0.0577 | 0.163 | 25/50 | 6.5e5 |
+| ... | R32_B2_E1_2tier | 0.0500 | **0.1609** record | 50/50 | 5.3e9 |
+| ... | R32_B5_E1_decay+warmup | 0.0519 | 0.163 | 50/50 | 5.3e9 |
+
+**Bug A1 ≡ A2**: decay 0.3 e 2-tier 0.15 producono cycle_max_lr coincidente (0.5×0.3 = 0.15), training identico. Solo 4 meccanismi effettivamente distinti.
+
+**Adaptive trigger (A3) = doppio-taglio**: peak Tp record (0.065) ma catastrofico (gn=1e19). Non riproducibile come champion.
+
+**3 champion R32 snapshot** in `Arch_Tested/`: R32_A4_C3_WARMUP_PEAK, R32_A1_C3_DECAY_BALANCED, R32_B5_E1_STABLE. Soppiantano R31_A3/E1.
+
+### Pomeriggio — Analisi diagnostica + 2 correzioni
+
+User identifica 3 anomalie nei grafici R32:
+1. **Explosion guard troppo sensibile**: soglia 100 abortiva run con singoli spike isolati. Verificato: tutti gli abort R32 erano su 2 epoche realmente consecutive >100, MA con `gn_total_preclip` naturale spesso fluttuante sopra 100, basta un batch rumoroso per innescare streak=1.
+2. **Restart_T0=15 sub-ottimale per 50 ep**: 3 cicli pieni + 1 ciclo monco di 5 ep (restart sprecato).
+3. **A1 ≡ A2 bug**: documentato per i prossimi sweep.
+
+**Correzioni in `train.py`** (default updates):
+- `epoch_explosion_threshold`: 100 → **10000** (R31_A3 peak=4.3e3, soglia ora distingue divergenza vera da spike transienti)
+- `restart_T0`: 15 → **12** (4 cicli pieni in 50 ep, no spreco)
+
+### Sera — R33 Closure (5 esp.) — 2 NUOVI champion
+
+5 esperimenti per chiudere rigorosamente lo studio:
+- **C1**: R32_A4 + T0=12 + thr=10000 → **49/50 ep**, Tp=0.0642, **val_data=0.1589 RECORD ASSOLUTO**
+- **C2**: R32_A1 + T0=12 + thr=10000 → **50/50 ep**, Tp=0.0518, **gn=52 ✅ CLEAN**
+- **C3**: R32_B5 + T0=12 + thr=10000 → 50/50 ep, marginalmente peggio di R32_B5 (gn ridotto 3 OOM, Tp leggermente sotto)
+- **D1** (isolation, T0=15 + solo thr=10000): identico a R32_A4 (+1 ep) → soglia da sola non basta
+- **D2** (isolation, A3 adaptive + thr=10000): identico a R32_A3 (Tp=0.065, ep=25, gn=1e19) → la sua esplosione era reale
+
+**Snapshot in `Arch_Tested/`**: `R33_C1_A4_T12_PEAK/` e `R33_C2_A1_T12_CLEAN/`. Soppiantano R32_A4 e R29v2_C3.
+
+### Champion roster finale post-R33
+
+| Ruolo | Tag | Tp | val_data | ep | gn_max |
+|---|---|---:|---:|---:|---:|
+| PEAK | R33_C1_A4_T12_PEAK | **0.0642** | **0.1589** 🏆 | 49/50 | 1.78e19 |
+| CLEAN | R33_C2_A1_T12_CLEAN | 0.0518 | 0.1654 | 50/50 | **52** ✅ |
+| STABLE | R32_B5_E1_STABLE | 0.0519 | 0.163 | 50/50 | 5.3e9 |
+| BASELINE storico | R24F_MIXED_lr0.5_V08 | 0.015 | 0.181 | 30/30 | 21.79 ✅ |
+
+#### Lezione #50 — Il posizionamento dei cicli batte i meccanismi di restart
+Tutti i 5 meccanismi soft R32 (decay/2-tier/adaptive/warmup/combo) producono trade-off interessanti, ma il **singolo intervento più impattante** dell'intero R31→R33 è il riposizionamento `T0=15 → T0=12`. +8 ep su A4 (Tp+1%), +25 ep su A1 (clean!). I meccanismi sofisticati venivano vanificati dal ciclo monco residuale.
+
+#### Lezione #51 — Default conservativi delle guard sono critici
+Soglia 100 per `epoch_explosion_threshold` (5× sopra R24F CLEAN=21.8) sembrava ragionevole ma diventa hair-trigger nel regime Prodigy + warm restart dove spike naturali transienti sono frequenti. Soglia 10000 (4× sopra R31_A3 stabile=4.3e3) discrimina meglio. **Calibrare le guard sui setup attivi, non sul baseline iniziale**.
+
+#### Lezione #52 — Studio rigoroso ≠ studio infinito
+R33 ha dimostrato che le correzioni minime (2 default in `train.py`) bastavano a sbloccare 2 nuovi record. Conferma che fermarsi a una "scoperta" senza verificare le ipotesi sui parametri di setup può lasciare champion non identificati. **5 esp. di chiusura ben mirati > 50 esp. di ricerca esplorativa randomica**.
+
+### Chiusura studio Prodigy — Merge → main
+
+I 5 branch di esplorazione (Architecture/Floor/Optimizer/Training_Method/Visualizer) sono tutti antenati di `Prodigy_Deep_Study`. Un merge `Prodigy_Deep_Study → main` integra l'intera storia del progetto (307 commit). Tag finale: `R33_closure`.
+
+---
+
 ## 📌 Note finali
 
 Questo TIMELINE va aggiornato dopo ogni milestone significativa. Mantenere la sezione "Lessons learned" è cruciale per non ripetere errori in future sessioni.
