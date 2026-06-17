@@ -148,8 +148,15 @@ Lo studio Prodigy è chiuso. Le opzioni successive (vedi `document/FUTURE_WORK.m
 
 ## Come riprodurre un champion
 
+Ogni champion ha il proprio CLI completo nella sezione "Riproduzione" del suo README:
+- `Arch_Tested/R33_C1_A4_T12_PEAK/README.md` (PEAK)
+- `Arch_Tested/R33_C2_A1_T12_CLEAN/README.md` (CLEAN)
+- `Arch_Tested/R32_B5_E1_STABLE/README.md` (STABLE)
+- `Arch_Tested/R24F_MIXED_lr0.5_V08_TRUE_CHAMPION/README.md` (BASELINE storico)
+
+Esempio CLEAN (deploy candidate):
+
 ```bash
-# Esempio: R33_C2_A1_T12_CLEAN
 cd Arch_Tested/R33_C2_A1_T12_CLEAN/
 cat README.md   # vedi sezione "Riproduzione"
 # Riproduzione full (50 ep):
