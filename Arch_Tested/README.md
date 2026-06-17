@@ -98,5 +98,5 @@ jupyter notebook reproduce_training.ipynb
 - `document/AUDIT_2026-06-02.md` — bilancio onesto pre-roadmap
 - `document/EVENTPROP_OPTIMIZER_SWEEP.md` — sweep 4x11 (origine EVPROP best)
 - `document/P_S.md` — storia cronologica problemi/soluzioni
-- `results/T30_*` — risultati run sorgenti A1/A8/A3
-- `results/SW_eventprop_alif_full_adamw_lr2e-3/` — risultato run sorgente EVPROP
+- `results/T30/T30_*` — risultati run sorgenti A1/A8/A3
+- `results/SW_OptimizerSweep/SW_eventprop_alif_full_adamw_lr2e-3/` — risultato run sorgente EVPROP

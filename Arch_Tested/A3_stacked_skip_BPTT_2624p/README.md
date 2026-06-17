@@ -10,7 +10,7 @@
 
 ## Risultati run originale
 
-**Source**: `results/T30_A3_STACKED_SKIP_adamw/` (snapshot copiato in `snapshot_original/`).
+**Source**: `results/T30/T30_A3_STACKED_SKIP_adamw/` (snapshot copiato in `snapshot_original/`).
 
 | Metric | Valore |
 |---|---:|

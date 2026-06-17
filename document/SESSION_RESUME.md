@@ -724,7 +724,7 @@ git push origin main
 
 ### Se l'utente dice "ho lanciato STEP 2A, ecco i risultati":
 1. `git pull origin main`
-2. `ls results/P9_S2A_fast_baseline/`
+2. `ls results/P9/P9_S2A_fast_baseline/`
 3. Analizza `training_log.csv` per val_loss
 4. Confronto con `P9_S1_highway_v2` (val=0.277)
 5. Applica decision tree sopra → propone STEP 2B

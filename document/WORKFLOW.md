@@ -431,4 +431,4 @@ Quando passi un esperimento all'agente per analisi, includi:
 Esempio:
 > "Pushato `P9_S1_highway_v2` (commit `3dedf51`). Training completato 5 epoche con early stop, best val_loss=0.27. Confermi P9? Procediamo a STEP 2?"
 
-L'agente farà `git pull`, leggerà `results/P9_S1_highway_v2/`, e risponderà.
+L'agente farà `git pull`, leggerà `results/P9/P9_S1_highway_v2/`, e risponderà.

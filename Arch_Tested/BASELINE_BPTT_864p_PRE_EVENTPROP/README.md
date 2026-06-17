@@ -30,7 +30,7 @@ Baseline production CF_FSNN_Net 864p, run pre-EventProp:
 
 ## Risultati run originale
 
-**Source**: `results/P12_S2D_F2_no_ou/` (snapshot copiato in `snapshot_original/`).
+**Source**: `results/P12/P12_S2D_F2_no_ou/` (snapshot copiato in `snapshot_original/`).
 
 | Metric | Valore |
 |---|---:|
@@ -109,5 +109,5 @@ Copia esatta della struttura `A1_baseline_BPTT_864p/`:
 - `core/network.py` (CF_FSNN_Net solo) + `neurons.py`, `hardware.py`
 - `data/generator.py`, `utils/plot_diagnostics.py`, `config.py` (shared)
 - `train.py` (CLI choices=['baseline'])
-- `snapshot_original/` da `results/P12_S2D_F2_no_ou/` (NOT da T30!)
+- `snapshot_original/` da `results/P12/P12_S2D_F2_no_ou/` (NOT da T30!)
 - `reproduce_training.ipynb`

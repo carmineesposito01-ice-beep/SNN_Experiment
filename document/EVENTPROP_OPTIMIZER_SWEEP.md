@@ -3,7 +3,7 @@
 **Data**: 2026-06-01
 **Branch**: `Training_Method_Exploration` HEAD `09e1159`
 **Documento parente**: [EVENTPROP_GRID2X2.md](EVENTPROP_GRID2X2.md), [EVENTPROP_DESIGN.md](EVENTPROP_DESIGN.md)
-**Risultati raw**: `results/SW_<method>_<opt_label>/` (44 cartelle)
+**Risultati raw**: `results/SW_OptimizerSweep/SW_<method>_<opt_label>/` (44 cartelle)
 **Aggregato**: `_sweep_master.csv`
 **Notebook Azure**: `Training_File_Optimizer_2x2.ipynb`
 
@@ -288,5 +288,5 @@ EventProp può continuare a esistere nel codebase come reference (`core/eventpro
 - `document/EVENTPROP_OPTIMIZER_SWEEP.md` — questo documento (chiusura definitiva)
 
 ### Risultati
-- `results/SW_<method>_<opt_label>/` — 44 cartelle con CSV epoca + batch + plot G1-G13
+- `results/SW_OptimizerSweep/SW_<method>_<opt_label>/` — 44 cartelle con CSV epoca + batch + plot G1-G13
 - `_sweep_master.csv` — aggregato locale (44 righe, 18 colonne metriche)
