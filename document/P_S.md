@@ -1,13 +1,14 @@
 # P_S.md — Problemi & Soluzioni CF_FSNN
 
 > 📌 **Per il quick-start con zero contesto**: leggi `SESSION_RESUME.md` prima.
-> 📚 **Per decode acronimi P/A/B/F/T/PF/G**: vedi `GLOSSARY.md`.
+> 📚 **Per decode acronimi P/A/B/F/T/PF/G/R/V/W**: vedi `GLOSSARY.md`.
 > 🔧 **Per workflow Azure end-to-end**: vedi `WORKFLOW.md`.
 > 🏛️ **Per storia decisioni + lessons learned**: vedi `TIMELINE.md`.
+> 📖 **Per audit roadmap R1/R2/R3**: vedi `AUDIT_2026-06-02.md`.
 
-> **Ultima modifica:** 2026-05-31 12:30 CET
-> **Sessione:** post-STEP 2D (Floor Diagnostic completo) + merge branch a main
-> **Stato corrente:** **P14 CHIUSO**. Floor val~0.28 completamente decomposto. OU noise = 19.3%, SR+Po2 = 0.4% (Po2 sorprendentemente trascurabile), residuo architettura = 78.4% (F7 best = 0.2198, ancora in trend DOWN). Po2 resta ON in deploy (zero costo confermato). P12 resta "diagnosi superata da P14" (capiamo il floor, ora dobbiamo decidere se attaccarlo). P13 (scenario crashes) ancora aperto, basso priority. **NEXT (scelta utente)**: 4 strade in FUTURE_WORK.md — (F2) **EventProp** training paradigma diverso, (F3) curriculum noise, (F4) architettura modificata, (F5) accettare floor e procedere a deploy. Branch `main` ora include Optimizer_Exploration + Floor_Diagnostic merged.
+> **Ultima modifica:** 2026-06-10 sera CET
+> **Sessione:** R26 Fusion Study (in esecuzione su Azure)
+> **Stato corrente:** **R26 IN CORSO** (6 run, ~1h Azure, HEAD `6075a96`). Tre fix sequenziali avanzati: (1) **BUGS_2026-06-03**: 4 bug strutturali risolti → tutti i ranking pregress invalidati. (2) **R24F**: rerun 93 esperimenti Prodigy MultiParam → V08 cosine_no_restart è il setup vincente (val 0.169/0.189/0.222 su highway/mixed/full, batte AdamW del 9-18%). Problema scoperto: **T predetto piatto intra-sample**. (3) **R25 Ablation causale** 18 run: **3 WIN INDIPENDENTI** trovati per T-tracking: A4 (max_delay 18, ΔT_corr +0.090), B1 (lambda_T_aux 0.1, ΔT_corr +0.147), C1 (lambda_sr 0, ΔT_corr +0.088). (4) **R26 Fusion** testa se i 3 win sommano → F1 TRIPLE atteso T_corr ~0.55-0.62 vs baseline 0.353. Branch `Prodigy_Deep_Study`. Vedi **P19** (T-tracking flat) per dettagli completi.
 
 Documento vivo: ogni problema ha (1) descrizione, (2) firma diagnostica, (3) causa root,
 (4) soluzioni in ordine di impatto. Le soluzioni si marcano `[ ] proposta`,
@@ -726,4 +727,216 @@ Floor totale 0.2805 = 100% del problema
 | 2026-05-31 12:30 | Decomposizione floor consolidata. **P14 chiuso**. Po2 contribuisce 0.2% → resta ON in deploy. | ✅ |
 | 2026-05-31 12:30 | Documentazione completa (P_S, SESSION_RESUME, TIMELINE, GLOSSARY, FUTURE_WORK) | [x] applicato |
 | 2026-05-31 12:30 | Branch `Optimizer_Exploration` + `Floor_Diagnostic` merged → `main` | [x] applicato |
-| 2026-05-31 12:30 | Prossima decisione: scelta utente tra opzioni mitigation (vedi FUTURE_WORK) | in attesa utente |
+
+---
+
+## P15 — A1 baseline ha `lambda_sr=0` (errato vs F2 vincente con `lambda_sr=0.5`)
+
+### 15.1 Descrizione
+Architecture_Exploration step P15_S2E ha introdotto A1 baseline come "default" della factory `build_model('baseline')`, ma con `lambda_sr=0.0`. Tutte le 6 run T30 successive hanno propagato l'errore. La vera baseline pre-EventProp (`P12_S2D_F2_no_ou`, commit `5a2c7ee`) aveva `lambda_sr=0.5` attivo.
+
+### 15.2 Firma diagnostica
+- T30 baseline run hanno spike rate medio 2.7-5.6% (target era 15-20% definito mesi fa)
+- Nessuna pressione esplicita al target spike rate durante training
+- Violin G7 collassati per 4/5 params (highway-only + nessun regolarizzatore)
+
+### 15.3 Causa root
+Architecture_Exploration → introduzione `--arch_variant baseline` come default factory, con CLI flags hardcoded `lambda_sr=0` invece di `lambda_sr=0.5`. Nessun audit dei lambdas vs run pre-existing.
+
+### 15.4 Soluzioni applicate
+- [x] R1.7 (2026-06-02): aggiunta sub-cartella `Arch_Tested/BASELINE_BPTT_864p_PRE_EVENTPROP/` con setup F2 corretto (`lambda_sr=0.5`) come **riferimento canonico** per studi R2/R3.
+- [x] `A1_baseline_BPTT_864p/README.md` marcato DEPRECATED con avviso "NON usare per studi R2/R3".
+- [x] `Arch_Tested/README.md` evidenzia BASELINE_PRE_EVENTPROP con ⭐ e tabella diff vs A1.
+
+---
+
+## P16 — AUDIT_2026-06-02: 5 affermazioni dichiarate ma non dimostrate
+
+### 16.1 Descrizione
+Audit ascetico user-driven post-8 run T30 ha identificato 5 conclusioni "celebrate" senza basi solide:
+
+| # | Affermazione | Status |
+|---|---|---|
+| (a) | "EventProp non funziona / è fragile" | ❌ non dimostrato — mai testato con tuning serio (clip aggressivo, warmup, init scaling, detach periodico, thresh_jump learnable). Domanda R3. |
+| (b) | "Prodigy non aggiunge valore vs AdamW" | ❌ non dimostrato — config testate erano default Prodigy lib, non setup canonical kohya/community (vedi V1-W7 in GLOSSARY). Domanda R2 in esecuzione. |
+| (c) | "A8 attn è la migliore architettura" | ❌ non dimostrato — mai confrontato con A1 a parità capacity (~3500p, h=64 r=16). Possibile overfit di rumore in highway-only. |
+| (d) | "Spike rate 4% va bene per FPGA" | ❌ contraddice target storico 15-20%. P15 root cause. |
+| (e) | "Capacity non è bottleneck" (P14) | ❌ riaperto — P14 era a 4 ep, A8 a 30 ep. Non comparabile. |
+
+### 16.2 Firma diagnostica
+Pattern ricorrente: "vedo numeri → dichiaro verdetto → vado avanti" senza:
+- verifica che setup abbia testato l'ipotesi giusta
+- chiusura onesta delle sotto-questioni aperte
+- coerenza con conclusioni precedenti
+
+### 16.3 Causa root
+- `lambda_sr=0` sistemico (P15)
+- Training highway-only sistemico → violin collassati universali
+- Scheduler ad-hoc per metodo senza razionale
+- Single-seed per ranking (rumore ≈ margini dichiarati)
+- Mancanza di baseline canonical stabile
+
+### 16.4 Soluzioni in corso
+- [x] `AUDIT_2026-06-02.md` documenta tutte le 5 affermazioni con grado di confidenza
+- [x] R1 (`Arch_Tested/`) — preserva architetture per riproduzione futura
+- [x] R1.7 — fix BASELINE_PRE_EVENTPROP come canonical
+- [x] R2.1 — `PRODIGY_DEEP_STUDY.md` ricerca multi-fonte (paper + 5 GitHub Issues + community)
+- [⏳] R2.2 — 5 esperimenti diagnostici P-A..P-E in esecuzione Azure (~1.5h)
+- [ ] R3 — Studio EventProp serio (pending, post R2)
+- [ ] R4 (futuro) — scenari misti, sweep multi-seed, capacity sweep a 30ep, `lambda_sr` attivo
+
+---
+
+## P17 — Prodigy `d` frozen a ~1e-3 nei nostri T30 (failure mode F2 community-documentato)
+
+### 17.1 Descrizione
+Tutte le 4 run T30 Prodigy hanno `prodigy_d` valore stabile attorno a 1e-3 per tutte le 30 epoche. Prodigy NON sta facendo D-adaptation, sta degenerando in SGD a lr piccolo.
+
+### 17.2 Firma diagnostica
+- `prodigy_lr_eff` ~ 1e-3 plateau
+- `prodigy_d` non sale dal valore iniziale
+- val_data converge come AdamW lr=1e-4 (lento ma stabile)
+
+### 17.3 Causa root (community wisdom, vedi `PRODIGY_DEEP_STUDY.md` §13)
+Failure mode F2 documentato in `PRODIGY_DEEP_STUDY.md`:
+- `d0=1e-6` (default) troppo conservativo vs scala dei gradient nostro BPTT chain 500 tick
+- `betas=(0.9, 0.999)` (default) → `beta3=0.9995` decay troppo lento per 5700 step
+- `d_coef=1.0` (default) — community raccomanda `2.0`
+- `use_bias_correction=False` (default) — community raccomanda True
+- `scheduler=none` — `cosine_no_restart T_max=epochs` raccomandato
+
+### 17.4 Soluzioni in test (R2.2)
+- [⏳] Esperimento P-D: bump `d0` da 1e-6 a 1e-5 (V2 fix konstmish ufficiale)
+- [⏳] Esperimento P-B: `betas=(0.9, 0.99)` (W1 madman404 "dramatic improvement")
+- [⏳] Esperimento P-C: `d_coef=2.0` (W2 community consensus)
+- [⏳] Esperimento P-E: SETUP CANONICAL completo + `cosine_no_restart` (vero benchmark)
+- [ ] Verdetto + parte 3 doc da scrivere post-Azure
+
+---
+
+---
+
+## P18 — Highway-only confounder: `val_total` ingannevole, violin G7 collassati universalmente
+
+### 18.1 Descrizione
+R2.3 analisi dei 5 esperimenti Prodigy diagnostici ha rivelato pattern UNIVERSALE: tutti gli esperimenti hanno violin G7 con 4-5 params completamente collassati ai bounds (v0 max, T min, s0 max, a min, b min). La rete predice CONSTANTS, non sta veramente decodificando.
+
+### 18.2 Firma diagnostica
+- Cinque setup Prodigy diversi (default, W1, W2, V2, CANONICAL) → val_total range 0.228-0.303
+- TUTTI hanno G7 violin collassati ai bounds
+- val_total pareggia F2 baseline (0.226) per W1/V2/E ma è "fitting di costanti", non decoding parametrico vero
+- Pattern già osservato in T30 baseline_adamw, A3_stacked_skip, EVPROP_ALIF — è un confounder pregress
+
+### 18.3 Causa root
+Training su `scenario_mix=highway` → tutti gli scenari hanno IDM_HIGHWAY identici (v0=33.3, T=1.2, s0=2.5, a=1.1, b=1.5). Una rete che predice valori CONSTANTS (qualunque) ottiene loss residua bassissima perché tutti i target sono uguali. Non c'è gradient informativo per imparare a decodificare la varianza scenario-specifica.
+
+### 18.4 Implicazioni
+- **`val_total` in highway-only NON è metric robusta per ranking optimizer/arch** (Lezione M1)
+- **Tutti i ranking T30/SW/P15 sono confusi dallo stesso problema** — il "best" e il "worst" potrebbero essere reti che predicono medie diverse, non discriminative learning
+- **Verdetto Prodigy vs AdamW richiede scenari misti** (R4) per essere conclusivo
+- **VIOLIN G7 va sempre controllato** prima di celebrare un val_total (Lezione M2)
+
+### 18.5 Soluzioni proposte
+- [ ] R4 (futuro, prerequisito): training su scenari MISTI (highway+urban+truck+cut-in) con IDM params variabili — sarà il primo training "non-degenere" del progetto
+- [ ] Workflow update: ogni report di esperimento DEVE includere screenshot violin G7 (non solo numero val_total)
+- [x] Doc parte 3 PRODIGY_DEEP_STUDY.md (Lezioni M1-M4) documenta il pattern
+
+---
+
+## P19 — 4 bug strutturali in core/network.py (BUGS_2026-06-03)
+
+### 19.1 Descrizione
+Audit codice profondo richiesto dall'utente dopo aver notato che TUTTI i run R2.4 mostravano violin G7 con saturazione universale dei params (T fisso a 2.5 o 0.5, s0 al MAX/MIN, ecc.). 4 bug strutturali trovati in `core/network.py` + `core/eventprop.py`.
+
+### 19.2 Firma diagnostica
+- Random init (no training): saturation **96-97%** per T/s0 (`(|raw_eq|>5).mean()` post-`sigmoid`)
+- Gradient s0/b ≈ **0.00004** (5000× più piccoli di a)
+- 78% dei pesi LI con gradient zero
+- A8 (attn) funziona "by accident" perché `attn=sigmoid(QK)·V` comprime magnitudo PRIMA del LI → raw_out piccolo → sigmoid non satura
+
+### 19.3 Cause + Fix (dettagli in BUGS_2026-06-03.md)
+
+| # | File | Sintomo | Fix applicato |
+|---|---|---|---|
+| 1 | `core/network.py:380-381` `_decode_params` | `raw_eq = raw / decode_scale` amplifica 9-18× per T/s0/a/b → sigmoid satura | Rimosso, ora `sigmoid(raw)` puro |
+| 2 | `core/network.py:59-64` `OutputLayer_LI` | `xavier_uniform_` ha row_mean ≠ 0 → con spike binari, bias deterministico | `fc_weight.sub_(fc_weight.mean(dim=1, keepdim=True))` post-Xavier |
+| 3 | `CF_FSNN_Net_Stacked`, `_StackedSkip` | base_threshold=1.5 troppo alto per ALIF non-input riceventi spike sparsi | `base_threshold.fill_(1.0)` per layer i>0 |
+| 4 | `HiddenLayer_ALIF` + `ALIFLayer_EventProp_Full` | Delay mask 1/max_delay → var(current) ridotta di max_delay | `fc_weight.mul_(max_delay**0.5)` post-Xavier |
+
+### 19.4 Soluzioni
+- [x] **Fix 1+2+3+4 applicati** (commit `d9d558a`, tag `pre_bug_fix_2026-06-03`)
+- [x] Verifica empirica post-fix: saturation **0%** (vs 96-97%), spike rate 6-10%, gradient ≠ 0 su 5/5 canali
+- [x] Smoke A1 2ep × 50 step: val_total = **0.213** in 100 step (vs floor pregress 0.22 dopo 5700 step) → convergenza 57× più veloce
+- [x] R24F rerun completo 93 esperimenti su codice fixato (commit successivi)
+
+### 19.5 Conseguenze
+- **TUTTI i ranking pregress** (T30, P15, SW, R2.2, R2.4 highway, **R24 multiparam pre-fix**) sono CORROTTI
+- Il floor val_total ≈ 0.22 NON era architetturale — era il floor della sigmoid saturation
+- A8 era best "by accident" — pre-fix solo A8 imparava davvero (compensava il bug)
+
+---
+
+## P20 — T-tracking flat: la rete fa "average estimation" non "system identification"
+
+### 20.1 Descrizione
+Post-fix BUGS_2026-06-03, R24F (93 esperimenti, scenario mixed, Prodigy V08 cosine) ha rivelato: la rete impara MOLTO meglio (val_total da 0.22 → 0.169-0.189), MA visualmente in G13 il `T_pred(t)` è una **linea piatta intra-sample** che NON segue `T_true(t)` quando fa step. La rete predice valore costante = media globale, non identifica il T del driver corrente.
+
+### 20.2 Firma diagnostica
+- G13 trajectory: T_predicted = costante con rumore (~1.1-1.2), T_true fa step 1.0↔1.5 ignorati
+- G7 violin: distribuzione T larga (cross-driver OK) → la rete distingue driver diversi
+- ma intra-driver: T predetto è quasi costante (std intra-seq bassa)
+- val_T_tracking_corr Pearson aggregato baseline ≈ **0.35** (intermedio, non zero)
+- Anche v0/s0 saturano vicino ai bound (v0 → 30-45, s0 → 1.2-5 con peak vicino al MAX)
+- `a` sempre vicino al MIN (0.3-0.4) cross-scenario
+
+### 20.3 Causa
+Più ipotesi (R25 ablation 18 run ha indagato):
+- **Memoria temporale insufficiente**: max_delay=6 → 60ms memoria sinaptica, troppo corta per identificare dinamica T che cambia ogni ~5-10s
+- **Mancanza di supervisione diretta su T**: `L_data` lavora sull'output ACC-IDM (accelerazione), non direttamente sui params decoded. La rete non riceve gradient esplicito "T deve essere X"
+- **L_sr regularizer**: la pressione su spike rate altera la dinamica della rete in modo dannoso per T-tracking
+- **Più training PEGGIORA T**: la rete continua a affinare la fisica (val_data ↓) ma deprime T-tracking (corr ↓)
+
+### 20.4 Soluzioni testate in R25 — 3 WIN INDIPENDENTI
+
+| ID R25 | Modifica | ΔT_corr | Δval | Note |
+|---|---|---:|---:|---|
+| **A4** | `max_delay 6→18` | **+0.090** | -0.015 | ✅ memoria sinaptica più lunga sblocca T |
+| **B1** | `--lambda_T_aux 0.1` (nuovo flag) | **+0.147** | -0.006 | ⭐ supervisione diretta T, NESSUN trade-off |
+| **C1** | `--lambda_sr 0.0` | **+0.088** | -0.014 | ✅ L_sr era controproducente per T |
+
+**Diminishing returns + trade-off**:
+- B2 (T_aux=1.0): T_corr +0.21 ma val_total +0.04 (rete sacrifica fisica per T)
+- B3 (T_aux=10): T_corr +0.22 ma val_total ESPLODE a 0.54 (10× il gradient su T schiaccia gli altri)
+- C2/C3 (sr alto): spike rate raggiunge 14% target FPGA, MA T_corr crolla del 70%
+
+**Insight tecnico**: gradient unbalance INVERTITO post-fix. Pre-fix v0 dominante. Post-fix T è il canale dominante (gn_out_fc_T=0.23 vs v0=0.01, 23× sbilanciato). Quindi T_corr=0.35 non è limitato da gradient magnitude ma dalla **direzione semantica**: B1 NON cambia magnitudo ma fa puntare il gradient T verso T_true GT.
+
+### 20.5 R26 Fusion (in corso)
+Test ortogonalità: F1=A4+B1+C1 (TOP candidato). Atteso T_corr ~0.55-0.62 se sommano linearmente.
+- F2/F3/F4 = coppie controllo per isolare interazioni
+- F5 = F1 + epochs=5 (E asse R25 suggerisce meno training)
+- Linearity test automatico in Cell 6: ratio F1_measured/R25_predicted
+
+### 20.6 Caveat sulla metrica
+`val_T_tracking_corr` cattura 2 fenomeni mescolati:
+1. **Cross-driver alignment**: driver con T_true=1.2 → T_pred basso; T_true=2 → T_pred alto
+2. **Intra-driver dynamics**: T_pred(t) segue T_true(t) dentro la stessa sequenza
+
+I 0.35 baseline sono quasi tutti (1). Il +0.15 di B1 è probabilmente (2). Per disambiguare servirebbe `val_T_intra_corr` (Pearson dopo aver rimosso la media per-sample). TODO post-R26.
+
+---
+
+## Log delle decisioni (estensione 2026-06-02)
+
+| Data | Decisione | Stato |
+|------|-----------|-------|
+| 2026-06-02 mattina | AUDIT_2026-06-02 scritto come radice della nuova roadmap | ✅ |
+| 2026-06-02 pomeriggio | R1 Arch_Tested/ creato (4 arch + smoke 1ep×1step) | ✅ |
+| 2026-06-02 pomeriggio | R1.7 fix: BASELINE_PRE_EVENTPROP aggiunto (vera baseline F2, lambda_sr=0.5) | ✅ |
+| 2026-06-02 sera | R2.1 PRODIGY_DEEP_STUDY.md parte 1+2 (ricerca multi-fonte) | ✅ |
+| 2026-06-02 sera | R2.2 setup: 4 nuovi CLI flag Prodigy + scheduler cosine_no_restart + notebook 5 esperimenti redesigned | ✅ |
+| 2026-06-02 sera | Sub-folder convention `results/<Study>/` adottata | ✅ |
+| 2026-06-02 sera | Azure esecuzione R2.2 in corso (~1.5h, 5 esperimenti × ~15-17 min) | ⏳ |
+| 2026-06-02 notte | R2 verdetto + PRODIGY_DEEP_STUDY.md parte 3 (post-Azure) | pending |
+| TBD | R3 EventProp serio (paper + 7 lever isolati) | pending |
+| TBD | Decisione utente: i 5 branch storici (Architecture_Exploration, Floor_Diagnostic, Optimizer_Exploration, Training_Method_Exploration, Visualizer_Building) restano intatti per ora; archive (tag+delete) rimandato | in attesa utente |

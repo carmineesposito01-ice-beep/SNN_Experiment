@@ -98,7 +98,7 @@ def main():
             y    = y.to(device)
             mask = mask.to(device)
 
-            _, comps, _ = pinn_loss(model, x, y, mask, *lam)
+            _, comps, _, _ = pinn_loss(model, x, y, mask, *lam)  # R25: 4-tuple (params_seq added)
             all_losses['total'].append(comps['total'])
             for k in ['data', 'phys', 'ou', 'bc']:
                 all_losses[k].append(comps[k])

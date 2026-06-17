@@ -1,6 +1,32 @@
 # WORKFLOW.md — Procedura end-to-end per un nuovo esperimento
 
-> Setup → training → analisi → push results. Tutto via `Training_File.ipynb` (cellula 1 unica da modificare).
+> Setup → training → analisi → push results.
+> **Convention post 2026-06-02**: ogni studio nuovo ha (a) branch git dedicato `<Topic>_Deep_Study` o `<Topic>_Setup`, (b) notebook dedicato `<Topic>_Diagnostics.ipynb`, (c) sub-folder dedicata `results/<Study_Name>/`.
+
+## 🔀 Convention nuovi studi (R1, R2, R3, ...)
+
+```
+1. Branch creato da main aggiornato:
+     git checkout main && git pull origin main
+     git checkout -b <Topic>_Deep_Study
+     git push -u origin <Topic>_Deep_Study
+
+2. Notebook: <Topic>_Diagnostics.ipynb (root repo)
+
+3. Results: results/<Topic>_Study/<tag>/
+   - Cellula RUN del notebook fa: subprocess train.py + shutil.move
+     da checkpoints/<tag>/ → results/<Topic>_Study/<tag>/
+   - SKIP_IF_EXISTS=True per resume idempotente
+
+4. Doc: document/<TOPIC>_DEEP_STUDY.md
+   - Parte 1: math + source walkthrough (pre-esperimenti)
+   - Parte 2: community wisdom / state-of-the-art (ricerca multi-fonte)
+   - Parte 3: lessons dai nostri esperimenti (post-Azure)
+
+5. Chiusura: merge in main → cancella branch di lavoro (NON i branch storici)
+```
+
+Esempi: `Prodigy_Deep_Study` (R2 attivo), `EventProp_Deep_Study` (R3 futuro), `Arch_Tested_Setup` (R1 chiuso/cancellato).
 
 ---
 

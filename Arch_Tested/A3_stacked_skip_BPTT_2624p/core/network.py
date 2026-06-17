@@ -17,6 +17,10 @@ class HiddenLayer_ALIF(nn.Module):
 
         self.fc_weight = nn.Parameter(torch.Tensor(out_features, in_features))
         nn.init.xavier_uniform_(self.fc_weight)
+        # FIX-BUG-4 (2026-06-03): compensa penalty 1/max_delay della delay mask.
+        # Vedi document/BUGS_2026-06-03.md criticità #4.
+        with torch.no_grad():
+            self.fc_weight.mul_(max_delay ** 0.5)
         self.register_buffer('delays', torch.randint(0, max_delay, (out_features, in_features)))
 
         self.rec_U = nn.Parameter(torch.Tensor(out_features, rank))
@@ -65,6 +69,10 @@ class OutputLayer_LI(nn.Module):
         super().__init__()
         self.fc_weight = nn.Parameter(torch.Tensor(out_features, in_features))
         nn.init.xavier_uniform_(self.fc_weight)
+        # FIX-BUG-2 (2026-06-03): rimuovi bias per-riga indotto da xavier_uniform.
+        # Vedi document/BUGS_2026-06-03.md bug #2.
+        with torch.no_grad():
+            self.fc_weight.sub_(self.fc_weight.mean(dim=1, keepdim=True))
         self.cell = LICell(out_features)
 
     def reset_state(self, batch_size, device):
@@ -190,8 +198,8 @@ class CF_FSNN_Net(nn.Module):
                                  = max_range * σ'(raw_eq_i)   [uniforme tra i 5 param]
         Senza scaling raw_v0 avrebbe un gradiente 18.5× maggiore di raw_T.
         """
-        raw_eq = raw / self.decode_scale              # (batch, 5) — scala equalizzata
-        return self.param_lo + (self.param_hi - self.param_lo) * torch.sigmoid(raw_eq)
+        # FIX-BUG-1 (2026-06-03): rimosso F5 pre-scaling. Vedi document/BUGS_2026-06-03.md.
+        return self.param_lo + (self.param_hi - self.param_lo) * torch.sigmoid(raw)
 
     # ----------------------------------------------------------
     # Forward
@@ -471,6 +479,10 @@ class CF_FSNN_Net_StackedSkip(_CF_FSNN_VariantBase):
         # Init scale piccolo: skip è additivo, non deve dominare
         with torch.no_grad():
             self.skip_weight.mul_(0.2)
+        # FIX-BUG-3 (2026-06-03): abbassa base_threshold per layer 1 (non-input).
+        # Vedi document/BUGS_2026-06-03.md criticità #3.
+        with torch.no_grad():
+            self.layer_hidden_1.cell.base_threshold.fill_(1.0)
 
     def reset_state(self, batch_size, device):
         self.layer_hidden_0.reset_state(batch_size, device)

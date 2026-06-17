@@ -323,3 +323,182 @@ Sequenza di esperimenti per identificare e affrontare la causa del plateau a val
 | ⚠️ | warning/parziale |
 | ❌ | fallito/scartato |
 | ⏸️ | in stand-by / pianificato per futuro |
+| ⏳ | in esecuzione |
+| ⭐ | canonical/preferito |
+
+---
+
+## 🆕 R1-R3 — Roadmap audit-driven (post 2026-06-02 AUDIT)
+
+| Codice | Nome | Status | Branch git |
+|--------|------|--------|------------|
+| **R1** | `Arch_Tested/` snapshot riproducibile architetture funzionanti | ✅ chiuso 2026-06-02 | `Arch_Tested_Setup` (mergiato + cancellato) |
+| **R1.7** | Aggiunta `BASELINE_BPTT_864p_PRE_EVENTPROP` (vera baseline pre-EventProp, lambda_sr=0.5) | ✅ chiuso 2026-06-02 | `Arch_Tested_Fix_Baseline` (mergiato + cancellato) |
+| **R2** | Studio Prodigy CAPIRE (paper + community wisdom + 5 esperimenti) | ⏳ in esecuzione Azure | `Prodigy_Deep_Study` |
+| **R2.1** | Reading + doc (`PRODIGY_DEEP_STUDY.md` parte 1 + 2) | ✅ chiuso 2026-06-02 | idem |
+| **R2.2** | 5 esperimenti diagnostici P-A..P-E (`Prodigy_Diagnostics.ipynb`) | ⏳ run Azure | idem |
+| **R2.2.fix** | Sub-folder `results/Prodigy_Study/` + Python <3.12 f-string fix | ✅ chiuso 2026-06-02 | idem |
+| **R3** | Studio EventProp serio (paper + 7 lever isolati + fair comparison) | ⏸️ pending (dopo R2) | `EventProp_Deep_Study` (da creare) |
+
+### V1-V4 + W1-W7 — Lever Prodigy emersi da ricerca multi-fonte (R2.1)
+
+Vedi `PRODIGY_DEEP_STUDY.md` parte 2 sezioni 10 e 11 per dettagli + fonti.
+
+| Codice | Origine | Cosa dice |
+|--------|---------|-----------|
+| **V1** | konstmish (Issue #3) | Senza scheduler, Prodigy agnostico al numero step |
+| **V2** | konstmish (Issue #27, fix ufficiale) | Se `d` frozen, bump `d0` da 1e-6 a 1e-5/1e-4 |
+| **V3** | konstmish (Issue #8, #10) | Cosine annealing T_max=total_steps, NIENTE restarts |
+| **V4** | konstmish (Issue #18) | Prodigy = Adam/AdamW + D-adaptation |
+| **W1** | madman404 (Issue #8) | `betas=(0.9, 0.99)` "dramatic improvement" (beta3=beta2^0.5) |
+| **W2** | community kohya/OneTrainer/bdsqlsz | `d_coef=2.0` standard (non 1.0 default) |
+| **W3** | community + README diffusion | `use_bias_correction=True` (boost early steps) |
+| **W4** | konstmish (Issue #3) + OneTrainer | `weight_decay=0.01` AdamW default |
+| **W5** | LoganBooker (`prodigy-plus-schedule-free` FAQ) | Monitorare `d` + norma pesi insieme |
+| **W6** | LoganBooker (Issue #27) | Min 200-300 step warmup naturale, 1000+ stabile |
+| **W7** | community discrepanza | `safeguard_warmup` True se warmup/restarts |
+
+### P-A..P-E — 5 esperimenti diagnostici R2.2
+
+| ID | Setup | Lever isolato |
+|----|-------|---------------|
+| **P-A** | baseline T30 replica (default Prodigy lib + safeguard ON) | conferma d frozen |
+| **P-B** | P-A + `betas=(0.9, 0.99)` | W1 |
+| **P-C** | P-A + `d_coef=2.0` | W2 |
+| **P-D** | P-A + `d0=1e-5` | V2 (fix konstmish) |
+| **P-E** | SETUP CANONICAL KOHYA completo + `cosine_no_restart` | tutti i lever insieme |
+
+### Arch_Tested/ — Snapshot architetture funzionanti (R1)
+
+| Cartella | Source run | Status |
+|----------|------------|--------|
+| ⭐ `BASELINE_BPTT_864p_PRE_EVENTPROP` | `P12_S2D_F2_no_ou` (lambda_sr=0.5) | **Canonical per R2/R3** |
+| `A1_baseline_BPTT_864p` | `T30_A1_BASELINE_adamw` (lambda_sr=0) | ⚠️ DEPRECATED |
+| `A8_attn_BPTT_3936p` | `T30_A8_ATTN_adamw` | 3936p, best architettonico ma overfit possibile |
+| `A3_stacked_skip_BPTT_2624p` | `T30_A3_STACKED_SKIP_adamw` | 2624p |
+| `EVPROP_ALIF_full_864p` | `SW_eventprop_alif_full_adamw_lr2e-3` (5ep sched=none) | EventProp adjoint |
+
+### `results/<Study>/` — Convention sub-folder dedicata (post 2026-06-02)
+
+Ogni studio futuro ha sub-folder dedicata in `results/`:
+- `results/Prodigy_Study/` — R2 (in corso)
+- `results/EventProp_Study/` — R3 (futuro)
+- `results/<Run_Tag>/` — run storiche restano nel root di `results/` per archeologia
+
+### Scheduler `cosine_no_restart` — nuovo (R2.2)
+
+Aggiunto in train.py. `CosineAnnealingLR` puro con `T_max=epochs`. Da NON confondere con `cosine` esistente che usa `CosineAnnealingWarmRestarts` (sconsigliato per Prodigy da konstmish Issue #8).
+
+### CLI flag Prodigy aggiunti (R2.2)
+
+- `--prodigy_betas STR` (default `'0.9,0.999'`) — formato `'b1,b2'`
+- `--prodigy_use_bias_correction {0,1}` (default 0, raccomandato 1)
+- `--prodigy_d0 FLOAT` (default 1e-6, bump a 1e-5 se d frozen)
+- `--prodigy_weight_decay FLOAT` (default -1 = sentinel `1e-4` hardcoded storico, raccomandato 0.01)
+- `--prodigy_safeguard_warmup {0,1}` (default 1, era hardcoded True)
+- `--prodigy_growth_rate FLOAT` (default inf, era hardcoded inf)
+- `--prodigy_d_coef FLOAT` (default 1.0, esistente da STEP 2C)
+
+---
+
+## 📚 Documenti recenti (post 2026-06-02)
+
+| Doc | Scopo |
+|-----|-------|
+| ⭐ `AUDIT_2026-06-02.md` | Bilancio onesto + roadmap R1/R2/R3 (radice di tutto) |
+| `PRODIGY_DEEP_STUDY.md` | Parte 1 math + Parte 2 community wisdom (ricerca multi-fonte) |
+| `SIMULATOR_FINDINGS.md` | Drift T² + cut-in analysis simulator |
+| `Arch_Tested/README.md` | Overview 5 architetture snapshot |
+| ⭐ `BUGS_2026-06-03.md` | 4 bug strutturali in `core/network.py` + fix |
+
+---
+
+## 🔬 Studi R24F, R25, R26 (post-fix BUGS_2026-06-03)
+
+### Tag prefix per identificare i run
+
+| Prefix | Studio | Notebook | # run | Output dir |
+|---|---|---|---:|---|
+| `R24F_*` | R2.4 Fixed — Prodigy MultiParam PostFix | `Prodigy_MultiParam_Study_PostFix.ipynb` | 93 | `results/Prodigy_Study/MultiParam_PostFix/` |
+| `R25_*` | R25 Ablation causale 5 assi | `Prodigy_Ablation_Study_R25.ipynb` | 18 | `results/Prodigy_Study/Ablation_R25/` |
+| `R26_F*` | R26 Fusion — combina top win R25 | `Prodigy_Fusion_Study_R26.ipynb` | 6 | `results/Prodigy_Study/Fusion_R26/` |
+
+### R25 — 5 assi di ablation
+
+| Asse | Cosa varia | Best | ΔT_corr | Δval |
+|---|---|---|---:|---:|
+| **A** memoria temporale | seq_len, max_delay, bit_shift | **A4** (max_delay 18) | +0.090 | -0.015 |
+| **B** loss balancing | lambda_T_aux | **B1** (T_aux=0.1) ⭐ | **+0.147** | -0.006 |
+| **C** spike rate | lambda_sr | **C1** (sr=0) | +0.088 | -0.014 |
+| **D** capacity | hidden_size, rank | D2 (h=64) marginale | +0.068 | -0.004 |
+| **E** training duration | epochs | E1 (5ep) ~baseline | -0.010 | -0.006 |
+
+Baseline R25_A1: val_total=0.195, T_corr=0.353 (replica V08 mixed da R24F).
+
+### R26 — 6 esperimenti fusion
+
+| Tag | Composizione | Scopo |
+|---|---|---|
+| `R26_F0_baseline_replica` | tutti default (=R25_A1) | sanity replica |
+| `R26_F1_TRIPLE_win` | A4+B1+C1 | TOP candidato |
+| `R26_F2_A4_B1` | A4+B1 (no sr_off) | isola sr |
+| `R26_F3_B1_C1` | B1+C1 (no memoria) | isola memoria |
+| `R26_F4_A4_C1` | A4+C1 (no T_aux) | isola T_aux |
+| `R26_F5_TRIPLE_short` | F1 + epochs=5 | combina asse E |
+
+---
+
+## 🆕 Nuove CLI flag (R25)
+
+- `--lambda_T_aux FLOAT` (default 0.0, backward-compat) — peso supervisione diretta T:
+  `L_T_aux = masked MSE(params_seq[:,:,1], y_seq[:,:,1])`. Aggiunge un termine alla loss totale che forza la rete a tracciare T_true dinamico per timestep.
+- `--cf_max_delay INT` (default None=usa config) — override max_delay sinaptico per ablation asse A4
+- `--cf_bit_shift INT` (default None=usa 3) — override leak LIF singolo neurone (3=default, 5=leak τ 4× più lungo)
+
+---
+
+## 🆕 Nuove colonne CSV (R25)
+
+### `training_log.csv` (epoch-level, 11 colonne nuove)
+- `val_T_tracking_corr` — Pearson(T_pred, T_true) aggregato su val set
+- `val_v0_pred_mean`, `val_T_pred_mean`, `val_s0_pred_mean`, `val_a_pred_mean`, `val_b_pred_mean` — media predetta per canale (indica saturazione bound)
+- `val_v0_intra_std`, `val_T_intra_std`, `val_s0_intra_std`, `val_a_intra_std`, `val_b_intra_std` — std intra-sequenza per canale (distingue "varia intra-driver" vs "costante intra-driver")
+
+### `training_batch_log.csv` (per-batch, 16 colonne nuove)
+- `loss_T_aux` — valore L_T_aux scalare
+- **Livello 1** (raw gradient): `gn_out_fc_v0`, `gn_out_fc_T`, `gn_out_fc_s0`, `gn_out_fc_a`, `gn_out_fc_b` — norma del gradient sulla i-esima riga di `LI.fc_weight`
+- **Livello 2** (decoded post-sigmoid): `gn_decoded_v0`, ..., `gn_decoded_b` — `mean|d(loss)/d(params_seq[:,:,i])|`
+- **Livello 3** (direzione): `grad_dir_v0`, ..., `grad_dir_b` — `sign(d(loss)/d(params_seq[:,:,i])).mean()` ∈ [-1, +1]. Vicino a 0 → cancellazione cross-sample; vicino a ±1 → direzione coerente
+
+---
+
+## 🆕 Nuovi plot (R25)
+
+- **G16** `G16_grad_raw_per_ch.png` — gradient raw per canale, log scale, 5 curve (v0/T/s0/a/b)
+- **G17** `G17_grad_decoded_per_ch.png` — gradient decoded post-sigmoid, log scale
+- **G18** `G18_grad_direction_per_ch.png` — sign mean, scala lineare [-1, +1]. Cattura **cancellazione cross-sample**
+
+---
+
+## 🐛 4 bug fix BUGS_2026-06-03
+
+| # | File | Sintomo | Fix |
+|---|---|---|---|
+| 1 | `core/network.py:380-381` | F5 sigmoid satura T/s0/a/b al random init (97% T saturated, 96% s0) | Rimosso `raw / decode_scale`. Ora `sigmoid(raw)` puro |
+| 2 | `core/network.py:59-64`, `core/eventprop.py:567-580` | Xavier row_mean ≠ 0 → asimmetria per canale con spike binari | `fc_weight.sub_(fc_weight.mean(dim=1, keepdim=True))` post-init |
+| 3 | `CF_FSNN_Net_Stacked`, `CF_FSNN_Net_StackedSkip` | ALIF cascata dead output (base_threshold=1.5 troppo alto per layer non-input) | `layer.cell.base_threshold.fill_(1.0)` per layer i>0 |
+| 4 | `HiddenLayer_ALIF` + `ALIFLayer_EventProp_Full` | Delay mask 1/max_delay penalty (var(current) ridotta) | `fc_weight.mul_(max_delay**0.5)` post-Xavier |
+
+**Tag git pre-fix**: `pre_bug_fix_2026-06-03`. Documentato in `BUGS_2026-06-03.md`.
+
+---
+
+## 📓 Notebook attivi nel repo (2026-06-10)
+
+| Notebook | Status | Note |
+|---|---|---|
+| `Prodigy_MultiParam_Study_PostFix.ipynb` | ✅ Completato (93 run) | R24F — 3 scenari × 31 run |
+| `Prodigy_Ablation_Study_R25.ipynb` | ✅ Completato (18 run) | R25 — 5 assi causali |
+| `Prodigy_Fusion_Study_R26.ipynb` | 🔄 In esecuzione (6 run) | R26 — test ortogonalità win R25 |
+| `Prodigy_MultiParam_Study.ipynb` | ❌ Archiviato | R2.4 pregress, CSV bugged |
+| `Prodigy_Diagnostics.ipynb` | ❌ Archiviato | R2.2 pregress, CSV bugged |

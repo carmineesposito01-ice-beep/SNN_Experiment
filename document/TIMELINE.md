@@ -643,6 +643,450 @@ BPTT+surrogate e EventProp adjoint convergono entrambi a 0.222 su ALIF. Due algo
 
 ---
 
+## 🗓️ 2026-06-02 — AUDIT + R1 (Arch_Tested) + R2 setup (Studio Prodigy CAPIRE)
+
+### Mattina: simulator iterazioni + 8 run T30 + analisi → AUDIT
+
+**Branch**: `Visualizer_Building` (poi mergiato in main).
+
+Eventi principali:
+1. Simulator visivo CF_FSNN completato a iterazioni: `utils/simulator/{engine,metrics,plots,anim}.py` + `Simulator_Visual.ipynb`. Scoperta drift cumulativo open-loop T² (vedi `SIMULATOR_FINDINGS.md`).
+2. Run 8 T30 (4 arch × 2 opt × 30 ep) eseguite su Azure, pullate e analizzate.
+3. **Audit ascetico user-driven**: l'utente ha legittimamente criticato 4 errori di setup recenti (Po2 mai disattivato, Prodigy lr=1.0 mai funzionante, A8 mai usata prima ma celebrata BEST, spike rate 4% accettato vs target 15-20%). Ha forzato a FERMARE la corsa.
+4. **`document/AUDIT_2026-06-02.md`** scritto come bilancio onesto: 5 affermazioni dichiarate ma NON dimostrate, 5 errori di setup ricorrenti, 8 domande aperte, roadmap R1+R2+R3.
+
+### Pomeriggio: R1 Arch_Tested/ + R1.7 fix BASELINE_PRE_EVENTPROP
+
+**Branch**: `Arch_Tested_Setup` → merge in main → cancellato. Poi `Arch_Tested_Fix_Baseline` → merge → cancellato.
+
+R1 snapshot riproducibile delle architetture funzionanti in `Arch_Tested/<arch>/`:
+- 4 originali (A1, A8, A3, EVPROP_ALIF) con `core/` cleanup chirurgico, `train.py` CLI ridotta a 1 variant, `snapshot_original/` READ-ONLY (13 plot G + log + config), `reproduce_training.ipynb` (3-4 celle), README dettagliato.
+- 5/5 smoke test 1ep×1step OK end-to-end.
+
+R1.7 fix critico: user feedback "A1 era sbagliata dall'inizio". Ricerca cronologica → vera baseline pre-EventProp è `P12_S2D_F2_no_ou` (commit pre-EventProp `5a2c7ee`). UNICA differenza vs A1: `lambda_sr=0.5` (vs 0). Aggiunta sub-cartella `Arch_Tested/BASELINE_BPTT_864p_PRE_EVENTPROP/` come riferimento canonico per studi R2/R3. A1 marcata DEPRECATED nel README con avviso prominente.
+
+### Sera: R2 setup — Studio Prodigy CAPIRE
+
+**Branch**: `Prodigy_Deep_Study` (in esecuzione su Azure).
+
+1. **R2.1 Reading & doc**: ricerca multi-fonte (paper Mishchenko 2024 + 5 GitHub Issues konstmish/prodigy #3/#8/#10/#18/#27 + OneTrainer Wiki + kohya-ss community + LoganBooker `prodigy-plus-schedule-free`).
+
+   Eureka critici scoperti:
+   - **V2** (konstmish ufficiale, Issue #27): "Se `d` resta troppo piccolo, aumentare `d0` da 1e-6 a 1e-5/1e-4". Confermato sui nostri T30 (d frozen ~1e-3 sempre).
+   - **W1** (madman404, Issue #8): `betas=(0.9, 0.99)` produce "dramatic improvement" perché `beta3=beta2^0.5` controlla decay del `d_numerator`. Default 0.9995 troppo lento per training <2000 step.
+   - **W2** (community consensus kohya/OneTrainer/bdsqlsz): `d_coef=2.0` standard, NON 1.0 default.
+   - **Setup CANONICAL "Prodigy is ALL YOU NEED"**: `lr=1.0 betas=(0.9,0.99) wd=0.01 use_bias_correction=True safeguard=True d_coef=2.0 d0=1e-6→1e-5 if frozen` + `cosine_no_restart T_max=epochs`.
+
+   Doc `document/PRODIGY_DEEP_STUDY.md` (~500 righe): parte 1 (math + source code walkthrough) + parte 2 (community wisdom multi-fonte verificata). Parte 3 (lessons R2.2) sarà aggiunta dopo esperimenti.
+
+2. **R2.2 setup**: train.py esteso con 4 nuovi CLI flag Prodigy (`--prodigy_betas`, `--prodigy_use_bias_correction`, `--prodigy_d0`, `--prodigy_weight_decay`) oltre ai 3 esistenti. Self-check post-init con 7 assert (no silent failure). Scheduler `cosine_no_restart` aggiunto (CosineAnnealingLR puro, T_max=epochs, NIENTE restarts come richiesto da konstmish).
+
+3. Notebook `Prodigy_Diagnostics.ipynb` redesigned con 5 esperimenti P-A..P-E isolanti i 3 lever community:
+   - **P-A**: baseline T30 replica → conferma d frozen
+   - **P-B**: P-A + `betas=(0.9, 0.99)` → isola W1
+   - **P-C**: P-A + `d_coef=2.0` → isola W2
+   - **P-D**: P-A + `d0=1e-5` → isola V2 fix konstmish
+   - **P-E**: SETUP CANONICAL completo + `cosine_no_restart`
+
+   Smoke test 5/5 OK end-to-end con verifica config_snapshot + batch_log (no workaround, hard fail su parametri non recepiti).
+
+4. **Sub-folder dedicata**: risultati in `results/Prodigy_Study/` (separazione visiva per evitare confusione futura). Convention: ogni studio futuro userà `results/<Study_Name>/`.
+
+5. **Fix Python <3.12 compat**: f-string nested quote singolari sostituite con doppie (PEP 701 supportato solo da 3.12).
+
+### Lessons learned 2026-06-02
+
+#### Lezione #28 — Mai dichiarare "X non funziona" senza tuning serio
+Per Prodigy avevamo dichiarato "non aggiunge valore" dopo 10/16 fallimenti del sweep. Ma il sweep usava solo i default Prodigy lib (`d0=1e-6, d_coef=1.0, betas=0.999, no use_bias_correction`). La community wisdom raccomanda un setup completamente diverso. Soluzione corretta: ricerca multi-fonte PRIMA di concludere.
+
+#### Lezione #29 — L'utente vede contraddizioni che noi non vediamo
+"A1 era sbagliata dall'inizio" — intuizione utente non immediatamente verificabile. Verifica cronologica: F2 vincente aveva `lambda_sr=0.5` attivo, A1 (introdotta da Architecture_Exploration) l'ha disattivato silenziosamente. Le 6 successive run T30 hanno propagato l'errore. Solo l'utente ha forzato il check storico.
+
+#### Lezione #30 — Sub-folder dedicate per ogni studio
+Mescolare risultati di studi diversi in `results/` ha causato confusione (T30, SW, P15 tutti insieme — utente non riusciva a trovare il "best vero"). Convention adottata: ogni studio futuro ha `results/<Study_Name>/` dedicata.
+
+#### Lezione #31 — Multi-fonte CRITICO per algoritmi nuovi
+Paper Prodigy NON documenta failure modes pratici (frozen d, betas tuning). 5 GitHub Issues konstmish/prodigy + community LoRA (kohya, OneTrainer, bdsqlsz) hanno svelato la verità. Sempre triangolare paper + source code + issue tracker + practitioner community per algoritmi adottati di recente.
+
+#### Lezione #32 — Smoke test post-modifica deve verificare config_snapshot + batch_log
+Aggiungere CLI flag senza verificare che (a) Prodigy li riceva (self-check assert post-init), (b) config_snapshot li salvi, (c) batch_log continui a funzionare = ricetta per esperimenti silenziosamente sbagliati. Sempre 3 controlli incrociati end-to-end.
+
+#### Lezione #33 — Branch storici NON cancellare prematuramente
+User feedback: "non cancellare i branch storici, crea solo nuovo branch per nuove azioni". I 5 branch storici (Architecture_Exploration, Floor_Diagnostic, Optimizer_Exploration, Training_Method_Exploration, Visualizer_Building) restano come archeologia consultabile (git log/checkout). Decisione di archiviare (tag + delete) rimandata a sessione futura, solo quando saremo CERTI che non servono.
+
+---
+
+## 🏛️ Fase 8 — Bug fix + R24F + R25 + R26 Fusion (2026-06-03 → 10)
+
+### 2026-06-03 — **BUGS_2026-06-03.md**: 4 bug strutturali trovati
+
+Durante l'analisi di R2.4 Prodigy MultiParam (90 run in corso su Azure con violin G7 fortemente collassati), l'utente ha chiesto un **audit profondo del codice** prima di lanciare nuovi studi.
+
+**Risultato**: 4 bug strutturali in `core/network.py` + `core/eventprop.py`:
+
+1. **F5 sigmoid saturation** (`_decode_params`, riga 380): `raw_eq = raw / decode_scale` amplificava `raw` di 9-18× per T/s0/a/b. Con bound Xavier `±0.4`, raw_eq cadeva in zona sigmoid satura → derivata ≈ 0 → params bloccati al random init. **97% dei sample T saturato, 96% s0 saturato** post-init.
+2. **Xavier asymmetric bias** in `OutputLayer_LI` (riga 63): row_mean ≠ 0 → con input spike binari `{0,1}` creava offset deterministico per canale → determinava QUALE bound veniva saturato.
+3. **A2/A4 stacked dead output** (in cascate ALIF, base_threshold=1.5 troppo alto per layer non-input riceventi spike sparsi).
+4. **Delay mask penalty** 1/max_delay: ogni edge contribuisce solo 1/max_delay del tempo → var(current) ridotta di max_delay rispetto a fc layer normale.
+
+**A8 attn funziona "by accident"**: `attn = sigmoid(QK)·V` comprime la magnitudo PRIMA del LI → raw_out piccolo → sigmoid non satura nonostante #1.
+
+**Conseguenza**: TUTTI i ranking pregress (T30, P15, SW, R2.2, R2.4 in corso, ecc.) sono **CORROTTI**. Il floor val_total ≈ 0.22 era il floor della sigmoid saturation, non architetturale.
+
+### 2026-06-03 sera — Fix applicati
+
+| # | File | Modifica |
+|---|---|---|
+| 1 | `core/network.py:380-381` (+ 5 snapshot) | Rimosso `raw / decode_scale`, ora `sigmoid(raw)` puro |
+| 2 | `core/network.py:59-64` (+ 5 snapshot + `core/eventprop.py:567-580`) | `fc_weight.sub_(fc_weight.mean(dim=1, keepdim=True))` post-Xavier |
+| 3 | `core/network.py` Stacked + StackedSkip | `base_threshold.fill_(1.0)` per ALIF non-input |
+| 4 | `core/network.py:14-16` (3 occorrenze + 5 snapshot + `core/eventprop.py:314`) | `fc_weight.mul_(max_delay**0.5)` |
+
+**Verifica empirica post-fix** (3 seeds × A1/A8/A3): saturation = **0%** (vs 96-97% pre-fix), spike rate ∈ [6%, 10%], gradient ≠ 0 su tutti i 5 canali, parametri count invariati (864/2624/3936/864). Smoke 4 arch forward+backward: 0 errori.
+
+**Smoke training A1 2ep × 50 step**: val_total = **0.213** (vs floor pregress 0.22 dopo 5700 step) → convergenza **57× più veloce**.
+
+**Tag git**: `pre_bug_fix_2026-06-03` (rollback). HEAD post-fix: `d9d558a`.
+
+### 2026-06-04 → 06 — R24F Prodigy MultiParam PostFix (93 esperimenti)
+
+Rerun completo del piano R2.4 con codice fixato. Tag prefix `R24F_*`, results in `MultiParam_PostFix/`.
+
+**Setup**:
+- 90 Prodigy: 3 LR × 10 varianti × 3 scenari (highway, mixed, full)
+- 3 AdamW baseline (1/scenario) per misurare valore aggiunto Prodigy
+- Arch: `baseline` (864p, post-fix), 10ep × 100 step
+
+**Best per scenario**:
+| Scenario | Best Prodigy | AdamW ref | Guadagno |
+|---|---:|---:|---:|
+| highway | **0.169** (V08 lr=1.0) | 0.186 | -9% |
+| mixed | **0.189** (V08 lr=0.5) | 0.230 | -18% |
+| full | **0.222** (V08 lr=1.0) | 0.253 | -12% |
+
+**V08 (cosine_no_restart) domina su tutti e 3 gli scenari**. Setup V08: `lr=1.0, d_coef=1.0, d0=1e-6, growth=inf, scheduler=cosine_no_restart, betas=(0.9, 0.99), use_bias_correction=1, safeguard=1, wd=0.01`.
+
+⚠️ **Problema scoperto in violin G7 + G13 trajectory**: T predetto è quasi una **linea piatta** intra-sample (non segue T_true che fa step). v0 e s0 saturano ancora vicino ai bound MAX/MIN (anche post-fix). `a` stuck vicino MIN. Solo v0 varia inter-sample (cross-driver), ma intra-driver tutto è quasi costante. La rete fa **"average estimation" cross-driver**, NON **"system identification" intra-driver**.
+
+### 2026-06-07 → 09 — R25 Ablation Study (18 esperimenti)
+
+Studio causale **one-at-a-time** per identificare cosa abilita T-tracking dinamico. Setup: scenario `mixed`, Prodigy V08 lr=1.0, seed=42.
+
+**5 assi**:
+- **A — Memoria temporale** (6 run incluso baseline replica): seq_len, max_delay, bit_shift
+- **B — Loss balancing** (3 run): `lambda_T_aux` ∈ {0.1, 1.0, 10.0}
+- **C — Spike rate** (3 run): `lambda_sr` ∈ {0.0, 5.0, 20.0}
+- **D — Capacity** (3 run): hidden_size ∈ {16, 64, 128}
+- **E — Training duration** (3 run): epochs ∈ {5, 20, 30}
+
+**Modifiche infrastruttura R25** (committate in `train.py` + `utils/plot_diagnostics.py`):
+- **`pinn_loss`** ritorna 4-tuple `(loss, comps, sr, params_seq)` + nuovo parametro `lam_T_aux` + `retain_params_grad`
+- **CLI**: `--lambda_T_aux`, `--cf_max_delay`, `--cf_bit_shift` (3 nuove)
+- **11 colonne CSV epoch**: `val_T_tracking_corr` + 5×`val_<p>_pred_mean` + 5×`val_<p>_intra_std`
+- **16 colonne CSV batch**: `loss_T_aux` + 3 livelli × 5 canali (gn_out_fc_*, gn_decoded_*, grad_dir_*)
+- **3 nuovi plot**: G16 (grad raw per canale), G17 (grad decoded post-sigmoid), G18 (grad direction sign mean)
+- Helper `_robust_rmtree` per NFS Azure
+- `core/network.py`: `bit_shift` kwarg propagato a CF_FSNN_Net + HiddenLayer_ALIF
+
+**Risultati R25 — 3 WIN INDIPENDENTI** (ognuno migliora T_tracking_corr senza danneggiare val_total):
+
+| Run | Modifica | ΔT_corr | Δval | Verdetto |
+|---|---|---:|---:|---|
+| **A4** | `max_delay 6→18` | **+0.090** | -0.015 | ✅ WIN puro (memoria sinaptica più lunga) |
+| **B1** | `lambda_T_aux 0→0.1` | **+0.147** | -0.006 | ⭐ WIN ASSOLUTO (supervisione T diretta) |
+| **C1** | `lambda_sr 0.5→0` | **+0.088** | -0.014 | ✅ WIN puro (L_sr era controproducente!) |
+
+**Altri findings importanti**:
+- **A5 (bit_shift 5)** è CONTROPRODUCENTE (T_corr -0.072). Leak singolo neurone non aiuta.
+- **A6 COMBO** è il MISTERO: combinare seq_len=100 + max_delay=18 + bit_shift=5 dà T_corr=0.20 (peggio della baseline!). C'è **interazione negativa**. Sospetto: bit_shift=5.
+- **B2/B3** (lambda_T_aux 1.0/10.0): T_corr migliora ancora a 0.56/0.58 ma **val_total ESPLODE** a 0.24/0.54 → la rete sacrifica L_data e L_phys per tracciare T.
+- **C2/C3** (lambda_sr alto): forzando spike rate al target FPGA 14%, T_corr crolla del 70%. **Trade-off duro spike_rate ↔ T-tracking**.
+- **D — Capacity NON è bottleneck**: D3 large (128h) crasha (best_ep=1). D2 mid solo +0.07 su T_corr.
+- **E — SHOCKING**: più training **PEGGIORA** T_corr. E2 (20ep, best_ep=19): T_corr 0.226 vs baseline 0.353. La rete **dimentica T** durante l'apprendimento esteso (continua a migliorare val_data ma peggiora val_T_corr). **Early stop ≈ 10 ep è la scelta giusta**.
+
+**Insight tecnico fondamentale post-R25**: post-fix il gradient unbalance si è **INVERTITO**. Pre-fix v0 dominante (gradient 10× degli altri). Post-fix **T è dominante** (gn_out_fc_T = 0.23 vs v0=0.01, 23× sbilanciato verso T). Quindi T_corr=0.35 baseline non è limitato da gradient magnitude — è qualcos'altro (capacity di rappresentazione? minimi locali?). B1 NON cambia magnitudo gradient T ma cambia la **direzione semantica** (T_aux punta a T_true) → riallineamento informazionale.
+
+### 2026-06-10 — R26 Fusion Study (6 esperimenti, in esecuzione)
+
+Test di **ortogonalità** dei 3 win R25.
+
+**6 esperimenti**:
+| Tag | max_delay | T_aux | sr | epochs | Note |
+|---|---:|---:|---:|---:|---|
+| F0_baseline_replica | 6 | 0.0 | 0.5 | 10 | sanity = R25_A1 |
+| **F1_TRIPLE_win** | 18 | 0.1 | 0.0 | 10 | A4+B1+C1 (TOP candidato) |
+| F2_A4_B1 | 18 | 0.1 | 0.5 | 10 | no sr_off |
+| F3_B1_C1 | 6 | 0.1 | 0.0 | 10 | no memoria |
+| F4_A4_C1 | 18 | 0.0 | 0.0 | 10 | no T_aux |
+| F5_TRIPLE_short | 18 | 0.1 | 0.0 | 5 | F1 + early stop |
+
+**Linearity test atteso**: somma R25 predetta = +0.325 su T_corr, -0.035 su val_total. Realistic 0.55-0.62 di T_corr (linearity ratio 70-90%).
+
+**Bug NFS Azure incontrato e risolto**: `shutil.rmtree` + `os.makedirs` race condition su NFS. Fix: tag univoco con timestamp (`_R26_PREFLIGHT_<unixtime>`), no cleanup prima del train.py, cleanup finale best-effort. Commit `6075a96`.
+
+### Lessons learned 2026-06-03 → 10
+
+#### Lezione #34 — Audit codice quando i ranking sono confusi
+3 sintomi convergenti (T30 violin collassati + R2.4 risultati strani + utente che nota "v0 satura sempre") ci hanno portato all'audit. **Mai assumere che il codice base sia corretto solo perché "ha sempre funzionato"**. I 4 bug erano latenti da settimane.
+
+#### Lezione #35 — Tag pre-fix prima di applicare correzioni a impatto sistemico
+`git tag pre_bug_fix_2026-06-03` ci dà rollback istantaneo se i fix introducono problemi peggiori. Sempre tag prima di toccare core/.
+
+#### Lezione #36 — Backward-compatibility dei CSV
+Le 11+16 nuove colonne CSV R25 hanno default NaN per i CSV pregress (R24F). Tutti gli script di analisi continuano a funzionare. **Non rinominare colonne esistenti, sempre append**.
+
+#### Lezione #37 — Metric scalar prima di "guardare i plot"
+G13 trajectory mostrava T flat. Ma G7 violin mostrava distribuzione T cross-sample larga. Il `val_T_tracking_corr` Pearson ci ha permesso di **quantificare** che la corr era 0.35 (cross-driver alignment), non zero. Senza metric scalar non si confrontano ablation.
+
+#### Lezione #38 — Sospetta gli effetti combinati (interazioni)
+R25 ha mostrato: A4 + B1 + C1 sono singolarmente win, ma A4+A5+A3 (COMBO A6) è LOSS. **Le ortogonalità sono ipotesi da TESTARE**, non assumere. R26 fa proprio questo: 4 combinazioni controllo (F1/F2/F3/F4) per isolare interazioni.
+
+#### Lezione #39 — Filesystem NFS richiede pattern di accesso speciali
+Su Azure cluster con NFS shared, `rmtree + makedirs` ha race condition (metadata stale). Soluzioni: tag univoco timestamp, `_robust_rmtree` con retry+backoff, ignore_errors=True su cleanup non critici.
+
+#### Lezione #40 — La metrica T_tracking_corr cattura 2 fenomeni
+`val_T_tracking_corr` Pearson aggregato cattura **(1) cross-driver alignment** (driver diversi → T diversi) **+ (2) intra-driver dynamics** (T(t) variabile dentro la stessa sequenza). I 0.35 baseline sono quasi tutti (1). Il +0.15 di B1 è probabilmente il vero (2). Per disambiguare servirebbe `val_T_intra_corr` (Pearson dopo aver rimosso la media per-sample). **TODO post-R26 se utile**.
+
+### 2026-06-11 — R27 Observability Audit (24 run R25+R26 auditati)
+
+Implementato in `train.py` + `scripts/audit_checkpoints.py`:
+- **Fix bug LAYER_MAP** (`train.py:704-722`): 4/6 colonne gradient erano SEMPRE NaN dal 2026-06-07 a causa di entry duplicate per varianti EventProp. Fix "first hit wins".
+- **Nuova metrica `val_T_intra_corr`** (Lezione #40): Pearson(T_pred, T_true) dopo rimozione media per-sample.
+- **Audit script**: rilancia val_epoch sui 24 best_model.pt R25+R26, calcola `rank_effective` + `cond_number` su `Cov(decoded_params)`.
+
+**Risultati shock**:
+- T_intra_corr ≤ 0.058 in tutti i 24 run (top: R25_A3 = 0.058). Il T_tracking_corr=0.5 di B1 era illusione cross-driver quasi totale.
+- rank_effective = 1 in 18/24 run, ≤2 in 22/24. Rank-collapse universale.
+- v0_pred saturato a 38-44 in 22/24 run.
+
+### 2026-06-12 mattina — R28 ProdigyTuning (5 esperimenti)
+
+Test fix konstmish Issue #27 (`d0=1e-5`), step budget 3×, warm restart cosine T0=5.
+
+- **A1 (d0=1e-5)**: Prodigy `d` sblocca a 0.474 (19× baseline) MA val_data esplode (+31%), T_intra crolla. d alto destabilizza.
+- **C1/D1**: best_ep=1 (rete locka minimo locale al primo epoch). Warm restart non interviene.
+- T_intra ≤ 0.035 in tutti i 5 setup. **Prodigy NON era il bottleneck.**
+
+### 2026-06-12 pomeriggio — R29 DecoderFix (12 esperimenti, disastro)
+
+Modifiche `core/network.py`: buffer `decode_offset` + `logit_tau` + `calibrate_decode_offset()` + `set_logit_tau()`. CLI flag opt-in in `train.py` (default no-op = backward-compat).
+
+12 run su 6 assi (controlli, init, τ-sweep, combo, long, no-Po2).
+
+**Risultati**:
+- E0 baseline A3 replica: val_data 0.174 (drift +2% vs A3 originale)
+- A1 init_shift alone: v0_pred_ep1=44.5 (PIÙ saturato di baseline!) → init annullato in 100 step → identifiability vs init asymmetry
+- B/C/D run con τ-anneal: best_ep=1 in 7/12 run → τ-anneal + cosine + lr=1.0 = locka minimo precoce
+- C1 init+τ5: val_data 0.253 (+45% peggio di baseline)
+- E1 no_po2: rank 1→2 lieve ma val_data crolla → **Po2 non è il colpevole del rank-collapse**
+
+**3 conferme negative cristalline da R29**:
+- init_shift INUTILE (loss landscape lo annulla)
+- Po2 quantization NON è la causa
+- τ-anneal mal interagisce con cosine scheduler
+
+### 2026-06-12 sera — SCOPERTA CRITICA: gradienti esplosi nascosti dal clip
+
+Utente solleva ipotesi: "stiamo usando una baseline instabile (LR 1)". Verifica su `gn_total_preclip`:
+
+| Run | inf grads | gn>100 | gn_max | giudizio |
+|---|---:|---:|---:|---|
+| ⭐ **R24F mixed V08 lr=0.5** | **0** | **0** | **21.79** | ✅ CLEAN |
+| R24F mixed V08 lr=1.0 | 20 | 13 | 4.2e+13 | ⚠ mascherato |
+| R25_B1 (= R28_A0) | 0 | 2 | 6.7e+5 | ⚠ mascherato |
+| R25_A3 (= R29_E0) | 2 | 9 | 8.6e+17 | ❌ mascherato |
+| R26_F1 TRIPLE | 0 | 5 | 7.3e+17 | ❌ mascherato |
+| R29_C1_init_tau5 | 1778 | 902 | 2.2e+17 | ❌ totalmente rotto |
+
+**Discovery**: TUTTI i baseline da R25 in poi avevano `gn_total_preclip` ∈ [10⁵, 10¹⁷], mascherati dal `clip_grad_norm_(1.0)`. R24F_mixed_lr0.5_V08 è l'UNICO setup post-fix con gradienti CLEAN.
+
+R24F LR sweep aggregato:
+- lr=0.1: 0% exploding ma val_data 0.7-1.0 (non converge)
+- lr=0.5: 0-20% exploding, val_data competitivo
+- lr=1.0: 20-50% exploding (mixed 50%, full 30%, highway 20%)
+
+### 2026-06-12 sera — RESET strategico
+
+**Decisione utente**: tornare al vero baseline post-fix `R24F_mixed_lr0.5_V08`. Snapshot creato in `Arch_Tested/R24F_MIXED_lr0.5_V08_TRUE_CHAMPION/` con README + reproduce_training.ipynb + snapshot_original + codice corrente. R27/R28/R29 mantengono valore informativo (rank-collapse confermato, Prodigy non colpevole, decoder fix non sufficienti, init irrelevant, Po2 innocent) MA misure numeriche vanno re-fatte sul baseline pulito.
+
+#### Lezione #41 — Sempre verificare `gn_total_preclip` (NON solo `gn_postclip`)
+Il `clip_grad_norm_(max_norm=1.0)` maschera completamente l'instabilità: log post-clip sempre = 1.0, dando illusione di sanità. Vero indicatore è `gn_total_preclip`. **Aggiungere assertion `gn_max < 25` come gate per qualunque baseline**.
+
+#### Lezione #42 — Sweep LR è la prima cosa per qualunque optimizer adattivo
+Per Prodigy: `d0` adatta dlr ma `lr` nominale modula la dinamica scheduler (cosine). lr=1.0 può sembrare giusto per Prodigy paper ma per il NOSTRO regime SNN+surrogate è instabile.
+
+#### Lezione #43 — Convenzioni paper non sostituiscono verifiche empiriche
+Ho seguito "lr=1.0 per Prodigy" (paper konstmish) per 4 sessioni senza verificare nel NOSTRO regime. R24F aveva già la risposta (lr=0.5 V08 per mixed) ma l'ho ignorata. **Mai assumere convenzione paper universale**.
+
+#### Lezione #44 — Strategic reset is OK
+4 sessioni costruite su baseline sbagliato sembrerebbero sprecate. MA: hanno comunque prodotto 3 risultati negativi rigorosi (init irrelevant, Po2 not the cause, Prodigy not bottleneck) E introdotto metriche valide (T_intra_corr, rank_effective). Reset al baseline pulito è OK, le lezioni restano.
+
+---
+
+## 📅 2026-06-13 — R30 Identifiability (10 esp.) post-RESET
+
+**Setup**: prima campagna sul vero baseline `R24F_mixed_lr0.5_V08`. Applicate decoder fix R29 opt-in (DEC-1 per-channel τ, DEC-3 init_bias_shift) + supervisione ausiliaria su v0/s0/a/b via 4-tuple loader (`data/generator.py` emette `params_gt`).
+
+**Implementazione**:
+- `generator.py`: aggiunto `params_gt` (4 valori per traiettoria) al dataset → loader 4-tuple `(x, y, mask, params_gt)`.
+- `train.py`: `pinn_loss` ora accetta `lambda_aux` su `MSE(decoded_params, params_gt)` come 4° componente.
+- 10 esperimenti: lambda_aux ∈ {0.0, 0.1, 0.5, 1.0}, decoder cfg ∈ {C0, C3}, plus 2 controlli.
+
+**Risultati**:
+- Rank-collapse **risolto** dove era universale: rank_effective ≥ 3 in 8/10 run con lambda_aux ≥ 0.5.
+- T_intra_corr migliorato a 0.038-0.043 nei migliori (vs ≤0.058 su 24 run R27 audit).
+- v0_pred desaturato (range 25-42 invece di clamp a 38-44).
+- **C3 emergente come decoder cfg vincente**: init_bias_shift=1 + per-channel τ=[10,3,10,3,3] migliora T_intra E rank.
+
+**Lezione #45 — Identifiability era il bottleneck primario, non capacità**: la rete da 864 params è sufficiente. Senza ground-truth sui parametri latenti, la rete impara una mappa costante (rank=1). Supervisione ausiliaria + decoder calibrato risolvono. R30 chiude la domanda aperta di R27 (rank-collapse) e R28 (Prodigy non era colpevole).
+
+---
+
+## 📅 2026-06-14 — R31 Champion Validation (14 esp.)
+
+**Setup**: sweep esaustivo a 50 epoche su 4 dimensioni ortogonali (decoder, scheduler, spike-pressure, capacity) per validare i 3 champion candidati emersi da R30.
+
+**Dimensioni**:
+- **Decoder**: C0 (none), C1 (init), C3 (init + per-ch τ) ← winner R30
+- **Scheduler**: cosine_no_restart, cosine_T0=15, cosine_T0=10
+- **Spike pressure**: λ_sr ∈ {0.5, 1.0, 5.0}
+- **Capacity**: h ∈ {32 (baseline 864p), 16 (232p ridotto)}
+
+**Risultati shock** (3 champion distinti, ognuno ottimo su un trade-off):
+
+| Tag | Config | T_intra | val_data | gn_max | Ep done | Categoria |
+|---|---|---:|---:|---:|---:|---|
+| ⭐ **C3** | C3 + no restart, 10 ep | **0.0407** | 0.177 | **40.6** ✅ | 10/10 | Scientific reference (CLEAN) |
+| ⭐ **A3** | C3 + cosine T0=15, 50 ep | **0.0599** | **0.167** | 4280 ⚠ | 32/50 abort | Operational best (peak @ ep15) |
+| ⭐ **E1** | C3 + h=16 + λ_sr=5 | 0.038 | 0.173 | 1.3e6 ⚠ | **50/50** ✅ | Long-run stable |
+
+**Pattern critico identificato**:
+- A3 (cosine T0=15): T_intra peak coincide **esattamente** con il primo restart @ep15, poi loss landscape implode (gn cresce di 3 OOM nelle 17 ep successive prima di abort).
+- E1 (capacity ridotta): l'unico setup che completa 50 ep senza abort, ma T_intra inferiore. h=16 (232 params) sacrifica capacità per stabilità.
+- C3 (no restart, 10 ep): l'unico CLEAN (gn=40.6 < 100). Trade-off: 4/4 obiettivi raggiunti su solo 10 ep, T_intra inferiore al peak A3.
+
+**Snapshot 3 champion** in `Arch_Tested/R29v2_C3_CLEAN/`, `Arch_Tested/R31_A3_PEAK/`, `Arch_Tested/R31_E1_STABLE/` con README + reproduce_training.ipynb + snapshot_original (config + training_log + plots G1-G13). README master `Arch_Tested/README.md` aggiornato (9 entry totali con colonna T_intra).
+
+#### Lezione #46 — Warm restart è lama a doppio taglio
+Il primo restart cosine T0=15 sblocca temporaneamente il peak T_intra (probabile uscita da minimo locale grazie al jump di lr da 0.0002→0.0178, 90×). Ma il jump è troppo violento: amplifica i gradienti accumulati, esplode poco dopo. **Hypothesis R32**: meccanismi soft (decay, warmup, adaptive trigger) possono catturare il beneficio del restart senza la successiva esplosione.
+
+#### Lezione #47 — Tre champion ≠ un champion
+Il concetto di "best model" è ambiguo se gli obiettivi sono multipli (T_intra, val_data, stabilità, riproducibilità). R31 ha mostrato che esistono **3 frontiere di Pareto distinte**. Documentare tutte e 3 in `Arch_Tested/` (con etichette "CLEAN"/"PEAK"/"STABLE") è meglio che forzare una scelta arbitraria.
+
+#### Lezione #48 — T_intra peak ≠ val_total best
+Il file `_TRUE_Tintra_ranking.csv` mostra che 12/49 run hanno peak T_intra a epoca DIVERSA dal best val_total (idxmin). Aggregatori standard (best.pt selezionato per val_total) **perdono** il peak T_intra. Per Prodigy Study estratto via re-scan completo dei training_log.csv per epoca con T_intra.idxmax() per run.
+
+---
+
+## 📅 2026-06-15 — R32 Restart Mechanisms (preparato, non eseguito)
+
+**Setup**: 5 meccanismi soft per warm restart + 2 baseline cfg (C3, E1) → 10 esperimenti × 50 ep.
+
+**Codice (`train.py`)**: aggiunti 5 nuovi CLI flag, tutti default no-op (backward-compat verificato con smoke test):
+```python
+parser.add_argument('--restart_T0', type=int, default=15)
+parser.add_argument('--restart_decay', type=float, default=1.0)     # 1.0 = no decay
+parser.add_argument('--restart_lr_after', type=float, default=-1.0) # -1 = disabled
+parser.add_argument('--restart_warmup_epochs', type=int, default=0)
+parser.add_argument('--restart_adaptive', type=int, default=0, choices=[0, 1])
+```
+
+Helper `_custom_restart_lr(epoch)`:
+```python
+# Per ciclo n: cycle_max_lr = base_lr * (restart_decay ** n)
+# OR cycle_max_lr = restart_lr_after se > 0
+# Cosine all'interno del ciclo, warmup linear opzionale nelle prime restart_warmup_epochs
+cosine_factor = 0.5 * (1.0 + math.cos(e_in_cycle * math.pi / cycle_T))
+```
+
+Helper `_check_restart_trigger()`: fixed T0 (epoch >= cycle_start + T0) OR adaptive (T_intra↓×2 vs cycle max).
+
+**5 meccanismi**:
+- **Opt 1 (decay 0.3)**: lr cicli 0.5 → 0.15 → 0.045 (smorzamento progressivo)
+- **Opt 2 (2-tier)**: ciclo 0 con lr=0.5, cicli successivi con lr_after=0.1
+- **Opt 3 (adaptive)**: restart triggerato da T_intra calo ×2 invece di T0 fisso
+- **Opt 4 (warmup 3 ep)**: linear warmup post-restart per 3 epoche
+- **Opt 5 (combo 1+4)**: decay 0.3 + warmup 3 ep
+
+**10 esperimenti**: 5 mech × {C3 base (h=32, λ_sr=1), E1 base (h=16, λ_sr=5)}. Notebook `Prodigy_Restart_Mechanisms_R32.ipynb` (9 celle).
+
+**Audit Python 3.10**: tutte le 9 celle passano `ast.parse(feature_version=(3,10))`. Fix Cell 3 (era SyntaxError per `\'` in f-string expression — vietato fino a 3.12, rilassato in 3.12+). Tag git `pre_R32`. HEAD `a552f55` pushed.
+
+**Stato**: pronto su Azure, **non ancora eseguito**. ~4.6h compute stimato. Output atteso: `results/Prodigy_Study/R32_RestartMechanisms/`.
+
+#### Lezione #49 — Python 3.10 compatibility check obbligatorio prima di pushare su Azure
+Azure ML cluster usa Python 3.10. `\'` (backslash) in f-string expression è vietato fino a 3.12 (PEP 701). Local Python 3.13 compila ma Azure 3.10 fallisce. **Aggiungere `ast.parse(src, feature_version=(3,10))` come step di pre-push** per ogni notebook.
+
+---
+
+## 📅 2026-06-16 — R32 RestartMechanisms eseguito + R33 Closure (CHIUSURA STUDIO)
+
+### Mattina — R32 eseguito (10 esp.)
+
+5 meccanismi soft (decay, 2-tier, adaptive, warmup, combo) × 2 baseline (C3, E1). Risultati chiave:
+
+| Rank Tp | Tag | Tp | val_data | ep | gn_max |
+|---:|---|---:|---:|---:|---:|
+| 1 | R32_A3_adaptive | 0.0651 | 0.170 | 25/50 | 1e19 |
+| 2 | R32_A4_warmup2ep | 0.0635 | 0.165 | 41/50 | 1.2e13 |
+| 3 | R32_B3_E1_adaptive | 0.0626 | 0.175 | 19/50 | 4e18 |
+| 4 | R32_A1_decay03 | 0.0577 | **0.163** | 25/50 | 6.5e5 |
+| 4 | R32_A2_2tier_015 | 0.0577 | 0.163 | 25/50 | 6.5e5 |
+| ... | R32_B2_E1_2tier | 0.0500 | **0.1609** record | 50/50 | 5.3e9 |
+| ... | R32_B5_E1_decay+warmup | 0.0519 | 0.163 | 50/50 | 5.3e9 |
+
+**Bug A1 ≡ A2**: decay 0.3 e 2-tier 0.15 producono cycle_max_lr coincidente (0.5×0.3 = 0.15), training identico. Solo 4 meccanismi effettivamente distinti.
+
+**Adaptive trigger (A3) = doppio-taglio**: peak Tp record (0.065) ma catastrofico (gn=1e19). Non riproducibile come champion.
+
+**3 champion R32 snapshot** in `Arch_Tested/`: R32_A4_C3_WARMUP_PEAK, R32_A1_C3_DECAY_BALANCED, R32_B5_E1_STABLE. Soppiantano R31_A3/E1.
+
+### Pomeriggio — Analisi diagnostica + 2 correzioni
+
+User identifica 3 anomalie nei grafici R32:
+1. **Explosion guard troppo sensibile**: soglia 100 abortiva run con singoli spike isolati. Verificato: tutti gli abort R32 erano su 2 epoche realmente consecutive >100, MA con `gn_total_preclip` naturale spesso fluttuante sopra 100, basta un batch rumoroso per innescare streak=1.
+2. **Restart_T0=15 sub-ottimale per 50 ep**: 3 cicli pieni + 1 ciclo monco di 5 ep (restart sprecato).
+3. **A1 ≡ A2 bug**: documentato per i prossimi sweep.
+
+**Correzioni in `train.py`** (default updates):
+- `epoch_explosion_threshold`: 100 → **10000** (R31_A3 peak=4.3e3, soglia ora distingue divergenza vera da spike transienti)
+- `restart_T0`: 15 → **12** (4 cicli pieni in 50 ep, no spreco)
+
+### Sera — R33 Closure (5 esp.) — 2 NUOVI champion
+
+5 esperimenti per chiudere rigorosamente lo studio:
+- **C1**: R32_A4 + T0=12 + thr=10000 → **49/50 ep**, Tp=0.0642, **val_data=0.1589 RECORD ASSOLUTO**
+- **C2**: R32_A1 + T0=12 + thr=10000 → **50/50 ep**, Tp=0.0518, **gn=52 ✅ CLEAN**
+- **C3**: R32_B5 + T0=12 + thr=10000 → 50/50 ep, marginalmente peggio di R32_B5 (gn ridotto 3 OOM, Tp leggermente sotto)
+- **D1** (isolation, T0=15 + solo thr=10000): identico a R32_A4 (+1 ep) → soglia da sola non basta
+- **D2** (isolation, A3 adaptive + thr=10000): identico a R32_A3 (Tp=0.065, ep=25, gn=1e19) → la sua esplosione era reale
+
+**Snapshot in `Arch_Tested/`**: `R33_C1_A4_T12_PEAK/` e `R33_C2_A1_T12_CLEAN/`. Soppiantano R32_A4 e R29v2_C3.
+
+### Champion roster finale post-R33
+
+| Ruolo | Tag | Tp | val_data | ep | gn_max |
+|---|---|---:|---:|---:|---:|
+| PEAK | R33_C1_A4_T12_PEAK | **0.0642** | **0.1589** 🏆 | 49/50 | 1.78e19 |
+| CLEAN | R33_C2_A1_T12_CLEAN | 0.0518 | 0.1654 | 50/50 | **52** ✅ |
+| STABLE | R32_B5_E1_STABLE | 0.0519 | 0.163 | 50/50 | 5.3e9 |
+| BASELINE storico | R24F_MIXED_lr0.5_V08 | 0.015 | 0.181 | 30/30 | 21.79 ✅ |
+
+#### Lezione #50 — Il posizionamento dei cicli batte i meccanismi di restart
+Tutti i 5 meccanismi soft R32 (decay/2-tier/adaptive/warmup/combo) producono trade-off interessanti, ma il **singolo intervento più impattante** dell'intero R31→R33 è il riposizionamento `T0=15 → T0=12`. +8 ep su A4 (Tp+1%), +25 ep su A1 (clean!). I meccanismi sofisticati venivano vanificati dal ciclo monco residuale.
+
+#### Lezione #51 — Default conservativi delle guard sono critici
+Soglia 100 per `epoch_explosion_threshold` (5× sopra R24F CLEAN=21.8) sembrava ragionevole ma diventa hair-trigger nel regime Prodigy + warm restart dove spike naturali transienti sono frequenti. Soglia 10000 (4× sopra R31_A3 stabile=4.3e3) discrimina meglio. **Calibrare le guard sui setup attivi, non sul baseline iniziale**.
+
+#### Lezione #52 — Studio rigoroso ≠ studio infinito
+R33 ha dimostrato che le correzioni minime (2 default in `train.py`) bastavano a sbloccare 2 nuovi record. Conferma che fermarsi a una "scoperta" senza verificare le ipotesi sui parametri di setup può lasciare champion non identificati. **5 esp. di chiusura ben mirati > 50 esp. di ricerca esplorativa randomica**.
+
+### Chiusura studio Prodigy — Merge → main
+
+I 5 branch di esplorazione (Architecture/Floor/Optimizer/Training_Method/Visualizer) sono tutti antenati di `Prodigy_Deep_Study`. Un merge `Prodigy_Deep_Study → main` integra l'intera storia del progetto (307 commit). Tag finale: `R33_closure`.
+
+---
+
 ## 📌 Note finali
 
 Questo TIMELINE va aggiornato dopo ogni milestone significativa. Mantenere la sezione "Lessons learned" è cruciale per non ripetere errori in future sessioni.
