@@ -1,13 +1,43 @@
-# FUTURE_WORK.md — Esperimenti differiti + opzioni STEP 2E
+# FUTURE_WORK.md — Esperimenti differiti + opzioni next-phase
 
-> File con (a) **opzioni STEP 2E** disponibili come prossima mossa dopo
-> chiusura P14 (decomposizione floor 2026-05-31), (b) **idee differite** per
-> dopo. Ogni voce è un'opzione, non un impegno. Aggiornare data quando si
-> esegue/scarta.
+> File con (a) **opzioni post-closure 2026-06-16** disponibili dopo merge
+> studio Prodigy su main, (b) **opzioni storiche STEP 2E** (sotto), (c) **idee differite** per dopo. Ogni voce è un'opzione, non un impegno. Aggiornare data quando si esegue/scarta.
 
 ---
 
-## 📋 Sommario decisione utente STEP 2E
+## 🟢 POST-CLOSURE 2026-06-16 — opzioni dopo R33
+
+Lo studio Prodigy è chiuso. I floor val_data sono passati da 0.28 (pre-R24F) a **0.159** (R33_C1 record). 4 champion attivi in `Arch_Tested/`. Le opzioni concrete per il prossimo capitolo:
+
+| ID | Mossa | Costo dev | Costo Azure | Risultato atteso | Note |
+|----|---|---|---|---|---|
+| **F6** | **Multi-seed validation 4 champion** | 1 giorno | ~6h | conferma robustezza ± 1σ | **CONSIGLIATO prima di F5** — single-seed è il vero rischio rimasto |
+| **F5** | **Deploy FPGA PYNQ-Z1** (R33_C2 CLEAN) | 2-3 settimane | minimo | progetto v1 completato | Setup minimum-risk: 864 params + gn pulito + 50/50 ep |
+| **F4** | **Architettura modificata** post-RESET | ~1 settimana | 5-10h sweep | val_data 0.13-0.15 (?) | Rifare A8 attn (3936p), StackedSkip su baseline pulito |
+| **F7** | **R30 4-tuple sui champion R33** | 2-3 giorni | ~3h | rank ≥4 garantito | Aggiunge supervisione ausiliaria a C1/C2; può sbloccare ulteriore Tp |
+| **F2** | EventProp (storico) | 2-4 settimane | ~5h | bassa probabilità di vincere | Già scartato in F2 originale, mantenuto come reference |
+
+**Raccomandazione**: **F6 → F5** è il path low-risk. **F7 → F4** è il path high-reward (più tempo, più downside, più potenziale).
+
+### [F6] Multi-seed validation — il vero rischio rimasto
+
+Single-seed è la principale criticità non risolta dello studio. Tutti i 4 champion sono basati su 1 seed (default 42). Rumore intra-seed può essere ≈ margini dichiarati (cfr. AUDIT_2026-06-02 §criticità #3).
+
+**Setup proposto**:
+- 4 champion × 5 seed (42, 123, 456, 789, 1024) = 20 run
+- ~18 min/run × 20 = 6h compute Azure
+- Output: stessa metrica per seed → media ± σ
+- Test: il ranking PEAK/CLEAN/STABLE resta stabile? Se sì → deploy con confidenza. Se no → rivaluta.
+
+**Notebook stub**: `Prodigy_MultiSeed_R34.ipynb` (da creare). Pattern: identico a R33 ma loop su `--seed {42,123,456,789,1024}`.
+
+---
+
+## 📋 STORICO — Sommario decisione utente STEP 2E (pre-R24F)
+
+> ⚠️ Le tabelle e raccomandazioni sotto sono dello stato **pre-2026-06-03** (prima della scoperta R24F baseline). Conservato per archeologia. Per le decisioni post-closure 2026-06-16 vedi sopra.
+
+## 📋 Sommario decisione utente STEP 2E (storico)
 
 | ID | Mossa | Costo dev | Costo Azure | Potenziale miglioramento | Pro | Contro |
 |----|-------|-----------|-------------|--------------------------|-----|--------|
