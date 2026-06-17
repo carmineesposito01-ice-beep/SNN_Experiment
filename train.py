@@ -613,6 +613,11 @@ def val_epoch(model, loader, device, lam):
     # Per altri canali: per-channel mean predicted (per saturation) + intra-seq std
     chan_pred_mean = {pn: [] for pn in _PARAM_NAMES}
     chan_intra_std = {pn: [] for pn in _PARAM_NAMES}
+    # Lente B (Loss_Study) — accumulatori per NRMSE per-canale vs GT.
+    # T: GT per-timestep in y[:,:,1] (masked). v0/s0/a/b: GT costante in params_gt.
+    _NR_GT_IDX = {'v0': 0, 's0': 1, 'a': 2, 'b': 3}   # colonna in params_gt (T escluso)
+    nrmse_se = {pn: 0.0 for pn in _PARAM_NAMES}
+    nrmse_n  = {pn: 0   for pn in _PARAM_NAMES}
 
     for batch in loader:
         # R30: 4-tuple loader (x, y, mask, params_gt). Backward-compat su 3-tuple.
@@ -643,6 +648,16 @@ def val_epoch(model, loader, device, lam):
         for i, pn in enumerate(_PARAM_NAMES):
             chan_pred_mean[pn].append(ps[:, :, i].mean().item())
             chan_intra_std[pn].append(ps[:, :, i].std(dim=1).mean().item())
+
+        # Lente B — somma errori quadratici vs GT (T: per-timestep masked; v0/s0/a/b: costante)
+        nrmse_se['T'] += (mask * (ps[:, :, 1] - y[:, :, 1]) ** 2).sum().item()
+        nrmse_n['T']  += mask.sum().item()
+        if params_gt is not None:
+            for pn, gi in _NR_GT_IDX.items():
+                pi = _PARAM_NAMES.index(pn)              # idx canale in params_seq
+                gt = params_gt[:, gi].unsqueeze(1)       # (batch, 1) costante per scenario
+                nrmse_se[pn] += ((ps[:, :, pi] - gt) ** 2).sum().item()
+                nrmse_n[pn]  += ps[:, :, pi].numel()
 
     nb = max(n_batches, 1)
     avgs = {k: v / nb for k, v in totals.items()}
@@ -683,6 +698,21 @@ def val_epoch(model, loader, device, lam):
     for pn in _PARAM_NAMES:
         avgs[f'val_{pn}_pred_mean'] = float(np.mean(chan_pred_mean[pn])) if chan_pred_mean[pn] else float('nan')
         avgs[f'val_{pn}_intra_std'] = float(np.mean(chan_intra_std[pn])) if chan_intra_std[pn] else float('nan')
+
+    # Lente B (Loss_Study) — NRMSE per-canale = RMSE / range_param. Normalizzare per il
+    # range rende confrontabili canali su scale diverse (v0~37 vs T~2). Guard hasattr per
+    # non rompere training method con modelli privi di param_hi/lo (es. EventProp variants).
+    if hasattr(model, 'param_hi') and hasattr(model, 'param_lo'):
+        _rng = (model.param_hi - model.param_lo).detach().cpu()
+        for i, pn in enumerate(_PARAM_NAMES):
+            if nrmse_n[pn] > 0:
+                _rmse = math.sqrt(nrmse_se[pn] / nrmse_n[pn])
+                avgs[f'val_{pn}_nrmse'] = float(_rmse / (_rng[i].item() + 1e-12))
+            else:
+                avgs[f'val_{pn}_nrmse'] = float('nan')
+    else:
+        for pn in _PARAM_NAMES:
+            avgs[f'val_{pn}_nrmse'] = float('nan')
 
     return avgs
 
@@ -732,6 +762,8 @@ class CSVLogger:
         'val_T_intra_corr',
         'val_v0_pred_mean', 'val_T_pred_mean', 'val_s0_pred_mean', 'val_a_pred_mean', 'val_b_pred_mean',
         'val_v0_intra_std', 'val_T_intra_std', 'val_s0_intra_std', 'val_a_intra_std', 'val_b_intra_std',
+        # Lente B (Loss_Study) — NRMSE per-canale (RMSE/range): residuo normalizzato confrontabile
+        'val_v0_nrmse', 'val_T_nrmse', 'val_s0_nrmse', 'val_a_nrmse', 'val_b_nrmse',
     ]
 
     def __init__(self, path: str):
@@ -1669,7 +1701,9 @@ def main():
                       'val_v0_pred_mean', 'val_T_pred_mean', 'val_s0_pred_mean',
                       'val_a_pred_mean', 'val_b_pred_mean',
                       'val_v0_intra_std', 'val_T_intra_std', 'val_s0_intra_std',
-                      'val_a_intra_std', 'val_b_intra_std'):
+                      'val_a_intra_std', 'val_b_intra_std',
+                      'val_v0_nrmse', 'val_T_nrmse', 'val_s0_nrmse',
+                      'val_a_nrmse', 'val_b_nrmse'):
                 row[k] = val_m.get(k, float('nan'))
             logger.log(row)
 
