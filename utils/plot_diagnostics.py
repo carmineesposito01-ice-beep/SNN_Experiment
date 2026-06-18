@@ -624,6 +624,37 @@ def plot_g18_grad_direction_per_channel(batch_log: dict, out_path: str):
                    out_path=out_path, log_scale=False, ylim=(-1.05, 1.05))
 
 
+def plot_g19_nrmse_per_channel(log: dict, out_path: str):
+    """G19 — NRMSE per-canale (RMSE(pred,GT)/range) vs epoca.
+
+    Richiede le colonne val_<p>_nrmse (aggiunte 2026-06 per Loss_Study). Skip
+    silenzioso se assenti (run pre-patch). NRMSE alto = parametro mal identificato;
+    confrontabile cross-canale perche' normalizzato per il range del parametro.
+    Disponibile su QUALSIASI run (dataset sintetico -> GT sempre nota), non solo
+    negli studi vincolati.
+    """
+    if not _MPL:
+        return
+    chans = ['v0', 'T', 's0', 'a', 'b']
+    keys = [f'val_{c}_nrmse' for c in chans]
+    if not all(k in log for k in keys):
+        print("  G19 saltato (colonne val_*_nrmse assenti — run pre-patch)")
+        return
+    ep = log.get('epoch', np.arange(1, len(log[keys[0]]) + 1))
+    fig, ax = plt.subplots(figsize=(9, 5))
+    for c, k in zip(chans, keys):
+        ax.plot(ep, log[k], marker='.', label=c)
+    ax.set_xlabel('epoch')
+    ax.set_ylabel('NRMSE = RMSE(pred, GT) / range')
+    ax.set_title('G19 — NRMSE per-canale (residuo normalizzato; alto = mal identificato)')
+    ax.legend()
+    ax.grid(alpha=0.3)
+    ax.set_ylim(bottom=0)
+    fig.tight_layout()
+    fig.savefig(out_path, dpi=120)
+    plt.close(fig)
+
+
 # ===========================================================
 # 3. Funzione principale
 # ===========================================================
@@ -663,6 +694,7 @@ def plot_all(log: dict, out_dir: str,
         plot_g3_lr_schedule(log, os.path.join(od, 'G3_lr_schedule.png'))
         plot_g4_grad_norm(log,   os.path.join(od, 'G4_grad_norm.png'))
         plot_g6_spike_rate(log,  os.path.join(od, 'G6_spike_rate.png'))
+        plot_g19_nrmse_per_channel(log, os.path.join(od, 'G19_nrmse_per_ch.png'))
 
         if T_pred is not None and T_true is not None:
             plot_g5_T_scatter(T_pred, T_true, os.path.join(od, 'G5_T_scatter.png'))
