@@ -55,6 +55,7 @@
   "cf_logit_tau_per_channel": "10.0,3.0,10.0,3.0,3.0",
   "max_epoch_explosion_streak": 2,
   "epoch_explosion_threshold": 10000.0,
+  "epoch_explosion_frac": 0.5,
   "max_steps_per_epoch": 100,
   "val_batch_size": 32,
   "resume": null,
