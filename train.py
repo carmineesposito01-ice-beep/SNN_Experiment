@@ -396,7 +396,8 @@ def _log_batch_diagnostics(tag, comps, gn_total, x, pre_norms, model):
 def train_epoch(model, loader, optimizer, device, epoch, lam,
                 scheduler=None, step_per_batch=False,
                 log_every=LOG_EVERY, max_inf_streak=20, diag=False,
-                batch_logger=None, max_steps_per_epoch=-1):
+                batch_logger=None, max_steps_per_epoch=-1,
+                explosion_threshold=float('inf')):
     """
     Esegue un'epoca di training con guardie e diagnostica.
 
@@ -419,6 +420,8 @@ def train_epoch(model, loader, optimizer, device, epoch, lam,
     n_batches  = 0
     inf_streak = 0          # batch consecutivi con grad_norm=inf
     max_gn_preclip = 0.0    # R30 explosion guard: max gn_total_preclip osservato in epoca
+    n_finite_gn    = 0      # batch con gn_total_preclip finito (denominatore frazione)
+    n_expl_gn      = 0      # batch con gn_total_preclip > explosion_threshold (S1b: frazione, non max)
     t0         = time.time()
 
     for batch_idx, batch in enumerate(loader):
@@ -509,8 +512,12 @@ def train_epoch(model, loader, optimizer, device, epoch, lam,
         # R30 (2026-06-12) — tracking max gn_total_preclip nell'epoca per
         # explosion guard a livello epoca. Ignora inf (gestito separatamente
         # da inf_streak).
-        if math.isfinite(gn_total_preclip) and gn_total_preclip > max_gn_preclip:
-            max_gn_preclip = gn_total_preclip
+        if math.isfinite(gn_total_preclip):
+            n_finite_gn += 1
+            if gn_total_preclip > max_gn_preclip:
+                max_gn_preclip = gn_total_preclip
+            if gn_total_preclip > explosion_threshold:
+                n_expl_gn += 1   # S1b: conta batch esplosi per la frazione epoca-level
 
         gn     = nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
         gn_val = float(gn)
@@ -545,6 +552,7 @@ def train_epoch(model, loader, optimizer, device, epoch, lam,
                 avgs['spike_rate'] = spike_acc / nb
                 avgs['grad_norm']  = float('inf')
                 avgs['max_gn_preclip'] = max_gn_preclip
+                avgs['explosion_frac'] = n_expl_gn / max(n_finite_gn, 1)
                 avgs['aborted']    = True
                 return avgs
             continue
@@ -595,6 +603,7 @@ def train_epoch(model, loader, optimizer, device, epoch, lam,
     avgs['spike_rate'] = spike_acc / nb
     avgs['grad_norm']  = grad_acc  / nb
     avgs['max_gn_preclip'] = max_gn_preclip   # R30: per explosion guard epoch-level
+    avgs['explosion_frac'] = n_expl_gn / max(n_finite_gn, 1)  # S1b: frazione batch esplosi
     avgs['aborted']    = False
     return avgs
 
@@ -1148,6 +1157,12 @@ def main():
                              'precoce di run altrimenti recuperabili. R32_A4 peak gn=1.2e13, '
                              'R32_B5 peak gn=5.3e9, R31_A3 peak gn=4.3e3 — 10000 distingue spike '
                              'transienti da divergenza vera). Solo se --max_epoch_explosion_streak > 0.')
+    parser.add_argument('--epoch_explosion_frac', type=float, default=0.5,
+                        help='S1b (2026-06): frazione minima di batch con gn_preclip>soglia per '
+                             'marcare l epoca come esplosa (default 0.5 = meta epoca). Robustifica '
+                             'la guard contro spike isolati: con il vecchio criterio (max>soglia) '
+                             'bastava 1 batch su 100 ad abortire una run pulita (vedi Loss_Study S1b, '
+                             'mediana gn~0.5 ma abort per spike isolato). Solo se streak>0.')
     # STEP 2C — Optimizer_Exploration: step budget control + val decoupling
     parser.add_argument('--max_steps_per_epoch', type=int, default=-1,
                         help='Cap step training per epoca, indipendente da len(train_loader). '
@@ -1606,28 +1621,34 @@ def main():
                 diag=args.smoke,
                 batch_logger=batch_logger,
                 max_steps_per_epoch=args.max_steps_per_epoch,
+                explosion_threshold=args.epoch_explosion_threshold,
             )
 
             # R30 (2026-06-12) — Epoch-level explosion guard.
             # Difesa contro gradient explosion mascherato dal clip_grad_norm_(1.0).
             # Solo attivo se --max_epoch_explosion_streak > 0 (default off).
             if args.max_epoch_explosion_streak > 0:
-                max_gn_e = train_m.get('max_gn_preclip', 0.0)
-                if max_gn_e > args.epoch_explosion_threshold:
+                max_gn_e  = train_m.get('max_gn_preclip', 0.0)
+                expl_frac = train_m.get('explosion_frac', 0.0)
+                # S1b (2026-06-18): epoca "esplosa" SOLO se una FRAZIONE dei batch supera
+                # la soglia (> epoch_explosion_frac), non un singolo spike isolato. Il
+                # vecchio criterio (max_gn > soglia) abortiva run pulite per 1 batch su 100.
+                if expl_frac > args.epoch_explosion_frac:
                     epoch_explosion_streak += 1
-                    print(f"  [R30 ExplosionGuard] epoca {epoch}: max_gn_preclip="
-                          f"{max_gn_e:.2e} > {args.epoch_explosion_threshold:.0f} "
-                          f"(streak {epoch_explosion_streak}/{args.max_epoch_explosion_streak})")
+                    print(f"  [ExplosionGuard] epoca {epoch}: frazione batch gn>soglia="
+                          f"{expl_frac:.2f} > {args.epoch_explosion_frac} "
+                          f"(max_gn={max_gn_e:.2e}, streak {epoch_explosion_streak}/{args.max_epoch_explosion_streak})")
                     if epoch_explosion_streak >= args.max_epoch_explosion_streak:
                         print(f"\n  [EARLY-STOP] {epoch_explosion_streak} epoche consecutive "
-                              f"con gn_preclip>soglia. Training abortito.")
+                              f"con >{args.epoch_explosion_frac:.0%} batch esplosi. Training abortito.")
                         crash_path = os.path.join(save_dir, 'crash_model.pt')
                         save_checkpoint(model, optimizer, epoch, float('inf'), crash_path)
                         print(f"  Crash dump salvato: {crash_path}")
                         break
                 else:
                     if epoch_explosion_streak > 0:
-                        print(f"  [R30 ExplosionGuard] reset streak (gn_max={max_gn_e:.2e} ok)")
+                        print(f"  [ExplosionGuard] reset streak (frazione esplosi={expl_frac:.2f} ok, "
+                              f"max_gn={max_gn_e:.2e})")
                     epoch_explosion_streak = 0
 
             if train_m.get('aborted'):
