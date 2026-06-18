@@ -470,7 +470,7 @@ def parse_scenario_mix(spec):
     if spec is None or spec == 'default':
         return dict(SCENARIO_MIX)
 
-    valid_scenarios = ['highway', 'urban', 'truck', 'mixed']
+    valid_scenarios = ['highway', 'urban', 'truck', 'mixed', 'freeflow']
 
     # Singolo scenario al 100%
     if spec in valid_scenarios:
@@ -533,6 +533,16 @@ def _sample_scenario(rng, scenario_mix=None, cut_in_ratio=None):
         p['v0'] *= rng.uniform(0.90, 1.05)
         p['T']   = rng.uniform(1.40, 2.20)
         prof = 'constant'
+
+    elif stype == 'freeflow':
+        # S1b excitation (2026-06): profilo 'free' = accelerazione libera fino a v0.
+        # Eccita la coppia molle v0/a (e b nel transitorio iniziale) — vedi Loss_Study S1.
+        # Range ampi su v0 e a per renderli identificabili sull'intero dominio.
+        p = dict(IDM_HWY)
+        p['v0'] *= rng.uniform(0.70, 1.20)
+        p['T']   = rng.uniform(IDM2D_T1, IDM2D_T2)
+        p['a']  *= rng.uniform(0.80, 1.20)
+        prof = 'free'
 
     else:  # mixed
         p = dict(IDM_HWY)
