@@ -109,6 +109,7 @@ PEAK_FF = {
     'tau_per_channel': '10.0,3.0,10.0,3.0,3.0',
     'max_epoch_explosion_streak': 2,
     'epoch_explosion_threshold': 10000.0,
+    'epoch_explosion_frac': 0.5,   # guard frazione-based (fix S1b): no abort su spike isolati
     'scheduler': 'custom_restart',
     'T0': 5, 'restart_T0': 12,
     'restart_decay': 1.0, 'restart_lr_after': -1.0,
@@ -230,6 +231,7 @@ def _build_cli(e):
         '--prodigy_growth_rate', str(e['growth_rate']),
         '--max_epoch_explosion_streak', str(e['max_epoch_explosion_streak']),
         '--epoch_explosion_threshold', str(e['epoch_explosion_threshold']),
+        '--epoch_explosion_frac', str(e['epoch_explosion_frac']),
         '--tag', e['tag']]
     if e.get('tau_per_channel'):
         cli.extend(['--cf_logit_tau_per_channel', e['tau_per_channel']])
