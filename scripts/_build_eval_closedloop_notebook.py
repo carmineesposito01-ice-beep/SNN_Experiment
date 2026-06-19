@@ -156,39 +156,77 @@ print('string_gain < 1 = string-stable (smorza le perturbazioni del leader).')
 print('Sintesi salvate: safety_summary.csv, collision_by_scenario.csv, quality_summary.csv')'''
 
 
-CELL_5_PLOTS = '''# Cell 5 -- Traiettorie esempio (cut-in, hard_brake) + barre sicurezza
+CELL_5_PLOTS = '''# Cell 5 -- Set completo: G1 traiettorie+accel, G2 TTC, G3 distribuzione margini, G4 string-stability
 import numpy as np, pandas as pd
 import matplotlib.pyplot as plt
-from utils.closed_loop_eval import simulate, build_scenarios
+from utils.closed_loop_eval import simulate, build_scenarios, TTC_STAR
 
-# usa il primo driver highway per gli esempi
+sources = [('oracle', None)] + [(lbl, m) for lbl, m in models.items()]
 dtype0, pgt0 = next((d for d in drivers if d[0] == 'highway'), drivers[0])
 scen0 = {s[0]: s for s in build_scenarios(pgt0, N=N_STEPS, rng=np.random.default_rng(100))}
-sources = [('oracle', None)] + [(lbl, m) for lbl, m in models.items()]
 
-fig, axes = plt.subplots(2, 2, figsize=(15, 9))
-for col, sname in enumerate(['cut_in', 'hard_brake']):
+# G1: gap / velocita / accelerazione per gli scenari dinamici (come reagisce l'ego)
+dyn = ['cut_in', 'hard_brake', 'stop_and_go']
+fig, axes = plt.subplots(3, len(dyn), figsize=(5 * len(dyn), 11), sharex='col')
+for col, sname in enumerate(dyn):
     _, vl, s_i, v_i, cut = scen0[sname]
     for src, mdl in sources:
         tr = simulate(mdl, pgt0, vl, s_i, v_i, cut_in=cut)
         t = np.arange(len(tr['s'])) * 0.1
         axes[0, col].plot(t, tr['s'], label=src, alpha=0.85)
-        axes[1, col].plot(t, tr['v'], label=f'{src} ego', alpha=0.85)
-    axes[1, col].plot(np.arange(len(vl)) * 0.1, vl, 'k--', lw=1, label='leader', alpha=0.6)
-    axes[0, col].axhline(0, color='r', lw=1.2, label='COLLISIONE')
-    axes[0, col].set_title(f'{sname}: gap [m]'); axes[0, col].set_ylabel('gap [m]')
-    axes[0, col].legend(fontsize=7); axes[0, col].grid(alpha=0.3)
-    axes[1, col].set_title(f'{sname}: velocita'); axes[1, col].set_xlabel('t [s]')
-    axes[1, col].set_ylabel('v [m/s]'); axes[1, col].legend(fontsize=7); axes[1, col].grid(alpha=0.3)
-plt.tight_layout(); plt.savefig(f'{RESULTS_DIR}/closedloop_trajectories.png', dpi=120); plt.show()
+        axes[1, col].plot(t, tr['v'], label=src, alpha=0.85)
+        axes[2, col].plot(t, tr['a_ego'], label=src, alpha=0.85)
+    axes[1, col].plot(np.arange(len(vl)) * 0.1, vl, 'k--', lw=1, alpha=0.5, label='leader')
+    axes[0, col].axhline(0, color='r', lw=1.2); axes[0, col].set_title(sname)
+    axes[2, col].axhline(-9, color='r', ls=':', lw=0.8)
+    axes[0, col].set_ylabel('gap [m]'); axes[1, col].set_ylabel('v [m/s]'); axes[2, col].set_ylabel('a_ego [m/s2]')
+    axes[2, col].set_xlabel('t [s]')
+    for r in range(3):
+        axes[r, col].grid(alpha=0.3); axes[r, col].legend(fontsize=6)
+fig.suptitle('G1 — Traiettorie closed-loop: gap / velocita / accelerazione (rosso = collisione / -9 limite)')
+fig.tight_layout(); fig.savefig(f'{RESULTS_DIR}/eval_G1_trajectories.png', dpi=120); plt.show()
 
-# barre: worst min_gap per scenario x sorgente
-piv = df.pivot_table(index='scenario', columns='source', values='min_gap', aggfunc='min')
-piv.plot(kind='bar', figsize=(11, 5)); plt.axhline(0, color='r', lw=1.2)
-plt.ylabel('worst min_gap [m] (0 = collisione)'); plt.title('Margine minimo di sicurezza per scenario')
-plt.xticks(rotation=0); plt.grid(alpha=0.3, axis='y'); plt.tight_layout()
-plt.savefig(f'{RESULTS_DIR}/closedloop_min_gap.png', dpi=120); plt.show()
-print('saved trajectories + min_gap plots')'''
+# G2: TTC(t) negli scenari critici — il segnale di pericolo reale
+fig, axes = plt.subplots(1, 2, figsize=(13, 4.5))
+for col, sname in enumerate(['cut_in', 'hard_brake']):
+    _, vl, s_i, v_i, cut = scen0[sname]
+    for src, mdl in sources:
+        tr = simulate(mdl, pgt0, vl, s_i, v_i, cut_in=cut)
+        ttc = np.where(tr['dv'] > 1e-3, tr['s'] / np.maximum(tr['dv'], 1e-6), np.nan)
+        axes[col].plot(np.arange(len(ttc)) * 0.1, np.clip(ttc, 0, 8), label=src, alpha=0.85)
+    axes[col].axhline(TTC_STAR, color='r', ls='--', label=f'TTC critico {TTC_STAR}s')
+    axes[col].set_title(f'{sname}: TTC(t)'); axes[col].set_xlabel('t [s]'); axes[col].set_ylabel('TTC [s] (clip 8)')
+    axes[col].legend(fontsize=7); axes[col].grid(alpha=0.3)
+fig.suptitle('G2 — Time-To-Collision: sotto la linea rossa = pericolo')
+fig.tight_layout(); fig.savefig(f'{RESULTS_DIR}/eval_G2_ttc.png', dpi=120); plt.show()
+
+# G3: distribuzione margini su TUTTE le sim (la CODA = caso peggiore, conta per la safety)
+fig, (a1, a2) = plt.subplots(1, 2, figsize=(14, 5))
+for src in df['source'].unique():
+    sub = df[df['source'] == src]
+    a1.scatter(sub['min_gap'], np.clip(sub['min_ttc'], 0, 10), label=src, alpha=0.6, s=28)
+a1.axvline(0, color='r', lw=1); a1.axhline(TTC_STAR, color='r', ls='--')
+a1.set_xlabel('min_gap [m] (0 = collisione)'); a1.set_ylabel('min_TTC [s] (clip 10)')
+a1.set_title('Ogni punto = una sim. Basso-sx = pericoloso (la coda)'); a1.legend(fontsize=8); a1.grid(alpha=0.3)
+df.pivot_table(index='scenario', columns='source', values='min_gap', aggfunc='min').plot(kind='bar', ax=a2)
+a2.axhline(0, color='r', lw=1.2); a2.set_ylabel('worst min_gap [m]')
+a2.set_title('Margine minimo per scenario'); a2.set_xticklabels(a2.get_xticklabels(), rotation=0)
+a2.grid(alpha=0.3, axis='y')
+fig.suptitle('G3 — Margini di sicurezza: distribuzione (coda) + worst-case per scenario')
+fig.tight_layout(); fig.savefig(f'{RESULTS_DIR}/eval_G3_margins.png', dpi=120); plt.show()
+
+# G4: string stability — l'ego smorza o amplifica le oscillazioni del leader?
+_, vl, s_i, v_i, _ = scen0['sinusoidal']
+fig, ax = plt.subplots(figsize=(11, 4.5))
+ax.plot(np.arange(len(vl)) * 0.1, vl, 'k--', lw=1.6, label='leader')
+for src, mdl in sources:
+    tr = simulate(mdl, pgt0, vl, s_i, v_i)
+    ax.plot(np.arange(len(tr['v'])) * 0.1, tr['v'], label=src, alpha=0.85)
+ax.set_xlabel('t [s]'); ax.set_ylabel('v [m/s]')
+ax.set_title('G4 — String stability: ampiezza ego < leader = stabile (smorza)')
+ax.legend(fontsize=8); ax.grid(alpha=0.3)
+fig.tight_layout(); fig.savefig(f'{RESULTS_DIR}/eval_G4_string_stability.png', dpi=120); plt.show()
+print('Salvati 4 grafici: G1 traiettorie+accel, G2 TTC, G3 margini (scatter+barre), G4 string-stability')'''
 
 
 CELL_6_FINAL = """# Cell 6 -- Commit finale (metriche + plot + checkpoint preservati)
