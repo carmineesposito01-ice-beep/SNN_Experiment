@@ -5,6 +5,7 @@
 > 🔧 **Per workflow Azure end-to-end**: vedi `WORKFLOW.md`.
 > 🏛️ **Per storia decisioni + lessons learned**: vedi `TIMELINE.md`.
 > 📖 **Per audit roadmap R1/R2/R3**: vedi `AUDIT_2026-06-02.md`.
+> 🔬 **Stato corrente (branch Loss_Study + evaluation)**: vedi `LOSS_STUDY_AND_EVALUATION.md` (record completo).
 
 > **Ultima modifica:** 2026-06-10 sera CET
 > **Sessione:** R26 Fusion Study (in esecuzione su Azure)

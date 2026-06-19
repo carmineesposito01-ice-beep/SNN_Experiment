@@ -5,7 +5,36 @@
 
 ---
 
-## 🎯 Stato attuale (2026-06-16 — **STUDIO PRODIGY CHIUSO. Merge → main**)
+## 🎯 Stato attuale (2026-06-19 — **Loss_Study + framework di EVALUATION completo**)
+
+**Branch corrente**: `Loss_Study` (da `main` tag `R33_closure`). Tutto il lavoro recente è qui.
+**Documento maestro**: `document/LOSS_STUDY_AND_EVALUATION.md` (record completo, auto-sufficiente).
+
+**Cosa è stato fatto (in ordine)**:
+1. **S1 — identificabilità**: i 5 parametri ACC-IDM NON sono congiuntamente identificabili
+   dall'accelerazione. v0 e `a` = **coppia molle** (provato causalmente, corr −0.82). Aggiunto
+   logging `val_*_nrmse` (Lente B) + plot G19/G20.
+2. **Osservabilità (la leva)**: scenario **freeflow** sblocca v0 (NRMSE 0.50→0.39); scenario
+   **launch** (accel forti ripetute) sblocca parzialmente `a` (0.43→0.65, NRMSE 0.34→0.26). Run
+   consolidata `LS3_PEAK_R0_launch_d03` (restart Opzione 1+4, decay 0.3). Bias a/b sistematico in frenata → **S4 futuro**.
+3. **Capacità (S2) — SOSPESA** (non esaustiva): modelli grandi esplodono in BPTT. Fix: guard v2
+   (frazione + inf), **AGC** (`--grad_clip agc`). Future: LAMB, raggio spettrale, multi-seed.
+4. **EVALUATION** (`Loss_Study_Validation_Full.ipynb`, ~6-9 min, un run): **micro** (sicurezza
+   closed-loop), **meso** (plotone/string stability, CAM dal leader i−1), **macro** (diagramma
+   fondamentale), **vetrina** (accuracy/raster/energia/GIF/dashboard). 15 grafici → `results/evaluate/<analisi>/`.
+
+**Esito micro (1ª run)**: la SNN guida **come l'oracolo** (collision 4% entrambi; collisioni solo
+in cut-in fisicamente inevitabile → **corretto** in v1). Più dolce + più string-stable dell'oracolo.
+Energia ~4× vs ANN (da AC<MAC, non sparsità). Accuracy 77%. Meso string-stable, macro FD corretto.
+
+**Cosa fare adesso**:
+1. Lanciare `Loss_Study_Validation_Full.ipynb` con `ANALYSIS='v1_realistic_cutin'` → verdetto corretto.
+2. Analizzare i 3 livelli; poi **S4** (bias a/b lato training).
+3. Poi: EventProp (in pipeline) / deploy FPGA.
+
+---
+
+## 🎯 Stato precedente (2026-06-16 — **STUDIO PRODIGY CHIUSO. Merge → main**) — superseded da Loss_Study
 
 **Fase corrente**: **Prodigy Study CLOSED**. R33 Closure ha prodotto 2 nuovi champion finali con record assoluti del progetto. Tutti i 5 branch di esplorazione (Architecture_Exploration, Floor_Diagnostic, Optimizer_Exploration, Training_Method_Exploration, Visualizer_Building) sono antenati di `Prodigy_Deep_Study` → un singolo merge `Prodigy_Deep_Study → main` integra l'intera storia (307 commit).
 
