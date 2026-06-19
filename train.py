@@ -393,11 +393,39 @@ def _log_batch_diagnostics(tag, comps, gn_total, x, pre_norms, model):
         print(f"{tag} weights: all finite, global_max_abs={wmax_global:.3e}")
 
 
+def adaptive_grad_clip(model, clip_lambda, eps=1e-3, skip_prefixes=('layer_out',)):
+    """AGC — Adaptive Gradient Clipping (Brock et al. 2021, NFNets).
+
+    Per ogni parametro multi-dim, clip per-UNITA' (per-riga, dim 0 = unita' di output):
+    se ||g_unit|| / max(||w_unit||, eps) > clip_lambda, scala g_unit a clip_lambda*||w_unit||.
+    Bound l'update relativamente alla dimensione dei pesi -> doma l'esplosione del gradiente
+    su reti grandi. **Optimizer-agnostico** (agisce sui .grad PRIMA dello step) -> compatibile
+    con Prodigy/AdamW/Lion senza sostituirli.
+
+    Esclusioni (prassi NFNets + SNN): parametri 1-D (bias, soglie ALIF) e il layer di output
+    (decoder dei 5 parametri). Default off; attivo solo con --grad_clip agc.
+    inf grad -> scale=max_norm/inf=0 -> grad azzerato (sopprime l'esplosione); nan resta gestito
+    dal guard frazione v2.
+    """
+    for name, p in model.named_parameters():
+        if p.grad is None or p.dim() <= 1:
+            continue
+        if any(name.startswith(pref) for pref in skip_prefixes):
+            continue
+        dims = tuple(range(1, p.dim()))                                   # tutte tranne dim 0 (unita')
+        w_norm = p.detach().norm(dim=dims, keepdim=True).clamp_(min=eps)
+        g_norm = p.grad.detach().norm(dim=dims, keepdim=True)
+        max_norm = w_norm * clip_lambda
+        scale = (max_norm / g_norm.clamp_(min=1e-12)).clamp_(max=1.0)     # clip solo dove g_norm>max_norm
+        p.grad.detach().mul_(scale)
+
+
 def train_epoch(model, loader, optimizer, device, epoch, lam,
                 scheduler=None, step_per_batch=False,
                 log_every=LOG_EVERY, max_inf_streak=20, diag=False,
                 batch_logger=None, max_steps_per_epoch=-1,
-                explosion_threshold=float('inf')):
+                explosion_threshold=float('inf'),
+                grad_clip_mode='none', agc_lambda=0.01):
     """
     Esegue un'epoca di training con guardie e diagnostica.
 
@@ -420,8 +448,9 @@ def train_epoch(model, loader, optimizer, device, epoch, lam,
     n_batches  = 0
     inf_streak = 0          # batch consecutivi con grad_norm=inf
     max_gn_preclip = 0.0    # R30 explosion guard: max gn_total_preclip osservato in epoca
-    n_finite_gn    = 0      # batch con gn_total_preclip finito (denominatore frazione)
-    n_expl_gn      = 0      # batch con gn_total_preclip > explosion_threshold (S1b: frazione, non max)
+    n_seen_gn      = 0      # tutti i batch visti (denominatore frazione, S1b v2)
+    n_finite_gn    = 0      # batch con gn_total_preclip finito
+    n_expl_gn      = 0      # batch esplosi: finiti-enormi (>soglia) O inf/nan (S1b v2)
     t0         = time.time()
 
     for batch_idx, batch in enumerate(loader):
@@ -512,12 +541,21 @@ def train_epoch(model, loader, optimizer, device, epoch, lam,
         # R30 (2026-06-12) — tracking max gn_total_preclip nell'epoca per
         # explosion guard a livello epoca. Ignora inf (gestito separatamente
         # da inf_streak).
+        n_seen_gn += 1   # tutti i batch (denominatore frazione, S1b v2)
         if math.isfinite(gn_total_preclip):
             n_finite_gn += 1
             if gn_total_preclip > max_gn_preclip:
                 max_gn_preclip = gn_total_preclip
             if gn_total_preclip > explosion_threshold:
-                n_expl_gn += 1   # S1b: conta batch esplosi per la frazione epoca-level
+                n_expl_gn += 1   # esploso finito-enorme
+        else:
+            n_expl_gn += 1   # S1b v2 FIX: inf/nan = esploso (cattura il fallimento "opposto"
+            #                  dove x8/x10 giravano 50ep su gradienti inf non contati)
+
+        # AGC (opt-in): clip per-unita relativo a ||w|| PRIMA del clip globale. Optimizer-agnostico
+        # -> mantiene Prodigy. gn_total_preclip sopra resta grezzo (failsafe del guard intatto).
+        if grad_clip_mode == 'agc':
+            adaptive_grad_clip(model, agc_lambda)
 
         gn     = nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
         gn_val = float(gn)
@@ -552,7 +590,7 @@ def train_epoch(model, loader, optimizer, device, epoch, lam,
                 avgs['spike_rate'] = spike_acc / nb
                 avgs['grad_norm']  = float('inf')
                 avgs['max_gn_preclip'] = max_gn_preclip
-                avgs['explosion_frac'] = n_expl_gn / max(n_finite_gn, 1)
+                avgs['explosion_frac'] = n_expl_gn / max(n_seen_gn, 1)
                 avgs['aborted']    = True
                 return avgs
             continue
@@ -603,7 +641,7 @@ def train_epoch(model, loader, optimizer, device, epoch, lam,
     avgs['spike_rate'] = spike_acc / nb
     avgs['grad_norm']  = grad_acc  / nb
     avgs['max_gn_preclip'] = max_gn_preclip   # R30: per explosion guard epoch-level
-    avgs['explosion_frac'] = n_expl_gn / max(n_finite_gn, 1)  # S1b: frazione batch esplosi
+    avgs['explosion_frac'] = n_expl_gn / max(n_seen_gn, 1)  # S1b: frazione batch esplosi
     avgs['aborted']    = False
     return avgs
 
@@ -1163,6 +1201,15 @@ def main():
                              'la guard contro spike isolati: con il vecchio criterio (max>soglia) '
                              'bastava 1 batch su 100 ad abortire una run pulita (vedi Loss_Study S1b, '
                              'mediana gn~0.5 ma abort per spike isolato). Solo se streak>0.')
+    parser.add_argument('--grad_clip', type=str, default='none', choices=['none', 'agc'],
+                        help='S2 (2026-06): clip gradiente EXTRA prima del clip globale. '
+                             'none=solo clip_grad_norm(1.0) esistente. agc=Adaptive Gradient '
+                             'Clipping (Brock 2021, NFNets): clip per-unita relativo a ||w|| -> '
+                             'doma esplosione su reti grandi MANTENENDO l optimizer (Prodigy). '
+                             'Esclude layer_out + param 1-D. Default none = backward-compat.')
+    parser.add_argument('--agc_lambda', type=float, default=0.01,
+                        help='Soglia AGC: rapporto max ||g_unit||/||w_unit|| ammesso. Tipico 0.01 '
+                             '(NFNets). Piu alto = meno aggressivo. Solo se --grad_clip agc.')
     # STEP 2C — Optimizer_Exploration: step budget control + val decoupling
     parser.add_argument('--max_steps_per_epoch', type=int, default=-1,
                         help='Cap step training per epoca, indipendente da len(train_loader). '
@@ -1622,6 +1669,8 @@ def main():
                 batch_logger=batch_logger,
                 max_steps_per_epoch=args.max_steps_per_epoch,
                 explosion_threshold=args.epoch_explosion_threshold,
+                grad_clip_mode=args.grad_clip,
+                agc_lambda=args.agc_lambda,
             )
 
             # R30 (2026-06-12) — Epoch-level explosion guard.
