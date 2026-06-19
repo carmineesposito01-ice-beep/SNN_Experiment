@@ -135,9 +135,16 @@ safety = df.groupby('source').agg(
     max_DRAC=('max_DRAC', 'max'),
     mean_TET=('TET', 'mean'), mean_TIT=('TIT', 'mean'),
 ).round(3)
+# Wilson 95% CI superiore sul collision_rate (proporzione) — onesta sul campione N
+def _wilson_hi(p, n, z=1.96):
+    if n == 0: return float('nan')
+    c = z * z / n
+    return round(((p + c/2) + z*np.sqrt(p*(1-p)/n + c/(4*n))) / (1 + c), 3)
+safety['collision_CI95hi'] = [_wilson_hi(p, n) for p, n in zip(safety['collision_rate'], safety['n'])]
 safety.to_csv(f'{RESULTS_DIR}/safety_summary.csv')
 display(safety)
-print('CRITERIO: collision_rate DEVE essere 0. worst_min_ttc > 1.5s ideale. DRAC < ~9 (>9=inevitabile).')
+print('CRITERIO: collision_rate ~ 0 (con CI). worst_min_ttc > 1.5s ideale. DRAC < ~9 (>9=inevitabile).')
+print(f'N={int(safety["n"].iloc[0])} sim/sorgente. collision_CI95hi = limite superiore 95% (Wilson) del collision rate.')
 
 display(Markdown('## Collision rate per scenario (dove la rete cede?)'))
 coll = df.pivot_table(index='scenario', columns='source', values='collided', aggfunc='mean').round(3)
@@ -215,18 +222,24 @@ a2.grid(alpha=0.3, axis='y')
 fig.suptitle('G3 — Margini di sicurezza: distribuzione (coda) + worst-case per scenario')
 fig.tight_layout(); fig.savefig(f'{RESULTS_DIR}/eval_G3_margins.png', dpi=120); plt.show()
 
-# G4: string stability — l'ego smorza o amplifica le oscillazioni del leader?
-_, vl, s_i, v_i, _ = scen0['sinusoidal']
-fig, ax = plt.subplots(figsize=(11, 4.5))
-ax.plot(np.arange(len(vl)) * 0.1, vl, 'k--', lw=1.6, label='leader')
-for src, mdl in sources:
-    tr = simulate(mdl, pgt0, vl, s_i, v_i)
-    ax.plot(np.arange(len(tr['v'])) * 0.1, tr['v'], label=src, alpha=0.85)
-ax.set_xlabel('t [s]'); ax.set_ylabel('v [m/s]')
-ax.set_title('G4 — String stability: ampiezza ego < leader = stabile (smorza)')
-ax.legend(fontsize=8); ax.grid(alpha=0.3)
+# G4: string stability — indice di SMORZAMENTO D = std(v_ego)/std(v_leader) (<1 = smorza).
+# Annotato su sinusoidale E stop&go (richiesta: indice di smorzamento sullo stop&go).
+fig, axes = plt.subplots(1, 2, figsize=(15, 4.5))
+for col, sname in enumerate(['sinusoidal', 'stop_and_go']):
+    _, vl, s_i, v_i, _ = scen0[sname]
+    t = np.arange(len(vl)) * 0.1
+    axes[col].plot(t, vl, 'k--', lw=1.6, label='leader')
+    for src, mdl in sources:
+        tr = simulate(mdl, pgt0, vl, s_i, v_i)
+        ve = tr['v']
+        D = float(np.std(ve - ve.mean()) / (np.std(vl - vl.mean()) + 1e-9))   # indice di smorzamento
+        axes[col].plot(np.arange(len(ve)) * 0.1, ve, alpha=0.85, label=f'{src}  D={D:.2f}')
+    axes[col].set_xlabel('t [s]'); axes[col].set_ylabel('v [m/s]')
+    axes[col].set_title(f'{sname}: D = std_ego/std_leader  (<1 = smorza, stabile)')
+    axes[col].legend(fontsize=7); axes[col].grid(alpha=0.3)
+fig.suptitle('G4 — String stability + indice di smorzamento D (sinusoidale e stop&go)')
 fig.tight_layout(); fig.savefig(f'{RESULTS_DIR}/eval_G4_string_stability.png', dpi=120); plt.show()
-print('Salvati 4 grafici: G1 traiettorie+accel, G2 TTC, G3 margini (scatter+barre), G4 string-stability')'''
+print('Salvati 4 grafici: G1 traiettorie+accel, G2 TTC, G3 margini, G4 string-stability+smorzamento (D)')'''
 
 
 CELL_6_FINAL = """# Cell 6 -- Commit finale (metriche + plot + checkpoint preservati)

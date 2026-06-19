@@ -50,8 +50,9 @@ Niente training → tempi brevi. Checkpoint solo su Azure; le celle col modello 
 ENV = """# Cell 1 -- ENV + cartelle
 import sys, os, subprocess
 import importlib.util as _imu
-EVAL_DIR = 'results/Loss_Study/Eval_ClosedLoop'
-SHOW_DIR = 'results/Loss_Study/Showcase'
+ANALYSIS = 'v1_realistic_cutin'   # nome analisi -> results/evaluate/<ANALYSIS>/{Eval_ClosedLoop,Showcase}
+EVAL_DIR = f'results/evaluate/{ANALYSIS}/Eval_ClosedLoop'
+SHOW_DIR = f'results/evaluate/{ANALYSIS}/Showcase'
 BRANCH = 'Loss_Study'
 _TMP_MSG = '/tmp/valfull.txt' if os.path.isdir('/tmp') else 'valfull.txt'
 for d in (EVAL_DIR, SHOW_DIR):

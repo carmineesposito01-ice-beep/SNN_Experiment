@@ -190,13 +190,16 @@ def build_scenarios(params_gt, N=600, rng=None):
         vl[i] = max(0.0, vl[i - 1] - 7.0 * DT)
     scen.append(('hard_brake', vl, *_equilibrium_init(params_gt, v_set), None))
 
-    # 4. Cut-in (UC2) AVVERSARIO: ego in crociera veloce, auto LENTA taglia VICINO a meta'
-    # -> Deltav alto + gap piccolo = TTC ~0.5s, l'ego deve frenare forte per non collidere.
-    vl = np.full(N, v_set)               # prima: ego segue leader veloce (equilibrio)
+    # 4. Cut-in (UC2): ego in crociera, auto piu' lenta taglia a meta'. FISICA REALISTICA:
+    # gap al taglio = TTC~1s sulla Deltav nominale -> DRAC ~4 m/s2 (<< b_max 9) = difficile ma
+    # EVITABILE da un buon controller (prima era 4m/DRAC~8 = oltre il limite, collideva anche l'oracolo).
+    vl = np.full(N, v_set)
     t_cut = N // 2
-    vl[t_cut:] = 0.45 * v0               # il cut-in e' un veicolo LENTO
+    vl[t_cut:] = 0.45 * v0               # cut-in piu' lento (Deltav nominale = v_set - 0.45*v0 = 0.25*v0)
+    dv_cut = max(v_set - 0.45 * v0, 1.0)
+    gap_cut = max(dv_cut * 1.0, 6.0)     # TTC ~1s al taglio: evitabile con frenata ferma (~4 m/s2)
     s_i, v_i = _equilibrium_init(params_gt, v_set)
-    scen.append(('cut_in', vl, s_i, v_i, (t_cut, max(params_gt[2] * 1.5, 4.0))))
+    scen.append(('cut_in', vl, s_i, v_i, (t_cut, gap_cut)))
 
     # 5. Sinusoidale (per string stability)
     vl = np.clip(v_set + 0.20 * v_set * np.sin(2 * np.pi * t / 80.0), 0, v0)
