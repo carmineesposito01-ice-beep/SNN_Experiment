@@ -41,10 +41,13 @@ In S2 i modelli grandi esplodevano (x10 = 50ep su gradienti inf = spazzatura; gu
 fallito al contrario). Fix applicati: **guard v2** (conta inf) + **AGC** opt-in
 (clip per-unita relativo a ||w||, optimizer-agnostico -> mantiene Prodigy).
 
-**Test**: x10 (h=122) con `--grad_clip agc`. Ipotesi: AGC doma l'esplosione (gn basso)
-senza cambiare optimizer. Confronto vs la x10 esplosa (LS2_x10_h122_ff).
+**Test (giro 2)**: AGC piu' STRETTO, `--agc_lambda 0.005` (era 0.01 -> 8 ep pulite poi
+esplosa a ep9; guard v2 ha catturato). Diagnosi: NON e' lr/Prodigy-d (stabili), ma
+instabilita' intrinseca del ricorrente grande in BPTT. Ipotesi: clip piu' aggressivo regge
+le 50 ep. Confronto a 3: no-AGC vs AGC 0.01 vs AGC 0.005.
 
-Se gn resta basso e NRMSE/val_data migliorano -> rifacciamo lo sweep con AGC.
+Se 0.005 regge/migliora -> capacita' testabile (+ eventuale vincolo raggio spettrale).
+Se esplode comunque -> chiudiamo la capacita', torniamo all'osservabilita'.
 """
 
 
@@ -90,11 +93,11 @@ X10_AGC = {
     'tau_per_channel': '10.0,3.0,10.0,3.0,3.0',
     'max_epoch_explosion_streak': 2,
     'epoch_explosion_threshold': 10000.0, 'epoch_explosion_frac': 0.5,
-    'grad_clip': 'agc', 'agc_lambda': 0.01,   # <-- AGC attivo (Prodigy invariato)
+    'grad_clip': 'agc', 'agc_lambda': 0.005,   # <-- AGC piu' STRETTO (era 0.01)
     'scheduler': 'custom_restart', 'T0': 5, 'restart_T0': 12,
     'restart_decay': 1.0, 'restart_lr_after': -1.0,
     'restart_warmup_epochs': 2, 'restart_adaptive': 0,
-    'tag': 'LS2_x10_h122_agc', 'desc': 'x10 (h=122) + AGC, Prodigy invariato',
+    'tag': 'LS2_x10_h122_agc005', 'desc': 'x10 (h=122) + AGC lambda=0.005 (piu stretto)',
 }
 EXPERIMENTS = [X10_AGC]
 print('S2b run:', X10_AGC['tag'], '| AGC lambda', X10_AGC['agc_lambda'], '| optimizer', X10_AGC['optimizer'])'''
@@ -190,7 +193,8 @@ from IPython.display import display, Markdown
 from collections import defaultdict
 
 pairs = [('x10 NO-AGC (esplosa)', 'LS2_x10_h122_ff'),
-         ('x10 + AGC', 'LS2_x10_h122_agc')]
+         ('x10 + AGC l0.01', 'LS2_x10_h122_agc'),
+         ('x10 + AGC l0.005', 'LS2_x10_h122_agc005')]
 
 def gn_med_per_ep(tag):
     p = f"{RESULTS_DIR}/{tag}/training_batch_log.csv"
