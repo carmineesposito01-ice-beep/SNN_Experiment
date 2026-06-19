@@ -135,11 +135,14 @@ safety = df.groupby('source').agg(
     max_DRAC=('max_DRAC', 'max'),
     mean_TET=('TET', 'mean'), mean_TIT=('TIT', 'mean'),
 ).round(3)
+safety.to_csv(f'{RESULTS_DIR}/safety_summary.csv')
 display(safety)
 print('CRITERIO: collision_rate DEVE essere 0. worst_min_ttc > 1.5s ideale. DRAC < ~9 (>9=inevitabile).')
 
 display(Markdown('## Collision rate per scenario (dove la rete cede?)'))
-display(df.pivot_table(index='scenario', columns='source', values='collided', aggfunc='mean').round(3))
+coll = df.pivot_table(index='scenario', columns='source', values='collided', aggfunc='mean').round(3)
+coll.to_csv(f'{RESULTS_DIR}/collision_by_scenario.csv')
+display(coll)
 
 display(Markdown('## Comfort + tracking + string stability (medie)'))
 qual = df.groupby('source').agg(
@@ -147,8 +150,10 @@ qual = df.groupby('source').agg(
     rms_jerk=('rms_jerk', 'mean'), rms_gap_error=('rms_gap_error', 'mean'),
     string_gain=('gain', 'mean'),
 ).round(3)
+qual.to_csv(f'{RESULTS_DIR}/quality_summary.csv')
 display(qual)
-print('string_gain < 1 = string-stable (smorza le perturbazioni del leader).')'''
+print('string_gain < 1 = string-stable (smorza le perturbazioni del leader).')
+print('Sintesi salvate: safety_summary.csv, collision_by_scenario.csv, quality_summary.csv')'''
 
 
 CELL_5_PLOTS = '''# Cell 5 -- Traiettorie esempio (cut-in, hard_brake) + barre sicurezza
