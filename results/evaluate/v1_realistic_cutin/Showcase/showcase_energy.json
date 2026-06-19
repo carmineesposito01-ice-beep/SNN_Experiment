@@ -1,0 +1,13 @@
+{
+  "T": 400,
+  "H": 32,
+  "rank": 8,
+  "total_spikes": 28179.0,
+  "mean_spike_rate_pct": 22.01484375,
+  "active_neuron_frac": 0.71875,
+  "ann_macs": 320000,
+  "snn_synops": 417527,
+  "E_ann_nJ": 1472.0,
+  "E_snn_nJ": 375.7743,
+  "energy_advantage_x": 3.917245005845264
+}

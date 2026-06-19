@@ -1,0 +1,5 @@
+source,n,collision_rate,worst_min_gap,worst_min_ttc,worst_min_headway,max_DRAC,mean_TET,mean_TIT,collision_CI95hi
+R33_C2 CLEAN,100,0.0,1.872,0.982,0.251,4.829,0.049,0.017,0.037
+S3 d0.3 (launch),100,0.0,1.873,0.969,0.25,4.892,0.055,0.017,0.037
+S3 d1.0 (launch),100,0.0,1.96,0.977,0.253,4.81,0.054,0.017,0.037
+oracle,100,0.0,1.552,1.0,0.265,4.697,0.112,0.02,0.037

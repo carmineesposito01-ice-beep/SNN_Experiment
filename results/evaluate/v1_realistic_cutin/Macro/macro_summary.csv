@@ -1,0 +1,5 @@
+source,capacity_veh_h,rho_crit_veh_km,v_free_km_h,rho_jam_veh_km,first_unstable_rho
+oracle,1045.0,15.0,88.8,120.0,8.0
+S3 d0.3 (launch),1961.7,25.0,122.8,120.0,15.0
+S3 d1.0 (launch),1967.2,25.0,110.3,120.0,8.0
+R33_C2 CLEAN,2081.1,25.0,130.0,120.0,8.0
