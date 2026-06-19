@@ -655,6 +655,52 @@ def plot_g19_nrmse_per_channel(log: dict, out_path: str):
     plt.close(fig)
 
 
+def plot_g20_follow(trajectories, out_path: str, dt: float = 0.1):
+    """G20 — Follow spazio-tempo: posizione x(t) di ego e leader + velocita', per scenario.
+
+    Vista complementare a G13 (che mostra segnali+parametri): qui la traiettoria
+    nello SPAZIO (x integrato dalle velocita') rende visibile l'inseguimento e il gap.
+    Usa le STESSE traiettorie val di G13 (nessuna rigenerazione):
+      x_ego = cumsum(v)*dt ; x_lead = x_ego + s (gap) ; v0 da scenario_params (linea rif).
+    Un'unica figura multi-scenario (1 colonna per traiettoria, 2 righe: posizione, velocita').
+    """
+    if not _MPL or not trajectories:
+        return
+    n = len(trajectories)
+    fig, axes = plt.subplots(2, n, figsize=(5.2 * n, 8), squeeze=False, sharex='col')
+    for j, tr in enumerate(trajectories):
+        s  = np.asarray(tr['s']);  v = np.asarray(tr['v']);  vl = np.asarray(tr['v_l'])
+        t  = np.arange(len(v)) * dt
+        x_ego  = np.cumsum(v) * dt
+        x_lead = x_ego + s
+        sc = tr.get('scenario', '?')
+        ci = ' (cut-in)' if tr.get('is_cut_in') else ''
+        ax = axes[0][j]
+        ax.plot(t, x_ego,  label='ego x(t)',    linewidth=2)
+        ax.plot(t, x_lead, label='leader x(t)', linewidth=2, linestyle='--')
+        ax.fill_between(t, x_ego, x_lead, alpha=0.12)
+        ax.set_title(f'{sc}{ci}')
+        if j == 0:
+            ax.set_ylabel('posizione [m]')
+        ax.legend(fontsize=8, loc='upper left')
+        ax.grid(True, alpha=0.3)
+        ax2 = axes[1][j]
+        ax2.plot(t, v,  label='v_ego',    linewidth=2)
+        ax2.plot(t, vl, label='v_leader', linewidth=2, linestyle='--')
+        v0 = tr.get('scenario_params', {}).get('v0')
+        if v0 is not None:
+            ax2.axhline(v0, color='r', linestyle=':', linewidth=1, label=f'v0={v0:.0f}')
+        ax2.set_xlabel('t [s]')
+        if j == 0:
+            ax2.set_ylabel('velocita [m/s]')
+        ax2.legend(fontsize=8, loc='lower right')
+        ax2.grid(True, alpha=0.3)
+    fig.suptitle('G20 — Follow spazio-tempo ego/leader (area ombreggiata = gap)', y=1.0)
+    fig.tight_layout()
+    fig.savefig(out_path, dpi=120)
+    plt.close(fig)
+
+
 # ===========================================================
 # 3. Funzione principale
 # ===========================================================
@@ -730,8 +776,10 @@ def plot_all(log: dict, out_dir: str,
             ci = '_cutin' if traj.get('is_cut_in') else ''
             fname = f'G13_traj_{sc}{ci}.png'
             plot_g13_signals_vs_params(traj, os.path.join(od, fname))
+        # G20 — follow spazio-tempo (x(t) ego/leader), 1 figura multi-scenario per run
+        plot_g20_follow(trajectories, os.path.join(od, 'G20_follow.png'))
     else:
-        print("  G13 saltato (trajectories non fornito)")
+        print("  G13/G20 saltati (trajectories non fornito)")
 
     print("[Diagnostics] Completato.")
 
