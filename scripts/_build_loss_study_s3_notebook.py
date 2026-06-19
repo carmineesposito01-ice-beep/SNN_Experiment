@@ -104,10 +104,10 @@ PEAK_LAUNCH = {
     'max_epoch_explosion_streak': 2, 'epoch_explosion_threshold': 10000.0,
     'epoch_explosion_frac': 0.5, 'grad_clip': 'none', 'agc_lambda': 0.01,
     'scheduler': 'custom_restart', 'T0': 5, 'restart_T0': 12,
-    'restart_decay': 1.0, 'restart_lr_after': -1.0,
+    'restart_decay': 0.3, 'restart_lr_after': -1.0,   # Opzione 1+4 (decay 0.3 + warmup 2)
     'restart_warmup_epochs': 2, 'restart_adaptive': 0,
-    'tag': 'LS3_PEAK_R0_launch', 'axis': 'PEAK',
-    'desc': 'PEAK R0 su mix launch (osservabilita forte di a), no aux',
+    'tag': 'LS3_PEAK_R0_launch_d03', 'axis': 'PEAK',
+    'desc': 'PEAK R0 launch + restart decay 0.3 (Opz.1+4) - stessa data di LS3 launch',
 }
 EXPERIMENTS = [PEAK_LAUNCH]
 print('S3 run:', PEAK_LAUNCH['tag'], '| launch mix | cache', CACHE)
@@ -208,9 +208,10 @@ from IPython.display import display, Markdown
 
 # (label, batch_log per gradiente, training_log per nrmse)
 runs = [
-    ('S1 vecchia',   'results/Loss_Study/S1/PEAK/LS1_PEAK_R0_obs'),
-    ('S1b freeflow', 'results/Loss_Study/S2_Capacity/LS2_x1_h32_ff'),
-    ('S3 launch',    f'{RESULTS_DIR}/PEAK/LS3_PEAK_R0_launch'),
+    ('S1 vecchia',     'results/Loss_Study/S1/PEAK/LS1_PEAK_R0_obs'),
+    ('S1b freeflow',   'results/Loss_Study/S2_Capacity/LS2_x1_h32_ff'),
+    ('S3 launch d1.0', f'{RESULTS_DIR}/PEAK/LS3_PEAK_R0_launch'),
+    ('S3 launch d0.3', f'{RESULTS_DIR}/PEAK/LS3_PEAK_R0_launch_d03'),
 ]
 
 def gn_decoded_mean(folder):
@@ -229,7 +230,7 @@ def gn_decoded_mean(folder):
     return {c: (sum(v)/len(v) if v else float('nan')) for c, v in acc.items()}
 
 rows = []
-fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
+fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(18, 5))
 for label, folder in runs:
     gd = gn_decoded_mean(folder)
     lp = os.path.join(folder, 'training_log.csv')
@@ -243,6 +244,7 @@ for label, folder in runs:
                  'min_val_data': round(float(e['val_data'].min()), 4), 'ep': len(e)})
     if 'val_a_nrmse' in e.columns:
         ax2.plot(e['epoch'], e['val_a_nrmse'], marker='.', label=label)
+    ax3.plot(e['epoch'], e['val_data'], marker='.', label=label, alpha=0.8)
 df = pd.DataFrame(rows)
 # barre gradiente 'a' per run
 if len(df):
@@ -252,6 +254,8 @@ if len(df):
     ax1.grid(alpha=0.3, axis='y')
 ax2.set_xlabel('epoch'); ax2.set_ylabel('a_nrmse'); ax2.set_ylim(bottom=0)
 ax2.set_title("a_nrmse nel tempo: scende e RESTA giu'?"); ax2.legend(); ax2.grid(alpha=0.3)
+ax3.set_xlabel('epoch'); ax3.set_ylabel('val_data')
+ax3.set_title('val_data: i bump ai restart spariscono con decay 0.3?'); ax3.legend(fontsize=8); ax3.grid(alpha=0.3)
 plt.tight_layout(); plt.savefig(f'{RESULTS_DIR}/S3_a_observability.png', dpi=120); plt.show()
 display(Markdown("## S3 — `a` ora osservabile? (atteso: gn_decoded_a su, a_nrmse giu e stabile)"))
 display(df)

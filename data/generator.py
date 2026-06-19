@@ -567,6 +567,7 @@ def _sample_scenario(rng, scenario_mix=None, cut_in_ratio=None):
     elif stype == 'launch':
         # S3 excitation: accelerazioni forti RIPETUTE -> eccita 'a' (gradiente da |a_pred| grande).
         # v0 non troppo alto cosi' i lanci raggiungono v0; range ampio su 'a' per identificarlo.
+        # (Nota S3b: v0 alto testato ma marginale -> l'ego gia' non raggiunge mai v0 nel launch.)
         p = dict(IDM_HWY)
         p['v0'] *= rng.uniform(0.60, 1.00)
         p['T']   = rng.uniform(IDM2D_T1, IDM2D_T2)
