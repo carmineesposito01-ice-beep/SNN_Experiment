@@ -19,6 +19,7 @@ def _load(path, name):
 
 EV = _load('scripts/_build_eval_closedloop_notebook.py', 'ev')
 SH = _load('scripts/_build_showcase_notebook.py', 'sh')
+MM = _load('scripts/_build_mesomacro_cells.py', 'mm')
 
 
 def make_cell(ctype, src, cid):
@@ -39,23 +40,27 @@ def make_notebook(cells):
 
 INTRO = """# Loss_Study — Validazione COMPLETA (un solo run, ~5-7 min)
 
-Carica il checkpoint **una volta** ed esegue tutto in sequenza:
-1. **Sicurezza closed-loop** (scenari avversari) → 4 grafici + 4 CSV
-2. **Vetrina**: accuracy, raster spike, energia SNN vs ANN, animazione auto (GIF), dashboard
+Carica il checkpoint **una volta** ed esegue tutto in sequenza (micro → meso → macro → vetrina):
+1. **MICRO** — sicurezza closed-loop (1 ego, scenari avversari) → 4 grafici + CSV (con CI)
+2. **MESO** — plotone (string stability ACC, gain per veicolo, heatmap spazio-tempo)
+3. **MACRO** — anello (diagramma fondamentale Q-ρ, capacità, stop&go)
+4. **VETRINA** — accuracy, raster spike, energia SNN vs ANN, animazione, dashboard
 
-Il **dashboard** finale include anche il verdetto di sicurezza (prodotto al passo 1).
-Niente training → tempi brevi. Checkpoint solo su Azure; le celle col modello saltano se assente.
+Output in `results/evaluate/<ANALYSIS>/{Eval_ClosedLoop,Meso,Macro,Showcase}`. Il dashboard
+include il verdetto di sicurezza. Niente training → ~6-9 min. Checkpoint solo su Azure (celle col modello saltano se assente).
 """
 
 ENV = """# Cell 1 -- ENV + cartelle
 import sys, os, subprocess
 import importlib.util as _imu
-ANALYSIS = 'v1_realistic_cutin'   # nome analisi -> results/evaluate/<ANALYSIS>/{Eval_ClosedLoop,Showcase}
-EVAL_DIR = f'results/evaluate/{ANALYSIS}/Eval_ClosedLoop'
+ANALYSIS = 'v1_realistic_cutin'   # results/evaluate/<ANALYSIS>/{Eval_ClosedLoop,Meso,Macro,Showcase}
+EVAL_DIR = f'results/evaluate/{ANALYSIS}/Eval_ClosedLoop'   # MICRO
+MESO_DIR = f'results/evaluate/{ANALYSIS}/Meso'
+MACRO_DIR = f'results/evaluate/{ANALYSIS}/Macro'
 SHOW_DIR = f'results/evaluate/{ANALYSIS}/Showcase'
 BRANCH = 'Loss_Study'
 _TMP_MSG = '/tmp/valfull.txt' if os.path.isdir('/tmp') else 'valfull.txt'
-for d in (EVAL_DIR, SHOW_DIR):
+for d in (EVAL_DIR, MESO_DIR, MACRO_DIR, SHOW_DIR):
     os.makedirs(d, exist_ok=True)
 for pkg in ['pandas', 'matplotlib', 'pillow']:
     if _imu.find_spec(pkg.replace('pillow', 'PIL')) is None:
@@ -91,7 +96,7 @@ if not models:
 
 PUSH = """# Cell -- push finale (eval + showcase insieme)
 import subprocess
-subprocess.run(['git', 'add', EVAL_DIR, SHOW_DIR], capture_output=True)
+subprocess.run(['git', 'add', EVAL_DIR, MESO_DIR, MACRO_DIR, SHOW_DIR], capture_output=True)
 r = subprocess.run(['git', 'commit', '-m', 'Validation full: safety eval + showcase'],
                    capture_output=True, text=True)
 print(r.stdout[-200:] if r.returncode == 0 else r.stderr[-200:])
@@ -112,6 +117,9 @@ def main():
         make_cell('code', _remap(EV.CELL_3_RUN, 'EVAL_DIR'), 'cell-ev-run'),
         make_cell('code', _remap(EV.CELL_4_SUMMARY, 'EVAL_DIR'), 'cell-ev-summary'),
         make_cell('code', _remap(EV.CELL_5_PLOTS, 'EVAL_DIR'), 'cell-ev-plots'),
+        # --- MESO (plotone) + MACRO (anello) ---
+        make_cell('code', MM.CELL_MESO, 'cell-meso'),
+        make_cell('code', MM.CELL_MACRO, 'cell-macro'),
         # --- SHOWCASE (vetrina) ---
         make_cell('code', _remap(SH.CELL_3, 'SHOW_DIR'), 'cell-sh-accuracy'),
         make_cell('code', _remap(SH.CELL_4, 'SHOW_DIR'), 'cell-sh-raster'),
