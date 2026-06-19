@@ -47,6 +47,19 @@ a2.set_xlabel('t [s]'); a2.set_ylabel('indice veicolo')
 a2.set_title(f'Velocita spazio-tempo ({prim}): perturbazione che si smorza lungo la catena')
 plt.colorbar(im, ax=a2, label='v [m/s]')
 plt.tight_layout(); plt.savefig(f'{MESO_DIR}/meso_string_stability.png', dpi=120); plt.show()
+
+# SCORECARD metriche scalari del plotone -> barre (tutto visibile senza CSV)
+scal = ['head_to_tail_gain', 'max_amplification', 'min_gap_platoon', 'min_ttc_platoon',
+        'rms_accel_mean', 'max_decel_platoon', 'rms_jerk_mean']
+fig3, axes3 = plt.subplots(2, 4, figsize=(18, 8))
+for ax, col in zip(axes3.ravel(), scal):
+    ax.bar(range(len(df_meso)), df_meso[col].values, color='tab:green', alpha=0.8)
+    ax.set_xticks(range(len(df_meso))); ax.set_xticklabels(df_meso['source'], rotation=25, ha='right', fontsize=7)
+    ax.set_title(col, fontsize=9); ax.grid(alpha=0.3, axis='y')
+axes3.ravel()[-1].axis('off')
+fig3.suptitle('MESO — metriche scalari del plotone (head-to-tail, amplificazione, sicurezza catena, comfort)')
+fig3.tight_layout(); fig3.savefig(f'{MESO_DIR}/meso_metrics_scorecard.png', dpi=120); plt.show()
+
 display(Markdown('## MESO — string stability del plotone (verdetto: head-to-tail < 1?)'))
 display(df_meso.drop(columns=['gain_per_vehicle']))
 print('Metriche: gain per veicolo, head-to-tail, max amplificazione, monotonia (strict), convettivita a monte,')
@@ -68,9 +81,13 @@ for src, mdl in sources:
     fd = fundamental_diagram(mdl, PGT0, DENS, ring_length=1000.0, n_steps=600)
     allfd[src] = fd
     rho = [p['rho_veh_km'] for p in fd]; Q = [p['Q_veh_h'] for p in fd]; V = [p['V_km_h'] for p in fd]
-    a1.plot(rho, Q, marker='o', alpha=0.85, label=src)
+    line, = a1.plot(rho, Q, marker='o', alpha=0.85, label=src)
     a2.plot(rho, V, marker='o', alpha=0.85, label=src)
     qmax = max(fd, key=lambda p: p['Q_veh_h'])
+    a1.scatter([qmax['rho_veh_km']], [qmax['Q_veh_h']], marker='*', s=200, zorder=5,
+               color=line.get_color(), edgecolor='k')
+    a1.annotate(f"cap {qmax['Q_veh_h']:.0f}", (qmax['rho_veh_km'], qmax['Q_veh_h']),
+                textcoords='offset points', xytext=(0, 9), fontsize=7, ha='center')
     jam = [p for p in fd if p['V_km_h'] < 3.0]
     rows.append({'source': src, 'capacity_veh_h': qmax['Q_veh_h'], 'rho_crit_veh_km': qmax['rho_veh_km'],
                  'v_free_km_h': fd[0]['V_km_h'],
@@ -85,6 +102,17 @@ plt.tight_layout(); plt.savefig(f'{MACRO_DIR}/macro_fundamental_diagram.png', dp
 
 df_macro = pd.DataFrame(rows)
 df_macro.to_csv(f'{MACRO_DIR}/macro_summary.csv', index=False)
+
+# SCORECARD macro scalari -> barre (tutto visibile senza CSV)
+mcols = ['capacity_veh_h', 'rho_crit_veh_km', 'v_free_km_h', 'rho_jam_veh_km']
+figm, axesm = plt.subplots(1, 4, figsize=(18, 4.5))
+for ax, col in zip(axesm, mcols):
+    ax.bar(range(len(df_macro)), df_macro[col].values, color='tab:purple', alpha=0.8)
+    ax.set_xticks(range(len(df_macro))); ax.set_xticklabels(df_macro['source'], rotation=25, ha='right', fontsize=7)
+    ax.set_title(col, fontsize=9); ax.grid(alpha=0.3, axis='y')
+figm.suptitle('MACRO — metriche scalari (capacita, densita critica, v free-flow, densita di jam)')
+figm.tight_layout(); figm.savefig(f'{MACRO_DIR}/macro_metrics_scorecard.png', dpi=120); plt.show()
+
 display(Markdown('## MACRO — diagramma fondamentale + capacita (SNN vs oracolo)'))
 display(df_macro)
 

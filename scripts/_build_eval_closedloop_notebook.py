@@ -239,7 +239,26 @@ for col, sname in enumerate(['sinusoidal', 'stop_and_go']):
     axes[col].legend(fontsize=7); axes[col].grid(alpha=0.3)
 fig.suptitle('G4 — String stability + indice di smorzamento D (sinusoidale e stop&go)')
 fig.tight_layout(); fig.savefig(f'{RESULTS_DIR}/eval_G4_string_stability.png', dpi=120); plt.show()
-print('Salvati 4 grafici: G1 traiettorie+accel, G2 TTC, G3 margini, G4 string-stability+smorzamento (D)')'''
+
+# G5: SCORECARD metriche (tutte le metriche numeriche -> barre leggibili, niente CSV a mano)
+panels = [('collision_rate', safety, 'collision rate', 'collision_CI95hi'),
+          ('max_DRAC', safety, 'max DRAC [m/s2]', None),
+          ('mean_TET', safety, 'TET [s] (tempo esposto a TTC critico)', None),
+          ('mean_TIT', safety, 'TIT [s]', None),
+          ('rms_accel', qual, 'rms accel [m/s2] (comfort)', None),
+          ('rms_jerk', qual, 'rms jerk [m/s3]', None),
+          ('rms_gap_error', qual, 'gap error [m] (tracking)', None),
+          ('string_gain', qual, 'string gain (<1 stabile)', None)]
+fig, axes = plt.subplots(2, 4, figsize=(18, 8))
+for ax, (col, sdf, title, ci) in zip(axes.ravel(), panels):
+    vals = sdf[col].values
+    yerr = (sdf[ci].values - vals) if (ci and ci in sdf.columns) else None
+    ax.bar(range(len(sdf)), vals, yerr=yerr, capsize=4, color='tab:blue', alpha=0.8)
+    ax.set_xticks(range(len(sdf))); ax.set_xticklabels(sdf.index, rotation=25, ha='right', fontsize=7)
+    ax.set_title(title, fontsize=9); ax.grid(alpha=0.3, axis='y')
+fig.suptitle('G5 — Scorecard metriche MICRO (sicurezza + comfort + tracking, per sorgente; barra CI su collision rate)')
+fig.tight_layout(); fig.savefig(f'{RESULTS_DIR}/eval_G5_metrics_scorecard.png', dpi=120); plt.show()
+print('Salvati 5 grafici: G1 traiettorie+accel, G2 TTC, G3 margini, G4 string-stability+D, G5 scorecard metriche')'''
 
 
 CELL_6_FINAL = """# Cell 6 -- Commit finale (metriche + plot + checkpoint preservati)
