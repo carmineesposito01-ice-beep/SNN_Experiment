@@ -1,0 +1,22 @@
+{
+  "D1_summary": {
+    "rise_nrmse_a_mem": -0.0014595579849578932,
+    "rise_nrmse_a_memless": 1.8045997320054186e-05,
+    "rise_nrmse_b_mem": -0.0013583676997271643,
+    "pred_a_drift": 0.004273059924443601,
+    "spike_drop": 0.0005989594260851494,
+    "spike_early": 0.16308515814940133,
+    "spike_late": 0.16248619872331618
+  },
+  "D2_atten": 1.803706722899937,
+  "D2_n_events": 18890,
+  "H1_accumulo": false,
+  "H2_creep": false,
+  "H3_smoothing": false,
+  "verdict": [
+    "H1 non confermata: NRMSE(a) memory non cresce nettamente con la posizione (rise -0.001). Il danno non e' accumulo posizionale.",
+    "H2 non dominante: spike-rate stabile lungo la finestra (drop 0.001).",
+    "H3 non dominante: la risposta di a al transitorio non e' attenuata in memory (atten = 1.8).",
+    "=> MECCANISMO dominante: nessuna firma netta - rivedere. Implicazione: il memoryless evita il difetto resettando lo stato a ogni step; il training L2 dovrebbe o adottare il readout memoryless o regolarizzare la ricorrenza contro questo difetto."
+  ]
+}
