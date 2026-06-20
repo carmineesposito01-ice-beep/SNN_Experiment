@@ -45,15 +45,24 @@ freschi (memoryless batte memory su v0/s0/a/b, pareggio su T; a 0.33→0.15 ~20�
 l'ibrido è il peggiore per jerk 2.03 perché mescola due regimi). **Il tetto a/b si risolve a costo ZERO di
 training** col readout full memoryless.
 
+**L1c ESEGUITO (2026-06-20, `results/Dynamic_Study/L1c/`)** — meccanismo del danno: **convergenza RAPIDA
+dello stato a un operating-point "caldo" distorto** (entro ~4 step dal reset): a pos0 memory≡memoryless
+(a_pred 0.97≈GT 1.19), in 4 step spike-rate 0.077→0.16 e a_pred COLLASSA a 0.51, poi plateau. NON accumulo
+lento, NON creep ALIF, NON smoothing (le 3 ipotesi rigettate; l'auto-verdetto le ha mancate perché le finestre
+early/late erano entrambe nel plateau). **D2**: in nessuna modalità la rete decodifica `a` dal transitorio
+(risposta piatta al picco |accel|) → a/b sono una **quasi-costante operating-point-dipendente**. "Memoryless
+vince" = prior meglio centrato (operating-point freddo), non identificazione per-istante.
+
 **Cosa fare adesso**:
-1. Girare **`Dynamic_Study_L1c.ipynb`** su Azure (niente training): capire il **PERCHÉ** la ricorrenza
-   addestrata danneggia a/b prima di promuovere il cambio di deploy. Discrimina H1 accumulo/deriva vs
-   H2 creep adattamento ALIF vs H3 low-pass/smoothing (D1 curve vs posizione-da-reset; D2 traccia `a`
-   sui transitori). Poi `git pull` e analisi (output in `results/Dynamic_Study/L1c/`).
+1. Girare **`Dynamic_Study_L1d.ipynb`** su Azure (niente training): probe decisivo **prior vs discriminazione**.
+   Media la pred per-driver → scatter pred-vs-GT su 250 scenari (Pearson r/pendenza/r², memory vs memoryless,
+   v0/s0/a/b). r≈0 = a/b sono un prior (win memoryless = solo bias-centering); r>0 = discriminazione reale.
+   Poi `git pull` e analisi (output in `results/Dynamic_Study/L1d/`).
 2. **L1.6** (no training): ri-validazione FULL del readout full-memoryless a scala (micro 100-sim/sorgente
    cut-in realistico + meso plotone + macro FD) per promuoverlo a modo di deploy ufficiale.
-3. **L2** (training): scope ridotto a **uncertainty head** per-parametro. Il recupero di a/b via training
-   NON è più necessario (risolto dal readout memoryless).
+3. **L2** (training): secondo L1d — se a/b = prior → loss per-regime + encoding transitorio (per identificazione
+   reale) e/o **uncertainty head**; se discriminazione reale → solo uncertainty head. Deploy memoryless valido
+   in ogni caso (win NRMSE + sicurezza già provati).
 
 ---
 
