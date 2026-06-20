@@ -38,15 +38,22 @@ a 0.331→**0.143**, b 0.178→**0.149** (≈ LM locale ideale 0.12/0.18), s0 0.
 T pareggio. Il path memoryless vince su 4/5 (gain_ab=−0.109). Decadimento NRMSE(a,b) **piatto** vs distanza
 dal transitorio → NON è ritenzione leaky. **Esclude** le leve "ritenzione/canale-lento" e "allungare seq_len".
 
+**L1.5 ESEGUITO (2026-06-20, `results/Dynamic_Study/L1p5/`)** — finding L1 confermato ROBUSTO su 3 seed
+freschi (memoryless batte memory su v0/s0/a/b, pareggio su T; a 0.33→0.15 ~20× la std). Closed-loop sanity
+(60 sim/modalità): **0 collisioni in tutte e 4** (a/b non toccano la sicurezza). Twist: il readout migliore
+è **FULL MEMORYLESS**, non l'ibrido (memoryless: miglior worst min_gap 2.22m + jerk più basso 1.54;
+l'ibrido è il peggiore per jerk 2.03 perché mescola due regimi). **Il tetto a/b si risolve a costo ZERO di
+training** col readout full memoryless.
+
 **Cosa fare adesso**:
-1. Girare **`Dynamic_Study_L1p5.ipynb`** su Azure (niente training): conferma del readout **ibrido**
-   (a/b memoryless, v0/T/s0 con memoria) PRIMA di L2. EXP A = ablazione statica su 3 seed freschi
-   (robustezza del finding L1); EXP B = sanity closed-loop 4 modalità (oracle/normal/memoryless/hybrid),
-   riusa `utils/closed_loop_eval.py`, con self-test anti-drift. Poi `git pull` e analisi (output in
-   `results/Dynamic_Study/L1p5/`).
-2. **L2** secondo l'esito di L1.5: **ibrido sicuro closed-loop** → win a/b a costo zero, L2 si riduce a
-   **uncertainty head** (+ eventuale recupero v0/s0); **ibrido instabile** (jitter) → L2 training con
-   **regolarizzatore di consistenza memoryless** + **loss per-regime** (leva #1) + uncertainty head.
+1. Girare **`Dynamic_Study_L1c.ipynb`** su Azure (niente training): capire il **PERCHÉ** la ricorrenza
+   addestrata danneggia a/b prima di promuovere il cambio di deploy. Discrimina H1 accumulo/deriva vs
+   H2 creep adattamento ALIF vs H3 low-pass/smoothing (D1 curve vs posizione-da-reset; D2 traccia `a`
+   sui transitori). Poi `git pull` e analisi (output in `results/Dynamic_Study/L1c/`).
+2. **L1.6** (no training): ri-validazione FULL del readout full-memoryless a scala (micro 100-sim/sorgente
+   cut-in realistico + meso plotone + macro FD) per promuoverlo a modo di deploy ufficiale.
+3. **L2** (training): scope ridotto a **uncertainty head** per-parametro. Il recupero di a/b via training
+   NON è più necessario (risolto dal readout memoryless).
 
 ---
 
