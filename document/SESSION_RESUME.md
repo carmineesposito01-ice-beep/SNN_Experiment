@@ -32,12 +32,21 @@ string-stable; report in `VALIDATION_REPORT.md`). Unico residuo: errore sui para
 memoria/ritenzione + **incertezza dichiarata**); #2 **gap-SNN** (surrogate width / encoding Δv'·jerk /
 TET loss); #3 **riparametrizzazione [a,√ab]→deriva b**; #6 cambio modello (Future-B) in frigo.
 
+**L1 ESEGUITO (2026-06-20, `results/Dynamic_Study/L1/`)** — verdetto sorprendente: la memoria ricorrente
+è **DANNOSA** per a/b, non solo inutile. Ablandola sul champion addestrato (stato resettato a ogni step):
+a 0.331→**0.143**, b 0.178→**0.149** (≈ LM locale ideale 0.12/0.18), s0 0.135→0.082, v0 0.242→0.219,
+T pareggio. Il path memoryless vince su 4/5 (gain_ab=−0.109). Decadimento NRMSE(a,b) **piatto** vs distanza
+dal transitorio → NON è ritenzione leaky. **Esclude** le leve "ritenzione/canale-lento" e "allungare seq_len".
+
 **Cosa fare adesso**:
-1. Girare **`Dynamic_Study_L1.ipynb`** su Azure (niente training): ablazione della memoria ricorrente
-   + decadimento NRMSE(a,b) vs distanza dal transitorio → decide tra "ritenzione" e "gap-SNN".
-   Poi `git pull` e analisi (output in `results/Dynamic_Study/L1/`).
-2. **L2** (training): l'intervento indicato da L1 — probabile partenza da **loss per-regime** (leva #1).
-   Deliverable parallelo: head di **incertezza** per-parametro (dichiarare a/b a bassa confidenza).
+1. Girare **`Dynamic_Study_L1p5.ipynb`** su Azure (niente training): conferma del readout **ibrido**
+   (a/b memoryless, v0/T/s0 con memoria) PRIMA di L2. EXP A = ablazione statica su 3 seed freschi
+   (robustezza del finding L1); EXP B = sanity closed-loop 4 modalità (oracle/normal/memoryless/hybrid),
+   riusa `utils/closed_loop_eval.py`, con self-test anti-drift. Poi `git pull` e analisi (output in
+   `results/Dynamic_Study/L1p5/`).
+2. **L2** secondo l'esito di L1.5: **ibrido sicuro closed-loop** → win a/b a costo zero, L2 si riduce a
+   **uncertainty head** (+ eventuale recupero v0/s0); **ibrido instabile** (jitter) → L2 training con
+   **regolarizzatore di consistenza memoryless** + **loss per-regime** (leva #1) + uncertainty head.
 
 ---
 
