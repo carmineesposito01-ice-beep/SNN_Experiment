@@ -10,7 +10,7 @@ Variante con spike attention "lite". Estende A1 baseline con 3 matrici Q/K/V (32
 
 ## Risultati run originale
 
-**Source**: `results/T30_A8_ATTN_adamw/` (snapshot copiato in `snapshot_original/`).
+**Source**: `results/T30/T30_A8_ATTN_adamw/` (snapshot copiato in `snapshot_original/`).
 
 | Metric | Valore |
 |---|---:|

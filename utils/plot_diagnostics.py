@@ -624,6 +624,83 @@ def plot_g18_grad_direction_per_channel(batch_log: dict, out_path: str):
                    out_path=out_path, log_scale=False, ylim=(-1.05, 1.05))
 
 
+def plot_g19_nrmse_per_channel(log: dict, out_path: str):
+    """G19 — NRMSE per-canale (RMSE(pred,GT)/range) vs epoca.
+
+    Richiede le colonne val_<p>_nrmse (aggiunte 2026-06 per Loss_Study). Skip
+    silenzioso se assenti (run pre-patch). NRMSE alto = parametro mal identificato;
+    confrontabile cross-canale perche' normalizzato per il range del parametro.
+    Disponibile su QUALSIASI run (dataset sintetico -> GT sempre nota), non solo
+    negli studi vincolati.
+    """
+    if not _MPL:
+        return
+    chans = ['v0', 'T', 's0', 'a', 'b']
+    keys = [f'val_{c}_nrmse' for c in chans]
+    if not all(k in log for k in keys):
+        print("  G19 saltato (colonne val_*_nrmse assenti — run pre-patch)")
+        return
+    ep = log.get('epoch', np.arange(1, len(log[keys[0]]) + 1))
+    fig, ax = plt.subplots(figsize=(9, 5))
+    for c, k in zip(chans, keys):
+        ax.plot(ep, log[k], marker='.', label=c)
+    ax.set_xlabel('epoch')
+    ax.set_ylabel('NRMSE = RMSE(pred, GT) / range')
+    ax.set_title('G19 — NRMSE per-canale (residuo normalizzato; alto = mal identificato)')
+    ax.legend()
+    ax.grid(alpha=0.3)
+    ax.set_ylim(bottom=0)
+    fig.tight_layout()
+    fig.savefig(out_path, dpi=120)
+    plt.close(fig)
+
+
+def plot_g20_follow(trajectories, out_path: str, dt: float = 0.1):
+    """G20 — Follow spazio-tempo: posizione x(t) di ego e leader + velocita', per scenario.
+
+    Vista complementare a G13 (che mostra segnali+parametri): qui la traiettoria
+    nello SPAZIO (x integrato dalle velocita') rende visibile l'inseguimento e il gap.
+    Usa le STESSE traiettorie val di G13 (nessuna rigenerazione):
+      x_ego = cumsum(v)*dt ; x_lead = x_ego + s (gap) ; v0 da scenario_params (linea rif).
+    Un'unica figura multi-scenario (1 colonna per traiettoria, 2 righe: posizione, velocita').
+    """
+    if not _MPL or not trajectories:
+        return
+    n = len(trajectories)
+    fig, axes = plt.subplots(2, n, figsize=(5.2 * n, 8), squeeze=False, sharex='col')
+    for j, tr in enumerate(trajectories):
+        s  = np.asarray(tr['s']);  v = np.asarray(tr['v']);  vl = np.asarray(tr['v_l'])
+        t  = np.arange(len(v)) * dt
+        x_ego  = np.cumsum(v) * dt
+        x_lead = x_ego + s
+        sc = tr.get('scenario', '?')
+        ci = ' (cut-in)' if tr.get('is_cut_in') else ''
+        ax = axes[0][j]
+        ax.plot(t, x_ego,  label='ego x(t)',    linewidth=2)
+        ax.plot(t, x_lead, label='leader x(t)', linewidth=2, linestyle='--')
+        ax.fill_between(t, x_ego, x_lead, alpha=0.12)
+        ax.set_title(f'{sc}{ci}')
+        if j == 0:
+            ax.set_ylabel('posizione [m]')
+        ax.legend(fontsize=8, loc='upper left')
+        ax.grid(True, alpha=0.3)
+        ax2 = axes[1][j]
+        ax2.plot(t, v,  label='v_ego',    linewidth=2)
+        ax2.plot(t, vl, label='v_leader', linewidth=2, linestyle='--')
+        v0 = tr.get('scenario_params', {}).get('v0')
+        if v0 is not None:
+            ax2.axhline(v0, color='r', linestyle=':', linewidth=1, label=f'v0={v0:.0f}')
+        ax2.set_xlabel('t [s]')
+        if j == 0:
+            ax2.set_ylabel('velocita [m/s]')
+        ax2.legend(fontsize=8, loc='lower right')
+        ax2.grid(True, alpha=0.3)
+    fig.suptitle('G20 — Follow spazio-tempo ego/leader (area ombreggiata = gap)', y=1.0)
+    fig.tight_layout()
+    fig.savefig(out_path, dpi=120)
+    plt.close(fig)
+
+
 # ===========================================================
 # 3. Funzione principale
 # ===========================================================
@@ -663,6 +740,7 @@ def plot_all(log: dict, out_dir: str,
         plot_g3_lr_schedule(log, os.path.join(od, 'G3_lr_schedule.png'))
         plot_g4_grad_norm(log,   os.path.join(od, 'G4_grad_norm.png'))
         plot_g6_spike_rate(log,  os.path.join(od, 'G6_spike_rate.png'))
+        plot_g19_nrmse_per_channel(log, os.path.join(od, 'G19_nrmse_per_ch.png'))
 
         if T_pred is not None and T_true is not None:
             plot_g5_T_scatter(T_pred, T_true, os.path.join(od, 'G5_T_scatter.png'))
@@ -698,8 +776,10 @@ def plot_all(log: dict, out_dir: str,
             ci = '_cutin' if traj.get('is_cut_in') else ''
             fname = f'G13_traj_{sc}{ci}.png'
             plot_g13_signals_vs_params(traj, os.path.join(od, fname))
+        # G20 — follow spazio-tempo (x(t) ego/leader), 1 figura multi-scenario per run
+        plot_g20_follow(trajectories, os.path.join(od, 'G20_follow.png'))
     else:
-        print("  G13 saltato (trajectories non fornito)")
+        print("  G13/G20 saltati (trajectories non fornito)")
 
     print("[Diagnostics] Completato.")
 

@@ -1,0 +1,6 @@
+scenario,R33_C2 CLEAN,S3 d0.3 (launch),S3 d1.0 (launch),oracle
+cut_in,0.0,0.0,0.0,0.0
+following,0.0,0.0,0.0,0.0
+hard_brake,0.0,0.0,0.0,0.0
+sinusoidal,0.0,0.0,0.0,0.0
+stop_and_go,0.0,0.0,0.0,0.0

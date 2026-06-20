@@ -5,7 +5,26 @@
 
 ---
 
-## 🟢 POST-CLOSURE 2026-06-16 — opzioni dopo R33
+## 🔵 POST-LOSS_STUDY 2026-06-19 — opzioni aperte (branch Loss_Study)
+
+Vedi `LOSS_STUDY_AND_EVALUATION.md`. Stato: framework di evaluation completo; in attesa/analisi
+della run `v1_realistic_cutin`.
+
+| ID | Mossa | Costo | Priorità | Note |
+|----|---|---|---|---|
+| **E1** | Lanciare `Loss_Study_Validation_Full.ipynb` (`ANALYSIS='v1_realistic_cutin'`) | ~6-9 min | **ALTA** | verdetto micro corretto (cut-in evitabile) + meso + macro + vetrina |
+| **S4** | Training: ridurre il **bias a/b** in frenata | ~giorni | ALTA (post-eval) | pesare residuo PINN sulla decelerazione / penalizzare bias su `b`; le criticità closed-loop sono in frenata |
+| **C1** | Capacità (sospesa): **LAMB** | medio | media | `--optimizer lamb`, da vendorizzare come Lion; sostituisce Prodigy |
+| **C2** | Capacità: **vincolo raggio spettrale** sul ricorrente `U@V` | alto | media | rimedio da manuale per l'esplosione BPTT (clip AGC non basta) |
+| **C3** | Multi-seed evaluation (CI più stretti) + affinare rilevatore instabilità macro | basso | bassa | N driver più alto; il detector stop&go macro è grezzo |
+| **EP** | **EventProp** "fatto come si deve" | settimane | media | in pipeline pre-Loss_Study; verificare misuso come per Prodigy |
+| **DP** | **Deploy FPGA PYNQ-Z1** | settimane | dopo eval | modello consolidato `LS3_PEAK_R0_launch_d03` o R33_C2 CLEAN |
+
+**Raccomandazione**: E1 (subito) → analisi → S4. Capacità (C1/C2) solo se si rivisita; non è esaustiva.
+
+---
+
+## 🟢 POST-CLOSURE 2026-06-16 — opzioni dopo R33 (storiche, pre-Loss_Study)
 
 Lo studio Prodigy è chiuso. I floor val_data sono passati da 0.28 (pre-R24F) a **0.159** (R33_C1 record). 4 champion attivi in `Arch_Tested/`. Le opzioni concrete per il prossimo capitolo:
 

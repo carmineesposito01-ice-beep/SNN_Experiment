@@ -1,0 +1,59 @@
+{
+  "tag": "R25v2_A4_delay_long",
+  "run_dir": "results/Prodigy_Study/R25_Ablation_v2/A_memory/R25v2_A4_delay_long",
+  "checkpoint": "checkpoints/R25v2_A4_delay_long/best_model.pt",
+  "ckpt_epoch": 10,
+  "ckpt_val_loss": 0.1953871562442881,
+  "val_metrics": {
+    "total": 0.18958095928772967,
+    "data": 0.1826971009215142,
+    "phys": 0.036447446208764264,
+    "ou": 0.013502228499806307,
+    "bc": 0.0007804319942861947,
+    "sr": 0.003567138762012659,
+    "spike_rate": 0.09238272003750218,
+    "val_T_tracking_corr": 0.2827409505844116,
+    "val_T_intra_corr": 0.010059166699647903,
+    "val_v0_pred_mean": 28.114039547899935,
+    "val_v0_intra_std": 2.6245801604174552,
+    "val_T_pred_mean": 1.2175442753954138,
+    "val_T_intra_std": 0.08623018642847842,
+    "val_s0_pred_mean": 1.3135130804903963,
+    "val_s0_intra_std": 0.07634867774570321,
+    "val_a_pred_mean": 0.44267677325517574,
+    "val_a_intra_std": 0.048831716304932264,
+    "val_b_pred_mean": 1.283430351855907,
+    "val_b_intra_std": 0.13960683880809774
+  },
+  "rank_metrics": {
+    "rank_effective": 1,
+    "rank_threshold_pct": 1.0,
+    "cond_number": 21733.567522581798,
+    "singular_values": [
+      132.35204786750384,
+      0.10829778353171185,
+      0.03135455616437613,
+      0.008769827758215934,
+      0.006089752532803751
+    ],
+    "singular_values_normalized": [
+      1.0,
+      0.0008182554427879163,
+      0.0002369026899815319,
+      6.626136806734801e-05,
+      4.6011774135147e-05
+    ]
+  },
+  "config": {
+    "cf_hidden_size": 32,
+    "cf_rank": 8,
+    "cf_max_delay": 18,
+    "cf_bit_shift": 3,
+    "lambda_T_aux": 0.0,
+    "lambda_sr": 0.5,
+    "scenario_mix": "highway:0.4,urban:0.3,truck:0.2,mixed:0.1",
+    "optimizer": "prodigy",
+    "epochs": 10
+  },
+  "audited_at": "2026-06-14 09:26:12"
+}

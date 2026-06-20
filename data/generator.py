@@ -222,6 +222,26 @@ def _leader_profile(profile, N, dt, rng, v0):
             v_curr  = float(np.clip(v_curr, 0.0, v0))
             v_l[i]  = v_curr
 
+    elif profile == 'launch':
+        # S3 (2026-06): cicli di LANCIO ripetuto per eccitare 'a' (osservabile solo dove
+        # |a_pred| e' grande, cioe' in accelerazione forte). Cicli corti = molti lanci ->
+        # molto tempo nel regime di accelerazione (vs freeflow: 1 lancio + lunga crociera).
+        cycle_len = max(int(rng.uniform(15.0, 30.0) / dt), 4)
+        a_launch  = rng.uniform(2.0, 3.5)        # accelerazione forte del leader (m/s^2)
+        v_curr = 0.0
+        for i in range(N):
+            phase = (i % cycle_len) / cycle_len
+            if phase < 0.10:                      # fermo (gap si chiude -> ego frena)
+                v_curr = 0.0
+            elif phase < 0.55:                    # LANCIO forte verso v0 (gap si apre -> ego accelera libero)
+                v_curr = min(v_curr + a_launch * dt, v0)
+            elif phase < 0.70:                    # crociera breve
+                pass
+            else:                                 # decelerazione a 0
+                v_curr = max(v_curr - a_launch * dt, 0.0)
+            v_l[i] = v_curr
+        v_l = np.clip(v_l, 0.0, v0 * 1.1)
+
     return v_l.astype(np.float32)
 
 
@@ -470,7 +490,7 @@ def parse_scenario_mix(spec):
     if spec is None or spec == 'default':
         return dict(SCENARIO_MIX)
 
-    valid_scenarios = ['highway', 'urban', 'truck', 'mixed']
+    valid_scenarios = ['highway', 'urban', 'truck', 'mixed', 'freeflow', 'launch']
 
     # Singolo scenario al 100%
     if spec in valid_scenarios:
@@ -533,6 +553,26 @@ def _sample_scenario(rng, scenario_mix=None, cut_in_ratio=None):
         p['v0'] *= rng.uniform(0.90, 1.05)
         p['T']   = rng.uniform(1.40, 2.20)
         prof = 'constant'
+
+    elif stype == 'freeflow':
+        # S1b excitation (2026-06): profilo 'free' = accelerazione libera fino a v0.
+        # Eccita la coppia molle v0/a (e b nel transitorio iniziale) — vedi Loss_Study S1.
+        # Range ampi su v0 e a per renderli identificabili sull'intero dominio.
+        p = dict(IDM_HWY)
+        p['v0'] *= rng.uniform(0.70, 1.20)
+        p['T']   = rng.uniform(IDM2D_T1, IDM2D_T2)
+        p['a']  *= rng.uniform(0.80, 1.20)
+        prof = 'free'
+
+    elif stype == 'launch':
+        # S3 excitation: accelerazioni forti RIPETUTE -> eccita 'a' (gradiente da |a_pred| grande).
+        # v0 non troppo alto cosi' i lanci raggiungono v0; range ampio su 'a' per identificarlo.
+        # (Nota S3b: v0 alto testato ma marginale -> l'ego gia' non raggiunge mai v0 nel launch.)
+        p = dict(IDM_HWY)
+        p['v0'] *= rng.uniform(0.60, 1.00)
+        p['T']   = rng.uniform(IDM2D_T1, IDM2D_T2)
+        p['a']  *= rng.uniform(0.70, 1.30)
+        prof = 'launch'
 
     else:  # mixed
         p = dict(IDM_HWY)

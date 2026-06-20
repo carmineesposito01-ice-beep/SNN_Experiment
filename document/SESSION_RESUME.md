@@ -5,7 +5,38 @@
 
 ---
 
-## 🎯 Stato attuale (2026-06-16 — **STUDIO PRODIGY CHIUSO. Merge → main**)
+## 🎯 Stato attuale (2026-06-19 — **Loss_Study + framework di EVALUATION completo**)
+
+**Branch corrente**: `Loss_Study` (da `main` tag `R33_closure`). Tutto il lavoro recente è qui.
+**Documento maestro**: `document/LOSS_STUDY_AND_EVALUATION.md` (record completo, auto-sufficiente).
+
+**Cosa è stato fatto (in ordine)**:
+1. **S1 — identificabilità**: i 5 parametri ACC-IDM NON sono congiuntamente identificabili
+   dall'accelerazione. v0 e `a` = **coppia molle** (provato causalmente, corr −0.82). Aggiunto
+   logging `val_*_nrmse` (Lente B) + plot G19/G20.
+2. **Osservabilità (la leva)**: scenario **freeflow** sblocca v0 (NRMSE 0.50→0.39); scenario
+   **launch** (accel forti ripetute) sblocca parzialmente `a` (0.43→0.65, NRMSE 0.34→0.26). Run
+   consolidata `LS3_PEAK_R0_launch_d03` (restart Opzione 1+4, decay 0.3). Bias a/b sistematico in frenata → **S4 futuro**.
+3. **Capacità (S2) — SOSPESA** (non esaustiva): modelli grandi esplodono in BPTT. Fix: guard v2
+   (frazione + inf), **AGC** (`--grad_clip agc`). Future: LAMB, raggio spettrale, multi-seed.
+4. **EVALUATION** (`Loss_Study_Validation_Full.ipynb`, ~6-9 min, un run): **micro** (sicurezza
+   closed-loop), **meso** (plotone/string stability, CAM dal leader i−1), **macro** (diagramma
+   fondamentale), **vetrina** (accuracy/raster/energia/GIF/dashboard). 15 grafici → `results/evaluate/<analisi>/`.
+
+**Esito EVALUATION v1 (FATTO, `results/evaluate/v1_realistic_cutin/`) — VALIDAZIONE SUPERATA**:
+- **MICRO**: **0 collisioni su TUTTI gli scenari** (100 sim/sorgente, cut-in realistico), SNN ≈ oracolo,
+  più dolce + più string-stable. (Il 4% della 1ª run era SOLO il cut-in inevitabile, ora corretto.)
+- **MESO**: plotone string-stable (head-to-tail <1), convettivo, 0 collisioni.
+- **MACRO**: FD corretto; SNN capacità più alta (~2000 vs oracolo 1045) per **bias v0 alto**.
+- Energia ~3.9× vs ANN (da AC<MAC). Accuracy 77%. Unico problema residuo: **bias parametri a/b/v0**.
+
+**Cosa fare adesso**:
+1. **S4** (lato training): ridurre il **bias a/b/v0** (margini frenata + capacità macro). È l'unico residuo.
+2. Poi: EventProp (in pipeline) / deploy FPGA (modello consolidato `LS3_PEAK_R0_launch_d03`).
+
+---
+
+## 🎯 Stato precedente (2026-06-16 — **STUDIO PRODIGY CHIUSO. Merge → main**) — superseded da Loss_Study
 
 **Fase corrente**: **Prodigy Study CLOSED**. R33 Closure ha prodotto 2 nuovi champion finali con record assoluti del progetto. Tutti i 5 branch di esplorazione (Architecture_Exploration, Floor_Diagnostic, Optimizer_Exploration, Training_Method_Exploration, Visualizer_Building) sono antenati di `Prodigy_Deep_Study` → un singolo merge `Prodigy_Deep_Study → main` integra l'intera storia (307 commit).
 
@@ -724,7 +755,7 @@ git push origin main
 
 ### Se l'utente dice "ho lanciato STEP 2A, ecco i risultati":
 1. `git pull origin main`
-2. `ls results/P9_S2A_fast_baseline/`
+2. `ls results/P9/P9_S2A_fast_baseline/`
 3. Analizza `training_log.csv` per val_loss
 4. Confronto con `P9_S1_highway_v2` (val=0.277)
 5. Applica decision tree sopra → propone STEP 2B

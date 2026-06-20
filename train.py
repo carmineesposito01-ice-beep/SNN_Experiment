@@ -393,10 +393,39 @@ def _log_batch_diagnostics(tag, comps, gn_total, x, pre_norms, model):
         print(f"{tag} weights: all finite, global_max_abs={wmax_global:.3e}")
 
 
+def adaptive_grad_clip(model, clip_lambda, eps=1e-3, skip_prefixes=('layer_out',)):
+    """AGC — Adaptive Gradient Clipping (Brock et al. 2021, NFNets).
+
+    Per ogni parametro multi-dim, clip per-UNITA' (per-riga, dim 0 = unita' di output):
+    se ||g_unit|| / max(||w_unit||, eps) > clip_lambda, scala g_unit a clip_lambda*||w_unit||.
+    Bound l'update relativamente alla dimensione dei pesi -> doma l'esplosione del gradiente
+    su reti grandi. **Optimizer-agnostico** (agisce sui .grad PRIMA dello step) -> compatibile
+    con Prodigy/AdamW/Lion senza sostituirli.
+
+    Esclusioni (prassi NFNets + SNN): parametri 1-D (bias, soglie ALIF) e il layer di output
+    (decoder dei 5 parametri). Default off; attivo solo con --grad_clip agc.
+    inf grad -> scale=max_norm/inf=0 -> grad azzerato (sopprime l'esplosione); nan resta gestito
+    dal guard frazione v2.
+    """
+    for name, p in model.named_parameters():
+        if p.grad is None or p.dim() <= 1:
+            continue
+        if any(name.startswith(pref) for pref in skip_prefixes):
+            continue
+        dims = tuple(range(1, p.dim()))                                   # tutte tranne dim 0 (unita')
+        w_norm = p.detach().norm(dim=dims, keepdim=True).clamp_(min=eps)
+        g_norm = p.grad.detach().norm(dim=dims, keepdim=True)
+        max_norm = w_norm * clip_lambda
+        scale = (max_norm / g_norm.clamp_(min=1e-12)).clamp_(max=1.0)     # clip solo dove g_norm>max_norm
+        p.grad.detach().mul_(scale)
+
+
 def train_epoch(model, loader, optimizer, device, epoch, lam,
                 scheduler=None, step_per_batch=False,
                 log_every=LOG_EVERY, max_inf_streak=20, diag=False,
-                batch_logger=None, max_steps_per_epoch=-1):
+                batch_logger=None, max_steps_per_epoch=-1,
+                explosion_threshold=float('inf'),
+                grad_clip_mode='none', agc_lambda=0.01):
     """
     Esegue un'epoca di training con guardie e diagnostica.
 
@@ -419,6 +448,9 @@ def train_epoch(model, loader, optimizer, device, epoch, lam,
     n_batches  = 0
     inf_streak = 0          # batch consecutivi con grad_norm=inf
     max_gn_preclip = 0.0    # R30 explosion guard: max gn_total_preclip osservato in epoca
+    n_seen_gn      = 0      # tutti i batch visti (denominatore frazione, S1b v2)
+    n_finite_gn    = 0      # batch con gn_total_preclip finito
+    n_expl_gn      = 0      # batch esplosi: finiti-enormi (>soglia) O inf/nan (S1b v2)
     t0         = time.time()
 
     for batch_idx, batch in enumerate(loader):
@@ -509,8 +541,21 @@ def train_epoch(model, loader, optimizer, device, epoch, lam,
         # R30 (2026-06-12) — tracking max gn_total_preclip nell'epoca per
         # explosion guard a livello epoca. Ignora inf (gestito separatamente
         # da inf_streak).
-        if math.isfinite(gn_total_preclip) and gn_total_preclip > max_gn_preclip:
-            max_gn_preclip = gn_total_preclip
+        n_seen_gn += 1   # tutti i batch (denominatore frazione, S1b v2)
+        if math.isfinite(gn_total_preclip):
+            n_finite_gn += 1
+            if gn_total_preclip > max_gn_preclip:
+                max_gn_preclip = gn_total_preclip
+            if gn_total_preclip > explosion_threshold:
+                n_expl_gn += 1   # esploso finito-enorme
+        else:
+            n_expl_gn += 1   # S1b v2 FIX: inf/nan = esploso (cattura il fallimento "opposto"
+            #                  dove x8/x10 giravano 50ep su gradienti inf non contati)
+
+        # AGC (opt-in): clip per-unita relativo a ||w|| PRIMA del clip globale. Optimizer-agnostico
+        # -> mantiene Prodigy. gn_total_preclip sopra resta grezzo (failsafe del guard intatto).
+        if grad_clip_mode == 'agc':
+            adaptive_grad_clip(model, agc_lambda)
 
         gn     = nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
         gn_val = float(gn)
@@ -545,6 +590,7 @@ def train_epoch(model, loader, optimizer, device, epoch, lam,
                 avgs['spike_rate'] = spike_acc / nb
                 avgs['grad_norm']  = float('inf')
                 avgs['max_gn_preclip'] = max_gn_preclip
+                avgs['explosion_frac'] = n_expl_gn / max(n_seen_gn, 1)
                 avgs['aborted']    = True
                 return avgs
             continue
@@ -595,6 +641,7 @@ def train_epoch(model, loader, optimizer, device, epoch, lam,
     avgs['spike_rate'] = spike_acc / nb
     avgs['grad_norm']  = grad_acc  / nb
     avgs['max_gn_preclip'] = max_gn_preclip   # R30: per explosion guard epoch-level
+    avgs['explosion_frac'] = n_expl_gn / max(n_seen_gn, 1)  # S1b: frazione batch esplosi
     avgs['aborted']    = False
     return avgs
 
@@ -613,6 +660,11 @@ def val_epoch(model, loader, device, lam):
     # Per altri canali: per-channel mean predicted (per saturation) + intra-seq std
     chan_pred_mean = {pn: [] for pn in _PARAM_NAMES}
     chan_intra_std = {pn: [] for pn in _PARAM_NAMES}
+    # Lente B (Loss_Study) — accumulatori per NRMSE per-canale vs GT.
+    # T: GT per-timestep in y[:,:,1] (masked). v0/s0/a/b: GT costante in params_gt.
+    _NR_GT_IDX = {'v0': 0, 's0': 1, 'a': 2, 'b': 3}   # colonna in params_gt (T escluso)
+    nrmse_se = {pn: 0.0 for pn in _PARAM_NAMES}
+    nrmse_n  = {pn: 0   for pn in _PARAM_NAMES}
 
     for batch in loader:
         # R30: 4-tuple loader (x, y, mask, params_gt). Backward-compat su 3-tuple.
@@ -643,6 +695,16 @@ def val_epoch(model, loader, device, lam):
         for i, pn in enumerate(_PARAM_NAMES):
             chan_pred_mean[pn].append(ps[:, :, i].mean().item())
             chan_intra_std[pn].append(ps[:, :, i].std(dim=1).mean().item())
+
+        # Lente B — somma errori quadratici vs GT (T: per-timestep masked; v0/s0/a/b: costante)
+        nrmse_se['T'] += (mask * (ps[:, :, 1] - y[:, :, 1]) ** 2).sum().item()
+        nrmse_n['T']  += mask.sum().item()
+        if params_gt is not None:
+            for pn, gi in _NR_GT_IDX.items():
+                pi = _PARAM_NAMES.index(pn)              # idx canale in params_seq
+                gt = params_gt[:, gi].unsqueeze(1)       # (batch, 1) costante per scenario
+                nrmse_se[pn] += ((ps[:, :, pi] - gt) ** 2).sum().item()
+                nrmse_n[pn]  += ps[:, :, pi].numel()
 
     nb = max(n_batches, 1)
     avgs = {k: v / nb for k, v in totals.items()}
@@ -683,6 +745,21 @@ def val_epoch(model, loader, device, lam):
     for pn in _PARAM_NAMES:
         avgs[f'val_{pn}_pred_mean'] = float(np.mean(chan_pred_mean[pn])) if chan_pred_mean[pn] else float('nan')
         avgs[f'val_{pn}_intra_std'] = float(np.mean(chan_intra_std[pn])) if chan_intra_std[pn] else float('nan')
+
+    # Lente B (Loss_Study) — NRMSE per-canale = RMSE / range_param. Normalizzare per il
+    # range rende confrontabili canali su scale diverse (v0~37 vs T~2). Guard hasattr per
+    # non rompere training method con modelli privi di param_hi/lo (es. EventProp variants).
+    if hasattr(model, 'param_hi') and hasattr(model, 'param_lo'):
+        _rng = (model.param_hi - model.param_lo).detach().cpu()
+        for i, pn in enumerate(_PARAM_NAMES):
+            if nrmse_n[pn] > 0:
+                _rmse = math.sqrt(nrmse_se[pn] / nrmse_n[pn])
+                avgs[f'val_{pn}_nrmse'] = float(_rmse / (_rng[i].item() + 1e-12))
+            else:
+                avgs[f'val_{pn}_nrmse'] = float('nan')
+    else:
+        for pn in _PARAM_NAMES:
+            avgs[f'val_{pn}_nrmse'] = float('nan')
 
     return avgs
 
@@ -732,6 +809,8 @@ class CSVLogger:
         'val_T_intra_corr',
         'val_v0_pred_mean', 'val_T_pred_mean', 'val_s0_pred_mean', 'val_a_pred_mean', 'val_b_pred_mean',
         'val_v0_intra_std', 'val_T_intra_std', 'val_s0_intra_std', 'val_a_intra_std', 'val_b_intra_std',
+        # Lente B (Loss_Study) — NRMSE per-canale (RMSE/range): residuo normalizzato confrontabile
+        'val_v0_nrmse', 'val_T_nrmse', 'val_s0_nrmse', 'val_a_nrmse', 'val_b_nrmse',
     ]
 
     def __init__(self, path: str):
@@ -1116,6 +1195,21 @@ def main():
                              'precoce di run altrimenti recuperabili. R32_A4 peak gn=1.2e13, '
                              'R32_B5 peak gn=5.3e9, R31_A3 peak gn=4.3e3 — 10000 distingue spike '
                              'transienti da divergenza vera). Solo se --max_epoch_explosion_streak > 0.')
+    parser.add_argument('--epoch_explosion_frac', type=float, default=0.5,
+                        help='S1b (2026-06): frazione minima di batch con gn_preclip>soglia per '
+                             'marcare l epoca come esplosa (default 0.5 = meta epoca). Robustifica '
+                             'la guard contro spike isolati: con il vecchio criterio (max>soglia) '
+                             'bastava 1 batch su 100 ad abortire una run pulita (vedi Loss_Study S1b, '
+                             'mediana gn~0.5 ma abort per spike isolato). Solo se streak>0.')
+    parser.add_argument('--grad_clip', type=str, default='none', choices=['none', 'agc'],
+                        help='S2 (2026-06): clip gradiente EXTRA prima del clip globale. '
+                             'none=solo clip_grad_norm(1.0) esistente. agc=Adaptive Gradient '
+                             'Clipping (Brock 2021, NFNets): clip per-unita relativo a ||w|| -> '
+                             'doma esplosione su reti grandi MANTENENDO l optimizer (Prodigy). '
+                             'Esclude layer_out + param 1-D. Default none = backward-compat.')
+    parser.add_argument('--agc_lambda', type=float, default=0.01,
+                        help='Soglia AGC: rapporto max ||g_unit||/||w_unit|| ammesso. Tipico 0.01 '
+                             '(NFNets). Piu alto = meno aggressivo. Solo se --grad_clip agc.')
     # STEP 2C — Optimizer_Exploration: step budget control + val decoupling
     parser.add_argument('--max_steps_per_epoch', type=int, default=-1,
                         help='Cap step training per epoca, indipendente da len(train_loader). '
@@ -1574,28 +1668,36 @@ def main():
                 diag=args.smoke,
                 batch_logger=batch_logger,
                 max_steps_per_epoch=args.max_steps_per_epoch,
+                explosion_threshold=args.epoch_explosion_threshold,
+                grad_clip_mode=args.grad_clip,
+                agc_lambda=args.agc_lambda,
             )
 
             # R30 (2026-06-12) — Epoch-level explosion guard.
             # Difesa contro gradient explosion mascherato dal clip_grad_norm_(1.0).
             # Solo attivo se --max_epoch_explosion_streak > 0 (default off).
             if args.max_epoch_explosion_streak > 0:
-                max_gn_e = train_m.get('max_gn_preclip', 0.0)
-                if max_gn_e > args.epoch_explosion_threshold:
+                max_gn_e  = train_m.get('max_gn_preclip', 0.0)
+                expl_frac = train_m.get('explosion_frac', 0.0)
+                # S1b (2026-06-18): epoca "esplosa" SOLO se una FRAZIONE dei batch supera
+                # la soglia (> epoch_explosion_frac), non un singolo spike isolato. Il
+                # vecchio criterio (max_gn > soglia) abortiva run pulite per 1 batch su 100.
+                if expl_frac > args.epoch_explosion_frac:
                     epoch_explosion_streak += 1
-                    print(f"  [R30 ExplosionGuard] epoca {epoch}: max_gn_preclip="
-                          f"{max_gn_e:.2e} > {args.epoch_explosion_threshold:.0f} "
-                          f"(streak {epoch_explosion_streak}/{args.max_epoch_explosion_streak})")
+                    print(f"  [ExplosionGuard] epoca {epoch}: frazione batch gn>soglia="
+                          f"{expl_frac:.2f} > {args.epoch_explosion_frac} "
+                          f"(max_gn={max_gn_e:.2e}, streak {epoch_explosion_streak}/{args.max_epoch_explosion_streak})")
                     if epoch_explosion_streak >= args.max_epoch_explosion_streak:
                         print(f"\n  [EARLY-STOP] {epoch_explosion_streak} epoche consecutive "
-                              f"con gn_preclip>soglia. Training abortito.")
+                              f"con >{args.epoch_explosion_frac:.0%} batch esplosi. Training abortito.")
                         crash_path = os.path.join(save_dir, 'crash_model.pt')
                         save_checkpoint(model, optimizer, epoch, float('inf'), crash_path)
                         print(f"  Crash dump salvato: {crash_path}")
                         break
                 else:
                     if epoch_explosion_streak > 0:
-                        print(f"  [R30 ExplosionGuard] reset streak (gn_max={max_gn_e:.2e} ok)")
+                        print(f"  [ExplosionGuard] reset streak (frazione esplosi={expl_frac:.2f} ok, "
+                              f"max_gn={max_gn_e:.2e})")
                     epoch_explosion_streak = 0
 
             if train_m.get('aborted'):
@@ -1669,7 +1771,9 @@ def main():
                       'val_v0_pred_mean', 'val_T_pred_mean', 'val_s0_pred_mean',
                       'val_a_pred_mean', 'val_b_pred_mean',
                       'val_v0_intra_std', 'val_T_intra_std', 'val_s0_intra_std',
-                      'val_a_intra_std', 'val_b_intra_std'):
+                      'val_a_intra_std', 'val_b_intra_std',
+                      'val_v0_nrmse', 'val_T_nrmse', 'val_s0_nrmse',
+                      'val_a_nrmse', 'val_b_nrmse'):
                 row[k] = val_m.get(k, float('nan'))
             logger.log(row)
 

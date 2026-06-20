@@ -1,0 +1,5 @@
+source,rms_accel,max_decel,rms_jerk,rms_gap_error,string_gain
+R33_C2 CLEAN,0.718,9.0,1.741,13.501,0.292
+S3 d0.3 (launch),0.763,9.0,1.741,11.697,0.376
+S3 d1.0 (launch),0.757,9.0,1.828,12.222,0.364
+oracle,0.836,9.0,1.736,8.791,0.488

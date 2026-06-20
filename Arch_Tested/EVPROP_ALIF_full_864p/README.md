@@ -10,7 +10,7 @@ Architettura IDENTICA ad A1 baseline (ALIF 32, rank=8, max_delay=6, Po2, n_ticks
 
 ## Risultati run originale
 
-**Source**: `results/SW_eventprop_alif_full_adamw_lr2e-3/` (snapshot copiato in `snapshot_original/`).
+**Source**: `results/SW_OptimizerSweep/SW_eventprop_alif_full_adamw_lr2e-3/` (snapshot copiato in `snapshot_original/`).
 
 | Metric | Valore |
 |---|---:|

@@ -5,6 +5,7 @@
 > 🔧 **Per workflow Azure end-to-end**: vedi `WORKFLOW.md`.
 > 🏛️ **Per storia decisioni + lessons learned**: vedi `TIMELINE.md`.
 > 📖 **Per audit roadmap R1/R2/R3**: vedi `AUDIT_2026-06-02.md`.
+> 🔬 **Stato corrente (branch Loss_Study + evaluation)**: vedi `LOSS_STUDY_AND_EVALUATION.md` (record completo).
 
 > **Ultima modifica:** 2026-06-10 sera CET
 > **Sessione:** R26 Fusion Study (in esecuzione su Azure)
@@ -675,7 +676,7 @@ su TUTTI gli scenari.
 
 Il floor val ≈ 0.28 osservato in 9 setup diversi (capacity sweep STEP 2B + ottimizzatore sweep STEP 2C + Plan A/B Optimizer_Exploration) è stato **completamente decomposto** dal floor diagnostic STEP 2D + STEP 2D-bis (branch `Floor_Diagnostic`). 7 esperimenti F1-F7 hanno isolato il contributo quantitativo di ogni fattore candidato.
 
-### 14.2 Risultati F1-F7 (tutti reproducibili da `results/P12_S2D_*/`)
+### 14.2 Risultati F1-F7 (tutti reproducibili da `results/P12/P12_S2D_*/`)
 
 | Plan | Config (vs baseline AdamW) | val_best | Δ vs REF | Conclusione |
 |------|----------------------------|----------|----------|-------------|

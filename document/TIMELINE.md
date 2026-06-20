@@ -1087,6 +1087,32 @@ I 5 branch di esplorazione (Architecture/Floor/Optimizer/Training_Method/Visuali
 
 ---
 
+## 🔬 Fase Loss_Study + Evaluation (2026-06-16 → 2026-06-19)
+
+Branch `Loss_Study` da `main` (R33_closure). Dettaglio completo: `LOSS_STUDY_AND_EVALUATION.md`.
+
+- **Riordino** `results/` in cartelle-famiglia (P6/P9/P12/P15/T30/GRID2x2/SW_OptimizerSweep).
+- **S1 (identificabilità)**: triangolazione gradiente/residuo/ablation. Scoperto che i 5 param non
+  sono congiuntamente identificabili dall'accelerazione; v0↔a = coppia molle (corr −0.82, provata
+  causalmente). Aggiunto `val_*_nrmse` + G19.
+- **S1b (freeflow)**: osservabilità sblocca v0 ma non `a` (gradiente v0 ×3, `a` invariato). Dato da
+  solo insufficiente. Guard fix v1 (frazione).
+- **S2 (capacità) — SOSPESA**: modelli grandi esplodono (BPTT, non lr/Prodigy-d — falsificato).
+  Guard v2 (conta inf). Ricerca LAMB/AGC → implementato **AGC** (optimizer-agnostico, mantiene
+  Prodigy). AGC ritarda ma non cura. Future: LAMB, raggio spettrale, multi-seed. Doc: `S2_CAPACITY_DIGRESSION.md`.
+- **S3 (launch)**: accel forti ripetute sbloccano parzialmente `a` (0.43→0.65, NRMSE 0.34→0.26, no
+  ricollasso). Run più bilanciata. Fix restart Opzione 1+4 (decay 0.3). Bias a/b → S4 futuro.
+- **EVALUATION framework**: micro (`closed_loop_eval`), meso+macro (`platoon_eval`), vetrina
+  (`snn_showcase`). Notebook unico `Loss_Study_Validation_Full.ipynb` → `results/evaluate/<analisi>/`.
+  Cut-in reso realistico (evitabile), CI Wilson, smorzamento, 15 grafici (ogni metrica visiva).
+- **Esito micro**: la SNN guida come l'oracolo; energia ~4× vs ANN (da AC<MAC); accuracy 77%.
+
+**Lessons learned**: (1) osservabilità > capacità/aux per l'identificabilità; (2) l'instabilità BPTT
+dei ricorrenti grandi è spazio-pesi (clip per-step non basta); (3) validare l'aux sul val (generalizza?);
+(4) negli scenari avversari verificare l'**evitabilità fisica** (l'oracolo che collide = scenario, non rete).
+
+---
+
 ## 📌 Note finali
 
 Questo TIMELINE va aggiornato dopo ogni milestone significativa. Mantenere la sezione "Lessons learned" è cruciale per non ripetere errori in future sessioni.

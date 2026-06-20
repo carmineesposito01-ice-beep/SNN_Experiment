@@ -16,7 +16,7 @@ Baseline production: ALIF 32 neuroni (rank=8, max_delay=6) + LI(32→5). Po2 qua
 
 ## Risultati run originale
 
-**Source**: `results/T30_A1_BASELINE_adamw/` (snapshot copiato in `snapshot_original/`).
+**Source**: `results/T30/T30_A1_BASELINE_adamw/` (snapshot copiato in `snapshot_original/`).
 
 | Metric | Valore |
 |---|---:|
