@@ -20,9 +20,10 @@
 - **Capacità**: digressione **SOSPESA** (non esaustiva), i modelli grandi esplodono in BPTT.
 - **Validazione**: costruito un framework completo **micro + meso + macro + vetrina** che gira
   in un solo notebook (`Loss_Study_Validation_Full.ipynb`, ~6-9 min) → `results/evaluate/<analisi>/`.
-- **Esito micro (1ª run)**: la SNN guida **come l'oracolo** (parametri veri); le uniche
-  collisioni erano cut-in fisicamente inevitabili (scenario corretto → ora evitabile).
-- **Prossimo**: lanciare `v1_realistic_cutin` (verdetto micro corretto) + S4 (bias a/b lato training).
+- **Esito micro (v1, cut-in realistico — FATTO)**: la SNN guida con **0 collisioni su TUTTI gli
+  scenari** (100 sim/sorgente), come/meglio dell'oracolo (più dolce, più string-stable). Il 4%
+  iniziale era SOLO l'artefatto del cut-in fisicamente inevitabile. **Validazione superata.**
+- **Prossimo**: S4 (bias a/b lato training) — l'unico problema residuo (vedi §7).
 
 ---
 
@@ -186,6 +187,26 @@ Veicoli su **anello** (i segue i−1, 0 segue N−1 +L). Densità ρ=N/L; Q, V v
 - **Energia**: ~3.9× vs ANN (vedi nota sparsità sopra).
 - **Accuracy**: 77% media.
 - **Meso/Macro**: plotone string-stable; diagramma fondamentale corretto (capacità ~1045 veh/h).
+
+---
+
+## 7bis. RISULTATI EVALUATION v1 (cut-in realistico — FATTO, `results/evaluate/v1_realistic_cutin/`)
+
+**MICRO — VALIDAZIONE SUPERATA**:
+- **collision_rate = 0.0 per TUTTE le sorgenti e TUTTI gli scenari** (incluso cut_in), N=100/sorgente
+  (CI Wilson 95% sup = 0.037). Col cut-in fisicamente evitabile, la SNN non causa incidenti.
+- worst_min_TTC ~0.97s, max_DRAC ~4.8 m/s² (frenata ferma ma fattibile, <9). SNN ≈ oracolo.
+- Comfort: SNN più **dolce** (rms_accel 0.74 vs oracolo 0.81), più **string-stable** (gain 0.38 vs 0.49);
+  gap tracking un po' peggiore (11.4 vs 8.6, atteso da bias parametri).
+- **MESO**: tutte string-stable (head-to-tail 0.12-0.17 < 1), convettive a monte, 0 collisioni nel plotone.
+- **MACRO**: FD corretto; la SNN ha capacità **più alta** (~1960-2080 vs oracolo 1045 veh/h) perché
+  **sovrastima v0** (bias) → free-flow speed più alta. Conferma indiretta del bias parametri.
+- **Energia**: ~3.9× vs ANN (spike rate 22%, da AC<MAC non da sparsità — invariato).
+- **Accuracy**: ~77%.
+
+**Conclusione**: la SNN è **validata come controller car-following sicuro** (micro 0 collisioni, meso
+string-stable, macro traffico valido). Unico problema residuo: il **bias parametri** (v0 alto, a basso,
+b alto) che (a) assottiglia i margini in frenata, (b) alza la capacità macro. → **S4** (lato training).
 
 ---
 

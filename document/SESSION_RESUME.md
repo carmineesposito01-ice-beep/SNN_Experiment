@@ -23,14 +23,16 @@
    closed-loop), **meso** (plotone/string stability, CAM dal leader i−1), **macro** (diagramma
    fondamentale), **vetrina** (accuracy/raster/energia/GIF/dashboard). 15 grafici → `results/evaluate/<analisi>/`.
 
-**Esito micro (1ª run)**: la SNN guida **come l'oracolo** (collision 4% entrambi; collisioni solo
-in cut-in fisicamente inevitabile → **corretto** in v1). Più dolce + più string-stable dell'oracolo.
-Energia ~4× vs ANN (da AC<MAC, non sparsità). Accuracy 77%. Meso string-stable, macro FD corretto.
+**Esito EVALUATION v1 (FATTO, `results/evaluate/v1_realistic_cutin/`) — VALIDAZIONE SUPERATA**:
+- **MICRO**: **0 collisioni su TUTTI gli scenari** (100 sim/sorgente, cut-in realistico), SNN ≈ oracolo,
+  più dolce + più string-stable. (Il 4% della 1ª run era SOLO il cut-in inevitabile, ora corretto.)
+- **MESO**: plotone string-stable (head-to-tail <1), convettivo, 0 collisioni.
+- **MACRO**: FD corretto; SNN capacità più alta (~2000 vs oracolo 1045) per **bias v0 alto**.
+- Energia ~3.9× vs ANN (da AC<MAC). Accuracy 77%. Unico problema residuo: **bias parametri a/b/v0**.
 
 **Cosa fare adesso**:
-1. Lanciare `Loss_Study_Validation_Full.ipynb` con `ANALYSIS='v1_realistic_cutin'` → verdetto corretto.
-2. Analizzare i 3 livelli; poi **S4** (bias a/b lato training).
-3. Poi: EventProp (in pipeline) / deploy FPGA.
+1. **S4** (lato training): ridurre il **bias a/b/v0** (margini frenata + capacità macro). È l'unico residuo.
+2. Poi: EventProp (in pipeline) / deploy FPGA (modello consolidato `LS3_PEAK_R0_launch_d03`).
 
 ---
 
