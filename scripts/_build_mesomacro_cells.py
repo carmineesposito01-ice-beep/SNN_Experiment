@@ -147,7 +147,15 @@ if os.path.isfile(CKPT):
     m = build_model(variant='baseline', hidden_size=32, rank=8, max_delay=6, bit_shift=3)
     m.load_state_dict(ck['model_state']); m.eval(); models['S3 d0.3'] = m
 print('ENV OK, modelli:', list(models.keys()))"""
-    nb = {'cells': [cell(ENV, 'env'), cell(CELL_MESO, 'meso'), cell(CELL_MACRO, 'macro')],
+    PUSH = """# Cell -- push (meso + macro standalone)
+import subprocess
+subprocess.run(['git', 'add', 'results/evaluate/standalone'], capture_output=True)
+r = subprocess.run(['git', 'commit', '-m', 'Meso/Macro standalone results'], capture_output=True, text=True)
+print(r.stdout[-200:] if r.returncode == 0 else r.stderr[-200:])
+subprocess.run(['git', 'pull', '--no-rebase', '--no-edit', 'origin', 'Loss_Study'], capture_output=True)
+subprocess.run(['git', 'push', 'origin', 'Loss_Study'], capture_output=True)
+print('MesoMacro standalone pushed.')"""
+    nb = {'cells': [cell(ENV, 'env'), cell(CELL_MESO, 'meso'), cell(CELL_MACRO, 'macro'), cell(PUSH, 'push')],
           'metadata': {'kernelspec': {'display_name': 'Python 3', 'language': 'python', 'name': 'python3'},
                        'language_info': {'name': 'python', 'version': '3.x'}},
           'nbformat': 4, 'nbformat_minor': 5}
