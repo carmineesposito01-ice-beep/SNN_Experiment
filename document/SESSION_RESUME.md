@@ -53,16 +53,22 @@ early/late erano entrambe nel plateau). **D2**: in nessuna modalità la rete dec
 (risposta piatta al picco |accel|) → a/b sono una **quasi-costante operating-point-dipendente**. "Memoryless
 vince" = prior meglio centrato (operating-point freddo), non identificazione per-istante.
 
-**Cosa fare adesso**:
-1. Girare **`Dynamic_Study_L1d.ipynb`** su Azure (niente training): probe decisivo **prior vs discriminazione**.
-   Media la pred per-driver → scatter pred-vs-GT su 250 scenari (Pearson r/pendenza/r², memory vs memoryless,
-   v0/s0/a/b). r≈0 = a/b sono un prior (win memoryless = solo bias-centering); r>0 = discriminazione reale.
-   Poi `git pull` e analisi (output in `results/Dynamic_Study/L1d/`).
-2. **L1.6** (no training): ri-validazione FULL del readout full-memoryless a scala (micro 100-sim/sorgente
-   cut-in realistico + meso plotone + macro FD) per promuoverlo a modo di deploy ufficiale.
-3. **L2** (training): secondo L1d — se a/b = prior → loss per-regime + encoding transitorio (per identificazione
-   reale) e/o **uncertainty head**; se discriminazione reale → solo uncertainty head. Deploy memoryless valido
-   in ogni caso (win NRMSE + sicurezza già provati).
+**L1d ESEGUITO (2026-06-20, `results/Dynamic_Study/L1d/`)** — probe prior-vs-discriminazione (scatter
+pred-vs-GT per-driver, 250 scenari). Memoryless: v0 r=0.86 (reale forte), s0 r=0.52 (moderata), **a r=0.39
+(debole, perlopiù prior)**, **b r=−0.37 (ANTI-correlato — peggio di un prior)**. Sottigliezza: **memory ha |r|
+più alto su tutti e 4** → conserva più segnale discriminativo ma mal centrato (NRMSE alta); il memoryless
+ri-centra il bias (NRMSE bassa) ma sacrifica discriminazione e peggiora l'anti-correlazione di b. **Il win
+memoryless è bias-centering** e la NRMSE è cieca all'anti-correlazione. **b è il vero problema irrisolto**
+(non affidabile per-driver in entrambe le modalità; rafforza Studio B: √ab fissato, b dedotto inversamente).
+**Diagnosi L1x COMPLETA.**
+
+**Cosa fare adesso** (fase build — diagnosi chiusa):
+1. **L1.6** (no training): ri-validazione FULL del readout full-memoryless a scala (micro 100-sim/sorgente
+   cut-in realistico + meso plotone + macro FD) per promuoverlo a deploy ufficiale. Resta valido in ogni caso.
+2. **L2** (training): ambizione da decidere con l'utente —
+   **A** uncertainty head only (dichiara a/b; b ~zero confidenza);
+   **B** reparam [a,√ab]→deriva b (Studio B #3, mirato all'anti-correlazione di b) + uncertainty head;
+   **C** ambizioso: loss per-regime + encoding transitorio/derivata (leggere a/b dai transitori) + reparam + uncertainty.
 
 ---
 
