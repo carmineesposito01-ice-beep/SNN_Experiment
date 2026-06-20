@@ -1,0 +1,37 @@
+{
+  "nrmse_normal": {
+    "v0": 0.2417732050979004,
+    "T": 0.11815738403955324,
+    "s0": 0.13469066076265157,
+    "a": 0.33135189465631937,
+    "b": 0.17829901633284578
+  },
+  "nrmse_ablated": {
+    "v0": 0.21919936583181282,
+    "T": 0.12489058237246912,
+    "s0": 0.08200219754631659,
+    "a": 0.1434489295859376,
+    "b": 0.1489469719042758
+  },
+  "gain_ab": -0.10862750474947587,
+  "decay_nrmse_a": [
+    0.31042060008747807,
+    0.3322878488492867,
+    0.3285078898565117,
+    0.32557942226896275,
+    0.3226082023648517,
+    0.33193364051534835
+  ],
+  "decay_nrmse_b": [
+    0.18221599528914403,
+    0.1576684168014854,
+    0.16330887869542657,
+    0.17394438148369826,
+    0.1879221880935334,
+    0.19704703397483886
+  ],
+  "verdict": [
+    "Memoria POCO USATA su a/b (guadagno -0.109): la rete predice quasi context-free -> leva = far USARE la ricorrenza (loss per-regime/latch) NON allungare seq_len.",
+    "NRMSE(a,b) PIATTO vs distanza dal transitorio: niente decadimento da memoria -> il collo e il gap-SNN al contesto attuale, non la ritenzione."
+  ]
+}
