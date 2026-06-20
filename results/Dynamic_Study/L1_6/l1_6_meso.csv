@@ -1,0 +1,4 @@
+mode,n_vehicles,amp_leader,head_to_tail_gain,max_amplification,string_stable_headtail,strict_monotone_decay,convective_upstream,min_gap_platoon,min_ttc_platoon,collided,rms_accel_mean,max_decel_platoon,rms_jerk_mean
+oracle,12,2.452,0.12,0.518,True,True,True,28.816,12.706,False,0.322,1.662,0.115
+normal,12,2.452,0.145,0.367,True,False,True,24.255,11.096,False,0.198,1.35,0.217
+memoryless,12,2.452,0.365,0.47,True,False,True,30.35,13.371,False,0.299,1.599,0.112

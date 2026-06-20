@@ -1,0 +1,4 @@
+mode,n,collision_rate,worst_min_gap,worst_min_ttc,max_DRAC,mean_TET,collision_CI95hi
+oracle,300,0.0,1.552,1.0,4.746,0.115,0.0126
+normal,300,0.0,1.873,0.969,4.962,0.071,0.0126
+memoryless,300,0.0,2.22,0.994,4.749,0.06,0.0126
