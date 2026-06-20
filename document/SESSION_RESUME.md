@@ -62,10 +62,16 @@ memoryless è bias-centering** e la NRMSE è cieca all'anti-correlazione. **b è
 (non affidabile per-driver in entrambe le modalità; rafforza Studio B: √ab fissato, b dedotto inversamente).
 **Diagnosi L1x COMPLETA.**
 
+**PRIORITÀ UTENTE (2026-06-20)**: **Safety > Comfort > Performance** (tutte contano). `b` = decel di
+**comfort** (priorità #2), legata all'attenuazione delle onde stop&go. Gerarchia usata nei verdetti.
+
 **Cosa fare adesso** (fase build — diagnosi chiusa):
-1. **L1.6** (no training): ri-validazione FULL del readout full-memoryless a scala (micro 100-sim/sorgente
-   cut-in realistico + meso plotone + macro FD) per promuoverlo a deploy ufficiale. Resta valido in ogni caso.
-2. **L2** (training): ambizione da decidere con l'utente —
+1. Girare **`Dynamic_Study_L1_6.ipynb`** su Azure (no training): ri-validazione a scala del readout
+   full-memoryless vs normal vs oracle. MICRO (60 driver × 5 scenari: sicurezza+comfort+string-stability D
+   su stop&go/sinusoidale) + MESO plotone (attenuazione onde, head-to-tail). Verdetto a tier Safety>Comfort>
+   Performance: promuovi memoryless a deploy se nessuna regressione su Safety né Comfort. Poi `git pull` e
+   analisi (output in `results/Dynamic_Study/L1_6/`).
+2. **L2** (training): ambizione da decidere DOPO L1.6 —
    **A** uncertainty head only (dichiara a/b; b ~zero confidenza);
    **B** reparam [a,√ab]→deriva b (Studio B #3, mirato all'anti-correlazione di b) + uncertainty head;
    **C** ambizioso: loss per-regime + encoding transitorio/derivata (leggere a/b dai transitori) + reparam + uncertainty.
