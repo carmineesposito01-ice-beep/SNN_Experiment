@@ -1,0 +1,5 @@
+mode,n,collision_rate,worst_min_gap,max_DRAC,rms_accel,rms_jerk,rms_gap_error,string_gain
+oracle,60,0.0,1.552,4.575,0.764,1.624,6.132,0.532
+normal,60,0.0,1.873,4.626,0.685,1.624,8.232,0.414
+memoryless,60,0.0,2.221,4.497,0.726,1.542,6.165,0.486
+hybrid,60,0.0,1.931,4.63,0.749,2.026,5.963,0.507

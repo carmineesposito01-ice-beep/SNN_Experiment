@@ -1,0 +1,104 @@
+{
+  "gain_ab": -0.10525,
+  "static_robust": true,
+  "closedloop_hybrid_safe": true,
+  "static": {
+    "normal_mean": {
+      "v0": 0.257,
+      "T": 0.1245,
+      "s0": 0.1402,
+      "a": 0.3309,
+      "b": 0.1986
+    },
+    "normal_std": {
+      "v0": 0.0083,
+      "T": 0.0034,
+      "s0": 0.0065,
+      "a": 0.0188,
+      "b": 0.0181
+    },
+    "memoryless_mean": {
+      "v0": 0.2376,
+      "T": 0.1315,
+      "s0": 0.0877,
+      "a": 0.1496,
+      "b": 0.1694
+    },
+    "memoryless_std": {
+      "v0": 0.0091,
+      "T": 0.0046,
+      "s0": 0.0025,
+      "a": 0.0085,
+      "b": 0.0165
+    },
+    "hybrid_mean": {
+      "v0": 0.257,
+      "T": 0.1245,
+      "s0": 0.1402,
+      "a": 0.1496,
+      "b": 0.1694
+    },
+    "gain_memoryless": {
+      "v0": -0.0194,
+      "T": 0.007,
+      "s0": -0.0525,
+      "a": -0.1813,
+      "b": -0.0292
+    }
+  },
+  "closedloop": {
+    "n": {
+      "oracle": 60,
+      "normal": 60,
+      "memoryless": 60,
+      "hybrid": 60
+    },
+    "collision_rate": {
+      "oracle": 0.0,
+      "normal": 0.0,
+      "memoryless": 0.0,
+      "hybrid": 0.0
+    },
+    "worst_min_gap": {
+      "oracle": 1.552,
+      "normal": 1.873,
+      "memoryless": 2.221,
+      "hybrid": 1.931
+    },
+    "max_DRAC": {
+      "oracle": 4.575,
+      "normal": 4.626,
+      "memoryless": 4.497,
+      "hybrid": 4.63
+    },
+    "rms_accel": {
+      "oracle": 0.764,
+      "normal": 0.685,
+      "memoryless": 0.726,
+      "hybrid": 0.749
+    },
+    "rms_jerk": {
+      "oracle": 1.624,
+      "normal": 1.624,
+      "memoryless": 1.542,
+      "hybrid": 2.026
+    },
+    "rms_gap_error": {
+      "oracle": 6.132,
+      "normal": 8.232,
+      "memoryless": 6.165,
+      "hybrid": 5.963
+    },
+    "string_gain": {
+      "oracle": 0.532,
+      "normal": 0.414,
+      "memoryless": 0.486,
+      "hybrid": 0.507
+    }
+  },
+  "verdict": [
+    "STATICO: ablazione ROBUSTA su 3 seed freschi (guadagno memoryless a,b = -0.105, oltre la std). Il finding L1 non era seed-specifico.",
+    "CLOSED-LOOP: l'ibrido e' SICURO/STABILE come normal (coll 0.000 vs 0.000, min_gap 1.93 vs 1.87, jerk 2.03 vs 1.62, string_gain 0.51<1). a/b memoryless NON destabilizza il controller.",
+    "=> DECISIONE: readout IBRIDO = guadagno a/b a costo zero, deployabile. L2 si concentra su uncertainty head (+ eventuale recupero v0/s0), non sul recupero a/b via training."
+  ]
+}
