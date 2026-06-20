@@ -206,9 +206,13 @@ confidenza e lo dico" può valere più di "stimo b al 75%".
       il tetto NON è identificabilità di fondo (recovery globale pulito = 0); la causa dominante è la
       **LOCALITÀ** (la rete predice per-istante, a/b ciechi nei tratti stazionari; Fisher cond 55→2748
       senza transitori), più un **gap SNN-specifico** recuperabile e la **direzione molle a/b**.
-- [ ] In base a B: implementare il batch nel **nuovo ordine** — (1) **località** (memoria/contesto +
-      loss per-regime S4 + incertezza dichiarata), (2) **gap SNN** (surrogate/encoding/TET),
-      (3) **riparametrizzazione [a,√ab]**; **#6** cambio modello resta in frigo. Da confermare.
+- [x] **L0** (`dynamic_study_L0.py`): curva valore-di-memoria → forma a soglia (a/b crollano solo a
+      W≥160). Due leve: gap-SNN al contesto attuale (affidabile) vs ritenzione lunga (difficile).
+- [x] **L1 notebook pronto** (`Dynamic_Study_L1.ipynb`) → da girare su Azure (ablazione memoria +
+      decadimento). Decide se la leva è "ritenzione" o "gap-SNN".
+- [ ] In base a B/L0/L1: implementare il batch nel **nuovo ordine** — (1) **località** (loss per-regime
+      S4 + memoria/ritenzione + incertezza dichiarata), (2) **gap SNN** (surrogate/encoding/TET),
+      (3) **riparametrizzazione [a,√ab]**; **#6** cambio modello resta in frigo.
 
 ---
 

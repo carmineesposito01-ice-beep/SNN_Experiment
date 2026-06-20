@@ -183,8 +183,11 @@ informativi e **trattenerne** l'informazione.
 ## 7. Stato
 
 - [x] Studio B (`dynamic_study_B.py`) + L0 (`dynamic_study_L0.py`) eseguiti → `figures_dynamic/`.
+- [x] **L1 notebook PRONTO** (`Dynamic_Study_L1.ipynb`, da `scripts/_build_dynamic_l1_notebook.py`,
+      pipeline validata in locale con modello non addestrato) → **da girare su Azure**.
 - [ ] **L1 (Azure, niente training)**: la rete addestrata usa la memoria? NRMSE(a,b) vs distanza
-      dall'ultimo transitorio + ablazione della ricorrenza. Decide tra "ritenzione" e "gap-SNN".
+      dall'ultimo transitorio + ablazione della ricorrenza. Output `results/Dynamic_Study/L1/`.
+      Decide tra "ritenzione" e "gap-SNN".
 - [ ] **L2 (Azure, training)**: l'intervento indicato — leva #1 (per-regime loss/surrogate/encoding)
       quasi certa; leva #2 (canale ricorrente lento) solo se L1 mostra che la ritenzione è il collo.
 - Deliverable parallelo: **incertezza dichiarata** (la rete non può conoscere a/b lontano dai

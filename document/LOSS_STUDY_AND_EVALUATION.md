@@ -1,5 +1,10 @@
 # LOSS_STUDY & EVALUATION — record completo (2026-06-19)
 
+> **⚠️ MILESTONE CHIUSA**: `Loss_Study` è stato **merge in `main`** (2026-06-20). Il lavoro continua
+> nel branch **`Dynamic_Study`** sul tetto dei parametri dinamici a/b. Per lo stato attuale parti da
+> `document/SESSION_RESUME.md` → poi `DYNAMIC_STUDY_PLAN.md` e `DYNAMIC_STUDY_B_RESULTS.md`. Questo
+> documento resta il record storico di Loss_Study.
+
 > **Scopo**: documento auto-sufficiente per riprendere il lavoro da una chat nuova.
 > Copre tutto il branch `Loss_Study`: lo studio di identificabilità (S1→S3), la digressione
 > capacità (S2), i fix al training, e l'intero framework di **evaluation closed-loop**

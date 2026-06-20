@@ -1113,6 +1113,38 @@ dei ricorrenti grandi è spazio-pesi (clip per-step non basta); (3) validare l'a
 
 ---
 
+## 📅 2026-06-20 — Milestone **Dynamic_Study** (il tetto sui parametri dinamici a/b)
+
+**Chiusura Loss_Study**: merge `Loss_Study → main` (milestone). Report di validazione auto-sufficiente
+`document/VALIDATION_REPORT.md` (+ `.pdf`, generatore `scripts/build_validation_report.py`): rete S3
+`LS3_PEAK_R0_launch_d03` validata — **0 collisioni** micro, plotone string-stable, energia ~3.9× vs ANN
+(da AC<MAC, non da sparsità). Corretto il verso del bias `b` nel report (b alto → gap desiderato minore;
+l'aggregato resta conservativo perché domina a↓ e √(ab) ~−12%).
+
+**Apertura `Dynamic_Study`** per il residuo a/b (NRMSE a=0.26, b=0.30). Studi locali (niente Azure):
+- **Studio B** (`scripts/dynamic_study_B.py`): confronto con ottimizzatore classico (LM) in 4 condizioni.
+  Esito → il tetto **NON è identificabilità** (recovery globale pulito = 0, a/b inclusi); causa
+  **dominante = LOCALITÀ** (la rete predice per-istante; senza transitori a/b ciechi, Fisher cond
+  55→2748); **gap-SNN recuperabile** (rete 0.26/0.31 > LM locale 0.12/0.18, ~+0.13); direzione molle = a/b.
+- **L0** (`dynamic_study_L0.py`): curva valore-di-memoria a **soglia** — a/b migliorano solo con contesto
+  W≥160 (~16 s), cioè quando la finestra cattura un transitorio.
+- **L1 notebook** (`Dynamic_Study_L1.ipynb`) pronto: ablazione memoria ricorrente + decadimento NRMSE(a,b)
+  vs distanza dal transitorio. Da girare su Azure.
+
+**Batch riordinato**: (1) **località** (loss per-regime S4 + memoria/ritenzione + incertezza dichiarata),
+(2) gap-SNN (surrogate/encoding/TET), (3) riparametrizzazione [a,√ab]; cambio modello (Future-B) in frigo.
+
+**Insight chiave**: a/b **non** sbloccano i task a valle — il closed-loop dipende da √(ab) (preservato)
+e l'equilibrio (capacità macro) è a/b-free (governato da T,v0,s0). Migliorare a/b serve per realismo
+transitori/comfort/classificazione driver e per il mandato "tutti e 5".
+
+**Lessons learned (agg.)**: (5) distinguere **identificabilità** (info nei dati) da **osservabilità
+locale** (info nel contesto che la rete vede); un baseline con ottimizzatore classico sugli stessi dati
+separa "limite dei dati" da "limite del metodo/predittore". Doc: `DYNAMIC_STUDY_PLAN.md`,
+`DYNAMIC_STUDY_B_RESULTS.md`.
+
+---
+
 ## 📌 Note finali
 
 Questo TIMELINE va aggiornato dopo ogni milestone significativa. Mantenere la sezione "Lessons learned" è cruciale per non ripetere errori in future sessioni.

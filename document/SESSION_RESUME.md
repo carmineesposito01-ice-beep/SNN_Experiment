@@ -5,9 +5,45 @@
 
 ---
 
-## 🎯 Stato attuale (2026-06-19 — **Loss_Study + framework di EVALUATION completo**)
+## 🎯 Stato attuale (2026-06-20 — **Dynamic_Study: il tetto sui parametri dinamici a/b**)
 
-**Branch corrente**: `Loss_Study` (da `main` tag `R33_closure`). Tutto il lavoro recente è qui.
+**Branch corrente**: `Dynamic_Study` (da `main`; `Loss_Study` è stato **merge in `main`** come milestone).
+**Documenti maestri (leggere in quest'ordine per il contesto pieno)**:
+1. `document/DYNAMIC_STUDY_PLAN.md` — diagnosi, disegno degli studi, batch di soluzioni, mappa skill/cassetto.
+2. `document/DYNAMIC_STUDY_B_RESULTS.md` — risultati Studio B + L0 (la causa, con numeri e figure).
+3. `document/VALIDATION_REPORT.md` (+ `.pdf`) — stato della rete S3 validata (micro/meso).
+
+**Contesto**: chiuso `Loss_Study` (validazione SUPERATA — rete `LS3_PEAK_R0_launch_d03`, 0 collisioni,
+string-stable; report in `VALIDATION_REPORT.md`). Unico residuo: errore sui parametri **dinamici** a/b
+(NRMSE a=0.26, b=0.30). Aperto `Dynamic_Study` per capirne la causa e superarlo.
+
+**Cosa è stato scoperto (Studio B + L0, locali, `scripts/dynamic_study_B.py` / `_L0.py`)**:
+- Il tetto **NON è identificabilità di fondo**: un ottimizzatore classico (LM) su dati globali puliti
+  recupera tutti e 5 i parametri **esattamente** (NRMSE 0). L'informazione è nei dati.
+- Causa **dominante = LOCALITÀ**: la rete predice **per-istante** e nei tratti senza transitori a/b
+  sono ciechi (Fisher cond 55→2748 togliendo i transitori; L0: curva a **soglia** — a/b crollano solo
+  con contesto W≥160 ≈ 16 s, quando la finestra *cattura* un transitorio).
+- **Gap-SNN recuperabile**: la rete (a 0.26/b 0.31) è peggio perfino del LM locale ideale (0.12/0.18)
+  di ~+0.13 → margine SNN al contesto attuale, senza toccare la memoria.
+- **Direzione molle = rapporto a/b**; a/b **non toccano** né micro (closed-loop dipende da √ab) né
+  macro (l'equilibrio `sₑ` è a/b-free → capacità governata da T,v0,s0).
+
+**Batch RIORDINATO** (in `DYNAMIC_STUDY_B_RESULTS.md` §4/§6): #1 **località** (loss per-regime S4 +
+memoria/ritenzione + **incertezza dichiarata**); #2 **gap-SNN** (surrogate width / encoding Δv'·jerk /
+TET loss); #3 **riparametrizzazione [a,√ab]→deriva b**; #6 cambio modello (Future-B) in frigo.
+
+**Cosa fare adesso**:
+1. Girare **`Dynamic_Study_L1.ipynb`** su Azure (niente training): ablazione della memoria ricorrente
+   + decadimento NRMSE(a,b) vs distanza dal transitorio → decide tra "ritenzione" e "gap-SNN".
+   Poi `git pull` e analisi (output in `results/Dynamic_Study/L1/`).
+2. **L2** (training): l'intervento indicato da L1 — probabile partenza da **loss per-regime** (leva #1).
+   Deliverable parallelo: head di **incertezza** per-parametro (dichiarare a/b a bassa confidenza).
+
+---
+
+## 🎯 Stato precedente (2026-06-19 — **Loss_Study + framework di EVALUATION completo**) — superseded da Dynamic_Study
+
+**Branch**: `Loss_Study` (da `main` tag `R33_closure`), poi merge in `main`.
 **Documento maestro**: `document/LOSS_STUDY_AND_EVALUATION.md` (record completo, auto-sufficiente).
 
 **Cosa è stato fatto (in ordine)**:
