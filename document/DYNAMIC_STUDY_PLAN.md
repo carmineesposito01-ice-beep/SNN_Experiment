@@ -202,10 +202,13 @@ confidenza e lo dico" può valere più di "stimo b al 75%".
 - [x] Merge `Loss_Study` → `main` (milestone), apertura branch `Dynamic_Study`.
 - [x] Report di validazione corretto (verso del bias `b`, intuizione √(ab)).
 - [x] Questo piano documentato.
-- [ ] **Studio B** (`scripts/dynamic_study_B.py`): B1 sensitività + B2 baseline LM + B3 coordinate →
-      `document/DYNAMIC_STUDY_B_RESULTS.md`.
-- [ ] In base a B: implementare il batch (probabile partenza da **#1 riparametrizzazione**, eventuale
-      **#4 S4**; **#6** cambio modello resta in frigo finché un task a valle non lo richiede).
+- [x] **Studio B** eseguito → `document/DYNAMIC_STUDY_B_RESULTS.md`. **Esito che riordina il piano**:
+      il tetto NON è identificabilità di fondo (recovery globale pulito = 0); la causa dominante è la
+      **LOCALITÀ** (la rete predice per-istante, a/b ciechi nei tratti stazionari; Fisher cond 55→2748
+      senza transitori), più un **gap SNN-specifico** recuperabile e la **direzione molle a/b**.
+- [ ] In base a B: implementare il batch nel **nuovo ordine** — (1) **località** (memoria/contesto +
+      loss per-regime S4 + incertezza dichiarata), (2) **gap SNN** (surrogate/encoding/TET),
+      (3) **riparametrizzazione [a,√ab]**; **#6** cambio modello resta in frigo. Da confermare.
 
 ---
 
