@@ -100,11 +100,14 @@ if model is not None:
     _, vl, s_i, v_i, cut = scen['cut_in']
     traj, spikes = capture_run(model, pgt, vl, s_i, v_i, cut_in=cut)   # spikes (T,H)
     T = spikes.shape[0]; t = np.arange(T) * 0.1
+    # salva i dati grezzi -> il raster e' ricostruibile in locale senza checkpoint (report)
+    np.savez(f'{RESULTS_DIR}/showcase_raster_data.npz', spikes=spikes,
+             gap=traj['s'], a_ego=traj['a_ego'], cut=np.array([cut[0]] if cut else [-1]))
     fig, axes = plt.subplots(3, 1, figsize=(13, 10), sharex=True,
                              gridspec_kw={'height_ratios': [2, 1, 1]})
     ys, xs = np.where(spikes.T > 0)                                    # raster
     axes[0].scatter(xs * 0.1, ys, s=6, c='k', marker='|')
-    axes[0].set_ylabel('neurone hidden'); axes[0].set_title('Raster spike (cut-in): la rete "spara" piu fitto nei transitori')
+    axes[0].set_ylabel('neurone hidden'); axes[0].set_title('Raster spike durante il cut-in: la rete riconfigura quali neuroni sparano (rate totale in basso)')
     axes[1].plot(t, spikes.sum(1), color='tab:purple'); axes[1].set_ylabel('spike totali / step')
     axes[1].grid(alpha=0.3)
     axes[2].plot(t, traj['s'], label='gap [m]'); axes[2].plot(t, traj['a_ego'], label='a_ego [m/s2]')
@@ -142,6 +145,9 @@ if model is not None and spikes is not None:
     print(f"SNN {en['E_snn_nJ']:.1f} nJ vs ANN {en['E_ann_nJ']:.1f} nJ -> {en['energy_advantage_x']:.1f}x | "
           f"sparsita {en['mean_spike_rate_pct']:.1f}% | SynOps {en['snn_synops']} vs MAC {en['ann_macs']}")
     print('NB: stima Horowitz 45nm (E_MAC=4.6pJ, E_AC=0.9pJ), per-inferenza. Po2/FPGA -> AC ancora piu economico.')
+    if en['snn_synops'] >= en['ann_macs']:
+        print(f"NB onesto: SynOps ({en['snn_synops']}) >= MAC ANN ({en['ann_macs']}) -> il vantaggio {en['energy_advantage_x']:.1f}x "
+              "viene dal costo unitario AC<MAC, NON dalla sparsita'. Piu' sparsita' = piu' vantaggio.")
 else:
     print('[skip] modello/spike assenti')'''
 
