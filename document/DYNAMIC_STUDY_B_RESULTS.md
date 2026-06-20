@@ -141,8 +141,51 @@ Rispetto al piano iniziale, lo studio **promuove la località** a leva principal
 
 ---
 
-## 6. Stato
+## 6. L0 — curva del "valore di memoria" (`scripts/dynamic_study_L0.py`)
 
-- [x] Studio B eseguito (`scripts/dynamic_study_B.py`), risultati in `document/figures_dynamic/`.
-- [ ] Decisione sul batch: proposta = partire da **località** (memoria/contesto + S4 + incertezza),
-      poi gap-SNN, poi riparametrizzazione. Da confermare con l'utente.
+Quanto scende l'errore a/b se l'identificatore IDEALE (LM) ha una finestra di contesto di
+lunghezza `W` crescente? È il **limite superiore** del beneficio del contesto temporale.
+
+![L0](figures_dynamic/dynL0_memory_curve.png)
+*Fig. L0 — NRMSE ideale (LM) vs lunghezza finestra W. Punteggiate = NRMSE della rete.*
+
+| W [step] | a | b | media v0,T,s0 |
+|---|---|---|---|
+| 5 | 0.150 | 0.203 | 0.169 |
+| 40 (~seq_len) | 0.117 | 0.159 | 0.145 |
+| 80 | 0.139 | 0.133 | 0.125 |
+| 160 | 0.057 | 0.066 | 0.044 |
+| 320 | 0.009 | 0.080 | 0.052 |
+| full | 0.000 | 0.000 | 0.000 |
+
+**La curva ha una forma a SOGLIA, non un decadimento liscio.** Da W=5 a W~80 (che bracketa il
+`seq_len` della rete ~50) a/b restano ~0.12–0.20; il crollo vero arriva a **W≥160 (~16 s)**, dove
+a/b scendono a ~0.06. Interpretazione: a/b non migliorano con "un po' più di memoria" — migliorano
+quando la finestra **cattura un transitorio** (accel/brake). Con finestre corte la maggior parte dei
+tratti è stazionaria → a/b indeterminati; serve un orizzonte abbastanza lungo da contenere gli eventi
+informativi e **trattenerne** l'informazione.
+
+**Due leve ortogonali, entrambe reali:**
+1. **Chiudere il gap-SNN al contesto attuale.** Al `seq_len` della rete il tetto IDEALE è a/b ~0.12–0.16;
+   la rete è a 0.26/0.31 → ~**+0.13 di gap-SNN** recuperabile *senza* toccare la memoria
+   (per-regime loss, surrogate, encoding). Leva **affidabile e immediata**.
+2. **Estendere la RITENZIONE.** Per scendere verso ~0.06 serve W≥160 (~16 s): un orizzonte lungo che
+   l'ALIF con leak veloce (`V←V−V≫3`, β≈0.875/tick) quasi certamente **non trattiene**. Quindi
+   "allungare `seq_len`" da solo aiuta poco: serve una memoria capace di *trattenere* il transitorio
+   (canale ricorrente lento / latch). Leva **a tetto più alto ma più difficile** — fattibilità da
+   verificare in L1.
+
+> Nota: anche i parametri statici (v0,T,s0) hanno lo stesso gap rete-vs-ideale → esiste un gap-SNN
+> generale, non solo su a/b. Il gap è solo *più grande* su a/b.
+
+---
+
+## 7. Stato
+
+- [x] Studio B (`dynamic_study_B.py`) + L0 (`dynamic_study_L0.py`) eseguiti → `figures_dynamic/`.
+- [ ] **L1 (Azure, niente training)**: la rete addestrata usa la memoria? NRMSE(a,b) vs distanza
+      dall'ultimo transitorio + ablazione della ricorrenza. Decide tra "ritenzione" e "gap-SNN".
+- [ ] **L2 (Azure, training)**: l'intervento indicato — leva #1 (per-regime loss/surrogate/encoding)
+      quasi certa; leva #2 (canale ricorrente lento) solo se L1 mostra che la ritenzione è il collo.
+- Deliverable parallelo: **incertezza dichiarata** (la rete non può conoscere a/b lontano dai
+  transitori → comunicarlo invece di indovinare).
