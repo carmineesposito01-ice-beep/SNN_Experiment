@@ -65,13 +65,19 @@ memoryless è bias-centering** e la NRMSE è cieca all'anti-correlazione. **b è
 **PRIORITÀ UTENTE (2026-06-20)**: **Safety > Comfort > Performance** (tutte contano). `b` = decel di
 **comfort** (priorità #2), legata all'attenuazione delle onde stop&go. Gerarchia usata nei verdetti.
 
-**Cosa fare adesso** (fase build — diagnosi chiusa):
-1. Girare **`Dynamic_Study_L1_6.ipynb`** su Azure (no training): ri-validazione a scala del readout
-   full-memoryless vs normal vs oracle. MICRO (60 driver × 5 scenari: sicurezza+comfort+string-stability D
-   su stop&go/sinusoidale) + MESO plotone (attenuazione onde, head-to-tail). Verdetto a tier Safety>Comfort>
-   Performance: promuovi memoryless a deploy se nessuna regressione su Safety né Comfort. Poi `git pull` e
-   analisi (output in `results/Dynamic_Study/L1_6/`).
-2. **L2** (training): ambizione da decidere DOPO L1.6 —
+**L1.6 ESEGUITO (2026-06-20, `results/Dynamic_Study/L1_6/`)** — 300 sim/modo micro + 1 plotone. Esito
+SFUMATO (auto-verdetto "non promuovere" troppo binario). **Safety #1: memoryless STRETTAMENTE MEGLIO**
+(0 coll, worst min_gap 2.22 vs 1.87, gap plotone 30.3 vs 24.3, TTC/TET migliori). **Comfort #2: MISTO** —
+jerk MEGLIO (micro 1.64 vs 1.67; plotone 0.11 vs 0.22), max_decel pari, D single-vehicle ~pari (≪1), ma
+**plotone head-to-tail 0.365 vs 0.145** → memoryless attenua le onde stop&go MENO (non-monotono, ~0.37,
+comunque ≪1 = stabile). **Performance #3: memoryless MEGLIO** (gap_error 10.0 vs 13.2). CAVEAT: plotone è
+**n=1** (un driver, una perturbazione) → meno robusto del micro; il D micro robusto mostra gap piccolo.
+
+**Cosa fare adesso**:
+1. **Decisione deploy** (la regressione comfort = attenuazione onde in plotone, n=1): confermare il dato
+   plotone su PIÙ config (no training) prima di scegliere; oppure promuovere memoryless (Safety #1 migliora,
+   comfort misto ma string-stable); oppure tenere normal (priorità onde). **DA DECIDERE con l'utente.**
+2. **L2** (training): ambizione da decidere —
    **A** uncertainty head only (dichiara a/b; b ~zero confidenza);
    **B** reparam [a,√ab]→deriva b (Studio B #3, mirato all'anti-correlazione di b) + uncertainty head;
    **C** ambizioso: loss per-regime + encoding transitorio/derivata (leggere a/b dai transitori) + reparam + uncertainty.
