@@ -73,14 +73,23 @@ jerk MEGLIO (micro 1.64 vs 1.67; plotone 0.11 vs 0.22), max_decel pari, D single
 comunque ≪1 = stabile). **Performance #3: memoryless MEGLIO** (gap_error 10.0 vs 13.2). CAVEAT: plotone è
 **n=1** (un driver, una perturbazione) → meno robusto del micro; il D micro robusto mostra gap piccolo.
 
+**PIVOT (2026-06-20, con l'utente)**: **memoryless SCARTATO** come deploy — è un workaround (non corregge la
+rete), vantaggio marginale, e in plotone diverge dall'oracle mentre `normal` gli somiglia (h2t 0.145≈0.12 vs
+0.365). **Resta `normal` come deploy** (champion validato). L'arco L1→L1.6 vale come **diagnosi conclusa**.
+Principio ribadito: **niente workaround**.
+
+**L2 TRAINING PRONTO — IN ATTESA su Azure** (run di ore, "nessun limite"). Scoperta chiave: il champion NON
+supervisionava a/b → b anti-correlato (vincolato solo via √ab). Soluzione di principio: supervisionare
+ESPLICITAMENTE log(a/b) (reparam in loss: geo-mean + log-ratio) concentrata ai transitori. `train.py` esteso
+(4 flag opt-in, backward-compat, smoke OK); `Dynamic_Study_L2.ipynb` = ablazione 6 varianti + diagnostica
+completa per-variante; plumbing end-to-end validato.
+
 **Cosa fare adesso**:
-1. **Decisione deploy** (la regressione comfort = attenuazione onde in plotone, n=1): confermare il dato
-   plotone su PIÙ config (no training) prima di scegliere; oppure promuovere memoryless (Safety #1 migliora,
-   comfort misto ma string-stable); oppure tenere normal (priorità onde). **DA DECIDERE con l'utente.**
-2. **L2** (training): ambizione da decidere —
-   **A** uncertainty head only (dichiara a/b; b ~zero confidenza);
-   **B** reparam [a,√ab]→deriva b (Studio B #3, mirato all'anti-correlazione di b) + uncertainty head;
-   **C** ambizioso: loss per-regime + encoding transitorio/derivata (leggere a/b dai transitori) + reparam + uncertainty.
+1. Girare **`Dynamic_Study_L2.ipynb`** su Azure (training ~ore): V0 baseline → V5 ratio+regime. Output
+   `results/Dynamic_Study/L2/`. Poi `git pull` e analisi. **Metrica chiave: r_b da −0.37 → positivo** (b sanato),
+   r_a su, NRMSE a/b giù, senza danneggiare v0/T/s0.
+2. Secondo L2: se reparam/regime sanano a/b → ottimo; se NON bastano (la rete non legge i transitori dal readout
+   per-istante) → **L2b** = encoding derivata/jerk (input dim) + uncertainty head (staged: architetturale).
 
 ---
 
