@@ -1,0 +1,62 @@
+{
+  "r_a": 0.39,
+  "r_b": -0.372,
+  "r_v0": 0.863,
+  "r_s0": 0.515,
+  "table": {
+    "gt_std": {
+      "v0": 9.385,
+      "s0": 0.287,
+      "a": 0.282,
+      "b": 0.287
+    },
+    "r_memory": {
+      "v0": 0.887,
+      "s0": 0.578,
+      "a": 0.462,
+      "b": -0.228
+    },
+    "r2_memory": {
+      "v0": 0.787,
+      "s0": 0.334,
+      "a": 0.214,
+      "b": 0.052
+    },
+    "slope_memory": {
+      "v0": 0.687,
+      "s0": 0.717,
+      "a": 0.422,
+      "b": -0.229
+    },
+    "r_memoryless": {
+      "v0": 0.863,
+      "s0": 0.515,
+      "a": 0.39,
+      "b": -0.372
+    },
+    "r2_memoryless": {
+      "v0": 0.746,
+      "s0": 0.265,
+      "a": 0.152,
+      "b": 0.139
+    },
+    "slope_memoryless": {
+      "v0": 0.45,
+      "s0": 0.198,
+      "a": 0.216,
+      "b": -0.204
+    },
+    "stdratio_memoryless": {
+      "v0": 0.522,
+      "s0": 0.384,
+      "a": 0.555,
+      "b": 0.548
+    }
+  },
+  "verdict": [
+    "a memoryless: r=0.39 (r2=0.15) -> discriminazione DEBOLE.",
+    "b memoryless: r=-0.37 (r2=0.14) -> discriminazione DEBOLE.",
+    "riferimento osservabili: v0 r=0.86 (discriminazione REALE), s0 r=0.52 (discriminazione REALE).",
+    "=> a/b discriminazione DEBOLE: il memoryless cattura un po' di segnale ma resta vicino al prior. L2: uncertainty head + eventuale loss per-regime per rinforzare; deploy memoryless valido."
+  ]
+}
