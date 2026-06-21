@@ -1,0 +1,129 @@
+{
+  "table": {
+    "nrmse_v0": {
+      "L2_V0_BASELINE": 0.243,
+      "L2_V1_INDEP_AUX": 0.162,
+      "L2_V2_GEO_RATIO": 0.171,
+      "L2_V3_RATIO_STR": 0.165,
+      "L2_V4_REGIME": 0.169,
+      "L2_V5_REGIME_STR": 0.146
+    },
+    "nrmse_T": {
+      "L2_V0_BASELINE": 0.122,
+      "L2_V1_INDEP_AUX": 0.118,
+      "L2_V2_GEO_RATIO": 0.122,
+      "L2_V3_RATIO_STR": 0.121,
+      "L2_V4_REGIME": 0.125,
+      "L2_V5_REGIME_STR": 0.12
+    },
+    "nrmse_s0": {
+      "L2_V0_BASELINE": 0.132,
+      "L2_V1_INDEP_AUX": 0.096,
+      "L2_V2_GEO_RATIO": 0.091,
+      "L2_V3_RATIO_STR": 0.077,
+      "L2_V4_REGIME": 0.076,
+      "L2_V5_REGIME_STR": 0.067
+    },
+    "nrmse_a": {
+      "L2_V0_BASELINE": 0.327,
+      "L2_V1_INDEP_AUX": 0.148,
+      "L2_V2_GEO_RATIO": 0.152,
+      "L2_V3_RATIO_STR": 0.15,
+      "L2_V4_REGIME": 0.142,
+      "L2_V5_REGIME_STR": 0.153
+    },
+    "nrmse_b": {
+      "L2_V0_BASELINE": 0.189,
+      "L2_V1_INDEP_AUX": 0.103,
+      "L2_V2_GEO_RATIO": 0.125,
+      "L2_V3_RATIO_STR": 0.142,
+      "L2_V4_REGIME": 0.118,
+      "L2_V5_REGIME_STR": 0.151
+    },
+    "r_v0": {
+      "L2_V0_BASELINE": 0.887,
+      "L2_V1_INDEP_AUX": 0.8,
+      "L2_V2_GEO_RATIO": 0.773,
+      "L2_V3_RATIO_STR": 0.796,
+      "L2_V4_REGIME": 0.775,
+      "L2_V5_REGIME_STR": 0.85
+    },
+    "r_s0": {
+      "L2_V0_BASELINE": 0.578,
+      "L2_V1_INDEP_AUX": -0.088,
+      "L2_V2_GEO_RATIO": 0.132,
+      "L2_V3_RATIO_STR": 0.105,
+      "L2_V4_REGIME": 0.233,
+      "L2_V5_REGIME_STR": 0.544
+    },
+    "r_a": {
+      "L2_V0_BASELINE": 0.462,
+      "L2_V1_INDEP_AUX": 0.575,
+      "L2_V2_GEO_RATIO": 0.546,
+      "L2_V3_RATIO_STR": 0.567,
+      "L2_V4_REGIME": 0.562,
+      "L2_V5_REGIME_STR": 0.489
+    },
+    "r_b": {
+      "L2_V0_BASELINE": -0.228,
+      "L2_V1_INDEP_AUX": 0.617,
+      "L2_V2_GEO_RATIO": 0.421,
+      "L2_V3_RATIO_STR": 0.466,
+      "L2_V4_REGIME": 0.607,
+      "L2_V5_REGIME_STR": 0.511
+    },
+    "r_geo": {
+      "L2_V0_BASELINE": 0.373,
+      "L2_V1_INDEP_AUX": 0.624,
+      "L2_V2_GEO_RATIO": 0.542,
+      "L2_V3_RATIO_STR": 0.546,
+      "L2_V4_REGIME": 0.599,
+      "L2_V5_REGIME_STR": 0.503
+    },
+    "r_ratio": {
+      "L2_V0_BASELINE": 0.259,
+      "L2_V1_INDEP_AUX": 0.119,
+      "L2_V2_GEO_RATIO": 0.327,
+      "L2_V3_RATIO_STR": 0.316,
+      "L2_V4_REGIME": 0.237,
+      "L2_V5_REGIME_STR": 0.293
+    },
+    "nrmse_a_transient": {
+      "L2_V0_BASELINE": 0.304,
+      "L2_V1_INDEP_AUX": 0.146,
+      "L2_V2_GEO_RATIO": 0.155,
+      "L2_V3_RATIO_STR": 0.15,
+      "L2_V4_REGIME": 0.14,
+      "L2_V5_REGIME_STR": 0.151
+    },
+    "nrmse_a_nontrans": {
+      "L2_V0_BASELINE": 0.332,
+      "L2_V1_INDEP_AUX": 0.149,
+      "L2_V2_GEO_RATIO": 0.151,
+      "L2_V3_RATIO_STR": 0.15,
+      "L2_V4_REGIME": 0.143,
+      "L2_V5_REGIME_STR": 0.154
+    },
+    "nrmse_b_transient": {
+      "L2_V0_BASELINE": 0.197,
+      "L2_V1_INDEP_AUX": 0.095,
+      "L2_V2_GEO_RATIO": 0.13,
+      "L2_V3_RATIO_STR": 0.146,
+      "L2_V4_REGIME": 0.118,
+      "L2_V5_REGIME_STR": 0.152
+    },
+    "nrmse_b_nontrans": {
+      "L2_V0_BASELINE": 0.187,
+      "L2_V1_INDEP_AUX": 0.105,
+      "L2_V2_GEO_RATIO": 0.124,
+      "L2_V3_RATIO_STR": 0.141,
+      "L2_V4_REGIME": 0.118,
+      "L2_V5_REGIME_STR": 0.15
+    }
+  },
+  "verdict": [
+    "Baseline V0: r_a=0.46 r_b=-0.23 | NRMSE a=0.33 b=0.19 (riproduce il tetto)",
+    "=> b SANATO: L2_V1_INDEP_AUX porta r_b da -0.23 a 0.62 (r_a 0.57), NRMSE b 0.19->0.10, senza danneggiare v0/T/s0. La reparam/regime FUNZIONA.",
+    "   L2_V0_BASELINE: a piu accurato AI TRANSITORI (0.30 < 0.33) -> inizia a leggere il segnale dove c-e."
+  ]
+}
