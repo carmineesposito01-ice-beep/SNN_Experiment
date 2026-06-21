@@ -1,0 +1,187 @@
+{
+  "summary": {
+    "epochs": {
+      "EVP_ADAMW": 6,
+      "EVP_PRODIGYEVENT": 4,
+      "EVP_PRODIGYEVENT_PROBE": 4,
+      "EVP_PE_PROBE_LSR": 4,
+      "EVP_ADAMW_LSR": 6,
+      "PEAK_BASELINE": 5,
+      "PEAK_SINGLECYCLE": 16
+    },
+    "val_data_min": {
+      "EVP_ADAMW": 0.2823,
+      "EVP_PRODIGYEVENT": 0.3481,
+      "EVP_PRODIGYEVENT_PROBE": 0.3438,
+      "EVP_PE_PROBE_LSR": 0.3673,
+      "EVP_ADAMW_LSR": 0.272,
+      "PEAK_BASELINE": 0.2451,
+      "PEAK_SINGLECYCLE": 0.2144
+    },
+    "spike_rate": {
+      "EVP_ADAMW": 0.191,
+      "EVP_PRODIGYEVENT": 0.655,
+      "EVP_PRODIGYEVENT_PROBE": 0.228,
+      "EVP_PE_PROBE_LSR": 0.172,
+      "EVP_ADAMW_LSR": 0.16,
+      "PEAK_BASELINE": 0.059,
+      "PEAK_SINGLECYCLE": 0.107
+    },
+    "nrmse_v0": {
+      "EVP_ADAMW": 0.344,
+      "EVP_PRODIGYEVENT": 0.516,
+      "EVP_PRODIGYEVENT_PROBE": 0.502,
+      "EVP_PE_PROBE_LSR": 0.526,
+      "EVP_ADAMW_LSR": 0.418,
+      "PEAK_BASELINE": 0.231,
+      "PEAK_SINGLECYCLE": 0.22
+    },
+    "nrmse_T": {
+      "EVP_ADAMW": 0.175,
+      "EVP_PRODIGYEVENT": 0.298,
+      "EVP_PRODIGYEVENT_PROBE": 0.236,
+      "EVP_PE_PROBE_LSR": 0.259,
+      "EVP_ADAMW_LSR": 0.254,
+      "PEAK_BASELINE": 0.121,
+      "PEAK_SINGLECYCLE": 0.254
+    },
+    "nrmse_s0": {
+      "EVP_ADAMW": 0.186,
+      "EVP_PRODIGYEVENT": 0.351,
+      "EVP_PRODIGYEVENT_PROBE": 0.333,
+      "EVP_PE_PROBE_LSR": 0.341,
+      "EVP_ADAMW_LSR": 0.191,
+      "PEAK_BASELINE": 0.106,
+      "PEAK_SINGLECYCLE": 0.179
+    },
+    "nrmse_a": {
+      "EVP_ADAMW": 0.267,
+      "EVP_PRODIGYEVENT": 0.286,
+      "EVP_PRODIGYEVENT_PROBE": 0.296,
+      "EVP_PE_PROBE_LSR": 0.284,
+      "EVP_ADAMW_LSR": 0.277,
+      "PEAK_BASELINE": 0.248,
+      "PEAK_SINGLECYCLE": 0.231
+    },
+    "nrmse_b": {
+      "EVP_ADAMW": 0.186,
+      "EVP_PRODIGYEVENT": 0.251,
+      "EVP_PRODIGYEVENT_PROBE": 0.268,
+      "EVP_PE_PROBE_LSR": 0.296,
+      "EVP_ADAMW_LSR": 0.316,
+      "PEAK_BASELINE": 0.109,
+      "PEAK_SINGLECYCLE": 0.314
+    },
+    "gn_max": {
+      "EVP_ADAMW": 829872.8914467555,
+      "EVP_PRODIGYEVENT": 21593129451.53974,
+      "EVP_PRODIGYEVENT_PROBE": 10532536875.937796,
+      "EVP_PE_PROBE_LSR": 13557091319.705616,
+      "EVP_ADAMW_LSR": 565618.5531564866,
+      "PEAK_BASELINE": null,
+      "PEAK_SINGLECYCLE": null
+    },
+    "n_expl": {
+      "EVP_ADAMW": 311,
+      "EVP_PRODIGYEVENT": 251,
+      "EVP_PRODIGYEVENT_PROBE": 273,
+      "EVP_PE_PROBE_LSR": 275,
+      "EVP_ADAMW_LSR": 287,
+      "PEAK_BASELINE": 291,
+      "PEAK_SINGLECYCLE": 399
+    },
+    "r_v0": {
+      "EVP_ADAMW": 0.837,
+      "EVP_PRODIGYEVENT": 0.723,
+      "EVP_PRODIGYEVENT_PROBE": 0.795,
+      "EVP_PE_PROBE_LSR": 0.736,
+      "EVP_ADAMW_LSR": 0.844,
+      "PEAK_BASELINE": 0.856,
+      "PEAK_SINGLECYCLE": 0.879
+    },
+    "r_s0": {
+      "EVP_ADAMW": 0.29,
+      "EVP_PRODIGYEVENT": -0.552,
+      "EVP_PRODIGYEVENT_PROBE": -0.612,
+      "EVP_PE_PROBE_LSR": -0.542,
+      "EVP_ADAMW_LSR": 0.308,
+      "PEAK_BASELINE": -0.495,
+      "PEAK_SINGLECYCLE": 0.507
+    },
+    "r_a": {
+      "EVP_ADAMW": 0.507,
+      "EVP_PRODIGYEVENT": 0.539,
+      "EVP_PRODIGYEVENT_PROBE": 0.56,
+      "EVP_PE_PROBE_LSR": 0.554,
+      "EVP_ADAMW_LSR": 0.465,
+      "PEAK_BASELINE": 0.49,
+      "PEAK_SINGLECYCLE": 0.438
+    },
+    "r_b": {
+      "EVP_ADAMW": 0.079,
+      "EVP_PRODIGYEVENT": 0.568,
+      "EVP_PRODIGYEVENT_PROBE": 0.62,
+      "EVP_PE_PROBE_LSR": 0.559,
+      "EVP_ADAMW_LSR": -0.44,
+      "PEAK_BASELINE": 0.434,
+      "PEAK_SINGLECYCLE": 0.104
+    }
+  },
+  "grad_struct": {
+    "EVP_ADAMW": {
+      "v0": 0.16777681739558345,
+      "T": 30.108110074885328,
+      "s0": 5.312164032095453,
+      "a": 47.90349506130497,
+      "b": 16.508454014318676
+    },
+    "EVP_PRODIGYEVENT": {
+      "v0": 0.23585318379129064,
+      "T": 23.700103544110277,
+      "s0": 9.181581356429831,
+      "a": 43.52294161645044,
+      "b": 23.359520299218172
+    },
+    "EVP_PRODIGYEVENT_PROBE": {
+      "v0": 0.2145365124603111,
+      "T": 25.647808595672302,
+      "s0": 4.058225594495591,
+      "a": 46.37674491050968,
+      "b": 23.702684386862106
+    },
+    "EVP_PE_PROBE_LSR": {
+      "v0": 2.211012715648267,
+      "T": 15.755068439932186,
+      "s0": 3.4135934507513706,
+      "a": 38.55529673654177,
+      "b": 40.065028657126405
+    },
+    "EVP_ADAMW_LSR": {
+      "v0": 0.15812187358460011,
+      "T": 34.24614047082837,
+      "s0": 5.8503165352198145,
+      "a": 44.90996010314197,
+      "b": 14.835461017225251
+    },
+    "PEAK_BASELINE": {
+      "v0": 0.8039264019158844,
+      "T": 36.8038309833675,
+      "s0": 6.886176637525802,
+      "a": 35.38857653700978,
+      "b": 20.117489440181032
+    },
+    "PEAK_SINGLECYCLE": {
+      "v0": 0.7100539715069906,
+      "T": 38.299409935411674,
+      "s0": 5.471437664802753,
+      "a": 37.210557603137204,
+      "b": 18.30854082514139
+    }
+  },
+  "verdict": [
+    "Miglior val_data: PEAK_SINGLECYCLE = 0.2144",
+    "EventProp best 0.2720 vs BPTT best 0.2144 -> BPTT meglio di 0.0576",
+    "ProdigyEvent arm: EVP_PRODIGYEVENT=0.3481, EVP_PRODIGYEVENT_PROBE=0.3438, EVP_PE_PROBE_LSR=0.3673",
+    "Correlazione per-driver r_b: EVP_ADAMW=0.08, EVP_PRODIGYEVENT=0.57, EVP_PRODIGYEVENT_PROBE=0.62, EVP_PE_PROBE_LSR=0.56, EVP_ADAMW_LSR=-0.44, PEAK_BASELINE=0.43, PEAK_SINGLECYCLE=0.10"
+  ]
+}
