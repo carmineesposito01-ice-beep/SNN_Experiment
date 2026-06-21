@@ -328,13 +328,16 @@ class CF_FSNN_Net(nn.Module):
         [ 0.5,  3.0],   # 4: b  [m/s²]
     ]
 
-    def __init__(self, hidden_size=None, rank=None, max_delay=None, bit_shift=None):
+    def __init__(self, hidden_size=None, rank=None, max_delay=None, bit_shift=None,
+                 input_size=None):
         """
         Args:
             hidden_size: override CF_HIDDEN_SIZE (None → usa config). Per STEP 2B sweep.
             rank: override CF_RANK (None → usa config). Per STEP 2B sweep.
             max_delay: override CF_MAX_DELAY (None → usa config). Per STEP 2E A5 variant.
             bit_shift: override leak (None → default ALIFCell=3). R25 ablation asse A5/A6.
+            input_size: override CF_INPUT_SIZE (None → usa config). L3 #2: encoding con
+                canali derivata (Δv', accel, ṡ) → input 4→7. Default None = 4 (backward-compat).
         """
         super().__init__()
         from config import (
@@ -362,8 +365,10 @@ class CF_FSNN_Net(nn.Module):
         # α = exp(-Δt / τ_OU): costante mean-reversion per loss OU  (≈ 0.9967)
         self.ou_alpha = _math.exp(-DT / IDM2D_TAU)
 
+        in_sz = input_size if input_size is not None else CF_INPUT_SIZE
+        self.input_size = in_sz   # esposto per logging/diagnostica (L3 #2 encoding)
         self.layer_hidden = HiddenLayer_ALIF(
-            CF_INPUT_SIZE, hidden_size,
+            in_sz, hidden_size,
             rank=rank, max_delay=max_delay, bit_shift=bit_shift,
         )
         self.layer_out = OutputLayer_LI(hidden_size, CF_OUTPUT_SIZE)
@@ -1451,8 +1456,10 @@ def build_model(variant: str = 'baseline', hidden_size=None, rank=None,
     # --- baseline (shared) ---
     if v == 'baseline':
         # R25: passa max_delay e bit_shift al baseline per ablation asse A4/A5/A6
+        # L3 #2: input_size via kwargs (encoding canali derivata). Default None = 4.
         return CF_FSNN_Net(hidden_size=hidden_size, rank=rank,
-                            max_delay=max_delay, bit_shift=bit_shift)
+                            max_delay=max_delay, bit_shift=bit_shift,
+                            input_size=kwargs.get('input_size'))
     # --- Architecture variants ---
     if v == 'stacked_2':
         h = hidden_size or 32

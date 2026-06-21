@@ -126,8 +126,12 @@ class CFDataset(Dataset):
     e' ignorato in pinn_loss → comportamento identico al pre-R30.
     """
 
-    def __init__(self, dataset_list, seq_len=100, stride=50):
+    def __init__(self, dataset_list, seq_len=100, stride=50, extra_channels=False):
         self.seq_len = seq_len
+        # L3 #2 (encoding): se True, __getitem__ aggiunge 3 canali derivata temporale
+        # [ṡ, accel_obs, Δv'] = diff(s), diff(v), diff(Δv) -> input 4->7. Danno alla rete
+        # la FIRMA del transitorio (oggi assente dal singolo step: causa L1c). Default False.
+        self.extra_channels = extra_channels
         self.windows = []
 
         # R30 — indice canali in CF_FSNN_Net._PARAM_BOUNDS: 0=v0, 1=T, 2=s0, 3=a, 4=b
@@ -163,6 +167,11 @@ class CFDataset(Dataset):
 
     def __getitem__(self, idx):
         x, y, mask, params_gt = self.windows[idx]
+        if self.extra_channels:
+            # canali derivata su s,v,Δv (col 0,1,2): diff temporale, prima riga = 0 (causale).
+            d = np.zeros((x.shape[0], 3), dtype=np.float32)
+            d[1:, :] = x[1:, :3] - x[:-1, :3]
+            x = np.concatenate([x, d], axis=1)   # (seq_len, 7)
         return (
             torch.from_numpy(x),
             torch.from_numpy(y),
@@ -1086,6 +1095,9 @@ def main():
                         help='R30 ID-1: peso supervisione b (cost per scenario). 0 = off.')
     # L2 (Dynamic_Study): reparam [a,b] -> (geo-mean, log-ratio) + per-regime weighting.
     # Vincola ESPLICITAMENTE la direzione molle log(a/b) (b anti-correlato in L1d). Default 0 = off.
+    parser.add_argument('--cf_extra_channels', type=int, default=0, choices=[0, 1],
+                        help='L3 #2 (encoding): 1 = aggiunge 3 canali derivata [ṡ,accel,Δv\'] '
+                             'all input (4->7) per dare la firma del transitorio. 0 = off (default).')
     parser.add_argument('--lambda_geo_aux', type=float, default=0.0,
                         help='L2: peso supervisione geo-mean log√(ab) (magnitudine a/b). 0 = off.')
     parser.add_argument('--lambda_ratio_aux', type=float, default=0.0,
@@ -1374,8 +1386,9 @@ def main():
     stride_trn = seq_len // 2
     stride_val = seq_len
 
-    train_ds = CFDataset(train_data, seq_len=seq_len, stride=stride_trn)
-    val_ds   = CFDataset(val_data,   seq_len=seq_len, stride=stride_val)
+    _extra_ch = bool(args.cf_extra_channels)
+    train_ds = CFDataset(train_data, seq_len=seq_len, stride=stride_trn, extra_channels=_extra_ch)
+    val_ds   = CFDataset(val_data,   seq_len=seq_len, stride=stride_val, extra_channels=_extra_ch)
 
     # num_workers: auto-rilevamento sicuro per ogni piattaforma.
     # Regola: 0 se Windows (fork CUDA non sicuro), 0 se Colab (CUDA già
@@ -1419,6 +1432,7 @@ def main():
         rank=args.cf_rank,
         max_delay=args.cf_max_delay,
         bit_shift=args.cf_bit_shift,
+        input_size=(7 if bool(args.cf_extra_channels) else None),   # L3 #2: 4->7 con encoding
     ).to(device)
     n_params = sum(p.numel() for p in model.parameters())
     # Log unificato: max_delay non sempre disponibile (LIF simple non lo espone)
@@ -1928,7 +1942,12 @@ def main():
                     continue
                 if pred(d):
                     used_idx.add(i)
-                    x_norm_t = torch.from_numpy(d['x']).unsqueeze(0).to(device)  # (1,N,4)
+                    _xv = d['x']                                          # (N,4) grezzo
+                    if getattr(model, 'input_size', 4) >= 7:             # L3 #2: stessa augmentation di CFDataset
+                        _dv = np.zeros((_xv.shape[0], 3), dtype=np.float32)
+                        _dv[1:, :] = _xv[1:, :3] - _xv[:-1, :3]
+                        _xv = np.concatenate([_xv, _dv], axis=1)         # (N,7)
+                    x_norm_t = torch.from_numpy(_xv).unsqueeze(0).to(device)  # (1,N,4|7)
                     with torch.no_grad():
                         params_seq_t, _ = model.forward_sequence_with_stats(x_norm_t)
                     params_np = params_seq_t.squeeze(0).cpu().numpy()    # (N, 5)
