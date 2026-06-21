@@ -1151,6 +1151,11 @@ def main():
     parser.add_argument('--prodigy_rate_band', type=str, default='',
                         help='ProdigyEvent: banda spike-rate "lo,hi" per il gate 2D (es. "0.10,0.25"). '
                              'Vuoto = gate off.')
+    parser.add_argument('--prodigy_d_decay', type=float, default=0.9,
+                        help='ProdigyEvent: fattore decadimento di d sotto instabilita (0.9 aggressivo, '
+                             '0.99 morbido -> d si assesta al confine stabile invece di collassare).')
+    parser.add_argument('--prodigy_d_floor', type=float, default=1e-5,
+                        help='ProdigyEvent: minimo di d (evita collasso a 0).')
     parser.add_argument('--prodigy_d_coef', type=float, default=1.0,
                         help='Prodigy d_coef: controlla velocita crescita parametro adattivo d. '
                              'Default 1.0 (Prodigy standard). <1.0 = piu cauto (utile se grad '
@@ -1534,7 +1539,9 @@ def main():
                                      grad_ema_beta=args.prodigy_ema_beta,
                                      rate_gate=_rate_gate,
                                      instab_kappa=args.prodigy_instab_kappa,
-                                     d_max=args.prodigy_d_max, **_prodigy_kw)
+                                     d_max=args.prodigy_d_max,
+                                     d_decay=args.prodigy_d_decay,
+                                     d_floor=args.prodigy_d_floor, **_prodigy_kw)
         else:
             optimizer = Prodigy(model.parameters(), **_prodigy_kw)
         # Self-check: verifica che Prodigy abbia recepito esattamente i param richiesti
