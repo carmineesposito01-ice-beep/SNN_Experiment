@@ -298,7 +298,8 @@ class ALIFLayer_EventProp_Full(nn.Module):
     def __init__(self, in_features, out_features, rank=8, max_delay=6, n_ticks=10,
                  base_th_init=1.5, thresh_jump_init=0.5,
                  alpha_m=7.0/8.0, alpha_f=7.0/8.0,
-                 eps=1e-3, silent_repair=True):
+                 eps=1e-3, silent_repair=True,
+                 jump_clamp=10.0, lv_clamp=50.0):
         super().__init__()
         self.in_features  = in_features
         self.out_features = out_features
@@ -308,6 +309,11 @@ class ALIFLayer_EventProp_Full(nn.Module):
         self.alpha_m = alpha_m
         self.alpha_f = alpha_f
         self.eps = eps
+        # C8 (EventProp_Study): stabilizzazione del cascade adjoint sugli spike marginali
+        # (denom = drive - V_th_eff -> 0 con fatigue). jump_clamp limita il termine di salto
+        # per-tick; lv_clamp bound l'adjoint accumulato. Senza, grad ~1e17 (fail storico 6/11).
+        self.jump_clamp = jump_clamp
+        self.lv_clamp = lv_clamp
         self.silent_repair = silent_repair
 
         # Parameters (match baseline exactly)
@@ -476,9 +482,15 @@ class ALIFLayer_EventProp_Full(nn.Module):
             denom = torch.where(denom.abs() < self.eps,
                                 torch.sign(denom + 1e-12) * self.eps, denom)
             jump = s[:, k+1] * (lV[:, k+1] + total_grad_s) / denom
+            # C8: taglia il jump per-tick (spike marginali con denom~0 -> jump enorme)
+            if self.jump_clamp is not None:
+                jump = torch.clamp(jump, -self.jump_clamp, self.jump_clamp)
 
             # Update adjoint: lV[k] = alpha_m * lV[k+1] + jump
             lV[:, k] = self.alpha_m * lV[:, k+1] + jump
+            # C8: bound l'adjoint accumulato -> rompe il cascade su 500 tick
+            if self.lv_clamp is not None:
+                lV[:, k] = torch.clamp(lV[:, k], -self.lv_clamp, self.lv_clamp)
 
             # === Gradient accumulators ===
             # NB: usiamo lolemacs-style indexing (lV[k+1] per il contributo at step k+1)
