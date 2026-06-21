@@ -23,7 +23,7 @@ from prodigyopt import Prodigy
 class ProdigyEvent(Prodigy):
     def __init__(self, params, grad_ema_beta=0.9, rate_gate=None,
                  instab_kappa=2.0, d_max=float('inf'),
-                 d_decay=0.9, d_floor=1e-5, **kwargs):
+                 d_decay=0.9, d_floor=1e-5, probe_up=0.0, **kwargs):
         """grad_ema_beta: decay EMA del gradiente per lo stimatore di d (0.9 ~10 step).
         rate_gate: None | (lo, hi) banda spike-rate; fuori banda -> congela crescita di d.
         instab_kappa: soglia del rapporto gn_fast/gn_slow oltre cui si congela d (instabilita
@@ -39,6 +39,7 @@ class ProdigyEvent(Prodigy):
         self.d_max = float(d_max)
         self.d_decay = float(d_decay)    # fattore di decadimento ATTIVO di d sotto instabilita
         self.d_floor = float(d_floor)    # minimo di d (evita collasso a 0)
+        self.probe_up = float(probe_up)  # MPPT P&O: perturbazione UP di d se stabile ma stagnante (0=off)
         self._gn_fast = None             # EMA veloce della norma gradiente (trend recente)
         self._gn_slow = None             # EMA lenta = baseline del regime stabile
 
@@ -88,6 +89,14 @@ class ProdigyEvent(Prodigy):
             for g in self.param_groups:              # (non solo congela: riporta lr_eff nell'envelope stabile)
                 if g.get('d', None) is not None:
                     g['d'] = max(self.d_floor, g['d'] * self.d_decay)
+        elif self.probe_up > 0.0 and d_before is not None:
+            # MPPT Perturb&Observe: STABILE ma d non cresciuto (Prodigy stagnante / post-decay
+            # stuck-low) -> perturba in ALTO per ri-cercare il confine di stabilita (hunting).
+            cur = self.param_groups[0].get('d', None)
+            if cur is not None and cur <= d_before * (1.0 + 1e-9):
+                for g in self.param_groups:
+                    if g.get('d', None) is not None:
+                        g['d'] = g['d'] * (1.0 + self.probe_up)
 
         if self.d_max != float('inf'):               # cap opzionale di sicurezza
             for g in self.param_groups:

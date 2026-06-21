@@ -190,6 +190,7 @@ def pinn_loss(model, x_seq, y_seq, mask_seq,
               lam_v0_aux=0.0, lam_s0_aux=0.0, lam_a_aux=0.0, lam_b_aux=0.0,
               lam_geo_aux=0.0, lam_ratio_aux=0.0, regime_gamma=0.0, regime_thr=0.5,
               lam_nll=0.0,
+              lam_sr_adapt_gamma=0.0, sr_adapt_margin=0.05,
               params_gt=None,
               spike_target=SPIKE_RATE_TARGET,
               retain_params_grad=False):
@@ -288,6 +289,15 @@ def pinn_loss(model, x_seq, y_seq, mask_seq,
     # Usa il tensor (non .item()) per preservare il gradiente verso i pesi della rete.
     spike_rate_tensor = spike_rates.mean()
     L_sr = (spike_rate_tensor - spike_target) ** 2
+    # Controllo rate ATTIVO (EventProp_Study): lam_sr cresce quando lo spike-rate esce dalla
+    # banda target±margin -> forza di richiamo DIREZIONALE piu forte (riporta nella zona sana).
+    # Il moltiplicatore e' un GAIN (detached); L_sr mantiene il gradiente. gamma=0 = backward-compat.
+    if lam_sr_adapt_gamma > 0.0:
+        _oob = ((spike_rate_tensor.detach() - spike_target).abs() - sr_adapt_margin).clamp(min=0.0)
+        lam_sr_eff = lam_sr * (1.0 + lam_sr_adapt_gamma * (_oob / max(sr_adapt_margin, 1e-6)) ** 2)
+        lam_sr_eff = float(lam_sr_eff)
+    else:
+        lam_sr_eff = lam_sr
 
     # ── L_T_aux (R25): supervisione diretta su T ─────────────────
     # Forza pred_T(t) ≈ T_true(t) usando il GT per-timestep in y_seq[:, :, 1].
@@ -364,7 +374,7 @@ def pinn_loss(model, x_seq, y_seq, mask_seq,
             + lam_phys * L_phys
             + lam_ou   * L_ou
             + lam_bc   * L_bc
-            + lam_sr   * L_sr
+            + lam_sr_eff * L_sr
             + lam_T_aux * L_T_aux
             + L_params_aux_total
             + lam_geo_aux * L_geo
@@ -1135,6 +1145,12 @@ def main():
                              'la confidenza per-parametro. Richiede --lambda_nll>0. 0 = off (default).')
     parser.add_argument('--lambda_nll', type=float, default=0.0,
                         help='L3 #5: peso della NLL gaussiana eteroschedastica su v0,s0,a,b. 0 = off.')
+    parser.add_argument('--lambda_sr_adapt_gamma', type=float, default=0.0,
+                        help='EventProp_Study: controllo rate attivo - boost di lam_sr fuori banda '
+                             '(forza di richiamo direzionale verso il rate sano). 0 = lam_sr fisso.')
+    parser.add_argument('--sr_adapt_margin', type=float, default=0.05,
+                        help='EventProp_Study: semi-banda attorno a SPIKE_RATE_TARGET entro cui lam_sr '
+                             'resta normale (oltre, boost ∝ gamma). Default 0.05 (target 0.15 -> banda 0.10-0.20).')
     # Ottimizzatore
     parser.add_argument('--optimizer',   type=str,   default='adam',
                         choices=['adam', 'adamw', 'lion', 'prodigy', 'prodigy_event'],
@@ -1156,6 +1172,9 @@ def main():
                              '0.99 morbido -> d si assesta al confine stabile invece di collassare).')
     parser.add_argument('--prodigy_d_floor', type=float, default=1e-5,
                         help='ProdigyEvent: minimo di d (evita collasso a 0).')
+    parser.add_argument('--prodigy_probe_up', type=float, default=0.0,
+                        help='ProdigyEvent: MPPT P&O perturbazione UP di d se stabile ma stagnante '
+                             '(es. 0.01 = +1%%/step finche non riparte; 0 = off). Rompe lo stuck-low.')
     parser.add_argument('--prodigy_d_coef', type=float, default=1.0,
                         help='Prodigy d_coef: controlla velocita crescita parametro adattivo d. '
                              'Default 1.0 (Prodigy standard). <1.0 = piu cauto (utile se grad '
@@ -1541,7 +1560,8 @@ def main():
                                      instab_kappa=args.prodigy_instab_kappa,
                                      d_max=args.prodigy_d_max,
                                      d_decay=args.prodigy_d_decay,
-                                     d_floor=args.prodigy_d_floor, **_prodigy_kw)
+                                     d_floor=args.prodigy_d_floor,
+                                     probe_up=args.prodigy_probe_up, **_prodigy_kw)
         else:
             optimizer = Prodigy(model.parameters(), **_prodigy_kw)
         # Self-check: verifica che Prodigy abbia recepito esattamente i param richiesti
@@ -1636,7 +1656,8 @@ def main():
            args.lambda_sr, args.lambda_T_aux,
            args.lambda_v0_aux, args.lambda_s0_aux, args.lambda_a_aux, args.lambda_b_aux,
            args.lambda_geo_aux, args.lambda_ratio_aux, args.regime_gamma, args.regime_thr,
-           args.lambda_nll)
+           args.lambda_nll,
+           args.lambda_sr_adapt_gamma, args.sr_adapt_margin)
 
     # ── Training loop ─────────────────────────────────────────────
     print(f"\n[Training] {args.epochs} epoche  |  scheduler={args.scheduler}"
