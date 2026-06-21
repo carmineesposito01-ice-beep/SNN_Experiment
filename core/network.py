@@ -439,7 +439,11 @@ class CF_FSNN_Net(nn.Module):
         if raw.shape[-1] > 5:
             self._last_logvar = raw[..., 5:]
             raw = raw[..., :5]
-        adj = (raw - self.decode_offset) / self.logit_tau
+        # R29 decode_offset/logit_tau: getattr-safe per varianti che NON li registrano
+        # (es. EventProp, pre-R29). Assenti -> offset 0 / tau 1 = comportamento pre-R29 identico.
+        off = self.decode_offset if hasattr(self, 'decode_offset') else 0.0
+        tau = self.logit_tau if hasattr(self, 'logit_tau') else 1.0
+        adj = (raw - off) / tau
         return self.param_lo + (self.param_hi - self.param_lo) * torch.sigmoid(adj)
 
     # ----------------------------------------------------------
