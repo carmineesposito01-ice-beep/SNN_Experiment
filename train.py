@@ -189,6 +189,7 @@ def pinn_loss(model, x_seq, y_seq, mask_seq,
               lam_T_aux=0.0,
               lam_v0_aux=0.0, lam_s0_aux=0.0, lam_a_aux=0.0, lam_b_aux=0.0,
               lam_geo_aux=0.0, lam_ratio_aux=0.0, regime_gamma=0.0, regime_thr=0.5,
+              lam_nll=0.0,
               params_gt=None,
               spike_target=SPIKE_RATE_TARGET,
               retain_params_grad=False):
@@ -344,6 +345,21 @@ def pinn_loss(model, x_seq, y_seq, mask_seq,
         L_geo = (wm * (geo_pr - geo_gt) ** 2).sum() / denom_w
         L_ratio = (wm * (rat_pr - rat_gt) ** 2).sum() / denom_w
 
+    # ── L_nll (L3 #5): uncertainty head eteroschedastica ─────────
+    # La rete dichiara una log-varianza per-parametro; NLL gaussiana eteroschedastica
+    #   0.5*exp(-s)*(μ-gt)^2 + 0.5*s  → impara media E confidenza (b dovrebbe risultare
+    # a bassa confidenza = s alto). Supervisione su v0,s0,a,b (costanti). Default 0 = off.
+    L_nll = torch.zeros((), device=x_seq.device)
+    if (lam_nll > 0.0 and params_gt is not None and getattr(model, 'uncertainty', False)
+            and getattr(model, '_last_logvar_seq', None) is not None):
+        lv = model._last_logvar_seq.clamp(-7.0, 7.0)            # (B,T,5)
+        for pi, gi in [(0, 0), (2, 1), (3, 2), (4, 3)]:         # v0,s0,a,b: pred idx vs gt idx
+            mu = params_seq[:, :, pi]
+            s  = lv[:, :, pi]
+            gt = params_gt[:, gi].unsqueeze(1)
+            nll = 0.5 * torch.exp(-s) * (mu - gt) ** 2 + 0.5 * s
+            L_nll = L_nll + (mask_seq * nll).sum() / N_valid
+
     loss = (lam_data * L_data
             + lam_phys * L_phys
             + lam_ou   * L_ou
@@ -352,7 +368,8 @@ def pinn_loss(model, x_seq, y_seq, mask_seq,
             + lam_T_aux * L_T_aux
             + L_params_aux_total
             + lam_geo_aux * L_geo
-            + lam_ratio_aux * L_ratio)
+            + lam_ratio_aux * L_ratio
+            + lam_nll * L_nll)
 
     avg_spike_rate = spike_rate_tensor.item()
 
@@ -371,6 +388,7 @@ def pinn_loss(model, x_seq, y_seq, mask_seq,
         'b_aux':  aux_losses.get(4, torch.zeros(())).item() if 4 in aux_losses else 0.0,
         'geo_aux':   L_geo.item(),
         'ratio_aux': L_ratio.item(),
+        'nll':       L_nll.item(),
     }
     return loss, comps_out, avg_spike_rate, params_seq
 
@@ -1107,6 +1125,12 @@ def main():
                              '(|v_dot_gt|>regime_thr) di un fattore (1+gamma). 0 = uniforme.')
     parser.add_argument('--regime_thr', type=float, default=0.5,
                         help='L2: soglia |v_dot| [m/s^2] che definisce un transitorio (per regime_gamma).')
+    # L3 #5 (uncertainty head): output 5->10 (medie+log-var) + NLL eteroschedastica.
+    parser.add_argument('--uncertainty_head', type=int, default=0, choices=[0, 1],
+                        help='L3 #5: 1 = output 5->10 (5 medie + 5 log-var), la rete dichiara '
+                             'la confidenza per-parametro. Richiede --lambda_nll>0. 0 = off (default).')
+    parser.add_argument('--lambda_nll', type=float, default=0.0,
+                        help='L3 #5: peso della NLL gaussiana eteroschedastica su v0,s0,a,b. 0 = off.')
     # Ottimizzatore
     parser.add_argument('--optimizer',   type=str,   default='adam',
                         choices=['adam', 'adamw', 'lion', 'prodigy'],
@@ -1433,6 +1457,7 @@ def main():
         max_delay=args.cf_max_delay,
         bit_shift=args.cf_bit_shift,
         input_size=(7 if bool(args.cf_extra_channels) else None),   # L3 #2: 4->7 con encoding
+        uncertainty=bool(args.uncertainty_head),                     # L3 #5: output 5->10 + NLL
     ).to(device)
     n_params = sum(p.numel() for p in model.parameters())
     # Log unificato: max_delay non sempre disponibile (LIF simple non lo espone)
@@ -1574,7 +1599,8 @@ def main():
     lam = (args.lambda_data, args.lambda_phys, args.lambda_ou, args.lambda_bc,
            args.lambda_sr, args.lambda_T_aux,
            args.lambda_v0_aux, args.lambda_s0_aux, args.lambda_a_aux, args.lambda_b_aux,
-           args.lambda_geo_aux, args.lambda_ratio_aux, args.regime_gamma, args.regime_thr)
+           args.lambda_geo_aux, args.lambda_ratio_aux, args.regime_gamma, args.regime_thr,
+           args.lambda_nll)
 
     # ── Training loop ─────────────────────────────────────────────
     print(f"\n[Training] {args.epochs} epoche  |  scheduler={args.scheduler}"
