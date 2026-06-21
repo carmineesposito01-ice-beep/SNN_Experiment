@@ -663,7 +663,11 @@ def train_epoch(model, loader, optimizer, device, epoch, lam,
             print(f"{tag} grad_norm={gn_val:.3e} (>{GRAD_WARN_THRESHOLD})")
             _log_batch_diagnostics(tag, comps, gn_val, x, pre_norms, model)
 
-        optimizer.step()
+        # ProdigyEvent: passa spike-rate e norma gradiente pre-clip per il throttle adattivo
+        if optimizer.__class__.__name__ == 'ProdigyEvent':
+            optimizer.step(spike_rate=sr, grad_norm=gn_total_preclip)
+        else:
+            optimizer.step()
 
         # Per-batch scheduler step (OneCycleLR)
         if step_per_batch and scheduler is not None:
@@ -1133,9 +1137,20 @@ def main():
                         help='L3 #5: peso della NLL gaussiana eteroschedastica su v0,s0,a,b. 0 = off.')
     # Ottimizzatore
     parser.add_argument('--optimizer',   type=str,   default='adam',
-                        choices=['adam', 'adamw', 'lion', 'prodigy'],
-                        help='Ottimizzatore: adam|adamw|lion|prodigy '
-                             '(prodigy: LR-free, usa --lr 1.0 come stima iniziale)')
+                        choices=['adam', 'adamw', 'lion', 'prodigy', 'prodigy_event'],
+                        help='Ottimizzatore: adam|adamw|lion|prodigy|prodigy_event '
+                             '(prodigy: LR-free; prodigy_event: Prodigy con stimatore d su '
+                             'gradiente EMA, per EventProp — vedi core/prodigy_event.py)')
+    parser.add_argument('--prodigy_ema_beta', type=float, default=0.9,
+                        help='ProdigyEvent: decay EMA del gradiente per lo stimatore di d (0.9 ~10 step).')
+    parser.add_argument('--prodigy_d_max', type=float, default=float('inf'),
+                        help='ProdigyEvent: cap opzionale su d (default inf=off; preferire throttle adattivo).')
+    parser.add_argument('--prodigy_instab_kappa', type=float, default=2.0,
+                        help='ProdigyEvent: soglia trend norma-gradiente (gn_fast/gn_slow) oltre cui '
+                             'si congela la crescita di d (instabilita accumulata). Default 2.0.')
+    parser.add_argument('--prodigy_rate_band', type=str, default='',
+                        help='ProdigyEvent: banda spike-rate "lo,hi" per il gate 2D (es. "0.10,0.25"). '
+                             'Vuoto = gate off.')
     parser.add_argument('--prodigy_d_coef', type=float, default=1.0,
                         help='Prodigy d_coef: controlla velocita crescita parametro adattivo d. '
                              'Default 1.0 (Prodigy standard). <1.0 = piu cauto (utile se grad '
@@ -1473,13 +1488,16 @@ def main():
         optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=1e-4)
     elif args.optimizer == 'lion':
         optimizer = LionOptimizer(model.parameters(), lr=args.lr, weight_decay=1e-4)
-    elif args.optimizer == 'prodigy':
+    elif args.optimizer in ('prodigy', 'prodigy_event'):
         # Prodigy (Mishchenko & Defazio, 2024) — LR-free adaptive optimizer.
         # Convention: pass lr=1.0 as the initial estimate; Prodigy auto-tunes.
         # Reference: https://github.com/konstmish/prodigy
         # Designed for batch_size=1 + noise-driven exploration (STEP 2C — P12 anti-local-minima).
+        # prodigy_event (EventProp_Study): stima d su gradiente EMA (fix 'd frozen' su EventProp).
         try:
             from prodigyopt import Prodigy
+            if args.optimizer == 'prodigy_event':
+                from core.prodigy_event import ProdigyEvent
         except ImportError as e:
             raise ImportError(
                 "prodigyopt non installato. Su Azure: !pip install prodigyopt\n"
@@ -1496,8 +1514,7 @@ def main():
             )
         # R2: weight_decay -1 = sentinel "usa default hardcoded storico"
         _wd = 1e-4 if args.prodigy_weight_decay < 0 else args.prodigy_weight_decay
-        optimizer = Prodigy(
-            model.parameters(),
+        _prodigy_kw = dict(
             lr=args.lr,                                              # raccomandato lr=1.0 (auto-adapt)
             betas=_betas,                                            # R2: CLI tunable (W1 in PRODIGY_DEEP_STUDY.md)
             weight_decay=_wd,                                        # R2: CLI tunable (W4)
@@ -1508,6 +1525,18 @@ def main():
             d_coef=args.prodigy_d_coef,                              # R2: CLI tunable (W2)
             d0=args.prodigy_d0,                                      # R2: CLI tunable (V2 — fix per frozen)
         )
+        if args.optimizer == 'prodigy_event':
+            _rate_gate = None
+            if args.prodigy_rate_band.strip():
+                _lo, _hi = [float(x) for x in args.prodigy_rate_band.split(',')]
+                _rate_gate = (_lo, _hi)
+            optimizer = ProdigyEvent(model.parameters(),
+                                     grad_ema_beta=args.prodigy_ema_beta,
+                                     rate_gate=_rate_gate,
+                                     instab_kappa=args.prodigy_instab_kappa,
+                                     d_max=args.prodigy_d_max, **_prodigy_kw)
+        else:
+            optimizer = Prodigy(model.parameters(), **_prodigy_kw)
         # Self-check: verifica che Prodigy abbia recepito esattamente i param richiesti
         _g0 = optimizer.param_groups[0]
         assert _g0['lr'] == args.lr, f"Prodigy lr mismatch: got {_g0['lr']} vs args {args.lr}"
