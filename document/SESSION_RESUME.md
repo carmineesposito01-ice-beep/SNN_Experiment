@@ -26,12 +26,24 @@ storico EventProp fallì per **misuso iperparametrico** (come accadde per Prodig
 NON per limite reale. Domanda scientifica: il gradiente **esatto** (EventProp) batte BPTT+surrogate, isolando
 la variabile "metodo di training"? Rilevante per FPGA (regola event-based, on-chip-friendly).
 
-**Cosa fare adesso (ragionare DA ZERO, l'ultimo studio è andato male)**:
-1. Cos'è EventProp e in cosa differisce dalla BPTT attuale.
-2. Studio approfondito da TUTTE le fonti (skill SNN-expert ch08/09; `core/eventprop.py` già esistente;
-   `document/EVENTPROP_DESIGN.md` / `EVENTPROP_OPTIMIZER_SWEEP.md` / `EVENTPROP_GRID2X2.md`; fallimento storico).
-3. Translazione su come applicarlo al nostro sistema (ALIF custom + ACC-IDM + vincoli FPGA Po2).
-**Documento maestro in costruzione**: `document/EVENTPROP_STUDY_PLAN.md` (da creare).
+**Ragionamento + build COMPLETATI (2026-06-21)** — vedi `document/EVENTPROP_STUDY_PLAN.md` (maestro).
+Sintesi: (1-2) EventProp = gradiente esatto (adjoint event-based) vs BPTT+surrogato; lo studio storico
+(44-run) trovava pareggio + fragilità, ma con la stessa C8 mai fixata (non 2 conferme indipendenti).
+(3) Traslato: **fix C8** (jump/lv clamp → EventProp stabile, val 0.267 AdamW); diagnosi "Prodigy si
+congela su EventProp" (incoerenza gradiente esatto) → costruito **ProdigyEvent** (`core/prodigy_event.py`:
+stima d su gradiente EMA + throttle adattivo trend-gradiente + decay morbido 0.99 + ProbeUp MPPT + gate
+rate; tutti iper-parametri sweepabili) → ProdigyEvent+ProbeUp val 0.299 (parameter-free). + controllo
+rate attivo (lambda_sr adattivo). Backward-compat bit-identico verificato.
+
+**Cosa fare adesso**:
+1. Girare **`EventProp_Study.ipynb`** su Azure (50 ep, 7 arm, EventProp PRIMI → pushati prima): EVP_ADAMW,
+   EVP_PRODIGYEVENT, EVP_PRODIGYEVENT_PROBE, EVP_PE_PROBE_LSR, EVP_ADAMW_LSR, PEAK_BASELINE, PEAK_SINGLECYCLE.
+   Output `results/EventProp_Study/`. Poi `git pull` e analisi (sintesi + viewpoint gradiente + r per-driver).
+2. Esito atteso: due metodi di training ottimizzati + viewpoint sul floor/a/b. Se ProdigyEvent+ProbeUp
+   conferma a 50ep → diventa il ProdigyEvent canonico.
+**Capacità riusabili** (opt-in, train.py/network.py): `--cf_extra_channels`, `--uncertainty_head`/`--lambda_nll`,
+`--lambda_geo/ratio_aux`/`--regime_gamma` (da Dynamic_Study); `--optimizer prodigy_event` + relativi flag,
+`--lambda_sr_adapt_gamma`, fix C8 EventProp (EventProp_Study).
 
 ---
 

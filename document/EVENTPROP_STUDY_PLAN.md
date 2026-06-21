@@ -79,3 +79,35 @@ si chiude). Se pareggia val_data ma la struttura-gradiente NON dà insight nuovi
 ## 6. Principio
 Niente workaround; estensione non modifica (i nuovi run usano flag esistenti opt-in già verificati
 bit-identici al pre-modifiche). Champion `normal` resta il deploy a prescindere.
+
+---
+
+## 7. IMPLEMENTAZIONE & RISULTATI SCOUT (2026-06-21) — studio PRONTO per Azure
+
+**Fix e nuovo codice (tutto opt-in, backward-compat bit-identico verificato):**
+- **Fix C8** (`core/eventprop.py`): `jump_clamp`+`lv_clamp` sull'adjoint ALIF → EventProp ora STABILE
+  (gn 87 vs `inf`/1e17 storico). Scout AdamW: val 0.350→0.267 monotona, spike 0.17 in-banda.
+- **ProdigyEvent** (`core/prodigy_event.py`, `--optimizer prodigy_event`): Prodigy adattato a EventProp.
+  Prodigy-std si CONGELA su EventProp (d=1e-6: gradiente esatto sparso → incoerente per lo stimatore di d).
+  Meccanismi (tutti iper-parametri sweepabili): (1) stima d su **gradiente EMA** (`--prodigy_ema_beta`) →
+  sblocca d (1e-6→0.018); (2) **throttle adattivo** su trend norma-gradiente (`--prodigy_instab_kappa`)
+  con **decay morbido** (`--prodigy_d_decay 0.99`) → d si assesta al confine stabile invece di collassare;
+  (3) **ProbeUp MPPT P&O** (`--prodigy_probe_up`) → esce dallo stuck-low; (4) gate spike-rate
+  (`--prodigy_rate_band`). Scout: ProdigyEvent+ProbeUp val **0.299** (= AdamW-class), d assestato 0.0066.
+- **Controllo rate attivo** (`--lambda_sr_adapt_gamma`): lam_sr cresce fuori banda (richiamo direzionale).
+  Finding: si **accoppia con la stima di d** di ProdigyEvent (la perturba → overshoot) → più pulito su AdamW.
+
+**Findings scout (5ep locali, n_train 400):**
+- EventProp stabile (AdamW) val 0.267; ProdigyEvent+ProbeUp 0.299 (parameter-free); Prodigy-std frozen 0.69.
+- **Viewpoint anteprima** (gradiente esatto, epoche stabili): v0 ~0.2% (gradient-starved come la surrogata,
+  metodo-indipendente); **a/b ricevono ~64%** (a 43% > T 32% > b 21%) → il muro a/b NON è flusso-gradiente.
+- ProdigyEvent+ProbeUp = **candidato canonico** (se conferma a 50ep diventa il ProdigyEvent di default).
+
+**Arm dello studio** (`EventProp_Study.ipynb`, EventProp primi → pushati prima, 50 ep, launch/freeflow,
+n_train 1500): EVP_ADAMW · EVP_PRODIGYEVENT · EVP_PRODIGYEVENT_PROBE · EVP_PE_PROBE_LSR · EVP_ADAMW_LSR ·
+PEAK_BASELINE (BPTT champion custom_restart) · PEAK_SINGLECYCLE (BPTT Prodigy canonico). Diagnostica:
+val_data/NRMSE/spike/stabilità + viewpoint gradiente esatto-vs-surrogato + correlazione per-driver r_a/r_b
++ traiettoria d. Plumbing end-to-end validato. **Da girare su Azure.**
+
+**Deliverable atteso**: due metodi di training ottimizzati (BPTT+Prodigy-canonico, EventProp+AdamW/ProdigyEvent),
++ il viewpoint sul perché del floor/a/b da un secondo paradigma. Qualunque insight = valore aggiunto.
