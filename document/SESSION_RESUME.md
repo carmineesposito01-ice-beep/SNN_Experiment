@@ -5,7 +5,37 @@
 
 ---
 
-## 🎯 Stato attuale (2026-06-20 — **Dynamic_Study: il tetto sui parametri dinamici a/b**)
+## 🎯 Stato attuale (2026-06-21 — **EventProp_Study: training a gradiente esatto**)
+
+**Branch corrente**: `EventProp_Study` (da `main`). **`Dynamic_Study` e `Loss_Study` CHIUSI e mergiati in
+`main`, poi eliminati** (locale + remoto). `main` @ `db9fbdb` contiene tutto il lavoro.
+
+**Da dove veniamo (Dynamic_Study, chiuso 2026-06-21)**: indagato a fondo il tetto sui parametri dinamici
+**a/b**. Esito conclusivo: **l'identificazione individuale di a/b è IRRIDUCIBILE** in questa architettura
+(capacità 32h + geometria IIDM: `a`=cap `min(·,a)`, accoppiamento √(ab)). Due conferme indipendenti (L2
+reparam/regime NEGATIVO = variance-collapse; L3 scout #2 encoding FALSIFICATO = non legge i transitori).
+**a/b NON toccano la sicurezza** (closed-loop dipende da √ab, già ben appreso) → il champion **`normal`
+`LS3_PEAK_R0_launch_d03`** (validato, 0 collisioni, string-stable) **resta il deploy**. Capacità aggiunte
+(opt-in, backward-compat, verificate bit-identiche al pre-modifiche): `--cf_extra_channels` (#2 encoding 4→7),
+`--uncertainty_head`+`--lambda_nll` (#5 head eteroschedastica, calibrata), `--lambda_geo/ratio_aux`+`--regime_gamma`
+(L2). **Ricetta Prodigy canonica** scoperta: `cosine_no_restart + lr=0.5 + growth_rate 1.05` (single-cycle, più
+semplice del custom_restart, ~15-20 ep; lr=1 esplode = raggio spettrale). Dettagli in `cf-fsnn-dynamic-study` (memoria).
+
+**Perché EventProp ora**: è lo **Study 2 pianificato** post-Loss_Study. Ipotesi guida (utente): il tentativo
+storico EventProp fallì per **misuso iperparametrico** (come accadde per Prodigy: lr=1.0 paper vs 0.5 CLEAN),
+NON per limite reale. Domanda scientifica: il gradiente **esatto** (EventProp) batte BPTT+surrogate, isolando
+la variabile "metodo di training"? Rilevante per FPGA (regola event-based, on-chip-friendly).
+
+**Cosa fare adesso (ragionare DA ZERO, l'ultimo studio è andato male)**:
+1. Cos'è EventProp e in cosa differisce dalla BPTT attuale.
+2. Studio approfondito da TUTTE le fonti (skill SNN-expert ch08/09; `core/eventprop.py` già esistente;
+   `document/EVENTPROP_DESIGN.md` / `EVENTPROP_OPTIMIZER_SWEEP.md` / `EVENTPROP_GRID2X2.md`; fallimento storico).
+3. Translazione su come applicarlo al nostro sistema (ALIF custom + ACC-IDM + vincoli FPGA Po2).
+**Documento maestro in costruzione**: `document/EVENTPROP_STUDY_PLAN.md` (da creare).
+
+---
+
+## 🗄️ Stato precedente (2026-06-20 — **Dynamic_Study: il tetto sui parametri dinamici a/b**) — CHIUSO, merged in main
 
 **Branch corrente**: `Dynamic_Study` (da `main`; `Loss_Study` è stato **merge in `main`** come milestone).
 **Documenti maestri (leggere in quest'ordine per il contesto pieno)**:
