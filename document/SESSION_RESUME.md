@@ -84,12 +84,23 @@ ESPLICITAMENTE log(a/b) (reparam in loss: geo-mean + log-ratio) concentrata ai t
 (4 flag opt-in, backward-compat, smoke OK); `Dynamic_Study_L2.ipynb` = ablazione 6 varianti + diagnostica
 completa per-variante; plumbing end-to-end validato.
 
-**Cosa fare adesso**:
-1. Girare **`Dynamic_Study_L2.ipynb`** su Azure (training ~ore): V0 baseline → V5 ratio+regime. Output
-   `results/Dynamic_Study/L2/`. Poi `git pull` e analisi. **Metrica chiave: r_b da −0.37 → positivo** (b sanato),
-   r_a su, NRMSE a/b giù, senza danneggiare v0/T/s0.
-2. Secondo L2: se reparam/regime sanano a/b → ottimo; se NON bastano (la rete non legge i transitori dal readout
-   per-istante) → **L2b** = encoding derivata/jerk (input dim) + uncertainty head (staged: architetturale).
+**L2 ESEGUITO (2026-06-21, `results/Dynamic_Study/L2/`) — NEGATIVO / workaround. FILONE a/b CHIUSO.**
+6 varianti. Superficie: r_b −0.23→+0.62, NRMSE(a) 0.33→0.14. MA: (1) guadagno = **variance-collapse** del
+range (prior meglio centrato, non identificazione); (2) **val_data (accel) PEGGIORA ~12%** (0.193→0.216) =
+trade sbagliato per Safety>Comfort>Performance; (3) **s0 si rompe** (r_s0 0.578→−0.088) = whack-a-mole, rete
+satura; (4) **r_ratio resta 0.12-0.33** → split a/b NON risolto (cavalca √ab); (5) per-regime inutile (non
+legge i transitori); (6) le leve "intelligenti" non battono l'aux banale (V1). **Conclusione: lo split a/b è
+IRRIDUCIBILE** (capacità + identificabilità strutturale IIDM); inseguirlo costa accel/s0. **Champion `normal`
+resta il deploy** (validato, sicuro, oracle-like); a/b non toccano la sicurezza.
+
+**Cosa fare adesso** — filone a/b chiuso, si torna alla scaletta `document/FUTURE_WORK.md`:
+- **EventProp (Study 2 pianificato)**: rifarlo "come si deve" (ipotesi: fallì per misuso iperparametri come
+  Prodigy). Gradiente esatto vs BPTT+surrogate; FPGA-rilevante. Docs: EVENTPROP_DESIGN/OPTIMIZER_SWEEP.
+- **F6 multi-seed → F5 deploy FPGA PYNQ-Z1**: finire il progetto col champion validato (single-seed = rischio
+  residuo principale).
+- **v0-freeze (decoder 4-param)**: cheap win (S1: v0 non-identificabile, ~zero costo + meno param FPGA).
+- **Future-B (cambio modello/loss)**: unico vero attacco strutturale ad a/b (S3_CONSOLIDATION_AND_FUTURE_B.md);
+  C1 LAMB / C2 vincolo raggio spettrale → capacity sweep valido. Deep/rischioso. **DA DECIDERE con l'utente.**
 
 ---
 
