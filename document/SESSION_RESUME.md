@@ -93,7 +93,18 @@ legge i transitori); (6) le leve "intelligenti" non battono l'aux banale (V1). *
 IRRIDUCIBILE** (capacità + identificabilità strutturale IIDM); inseguirlo costa accel/s0. **Champion `normal`
 resta il deploy** (validato, sicuro, oracle-like); a/b non toccano la sicurezza.
 
-**Cosa fare adesso** — filone a/b chiuso, si torna alla scaletta `document/FUTURE_WORK.md`:
+**L3 esplorato via SCOUT locali (2026-06-21) — conferma la chiusura.** Invece dell'ablazione full (ore Azure),
+scout 5ep locali: **#2 encoding (Δv'/jerk/ṡ, input 4→7) FALSIFICATO** — r_b peggiora a −0.57, r_ratio 0.09,
+per-regime ancora piatto (NON legge i transitori), `a` variance-collapsed. **2ª conferma: identificazione a/b
+irriducibile.** **#5 uncertainty head** (eteroschedastica, output 5→10 + NLL): scout POSITIVO — calibrata
+(corr(σ,|err|) 0.45-0.67), flagga correttamente `a` come param più incerto (NON `b`: errore puntuale piccolo,
+l'anti-correlazione è di rango = Performance, non safety). **Capacità riusabili in train.py/network.py** (flag
+opt-in, backward-compat): `--cf_extra_channels` (#2), `--uncertainty_head`+`--lambda_nll` (#5), `--lambda_geo_aux`/
+`--lambda_ratio_aux`/`--regime_gamma` (L2). **Studio Prodigy** (utente): ricetta canonica **single-cycle**
+`cosine_no_restart + lr=0.5 + growth_rate 1.05` validata locale (più semplice del custom_restart, stesso operating
+point; lr=1 esplode = raggio spettrale, AGC peggiora; ~15-20 ep bastano).
+
+**Cosa fare adesso** — filone a/b CHIUSO definitivamente, si torna alla scaletta `document/FUTURE_WORK.md`:
 - **EventProp (Study 2 pianificato)**: rifarlo "come si deve" (ipotesi: fallì per misuso iperparametri come
   Prodigy). Gradiente esatto vs BPTT+surrogate; FPGA-rilevante. Docs: EVENTPROP_DESIGN/OPTIMIZER_SWEEP.
 - **F6 multi-seed → F5 deploy FPGA PYNQ-Z1**: finire il progetto col champion validato (single-seed = rischio
