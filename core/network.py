@@ -1337,7 +1337,9 @@ class CF_FSNN_Net_EventProp_Full(CF_FSNN_Net):
     Il base_threshold viene appreso via soft reset adjoint (vedi eventprop.py).
     """
 
-    def __init__(self, hidden_size=None, rank=None, max_delay=None):
+    def __init__(self, hidden_size=None, rank=None, max_delay=None,
+                 eventprop_eps=1e-3, eventprop_jump_clamp=10.0,
+                 eventprop_lv_clamp=50.0, eventprop_denom_gate_scale=0.0):
         nn.Module.__init__(self)
         from config import (
             CF_INPUT_SIZE, CF_HIDDEN_SIZE, CF_OUTPUT_SIZE,
@@ -1366,6 +1368,8 @@ class CF_FSNN_Net_EventProp_Full(CF_FSNN_Net):
             base_th_init=1.5, thresh_jump_init=0.5,   # match baseline ALIFCell
             alpha_m=7.0/8.0, alpha_f=7.0/8.0,         # bit_shift=3 leak
             silent_repair=True,
+            eps=eventprop_eps, jump_clamp=eventprop_jump_clamp,
+            lv_clamp=eventprop_lv_clamp, denom_gate_scale=eventprop_denom_gate_scale,
         )
         # Output: bit-shift leak + Po2 quantize (matches baseline OutputLayer_LI)
         self.layer_out = LILayer_BitShift_Po2(
@@ -1484,8 +1488,12 @@ def build_model(variant: str = 'baseline', hidden_size=None, rank=None,
     if v == 'eventprop_lif_simple':
         return CF_FSNN_Net_EventProp_LIF_Simple(hidden_size=hidden_size, rank=rank)
     if v == 'eventprop_alif_full':
-        return CF_FSNN_Net_EventProp_Full(hidden_size=hidden_size, rank=rank,
-                                          max_delay=max_delay)
+        return CF_FSNN_Net_EventProp_Full(
+            hidden_size=hidden_size, rank=rank, max_delay=max_delay,
+            eventprop_eps=kwargs.get('eventprop_eps', 1e-3),
+            eventprop_jump_clamp=kwargs.get('eventprop_jump_clamp', 10.0),
+            eventprop_lv_clamp=kwargs.get('eventprop_lv_clamp', 50.0),
+            eventprop_denom_gate_scale=kwargs.get('eventprop_denom_gate_scale', 0.0))
     raise ValueError(
         f"Variant '{variant}' non supportata. Choices:\n"
         "  baseline | stacked_2 | stacked_2_skip | stacked_3_thin | max_delay_12 | "

@@ -1233,6 +1233,18 @@ def main():
     parser.add_argument('--agc_lambda', type=float, default=0.01,
                         help='Soglia AGC: rapporto max ||g_unit||/||w_unit|| ammesso. Tipico 0.01 '
                              '(NFNets). Piu alto = meno aggressivo. Solo se --grad_clip agc.')
+    # EventProp adjoint stabilization (C8/C8b) — solo per --training_method eventprop_alif_full.
+    # Spike marginali (denom = drive - V_th_eff -> 0) corrompono il gradiente adjoint a scala.
+    parser.add_argument('--eventprop_eps', type=float, default=1e-3,
+                        help='EventProp: floor |denom| nell adjoint (guard div-by-0). Default 1e-3.')
+    parser.add_argument('--eventprop_jump_clamp', type=float, default=10.0,
+                        help='EventProp C8: cap per-tick del jump adjoint. Default 10.0.')
+    parser.add_argument('--eventprop_lv_clamp', type=float, default=50.0,
+                        help='EventProp C8: bound dell adjoint lV accumulato. Default 50.0.')
+    parser.add_argument('--eventprop_denom_gate_scale', type=float, default=0.0,
+                        help='EventProp C8b: scala del gate morbido denom^2/(denom^2+scale^2) che '
+                             'attenua il jump degli spike marginali (invece di clamparlo). '
+                             '0 = off (default). Es. 0.05 = attenua |denom|<~0.05.')
     # STEP 2C — Optimizer_Exploration: step budget control + val decoupling
     parser.add_argument('--max_steps_per_epoch', type=int, default=-1,
                         help='Cap step training per epoca, indipendente da len(train_loader). '
@@ -1399,6 +1411,10 @@ def main():
         rank=args.cf_rank,
         max_delay=args.cf_max_delay,
         bit_shift=args.cf_bit_shift,
+        eventprop_eps=args.eventprop_eps,
+        eventprop_jump_clamp=args.eventprop_jump_clamp,
+        eventprop_lv_clamp=args.eventprop_lv_clamp,
+        eventprop_denom_gate_scale=args.eventprop_denom_gate_scale,
     ).to(device)
     n_params = sum(p.numel() for p in model.parameters())
     # Log unificato: max_delay non sempre disponibile (LIF simple non lo espone)

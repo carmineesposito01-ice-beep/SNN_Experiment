@@ -299,7 +299,7 @@ class ALIFLayer_EventProp_Full(nn.Module):
                  base_th_init=1.5, thresh_jump_init=0.5,
                  alpha_m=7.0/8.0, alpha_f=7.0/8.0,
                  eps=1e-3, silent_repair=True,
-                 jump_clamp=10.0, lv_clamp=50.0):
+                 jump_clamp=10.0, lv_clamp=50.0, denom_gate_scale=0.0):
         super().__init__()
         self.in_features  = in_features
         self.out_features = out_features
@@ -314,6 +314,7 @@ class ALIFLayer_EventProp_Full(nn.Module):
         # per-tick; lv_clamp bound l'adjoint accumulato. Senza, grad ~1e17 (fail storico 6/11).
         self.jump_clamp = jump_clamp
         self.lv_clamp = lv_clamp
+        self.denom_gate_scale = denom_gate_scale   # C8b: scala gate morbido (0 = off)
         self.silent_repair = silent_repair
 
         # Parameters (match baseline exactly)
@@ -478,11 +479,18 @@ class ALIFLayer_EventProp_Full(nn.Module):
             # Jump al spike time k+1 (formula EventProp: denom ≈ V'(t*) discretizzato)
             # Per il nostro caso (NO synaptic current), drive[k+1] è il "kick" che ha
             # spinto V sopra threshold. denom = drive[k+1] - V_th_eff[k+1]
-            denom = drive[:, k+1] - V_th_eff[:, k+1]
-            denom = torch.where(denom.abs() < self.eps,
-                                torch.sign(denom + 1e-12) * self.eps, denom)
+            denom_raw = drive[:, k+1] - V_th_eff[:, k+1]
+            denom = torch.where(denom_raw.abs() < self.eps,
+                                torch.sign(denom_raw + 1e-12) * self.eps, denom_raw)
             jump = s[:, k+1] * (lV[:, k+1] + total_grad_s) / denom
-            # C8: taglia il jump per-tick (spike marginali con denom~0 -> jump enorme)
+            # C8b: gate MORBIDO sul denominatore. Gli spike marginali (denom_raw -> 0) danno un
+            # jump inaffidabile (formula adjoint degenere); invece di clamparlo (= direzione
+            # corrotta), lo ATTENUA con gate = denom_raw^2 / (denom_raw^2 + scale^2) in [0,1]:
+            # ~0 per crossing marginali (|denom|<<scale), ~1 per crossing puliti. scale=0 = off.
+            if self.denom_gate_scale > 0.0:
+                gate = denom_raw * denom_raw / (denom_raw * denom_raw + self.denom_gate_scale ** 2)
+                jump = jump * gate
+            # C8: taglia il jump per-tick (rete di sicurezza contro overflow residuo)
             if self.jump_clamp is not None:
                 jump = torch.clamp(jump, -self.jump_clamp, self.jump_clamp)
 

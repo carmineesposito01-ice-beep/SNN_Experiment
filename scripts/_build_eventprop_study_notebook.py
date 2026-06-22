@@ -10,12 +10,17 @@ Prodigy si congela su EventProp -> ProdigyEvent (stima d su gradiente EMA) lo sb
 l'envelope stretto -> throttle adattivo (trend-gradiente) + decay morbido 0.99 lo assesta al confine;
 + ProbeUp (MPPT P&O) come iper-parametro sweepabile.
 
-Arm (EventProp PRIMI -> pushati per primi):
-  EVP_ADAMW              EventProp + AdamW 2e-3 + cosine_no_restart + AGC (workhorse)
+Arm (solo EventProp per ora — baseline gia' validate, droppate perche' rallenterebbero soltanto):
+  EVP_ADAMW              EventProp + AdamW 5e-4 + cosine_no_restart + AGC (workhorse)
   EVP_PRODIGYEVENT       + ProdigyEvent (EMA + gate rate + decay 0.99)
   EVP_PRODIGYEVENT_PROBE + ProbeUp 0.01 (candidato canonico)
-  PEAK_BASELINE          BPTT champion (Prodigy + custom_restart, grad_clip none) -- riferimento
-  PEAK_SINGLECYCLE       BPTT + Prodigy single-cycle canonico (cosine_no_restart + growth 1.05)
+
+Fix di stabilita' (2026-06-22): la failure a scala 50ep/1500 era deriva nel regime SINGOLARE
+dell'adjoint (spike marginali, denom=drive-V_th -> 0, gain per-spike 1/denom). NON e' magnitudine
+(gia' clippata a norma 1.0) ma DIREZIONE. Repro locale fedele (cache n1500 launch): AdamW lr 2e-3
+esplode a ep4 (grad 4482); lr 5e-4 STABILE 9ep (grad ~1.0, val 0.292 monotona, clamp C8 MAI attivi
+-> stabilita' intrinseca dell'operating-point, non dei clamp). I clamp jump/lv restano come barriere
+di sicurezza (failsafe), non come meccanismo di stabilita'.
 """
 import json
 import os
@@ -59,7 +64,7 @@ br = subprocess.run(['git', 'branch', '--show-current'], capture_output=True, te
 print('[EventProp_Study] ENV OK | branch =', br)
 """
 
-CONFIG = """# Cell 2 -- definizione arm (EventProp PRIMI). Flag comuni + override per-arm.
+CONFIG = """# Cell 2 -- definizione arm (BASELINE PRIME). Flag comuni + override per-arm.
 EPOCHS = 50
 COMMON = ['--max_steps_per_epoch', '100', '--batch_size', '8', '--val_batch_size', '32',
           '--seq_len', '50', '--cf_hidden_size', '32', '--cf_rank', '8', '--cf_max_delay', '6',
@@ -76,27 +81,24 @@ PE = ['--optimizer', 'prodigy_event', '--lr', '0.5', '--max_lr', '0.5', '--sched
       '--prodigy_d0', '1e-6', '--prodigy_weight_decay', '0.01', '--prodigy_use_bias_correction', '1',
       '--prodigy_safeguard_warmup', '1', '--prodigy_ema_beta', '0.9', '--prodigy_instab_kappa', '2.0',
       '--prodigy_rate_band', '0.10,0.25', '--prodigy_d_decay', '0.99']
-ADAMW = ['--optimizer', 'adamw', '--lr', '2e-3', '--max_lr', '2e-3', '--scheduler', 'cosine_no_restart']
+# lr 5e-4 (non 2e-3): a 2e-3 EventProp deriva nel regime singolare ed esplode a ep4 (repro locale
+# n1500 launch); a 5e-4 resta nel regime ben condizionato (grad ~1, clamp inattivi) -> stabile.
+ADAMW = ['--optimizer', 'adamw', '--lr', '5e-4', '--max_lr', '5e-4', '--scheduler', 'cosine_no_restart']
 # BPTT champion (custom_restart) e single-cycle: decode calibrato (init_bias_shift + tau per-channel)
 BPTT_DECODE = ['--cf_init_bias_shift', '1', '--cf_logit_tau_per_channel', '10.0,3.0,10.0,3.0,3.0']
 PRODIGY_STD = ['--optimizer', 'prodigy', '--lr', '0.5', '--prodigy_betas', '0.9,0.99', '--prodigy_d_coef', '1.0',
                '--prodigy_d0', '1e-6', '--prodigy_weight_decay', '0.01', '--prodigy_use_bias_correction', '1',
                '--prodigy_safeguard_warmup', '1']
 
-# (tag, training_method, [override]) — EventProp PRIMI
+# (tag, training_method, [override]) — SOLO EventProp per ora.
+# Le baseline (PEAK_BASELINE/SINGLECYCLE, BPTT_DECODE+PRODIGY_STD) sono gia' validate e sono state
+# droppate per questa iterazione: rallenterebbero soltanto. Definizioni tenute per re-aggiungerle.
 ARMS = [
     ('EVP_ADAMW',              'eventprop_alif_full', ADAMW),
     ('EVP_PRODIGYEVENT',       'eventprop_alif_full', PE),
     ('EVP_PRODIGYEVENT_PROBE', 'eventprop_alif_full', PE + ['--prodigy_probe_up', '0.01']),
-    # PEAK_BASELINE: replica FEDELE del champion LS3_PEAK_R0_launch_d03 -> grad_clip 'none'
-    # (override sull'agc del COMMON). Con growth inf + custom_restart l'agc destabilizzava d.
-    ('PEAK_BASELINE',          'baseline', BPTT_DECODE + PRODIGY_STD + ['--scheduler', 'custom_restart',
-                                '--restart_T0', '12', '--restart_decay', '0.3', '--restart_warmup_epochs', '2',
-                                '--prodigy_growth_rate', 'inf', '--T0', '5', '--grad_clip', 'none']),
-    ('PEAK_SINGLECYCLE',       'baseline', BPTT_DECODE + PRODIGY_STD + ['--scheduler', 'cosine_no_restart',
-                                '--max_lr', '0.5', '--prodigy_growth_rate', '1.05']),
 ]
-print('Arm (in ordine, EventProp primi):', [a[0] for a in ARMS])
+print('Arm (solo EventProp):', [a[0] for a in ARMS])
 """
 
 RUN = """# Cell 3 -- esegue ogni arm (subprocess train.py) + push per-arm (EventProp primi -> visibili prima)
