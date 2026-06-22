@@ -425,7 +425,8 @@ def train_epoch(model, loader, optimizer, device, epoch, lam,
                 log_every=LOG_EVERY, max_inf_streak=20, diag=False,
                 batch_logger=None, max_steps_per_epoch=-1,
                 explosion_threshold=float('inf'),
-                grad_clip_mode='none', agc_lambda=0.01):
+                grad_clip_mode='none', agc_lambda=0.01,
+                spectral_lambda=0.0, spectral_target=1.5):
     """
     Esegue un'epoca di training con guardie e diagnostica.
 
@@ -491,6 +492,17 @@ def train_epoch(model, loader, optimizer, device, epoch, lam,
             spike_acc += sr
             n_batches  += 1
             continue
+
+        # Regolarizzatore spettrale (EventProp): vincola sigma_max(po2(U)@po2(V)) <= target ->
+        # ricorrenza e adjoint Rᵀ contrattivi -> stabile per costruzione. Il gradiente fluisce a
+        # rec_U/rec_V via autograd standard e SI SOMMA al manual adjoint del Function. 0 = off.
+        if spectral_lambda > 0.0:
+            _lh = getattr(model, 'layer_hidden', None)
+            if _lh is not None and hasattr(_lh, 'rec_U') and hasattr(_lh, 'rec_V'):
+                from core.hardware import po2_quantize
+                _R = po2_quantize(_lh.rec_U) @ po2_quantize(_lh.rec_V)
+                _sigma = torch.linalg.matrix_norm(_R, ord=2)
+                loss = loss + spectral_lambda * torch.relu(_sigma - spectral_target) ** 2
 
         loss.backward()
 
@@ -1286,6 +1298,13 @@ def main():
                         help='EventProp C10: 1 = corregge la scala del denom adjoint per il bit-shift '
                              'leak (drive_eff = drive/(1-alpha_m) -> denom ~16x piu grande -> guadagno '
                              'per-spike <1 -> stabile per costruzione). 0 = denom grezzo (default).')
+    parser.add_argument('--eventprop_lambda_spectral', type=float, default=0.0,
+                        help='EventProp C11: peso del regolarizzatore spettrale relu(sigma_max(U@V)-'
+                             'target)^2. Vincola il raggio spettrale della ricorrenza -> adjoint Rᵀ '
+                             'contrattivo (la ricorrenza cresce senza vincolo ed esplode l\'adjoint). 0 = off.')
+    parser.add_argument('--eventprop_spectral_target', type=float, default=1.5,
+                        help='EventProp C11: tetto del raggio spettrale di U@V (oltre, penalita\'). '
+                             'Default 1.5 (l\'esplosione osservata parte a ~2.5-2.7).')
     # STEP 2C — Optimizer_Exploration: step budget control + val decoupling
     parser.add_argument('--max_steps_per_epoch', type=int, default=-1,
                         help='Cap step training per epoca, indipendente da len(train_loader). '
@@ -1771,6 +1790,8 @@ def main():
                 explosion_threshold=args.epoch_explosion_threshold,
                 grad_clip_mode=args.grad_clip,
                 agc_lambda=args.agc_lambda,
+                spectral_lambda=args.eventprop_lambda_spectral,
+                spectral_target=args.eventprop_spectral_target,
             )
 
             # R30 (2026-06-12) — Epoch-level explosion guard.
