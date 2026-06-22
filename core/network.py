@@ -328,16 +328,13 @@ class CF_FSNN_Net(nn.Module):
         [ 0.5,  3.0],   # 4: b  [m/s²]
     ]
 
-    def __init__(self, hidden_size=None, rank=None, max_delay=None, bit_shift=None,
-                 input_size=None, uncertainty=False):
+    def __init__(self, hidden_size=None, rank=None, max_delay=None, bit_shift=None):
         """
         Args:
             hidden_size: override CF_HIDDEN_SIZE (None → usa config). Per STEP 2B sweep.
             rank: override CF_RANK (None → usa config). Per STEP 2B sweep.
             max_delay: override CF_MAX_DELAY (None → usa config). Per STEP 2E A5 variant.
             bit_shift: override leak (None → default ALIFCell=3). R25 ablation asse A5/A6.
-            input_size: override CF_INPUT_SIZE (None → usa config). L3 #2: encoding con
-                canali derivata (Δv', accel, ṡ) → input 4→7. Default None = 4 (backward-compat).
         """
         super().__init__()
         from config import (
@@ -365,18 +362,11 @@ class CF_FSNN_Net(nn.Module):
         # α = exp(-Δt / τ_OU): costante mean-reversion per loss OU  (≈ 0.9967)
         self.ou_alpha = _math.exp(-DT / IDM2D_TAU)
 
-        in_sz = input_size if input_size is not None else CF_INPUT_SIZE
-        self.input_size = in_sz   # esposto per logging/diagnostica (L3 #2 encoding)
         self.layer_hidden = HiddenLayer_ALIF(
-            in_sz, hidden_size,
+            CF_INPUT_SIZE, hidden_size,
             rank=rank, max_delay=max_delay, bit_shift=bit_shift,
         )
-        # L3 #5 (uncertainty head): output 5->10 (5 medie + 5 log-varianza). forward_step
-        # restituisce comunque le 5 medie (contratto invariato); il log-var e' stashato per la NLL.
-        self.uncertainty = bool(uncertainty)
-        self.layer_out = OutputLayer_LI(hidden_size, 10 if self.uncertainty else CF_OUTPUT_SIZE)
-        self._last_logvar = None
-        self._last_logvar_seq = None
+        self.layer_out = OutputLayer_LI(hidden_size, CF_OUTPUT_SIZE)
 
         # Bounds come buffer → si spostano con .to(device)
         bounds = torch.tensor(self._PARAM_BOUNDS, dtype=torch.float32)
@@ -435,10 +425,6 @@ class CF_FSNN_Net(nn.Module):
           (raw - decode_offset[i]) / logit_tau[i] poi sigmoid.
           Con default decode_offset=0, logit_tau=1: comportamento identico al pre-R29.
         """
-        # L3 #5: se l'output e' 10-wide, split: prime 5 = medie, ultime 5 = log-varianza.
-        if raw.shape[-1] > 5:
-            self._last_logvar = raw[..., 5:]
-            raw = raw[..., :5]
         # R29 decode_offset/logit_tau: getattr-safe per varianti che NON li registrano
         # (es. EventProp, pre-R29). Assenti -> offset 0 / tau 1 = comportamento pre-R29 identico.
         off = self.decode_offset if hasattr(self, 'decode_offset') else 0.0
@@ -670,7 +656,6 @@ class CF_FSNN_Net(nn.Module):
         self.reset_state(batch, x_seq_norm.device)
         steps  = []
         spikes = []
-        logvars = []                                          # L3 #5: log-var per step
         for t in range(T_len):
             x_t = x_seq_norm[:, t, :]
             raw_out     = None
@@ -682,11 +667,7 @@ class CF_FSNN_Net(nn.Module):
                 spike_h_acc = spike_h_acc + spike_h.float()
             spike_h_rate = spike_h_acc / self.n_ticks        # (batch, hidden)
             spikes.append(spike_h_rate.mean(dim=1, keepdim=True))   # (batch, 1)
-            steps.append(self._decode_params(raw_out).unsqueeze(1))  # (batch, 1, 5) — stasha _last_logvar
-            if self.uncertainty:
-                logvars.append(self._last_logvar.unsqueeze(1))      # (batch, 1, 5)
-        # L3 #5: stasha la sequenza di log-var (B,T,5) leggibile da pinn_loss (None se off)
-        self._last_logvar_seq = torch.cat(logvars, dim=1) if self.uncertainty else None
+            steps.append(self._decode_params(raw_out).unsqueeze(1))  # (batch, 1, 5)
         return torch.cat(steps, dim=1), torch.cat(spikes, dim=1)     # (batch,T,5), (batch,T)
 
 
@@ -1474,11 +1455,8 @@ def build_model(variant: str = 'baseline', hidden_size=None, rank=None,
     # --- baseline (shared) ---
     if v == 'baseline':
         # R25: passa max_delay e bit_shift al baseline per ablation asse A4/A5/A6
-        # L3 #2: input_size via kwargs (encoding canali derivata). Default None = 4.
         return CF_FSNN_Net(hidden_size=hidden_size, rank=rank,
-                            max_delay=max_delay, bit_shift=bit_shift,
-                            input_size=kwargs.get('input_size'),
-                            uncertainty=kwargs.get('uncertainty', False))
+                            max_delay=max_delay, bit_shift=bit_shift)
     # --- Architecture variants ---
     if v == 'stacked_2':
         h = hidden_size or 32

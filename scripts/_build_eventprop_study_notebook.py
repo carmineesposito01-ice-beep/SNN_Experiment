@@ -8,15 +8,13 @@ ottimizzatori ottimizzati per ciascuno. Obiettivo: due metodi di training ottimi
 Pre-requisiti validati localmente (scout 5ep): EventProp stabile via fix C8 (jump/lv clamp);
 Prodigy si congela su EventProp -> ProdigyEvent (stima d su gradiente EMA) lo sblocca; d sovrastima
 l'envelope stretto -> throttle adattivo (trend-gradiente) + decay morbido 0.99 lo assesta al confine;
-+ ProbeUp (MPPT P&O) e lambda_sr adattivo (controllo rate) come iper-parametri sweepabili.
++ ProbeUp (MPPT P&O) come iper-parametro sweepabile.
 
 Arm (EventProp PRIMI -> pushati per primi):
   EVP_ADAMW              EventProp + AdamW 2e-3 + cosine_no_restart + AGC (workhorse)
   EVP_PRODIGYEVENT       + ProdigyEvent (EMA + gate rate + decay 0.99)
   EVP_PRODIGYEVENT_PROBE + ProbeUp 0.01 (candidato canonico)
-  EVP_PE_PROBE_LSR       + lambda_sr adattivo (g1.0) su ProdigyEvent
-  EVP_ADAMW_LSR          AdamW + lambda_sr adattivo (controllo rate su optimizer robusto)
-  PEAK_BASELINE          BPTT champion (Prodigy + custom_restart) -- riferimento
+  PEAK_BASELINE          BPTT champion (Prodigy + custom_restart, grad_clip none) -- riferimento
   PEAK_SINGLECYCLE       BPTT + Prodigy single-cycle canonico (cosine_no_restart + growth 1.05)
 """
 import json
@@ -84,18 +82,17 @@ BPTT_DECODE = ['--cf_init_bias_shift', '1', '--cf_logit_tau_per_channel', '10.0,
 PRODIGY_STD = ['--optimizer', 'prodigy', '--lr', '0.5', '--prodigy_betas', '0.9,0.99', '--prodigy_d_coef', '1.0',
                '--prodigy_d0', '1e-6', '--prodigy_weight_decay', '0.01', '--prodigy_use_bias_correction', '1',
                '--prodigy_safeguard_warmup', '1']
-LSR = ['--lambda_sr_adapt_gamma', '1.0', '--sr_adapt_margin', '0.05']
 
 # (tag, training_method, [override]) — EventProp PRIMI
 ARMS = [
     ('EVP_ADAMW',              'eventprop_alif_full', ADAMW),
     ('EVP_PRODIGYEVENT',       'eventprop_alif_full', PE),
     ('EVP_PRODIGYEVENT_PROBE', 'eventprop_alif_full', PE + ['--prodigy_probe_up', '0.01']),
-    ('EVP_PE_PROBE_LSR',       'eventprop_alif_full', PE + ['--prodigy_probe_up', '0.01'] + LSR),
-    ('EVP_ADAMW_LSR',          'eventprop_alif_full', ADAMW + LSR),
+    # PEAK_BASELINE: replica FEDELE del champion LS3_PEAK_R0_launch_d03 -> grad_clip 'none'
+    # (override sull'agc del COMMON). Con growth inf + custom_restart l'agc destabilizzava d.
     ('PEAK_BASELINE',          'baseline', BPTT_DECODE + PRODIGY_STD + ['--scheduler', 'custom_restart',
                                 '--restart_T0', '12', '--restart_decay', '0.3', '--restart_warmup_epochs', '2',
-                                '--prodigy_growth_rate', 'inf', '--T0', '5']),
+                                '--prodigy_growth_rate', 'inf', '--T0', '5', '--grad_clip', 'none']),
     ('PEAK_SINGLECYCLE',       'baseline', BPTT_DECODE + PRODIGY_STD + ['--scheduler', 'cosine_no_restart',
                                 '--max_lr', '0.5', '--prodigy_growth_rate', '1.05']),
 ]

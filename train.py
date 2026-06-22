@@ -126,12 +126,8 @@ class CFDataset(Dataset):
     e' ignorato in pinn_loss → comportamento identico al pre-R30.
     """
 
-    def __init__(self, dataset_list, seq_len=100, stride=50, extra_channels=False):
+    def __init__(self, dataset_list, seq_len=100, stride=50):
         self.seq_len = seq_len
-        # L3 #2 (encoding): se True, __getitem__ aggiunge 3 canali derivata temporale
-        # [ṡ, accel_obs, Δv'] = diff(s), diff(v), diff(Δv) -> input 4->7. Danno alla rete
-        # la FIRMA del transitorio (oggi assente dal singolo step: causa L1c). Default False.
-        self.extra_channels = extra_channels
         self.windows = []
 
         # R30 — indice canali in CF_FSNN_Net._PARAM_BOUNDS: 0=v0, 1=T, 2=s0, 3=a, 4=b
@@ -167,11 +163,6 @@ class CFDataset(Dataset):
 
     def __getitem__(self, idx):
         x, y, mask, params_gt = self.windows[idx]
-        if self.extra_channels:
-            # canali derivata su s,v,Δv (col 0,1,2): diff temporale, prima riga = 0 (causale).
-            d = np.zeros((x.shape[0], 3), dtype=np.float32)
-            d[1:, :] = x[1:, :3] - x[:-1, :3]
-            x = np.concatenate([x, d], axis=1)   # (seq_len, 7)
         return (
             torch.from_numpy(x),
             torch.from_numpy(y),
@@ -188,9 +179,6 @@ def pinn_loss(model, x_seq, y_seq, mask_seq,
               lam_data, lam_phys, lam_ou, lam_bc, lam_sr=0.0,
               lam_T_aux=0.0,
               lam_v0_aux=0.0, lam_s0_aux=0.0, lam_a_aux=0.0, lam_b_aux=0.0,
-              lam_geo_aux=0.0, lam_ratio_aux=0.0, regime_gamma=0.0, regime_thr=0.5,
-              lam_nll=0.0,
-              lam_sr_adapt_gamma=0.0, sr_adapt_margin=0.05,
               params_gt=None,
               spike_target=SPIKE_RATE_TARGET,
               retain_params_grad=False):
@@ -289,15 +277,6 @@ def pinn_loss(model, x_seq, y_seq, mask_seq,
     # Usa il tensor (non .item()) per preservare il gradiente verso i pesi della rete.
     spike_rate_tensor = spike_rates.mean()
     L_sr = (spike_rate_tensor - spike_target) ** 2
-    # Controllo rate ATTIVO (EventProp_Study): lam_sr cresce quando lo spike-rate esce dalla
-    # banda target±margin -> forza di richiamo DIREZIONALE piu forte (riporta nella zona sana).
-    # Il moltiplicatore e' un GAIN (detached); L_sr mantiene il gradiente. gamma=0 = backward-compat.
-    if lam_sr_adapt_gamma > 0.0:
-        _oob = ((spike_rate_tensor.detach() - spike_target).abs() - sr_adapt_margin).clamp(min=0.0)
-        lam_sr_eff = lam_sr * (1.0 + lam_sr_adapt_gamma * (_oob / max(sr_adapt_margin, 1e-6)) ** 2)
-        lam_sr_eff = float(lam_sr_eff)
-    else:
-        lam_sr_eff = lam_sr
 
     # ── L_T_aux (R25): supervisione diretta su T ─────────────────
     # Forza pred_T(t) ≈ T_true(t) usando il GT per-timestep in y_seq[:, :, 1].
@@ -328,58 +307,13 @@ def pinn_loss(model, x_seq, y_seq, mask_seq,
                 aux_losses[idx_pred] = L_p
                 L_params_aux_total = L_params_aux_total + lam_p * L_p
 
-    # ── L2 (Dynamic_Study): reparam [a,b] -> (geo-mean, log-ratio) + per-regime ──
-    # Diagnosi L1c/L1d: la rete fissa bene √(ab) (via L_data) ma il RAPPORTO a/b e' la
-    # direzione molle non vincolata -> b anti-correlato per-driver. Qui si supervisiona
-    # ESPLICITAMENTE la decomposizione in log-spazio:
-    #   geo   = 0.5*(log a + log b) = log √(ab)   (magnitudine, gia' vincolata da L_data)
-    #   ratio = log a - log b        = log(a/b)   (direzione molle: la si vincola QUI)
-    # regime_gamma>0 concentra il peso sui TRANSITORI (|v_dot_gt|>regime_thr), dove a/b
-    # sono osservabili (Studio B: Fisher cond crolla coi transitori). Default 0 = no-op.
-    L_geo = torch.zeros((), device=x_seq.device)
-    L_ratio = torch.zeros((), device=x_seq.device)
-    if params_gt is not None and (lam_geo_aux > 0.0 or lam_ratio_aux > 0.0):
-        eps_p = 1e-3
-        log_a_pr = torch.log(params_seq[:, :, 3].clamp_min(eps_p))   # (B,T)
-        log_b_pr = torch.log(params_seq[:, :, 4].clamp_min(eps_p))
-        log_a_gt = torch.log(params_gt[:, 2].clamp_min(eps_p)).unsqueeze(1)   # (B,1)
-        log_b_gt = torch.log(params_gt[:, 3].clamp_min(eps_p)).unsqueeze(1)
-        geo_pr = 0.5 * (log_a_pr + log_b_pr); geo_gt = 0.5 * (log_a_gt + log_b_gt)
-        rat_pr = log_a_pr - log_b_pr;          rat_gt = log_a_gt - log_b_gt
-        if regime_gamma > 0.0:
-            w_reg = 1.0 + regime_gamma * (v_dot_gt.abs() > regime_thr).float()   # (B,T)
-        else:
-            w_reg = torch.ones_like(mask_seq)
-        wm = mask_seq * w_reg
-        denom_w = wm.sum().clamp(min=1.0)
-        L_geo = (wm * (geo_pr - geo_gt) ** 2).sum() / denom_w
-        L_ratio = (wm * (rat_pr - rat_gt) ** 2).sum() / denom_w
-
-    # ── L_nll (L3 #5): uncertainty head eteroschedastica ─────────
-    # La rete dichiara una log-varianza per-parametro; NLL gaussiana eteroschedastica
-    #   0.5*exp(-s)*(μ-gt)^2 + 0.5*s  → impara media E confidenza (b dovrebbe risultare
-    # a bassa confidenza = s alto). Supervisione su v0,s0,a,b (costanti). Default 0 = off.
-    L_nll = torch.zeros((), device=x_seq.device)
-    if (lam_nll > 0.0 and params_gt is not None and getattr(model, 'uncertainty', False)
-            and getattr(model, '_last_logvar_seq', None) is not None):
-        lv = model._last_logvar_seq.clamp(-7.0, 7.0)            # (B,T,5)
-        for pi, gi in [(0, 0), (2, 1), (3, 2), (4, 3)]:         # v0,s0,a,b: pred idx vs gt idx
-            mu = params_seq[:, :, pi]
-            s  = lv[:, :, pi]
-            gt = params_gt[:, gi].unsqueeze(1)
-            nll = 0.5 * torch.exp(-s) * (mu - gt) ** 2 + 0.5 * s
-            L_nll = L_nll + (mask_seq * nll).sum() / N_valid
-
     loss = (lam_data * L_data
             + lam_phys * L_phys
             + lam_ou   * L_ou
             + lam_bc   * L_bc
-            + lam_sr_eff * L_sr
+            + lam_sr   * L_sr
             + lam_T_aux * L_T_aux
-            + L_params_aux_total
-            + lam_geo_aux * L_geo
-            + lam_ratio_aux * L_ratio
-            + lam_nll * L_nll)
+            + L_params_aux_total)
 
     avg_spike_rate = spike_rate_tensor.item()
 
@@ -396,9 +330,6 @@ def pinn_loss(model, x_seq, y_seq, mask_seq,
         's0_aux': aux_losses.get(2, torch.zeros(())).item() if 2 in aux_losses else 0.0,
         'a_aux':  aux_losses.get(3, torch.zeros(())).item() if 3 in aux_losses else 0.0,
         'b_aux':  aux_losses.get(4, torch.zeros(())).item() if 4 in aux_losses else 0.0,
-        'geo_aux':   L_geo.item(),
-        'ratio_aux': L_ratio.item(),
-        'nll':       L_nll.item(),
     }
     return loss, comps_out, avg_spike_rate, params_seq
 
@@ -1125,32 +1056,6 @@ def main():
                         help='R30 ID-1: peso supervisione a (cost per scenario). 0 = off.')
     parser.add_argument('--lambda_b_aux',  type=float, default=0.0,
                         help='R30 ID-1: peso supervisione b (cost per scenario). 0 = off.')
-    # L2 (Dynamic_Study): reparam [a,b] -> (geo-mean, log-ratio) + per-regime weighting.
-    # Vincola ESPLICITAMENTE la direzione molle log(a/b) (b anti-correlato in L1d). Default 0 = off.
-    parser.add_argument('--cf_extra_channels', type=int, default=0, choices=[0, 1],
-                        help='L3 #2 (encoding): 1 = aggiunge 3 canali derivata [ṡ,accel,Δv\'] '
-                             'all input (4->7) per dare la firma del transitorio. 0 = off (default).')
-    parser.add_argument('--lambda_geo_aux', type=float, default=0.0,
-                        help='L2: peso supervisione geo-mean log√(ab) (magnitudine a/b). 0 = off.')
-    parser.add_argument('--lambda_ratio_aux', type=float, default=0.0,
-                        help='L2: peso supervisione log-ratio log(a/b) (direzione molle). 0 = off.')
-    parser.add_argument('--regime_gamma', type=float, default=0.0,
-                        help='L2: amplifica il peso di geo/ratio aux sui transitori '
-                             '(|v_dot_gt|>regime_thr) di un fattore (1+gamma). 0 = uniforme.')
-    parser.add_argument('--regime_thr', type=float, default=0.5,
-                        help='L2: soglia |v_dot| [m/s^2] che definisce un transitorio (per regime_gamma).')
-    # L3 #5 (uncertainty head): output 5->10 (medie+log-var) + NLL eteroschedastica.
-    parser.add_argument('--uncertainty_head', type=int, default=0, choices=[0, 1],
-                        help='L3 #5: 1 = output 5->10 (5 medie + 5 log-var), la rete dichiara '
-                             'la confidenza per-parametro. Richiede --lambda_nll>0. 0 = off (default).')
-    parser.add_argument('--lambda_nll', type=float, default=0.0,
-                        help='L3 #5: peso della NLL gaussiana eteroschedastica su v0,s0,a,b. 0 = off.')
-    parser.add_argument('--lambda_sr_adapt_gamma', type=float, default=0.0,
-                        help='EventProp_Study: controllo rate attivo - boost di lam_sr fuori banda '
-                             '(forza di richiamo direzionale verso il rate sano). 0 = lam_sr fisso.')
-    parser.add_argument('--sr_adapt_margin', type=float, default=0.05,
-                        help='EventProp_Study: semi-banda attorno a SPIKE_RATE_TARGET entro cui lam_sr '
-                             'resta normale (oltre, boost ∝ gamma). Default 0.05 (target 0.15 -> banda 0.10-0.20).')
     # Ottimizzatore
     parser.add_argument('--optimizer',   type=str,   default='adam',
                         choices=['adam', 'adamw', 'lion', 'prodigy', 'prodigy_event'],
@@ -1449,9 +1354,8 @@ def main():
     stride_trn = seq_len // 2
     stride_val = seq_len
 
-    _extra_ch = bool(args.cf_extra_channels)
-    train_ds = CFDataset(train_data, seq_len=seq_len, stride=stride_trn, extra_channels=_extra_ch)
-    val_ds   = CFDataset(val_data,   seq_len=seq_len, stride=stride_val, extra_channels=_extra_ch)
+    train_ds = CFDataset(train_data, seq_len=seq_len, stride=stride_trn)
+    val_ds   = CFDataset(val_data,   seq_len=seq_len, stride=stride_val)
 
     # num_workers: auto-rilevamento sicuro per ogni piattaforma.
     # Regola: 0 se Windows (fork CUDA non sicuro), 0 se Colab (CUDA già
@@ -1495,8 +1399,6 @@ def main():
         rank=args.cf_rank,
         max_delay=args.cf_max_delay,
         bit_shift=args.cf_bit_shift,
-        input_size=(7 if bool(args.cf_extra_channels) else None),   # L3 #2: 4->7 con encoding
-        uncertainty=bool(args.uncertainty_head),                     # L3 #5: output 5->10 + NLL
     ).to(device)
     n_params = sum(p.numel() for p in model.parameters())
     # Log unificato: max_delay non sempre disponibile (LIF simple non lo espone)
@@ -1648,16 +1550,12 @@ def main():
     batch_log_path = os.path.join(save_dir, 'training_batch_log.csv')
     batch_logger   = BatchCSVLogger(batch_log_path, flush_every=50)
 
-    # Pesi PINN come tupla per pinn_loss() — 14 componenti (B5 + R25 T_aux + R30 4 params
-    # + L2 geo/ratio/regime). Ordine MUST match pinn_loss signature: lam_data, lam_phys,
-    # lam_ou, lam_bc, lam_sr, lam_T_aux, lam_v0_aux, lam_s0_aux, lam_a_aux, lam_b_aux,
-    # lam_geo_aux, lam_ratio_aux, regime_gamma, regime_thr.
+    # Pesi PINN come tupla per pinn_loss() — 10 componenti (B5 + R25 T_aux + R30 4 params)
+    # Ordine MUST match pinn_loss signature: lam_data, lam_phys, lam_ou, lam_bc, lam_sr,
+    # lam_T_aux, lam_v0_aux, lam_s0_aux, lam_a_aux, lam_b_aux.
     lam = (args.lambda_data, args.lambda_phys, args.lambda_ou, args.lambda_bc,
            args.lambda_sr, args.lambda_T_aux,
-           args.lambda_v0_aux, args.lambda_s0_aux, args.lambda_a_aux, args.lambda_b_aux,
-           args.lambda_geo_aux, args.lambda_ratio_aux, args.regime_gamma, args.regime_thr,
-           args.lambda_nll,
-           args.lambda_sr_adapt_gamma, args.sr_adapt_margin)
+           args.lambda_v0_aux, args.lambda_s0_aux, args.lambda_a_aux, args.lambda_b_aux)
 
     # ── Training loop ─────────────────────────────────────────────
     print(f"\n[Training] {args.epochs} epoche  |  scheduler={args.scheduler}"
@@ -2025,12 +1923,7 @@ def main():
                     continue
                 if pred(d):
                     used_idx.add(i)
-                    _xv = d['x']                                          # (N,4) grezzo
-                    if getattr(model, 'input_size', 4) >= 7:             # L3 #2: stessa augmentation di CFDataset
-                        _dv = np.zeros((_xv.shape[0], 3), dtype=np.float32)
-                        _dv[1:, :] = _xv[1:, :3] - _xv[:-1, :3]
-                        _xv = np.concatenate([_xv, _dv], axis=1)         # (N,7)
-                    x_norm_t = torch.from_numpy(_xv).unsqueeze(0).to(device)  # (1,N,4|7)
+                    x_norm_t = torch.from_numpy(d['x']).unsqueeze(0).to(device)  # (1,N,4)
                     with torch.no_grad():
                         params_seq_t, _ = model.forward_sequence_with_stats(x_norm_t)
                     params_np = params_seq_t.squeeze(0).cpu().numpy()    # (N, 5)
