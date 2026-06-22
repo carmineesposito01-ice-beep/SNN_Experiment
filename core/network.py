@@ -1340,7 +1340,8 @@ class CF_FSNN_Net_EventProp_Full(CF_FSNN_Net):
     def __init__(self, hidden_size=None, rank=None, max_delay=None,
                  eventprop_eps=1e-3, eventprop_jump_clamp=10.0,
                  eventprop_lv_clamp=50.0, eventprop_denom_gate_scale=0.0,
-                 eventprop_lambda_margin=0.0, eventprop_margin_target=0.1):
+                 eventprop_lambda_margin=0.0, eventprop_margin_target=0.1,
+                 eventprop_denom_leak_correct=False):
         nn.Module.__init__(self)
         from config import (
             CF_INPUT_SIZE, CF_HIDDEN_SIZE, CF_OUTPUT_SIZE,
@@ -1372,6 +1373,7 @@ class CF_FSNN_Net_EventProp_Full(CF_FSNN_Net):
             eps=eventprop_eps, jump_clamp=eventprop_jump_clamp,
             lv_clamp=eventprop_lv_clamp, denom_gate_scale=eventprop_denom_gate_scale,
             lambda_margin=eventprop_lambda_margin, margin_target=eventprop_margin_target,
+            denom_leak_correct=eventprop_denom_leak_correct,
         )
         # Output: bit-shift leak + Po2 quantize (matches baseline OutputLayer_LI)
         self.layer_out = LILayer_BitShift_Po2(
@@ -1497,7 +1499,8 @@ def build_model(variant: str = 'baseline', hidden_size=None, rank=None,
             eventprop_lv_clamp=kwargs.get('eventprop_lv_clamp', 50.0),
             eventprop_denom_gate_scale=kwargs.get('eventprop_denom_gate_scale', 0.0),
             eventprop_lambda_margin=kwargs.get('eventprop_lambda_margin', 0.0),
-            eventprop_margin_target=kwargs.get('eventprop_margin_target', 0.1))
+            eventprop_margin_target=kwargs.get('eventprop_margin_target', 0.1),
+            eventprop_denom_leak_correct=kwargs.get('eventprop_denom_leak_correct', False))
     raise ValueError(
         f"Variant '{variant}' non supportata. Choices:\n"
         "  baseline | stacked_2 | stacked_2_skip | stacked_3_thin | max_delay_12 | "

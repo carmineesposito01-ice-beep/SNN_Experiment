@@ -1264,6 +1264,10 @@ def main():
     parser.add_argument('--eventprop_margin_target', type=float, default=0.1,
                         help='EventProp C9: soglia |denom| sotto cui uno spike e\' "marginale" '
                              '(target di margine da raggiungere). Default 0.1.')
+    parser.add_argument('--eventprop_denom_leak_correct', type=int, default=0, choices=[0, 1],
+                        help='EventProp C10: 1 = corregge la scala del denom adjoint per il bit-shift '
+                             'leak (drive_eff = drive/(1-alpha_m) -> denom ~16x piu grande -> guadagno '
+                             'per-spike <1 -> stabile per costruzione). 0 = denom grezzo (default).')
     # STEP 2C — Optimizer_Exploration: step budget control + val decoupling
     parser.add_argument('--max_steps_per_epoch', type=int, default=-1,
                         help='Cap step training per epoca, indipendente da len(train_loader). '
@@ -1436,6 +1440,7 @@ def main():
         eventprop_denom_gate_scale=args.eventprop_denom_gate_scale,
         eventprop_lambda_margin=args.eventprop_lambda_margin,
         eventprop_margin_target=args.eventprop_margin_target,
+        eventprop_denom_leak_correct=bool(args.eventprop_denom_leak_correct),
     ).to(device)
     n_params = sum(p.numel() for p in model.parameters())
     # Log unificato: max_delay non sempre disponibile (LIF simple non lo espone)

@@ -300,7 +300,7 @@ class ALIFLayer_EventProp_Full(nn.Module):
                  alpha_m=7.0/8.0, alpha_f=7.0/8.0,
                  eps=1e-3, silent_repair=True,
                  jump_clamp=10.0, lv_clamp=50.0, denom_gate_scale=0.0,
-                 lambda_margin=0.0, margin_target=0.1):
+                 lambda_margin=0.0, margin_target=0.1, denom_leak_correct=False):
         super().__init__()
         self.in_features  = in_features
         self.out_features = out_features
@@ -321,6 +321,11 @@ class ALIFLayer_EventProp_Full(nn.Module):
         # stabile senza clamp, mantenendo la sparsita' (agisce sul margine, non sul numero di spike).
         self.lambda_margin = lambda_margin       # 0 = off (default)
         self.margin_target = margin_target       # soglia |denom| sotto cui uno spike e' "marginale"
+        # C10: correzione di scala del denom adjoint. Il bit-shift leak fa drive = (dt/tau)*I =
+        # (1-alpha_m)*I, quindi la corrente efficace e' I = drive/(1-alpha_m). Il denom EventProp
+        # dovrebbe usare V'(t*) ~ I - V_th = drive/(1-alpha_m) - V_th, NON drive - V_th (16x troppo
+        # piccolo -> 1/denom spurio -> guadagno adjoint per-spike >1). False = comportamento attuale.
+        self.denom_leak_correct = denom_leak_correct
         # Diagnostica (stash ultimo batch): frazione spike marginali + |denom| medio agli spike
         self._marginal_frac = 0.0
         self._mean_spike_margin = 0.0
@@ -475,8 +480,11 @@ class ALIFLayer_EventProp_Full(nn.Module):
         # thresh_jump: gradient via fatigue dynamics complex, ignored for now (= 0)
 
         # === Diagnostica denom + margine (C9) ===
-        # denom agli spike = drive - V_th_eff (la quantita' che l'adjoint divide per 1/denom).
-        denom_all = drive - V_th_eff                          # (B, K, out)
+        # denom agli spike = drive_eff - V_th_eff (cio' che l'adjoint divide per 1/denom).
+        # C10: drive_eff = drive/(1-alpha_m) se denom_leak_correct (corrente efficace post-leak),
+        # altrimenti drive grezzo (comportamento attuale).
+        _drive_eff = drive / (1.0 - self.alpha_m) if self.denom_leak_correct else drive
+        denom_all = _drive_eff - V_th_eff                     # (B, K, out)
         fired = s                                             # (B, K, out), {0,1}
         _n_fired = fired.sum().clamp(min=1.0)
         self._marginal_frac = float(
@@ -500,10 +508,9 @@ class ALIFLayer_EventProp_Full(nn.Module):
             # Total grad su s[k+1]: upstream (LI output) + recurrent feedback
             total_grad_s = grad_output[:, k+1] + rec_feedback
 
-            # Jump al spike time k+1 (formula EventProp: denom ≈ V'(t*) discretizzato)
-            # Per il nostro caso (NO synaptic current), drive[k+1] è il "kick" che ha
-            # spinto V sopra threshold. denom = drive[k+1] - V_th_eff[k+1]
-            denom_raw = drive[:, k+1] - V_th_eff[:, k+1]
+            # Jump al spike time k+1 (formula EventProp: denom ≈ V'(t*) discretizzato).
+            # denom_all gia' calcolato sopra (con/senza correzione leak C10).
+            denom_raw = denom_all[:, k+1]
             denom = torch.where(denom_raw.abs() < self.eps,
                                 torch.sign(denom_raw + 1e-12) * self.eps, denom_raw)
             jump = s[:, k+1] * (lV[:, k+1] + total_grad_s) / denom
