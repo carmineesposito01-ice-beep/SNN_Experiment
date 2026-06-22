@@ -804,6 +804,22 @@ def load_checkpoint(model, optimizer, path, device):
     return ckpt['epoch'], ckpt['val_loss']
 
 
+def _rec_spectral_radius(model):
+    """Raggio spettrale (sigma_max) della ricorrenza effettiva po2(U)@po2(V) del layer EventProp.
+    NaN se il modello non e' EventProp. Diagnostica: se cresce e supera la soglia di stabilita'
+    -> l'adjoint Rᵀ·lV diverge (amplificatore ricorrente)."""
+    lh = getattr(model, 'layer_hidden', None)
+    if lh is None or not hasattr(lh, 'rec_U') or not hasattr(lh, 'rec_V'):
+        return float('nan')
+    try:
+        from core.hardware import po2_quantize
+        with torch.no_grad():
+            R = po2_quantize(lh.rec_U) @ po2_quantize(lh.rec_V)
+            return float(torch.linalg.matrix_norm(R, ord=2).item())
+    except Exception:
+        return float('nan')
+
+
 class CSVLogger:
     """Scrive training_log.csv riga per riga (flush ad ogni epoca)."""
 
@@ -814,7 +830,7 @@ class CSVLogger:
         'lr', 'grad_norm', 'spike_rate', 'time_s',
         # EventProp C9 diagnostica: frazione spike marginali (|denom|<target) + |denom| medio agli
         # spike. NaN per training non-EventProp. Cresce prima dell'esplosione adjoint se l'ipotesi regge.
-        'marginal_frac', 'mean_spike_margin', 'mean_vth_at_spike',
+        'marginal_frac', 'mean_spike_margin', 'mean_vth_at_spike', 'rec_spectral_radius',
         # Prodigy: d e' l'adaptive scalar; lr_eff = lr * d e' la "vera" LR (NaN per
         # altri optimizer). Aggiunto 2026-06-01 per visibility schedule Prodigy.
         'prodigy_d', 'prodigy_d_max', 'prodigy_lr_eff',
@@ -1848,6 +1864,7 @@ def main():
                 'marginal_frac'     : train_m.get('marginal_frac', float('nan')),
                 'mean_spike_margin' : train_m.get('mean_spike_margin', float('nan')),
                 'mean_vth_at_spike' : train_m.get('mean_vth_at_spike', float('nan')),
+                'rec_spectral_radius': _rec_spectral_radius(model),
                 # Prodigy adapter (NaN per altri optimizer)
                 'prodigy_d'      : optimizer.param_groups[0].get('d', float('nan')),
                 'prodigy_d_max'  : optimizer.param_groups[0].get('d_max', float('nan')),
