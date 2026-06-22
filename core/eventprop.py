@@ -327,8 +327,10 @@ class ALIFLayer_EventProp_Full(nn.Module):
         # piccolo -> 1/denom spurio -> guadagno adjoint per-spike >1). False = comportamento attuale.
         self.denom_leak_correct = denom_leak_correct
         # Diagnostica (stash ultimo batch): frazione spike marginali + |denom| medio agli spike
+        # + V_th_eff medio agli spike (sale se il fatigue accumula -> stringe il denom).
         self._marginal_frac = 0.0
         self._mean_spike_margin = 0.0
+        self._mean_vth_at_spike = 0.0
         self.silent_repair = silent_repair
 
         # Parameters (match baseline exactly)
@@ -490,6 +492,7 @@ class ALIFLayer_EventProp_Full(nn.Module):
         self._marginal_frac = float(
             ((fired * (denom_all.abs() < self.margin_target).float()).sum() / _n_fired).item())
         self._mean_spike_margin = float(((fired * denom_all.abs()).sum() / _n_fired).item())
+        self._mean_vth_at_spike = float(((fired * V_th_eff).sum() / _n_fired).item())  # fatigue tracker
         # margin_term[k] = 2*lambda*relu(margin_target - denom) sui SOLI spike (diretto, NON ricorsivo):
         # entra solo in grad_W (peso input->drive) per spingere su il drive degli spike marginali.
         if self.lambda_margin > 0.0:

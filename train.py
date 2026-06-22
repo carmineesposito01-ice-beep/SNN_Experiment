@@ -596,6 +596,7 @@ def train_epoch(model, loader, optimizer, device, epoch, lam,
                 if _lh is not None and hasattr(_lh, '_marginal_frac'):
                     avgs['marginal_frac'] = _lh._marginal_frac
                     avgs['mean_spike_margin'] = _lh._mean_spike_margin
+                    avgs['mean_vth_at_spike'] = _lh._mean_vth_at_spike
                 return avgs
             continue
 
@@ -656,6 +657,7 @@ def train_epoch(model, loader, optimizer, device, epoch, lam,
     if _lh is not None and hasattr(_lh, '_marginal_frac'):
         avgs['marginal_frac'] = _lh._marginal_frac
         avgs['mean_spike_margin'] = _lh._mean_spike_margin
+        avgs['mean_vth_at_spike'] = _lh._mean_vth_at_spike
     return avgs
 
 
@@ -812,7 +814,7 @@ class CSVLogger:
         'lr', 'grad_norm', 'spike_rate', 'time_s',
         # EventProp C9 diagnostica: frazione spike marginali (|denom|<target) + |denom| medio agli
         # spike. NaN per training non-EventProp. Cresce prima dell'esplosione adjoint se l'ipotesi regge.
-        'marginal_frac', 'mean_spike_margin',
+        'marginal_frac', 'mean_spike_margin', 'mean_vth_at_spike',
         # Prodigy: d e' l'adaptive scalar; lr_eff = lr * d e' la "vera" LR (NaN per
         # altri optimizer). Aggiunto 2026-06-01 per visibility schedule Prodigy.
         'prodigy_d', 'prodigy_d_max', 'prodigy_lr_eff',
@@ -1845,6 +1847,7 @@ def main():
                 # EventProp C9 diagnostica (NaN per training non-EventProp)
                 'marginal_frac'     : train_m.get('marginal_frac', float('nan')),
                 'mean_spike_margin' : train_m.get('mean_spike_margin', float('nan')),
+                'mean_vth_at_spike' : train_m.get('mean_vth_at_spike', float('nan')),
                 # Prodigy adapter (NaN per altri optimizer)
                 'prodigy_d'      : optimizer.param_groups[0].get('d', float('nan')),
                 'prodigy_d_max'  : optimizer.param_groups[0].get('d_max', float('nan')),
