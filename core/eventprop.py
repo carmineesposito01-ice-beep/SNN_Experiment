@@ -299,7 +299,8 @@ class ALIFLayer_EventProp_Full(nn.Module):
                  base_th_init=1.5, thresh_jump_init=0.5,
                  alpha_m=7.0/8.0, alpha_f=7.0/8.0,
                  eps=1e-3, silent_repair=True,
-                 jump_clamp=10.0, lv_clamp=50.0, denom_gate_scale=0.0):
+                 jump_clamp=10.0, lv_clamp=50.0, denom_gate_scale=0.0,
+                 lambda_margin=0.0, margin_target=0.1):
         super().__init__()
         self.in_features  = in_features
         self.out_features = out_features
@@ -315,6 +316,14 @@ class ALIFLayer_EventProp_Full(nn.Module):
         self.jump_clamp = jump_clamp
         self.lv_clamp = lv_clamp
         self.denom_gate_scale = denom_gate_scale   # C8b: scala gate morbido (0 = off)
+        # Margine di spike (C9): spinge i singoli spike marginali (denom=drive-V_th piccolo)
+        # ad attraversare la soglia con margine -> 1/denom limitato PER COSTRUZIONE -> adjoint
+        # stabile senza clamp, mantenendo la sparsita' (agisce sul margine, non sul numero di spike).
+        self.lambda_margin = lambda_margin       # 0 = off (default)
+        self.margin_target = margin_target       # soglia |denom| sotto cui uno spike e' "marginale"
+        # Diagnostica (stash ultimo batch): frazione spike marginali + |denom| medio agli spike
+        self._marginal_frac = 0.0
+        self._mean_spike_margin = 0.0
         self.silent_repair = silent_repair
 
         # Parameters (match baseline exactly)
@@ -465,6 +474,21 @@ class ALIFLayer_EventProp_Full(nn.Module):
         grad_base_th = torch.zeros(B, out_dim, device=device)
         # thresh_jump: gradient via fatigue dynamics complex, ignored for now (= 0)
 
+        # === Diagnostica denom + margine (C9) ===
+        # denom agli spike = drive - V_th_eff (la quantita' che l'adjoint divide per 1/denom).
+        denom_all = drive - V_th_eff                          # (B, K, out)
+        fired = s                                             # (B, K, out), {0,1}
+        _n_fired = fired.sum().clamp(min=1.0)
+        self._marginal_frac = float(
+            ((fired * (denom_all.abs() < self.margin_target).float()).sum() / _n_fired).item())
+        self._mean_spike_margin = float(((fired * denom_all.abs()).sum() / _n_fired).item())
+        # margin_term[k] = 2*lambda*relu(margin_target - denom) sui SOLI spike (diretto, NON ricorsivo):
+        # entra solo in grad_W (peso input->drive) per spingere su il drive degli spike marginali.
+        if self.lambda_margin > 0.0:
+            margin_term = 2.0 * self.lambda_margin * F.relu(self.margin_target - denom_all) * fired
+        else:
+            margin_term = None
+
         for k in range(K - 2, -1, -1):
             # Rec feedback: s[k+1] entra in rec_curr[k+2] = rec_full @ s[k+1]
             # che contribuisce a V_pre[k+2]. Adjoint da lV[k+2] back to s[k+1]:
@@ -505,10 +529,13 @@ class ALIFLayer_EventProp_Full(nn.Module):
 
             # 1) grad_W via delays: drive[k+1] += Σ_d (mask_d * W_po2) @ x[k+1-d]
             #    grad_W_d += -lV[k+1] outer x[k+1-d] * mask_d
+            # Coefficiente di grad_W: adjoint lV[k+1] + termine di margine (C9, diretto sui pesi
+            # input->drive). Il margine NON entra nella ricorsione di lV ne' in grad_input.
+            coef_W = lV[:, k+1] if margin_term is None else (lV[:, k+1] + margin_term[:, k+1])
             for d in range(self.max_delay):
                 k_in = k + 1 - d
                 if 0 <= k_in < K:
-                    grad_W_contrib = -lV[:, k+1].unsqueeze(2) * x_repl[:, k_in].unsqueeze(1)
+                    grad_W_contrib = -coef_W.unsqueeze(2) * x_repl[:, k_in].unsqueeze(1)
                     grad_W = grad_W + grad_W_contrib * self.delay_masks[d].unsqueeze(0)
                     # Input grad: x[k+1-d] -> drive[k+1] via (mask_d * W_po2)
                     grad_input_contrib = F.linear(

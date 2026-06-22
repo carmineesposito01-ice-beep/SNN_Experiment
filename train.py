@@ -592,6 +592,10 @@ def train_epoch(model, loader, optimizer, device, epoch, lam,
                 avgs['max_gn_preclip'] = max_gn_preclip
                 avgs['explosion_frac'] = n_expl_gn / max(n_seen_gn, 1)
                 avgs['aborted']    = True
+                _lh = getattr(model, 'layer_hidden', None)
+                if _lh is not None and hasattr(_lh, '_marginal_frac'):
+                    avgs['marginal_frac'] = _lh._marginal_frac
+                    avgs['mean_spike_margin'] = _lh._mean_spike_margin
                 return avgs
             continue
 
@@ -647,6 +651,11 @@ def train_epoch(model, loader, optimizer, device, epoch, lam,
     avgs['max_gn_preclip'] = max_gn_preclip   # R30: per explosion guard epoch-level
     avgs['explosion_frac'] = n_expl_gn / max(n_seen_gn, 1)  # S1b: frazione batch esplosi
     avgs['aborted']    = False
+    # EventProp C9: diagnostica margine spike (stash dell'ultimo batch dal layer adjoint)
+    _lh = getattr(model, 'layer_hidden', None)
+    if _lh is not None and hasattr(_lh, '_marginal_frac'):
+        avgs['marginal_frac'] = _lh._marginal_frac
+        avgs['mean_spike_margin'] = _lh._mean_spike_margin
     return avgs
 
 
@@ -801,6 +810,9 @@ class CSVLogger:
         'train_total', 'train_data', 'train_phys', 'train_ou', 'train_bc', 'train_sr',
         'val_total',   'val_data',   'val_phys',   'val_ou',   'val_bc',   'val_sr',
         'lr', 'grad_norm', 'spike_rate', 'time_s',
+        # EventProp C9 diagnostica: frazione spike marginali (|denom|<target) + |denom| medio agli
+        # spike. NaN per training non-EventProp. Cresce prima dell'esplosione adjoint se l'ipotesi regge.
+        'marginal_frac', 'mean_spike_margin',
         # Prodigy: d e' l'adaptive scalar; lr_eff = lr * d e' la "vera" LR (NaN per
         # altri optimizer). Aggiunto 2026-06-01 per visibility schedule Prodigy.
         'prodigy_d', 'prodigy_d_max', 'prodigy_lr_eff',
@@ -1245,6 +1257,13 @@ def main():
                         help='EventProp C8b: scala del gate morbido denom^2/(denom^2+scale^2) che '
                              'attenua il jump degli spike marginali (invece di clamparlo). '
                              '0 = off (default). Es. 0.05 = attenua |denom|<~0.05.')
+    parser.add_argument('--eventprop_lambda_margin', type=float, default=0.0,
+                        help='EventProp C9: peso del regolarizzatore di MARGINE di spike. Spinge i '
+                             'singoli spike marginali (|drive-V_th|<target) ad attraversare con '
+                             'margine -> 1/denom limitato per costruzione. 0 = off (default).')
+    parser.add_argument('--eventprop_margin_target', type=float, default=0.1,
+                        help='EventProp C9: soglia |denom| sotto cui uno spike e\' "marginale" '
+                             '(target di margine da raggiungere). Default 0.1.')
     # STEP 2C — Optimizer_Exploration: step budget control + val decoupling
     parser.add_argument('--max_steps_per_epoch', type=int, default=-1,
                         help='Cap step training per epoca, indipendente da len(train_loader). '
@@ -1415,6 +1434,8 @@ def main():
         eventprop_jump_clamp=args.eventprop_jump_clamp,
         eventprop_lv_clamp=args.eventprop_lv_clamp,
         eventprop_denom_gate_scale=args.eventprop_denom_gate_scale,
+        eventprop_lambda_margin=args.eventprop_lambda_margin,
+        eventprop_margin_target=args.eventprop_margin_target,
     ).to(device)
     n_params = sum(p.numel() for p in model.parameters())
     # Log unificato: max_delay non sempre disponibile (LIF simple non lo espone)
@@ -1816,6 +1837,9 @@ def main():
                 'grad_norm'   : train_m['grad_norm'],
                 'spike_rate'  : val_m['spike_rate'],
                 'time_s'      : ep_time,
+                # EventProp C9 diagnostica (NaN per training non-EventProp)
+                'marginal_frac'     : train_m.get('marginal_frac', float('nan')),
+                'mean_spike_margin' : train_m.get('mean_spike_margin', float('nan')),
                 # Prodigy adapter (NaN per altri optimizer)
                 'prodigy_d'      : optimizer.param_groups[0].get('d', float('nan')),
                 'prodigy_d_max'  : optimizer.param_groups[0].get('d_max', float('nan')),
