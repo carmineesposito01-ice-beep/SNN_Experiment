@@ -621,9 +621,9 @@ def train_epoch(model, loader, optimizer, device, epoch, lam,
             print(f"{tag} grad_norm={gn_val:.3e} (>{GRAD_WARN_THRESHOLD})")
             _log_batch_diagnostics(tag, comps, gn_val, x, pre_norms, model)
 
-        # ProdigyEvent: passa spike-rate e norma gradiente pre-clip per il throttle adattivo
+        # ProdigyEvent: passa spike-rate, norma gradiente pre-clip e loss (per il P&O loss-aware)
         if optimizer.__class__.__name__ == 'ProdigyEvent':
-            optimizer.step(spike_rate=sr, grad_norm=gn_total_preclip)
+            optimizer.step(spike_rate=sr, grad_norm=gn_total_preclip, loss=comps.get('total'))
         else:
             optimizer.step()
 
@@ -1122,6 +1122,20 @@ def main():
     parser.add_argument('--prodigy_probe_up', type=float, default=0.0,
                         help='ProdigyEvent: MPPT P&O perturbazione UP di d se stabile ma stagnante '
                              '(es. 0.01 = +1%%/step finche non riparte; 0 = off). Rompe lo stuck-low.')
+    # ProdigyEvent LOSS-AWARE: P&O bidirezionale su d guidato dalla LOSS (non da gn/rate, che laggano).
+    parser.add_argument('--prodigy_loss_aware', type=int, default=0, choices=[0, 1],
+                        help='ProdigyEvent: 1 = modula d sul trend della LOSS (salto produttivo->cresci, '
+                             'salto cattivo->decadi) + peso spike-rate. 0 = throttle legacy (default).')
+    parser.add_argument('--prodigy_loss_ema_beta', type=float, default=0.9,
+                        help='ProdigyEvent loss-aware: decay EMA della loss per il trend. Default 0.9.')
+    parser.add_argument('--prodigy_po_period', type=int, default=25,
+                        help='ProdigyEvent loss-aware: step tra due decisioni P&O. Default 25.')
+    parser.add_argument('--prodigy_po_bad_decay', type=float, default=0.5,
+                        help='ProdigyEvent loss-aware: fattore decay di d su finestra "cattiva" '
+                             '(loss su). Raddoppiato se anche spike-rate fuori banda. Default 0.5.')
+    parser.add_argument('--prodigy_po_good_probe', type=float, default=0.0,
+                        help='ProdigyEvent loss-aware: crescita extra di d su finestra "produttiva" '
+                             '(loss giu, rate sano) per esplorare di piu. 0 = off (default).')
     parser.add_argument('--prodigy_d_coef', type=float, default=1.0,
                         help='Prodigy d_coef: controlla velocita crescita parametro adattivo d. '
                              'Default 1.0 (Prodigy standard). <1.0 = piu cauto (utile se grad '
@@ -1542,7 +1556,13 @@ def main():
                                      d_max=args.prodigy_d_max,
                                      d_decay=args.prodigy_d_decay,
                                      d_floor=args.prodigy_d_floor,
-                                     probe_up=args.prodigy_probe_up, **_prodigy_kw)
+                                     probe_up=args.prodigy_probe_up,
+                                     loss_aware=bool(args.prodigy_loss_aware),
+                                     loss_ema_beta=args.prodigy_loss_ema_beta,
+                                     po_period=args.prodigy_po_period,
+                                     po_bad_decay=args.prodigy_po_bad_decay,
+                                     po_good_probe=args.prodigy_po_good_probe,
+                                     **_prodigy_kw)
         else:
             optimizer = Prodigy(model.parameters(), **_prodigy_kw)
         # Self-check: verifica che Prodigy abbia recepito esattamente i param richiesti

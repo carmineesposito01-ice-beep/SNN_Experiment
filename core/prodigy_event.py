@@ -23,7 +23,9 @@ from prodigyopt import Prodigy
 class ProdigyEvent(Prodigy):
     def __init__(self, params, grad_ema_beta=0.9, rate_gate=None,
                  instab_kappa=2.0, d_max=float('inf'),
-                 d_decay=0.9, d_floor=1e-5, probe_up=0.0, **kwargs):
+                 d_decay=0.9, d_floor=1e-5, probe_up=0.0,
+                 loss_aware=False, loss_ema_beta=0.9, po_period=25,
+                 po_bad_decay=0.5, po_good_probe=0.0, **kwargs):
         """grad_ema_beta: decay EMA del gradiente per lo stimatore di d (0.9 ~10 step).
         rate_gate: None | (lo, hi) banda spike-rate; fuori banda -> congela crescita di d.
         instab_kappa: soglia del rapporto gn_fast/gn_slow oltre cui si congela d (instabilita
@@ -42,9 +44,23 @@ class ProdigyEvent(Prodigy):
         self.probe_up = float(probe_up)  # MPPT P&O: perturbazione UP di d se stabile ma stagnante (0=off)
         self._gn_fast = None             # EMA veloce della norma gradiente (trend recente)
         self._gn_slow = None             # EMA lenta = baseline del regime stabile
+        # --- Modalita' LOSS-AWARE (P&O bidirezionale sull'obiettivo, peso spike-rate) ---
+        # Insight: l'instabilita' di EventProp e' ESPLORAZIONE (salti grandi che atterrano in zone
+        # vantaggiose). Non frenare d a caso (un cap uccide l'esplorazione e blocca il training):
+        # modula d sul SEGNALE GIUSTO = la loss sta migliorando o peggiorando? loss giu' -> salto
+        # produttivo, lascia crescere d; loss su (dopo che d e' cresciuto) -> salto cattivo, decadi d.
+        # Spike-rate come PESO (non gate): rate fuori banda raddoppia il decay (doppia conferma).
+        self.loss_aware = bool(loss_aware)
+        self._lb = float(loss_ema_beta)
+        self.po_period = int(po_period)      # step tra due decisioni P&O
+        self.po_bad_decay = float(po_bad_decay)   # fattore decay di d su finestra "cattiva"
+        self.po_good_probe = float(po_good_probe) # crescita extra di d su finestra "produttiva" (0=off)
+        self._loss_ema = None
+        self._loss_ref = None
+        self._po_t = 0
 
     @torch.no_grad()
-    def step(self, closure=None, spike_rate=None, grad_norm=None):
+    def step(self, closure=None, spike_rate=None, grad_norm=None, loss=None):
         # 1) EMA del gradiente (bias-corrected) -> coerenza per lo stimatore di d
         self._ge_t += 1
         b = self._ge_beta
@@ -64,39 +80,71 @@ class ProdigyEvent(Prodigy):
         d_before = self.param_groups[0].get('d', None)
         out = super().step(closure)
 
-        # 2) throttle adattivo: decide se l'instabilita si sta accumulando
-        throttle = False
-        if grad_norm is not None:
-            if not math.isfinite(grad_norm):
-                throttle = True                      # inf/nan -> instabile per definizione
-            else:
-                if self._gn_fast is None:
-                    self._gn_fast = self._gn_slow = grad_norm
-                self._gn_fast = 0.7 * self._gn_fast + 0.3 * grad_norm
-                instab = self._gn_fast / (self._gn_slow + 1e-8)
-                if instab > self.instab_kappa:
-                    throttle = True                  # trend gradiente sopra baseline -> instabile
-                else:
-                    # regime stabile: aggiorna la baseline lenta (solo quando stabile)
-                    self._gn_slow = 0.99 * self._gn_slow + 0.01 * grad_norm
-        # gate spike-rate (secondo segnale oggettivo)
-        if self.rate_gate is not None and spike_rate is not None:
-            lo, hi = self.rate_gate
-            if not (lo <= float(spike_rate) <= hi):
-                throttle = True
-
-        if throttle:                                 # instabilita/rate fuori banda -> DECADI d attivamente
-            for g in self.param_groups:              # (non solo congela: riporta lr_eff nell'envelope stabile)
-                if g.get('d', None) is not None:
-                    g['d'] = max(self.d_floor, g['d'] * self.d_decay)
-        elif self.probe_up > 0.0 and d_before is not None:
-            # MPPT Perturb&Observe: STABILE ma d non cresciuto (Prodigy stagnante / post-decay
-            # stuck-low) -> perturba in ALTO per ri-cercare il confine di stabilita (hunting).
-            cur = self.param_groups[0].get('d', None)
-            if cur is not None and cur <= d_before * (1.0 + 1e-9):
+        if self.loss_aware:
+            # === MODALITA' LOSS-AWARE: P&O bidirezionale sull'obiettivo (peso spike-rate) ===
+            # Sicurezza per-step: grad inf/nan = salto fatale -> decadi subito (non aspettare la finestra).
+            if grad_norm is not None and not math.isfinite(grad_norm):
                 for g in self.param_groups:
                     if g.get('d', None) is not None:
-                        g['d'] = g['d'] * (1.0 + self.probe_up)
+                        g['d'] = max(self.d_floor, g['d'] * 0.5)
+            elif loss is not None and math.isfinite(float(loss)):
+                lval = float(loss)
+                if self._loss_ema is None:
+                    self._loss_ema = lval; self._loss_ref = lval
+                else:
+                    self._loss_ema = self._lb * self._loss_ema + (1.0 - self._lb) * lval
+                self._po_t += 1
+                if self._po_t >= self.po_period:     # decisione P&O ogni po_period step
+                    improved = self._loss_ema < self._loss_ref - 1e-6
+                    rate_ok = True
+                    if self.rate_gate is not None and spike_rate is not None:
+                        lo, hi = self.rate_gate
+                        rate_ok = (lo <= float(spike_rate) <= hi)
+                    if improved and rate_ok:
+                        # FINESTRA PRODUTTIVA (loss giu', rate sano): lascia esplorare; probe opzionale
+                        if self.po_good_probe > 0.0:
+                            for g in self.param_groups:
+                                if g.get('d', None) is not None:
+                                    g['d'] = min(self.d_max, g['d'] * (1.0 + self.po_good_probe))
+                    else:
+                        # SALTO CATTIVO (loss su) o rate fuori banda: ritirati -> decadi d.
+                        factor = self.po_bad_decay
+                        if not rate_ok:
+                            factor = factor * self.po_bad_decay   # doppio decay se anche rate malato
+                        for g in self.param_groups:
+                            if g.get('d', None) is not None:
+                                g['d'] = max(self.d_floor, g['d'] * factor)
+                    self._loss_ref = self._loss_ema
+                    self._po_t = 0
+        else:
+            # === MODALITA' LEGACY: throttle su trend norma-gradiente + gate spike-rate ===
+            throttle = False
+            if grad_norm is not None:
+                if not math.isfinite(grad_norm):
+                    throttle = True                  # inf/nan -> instabile per definizione
+                else:
+                    if self._gn_fast is None:
+                        self._gn_fast = self._gn_slow = grad_norm
+                    self._gn_fast = 0.7 * self._gn_fast + 0.3 * grad_norm
+                    instab = self._gn_fast / (self._gn_slow + 1e-8)
+                    if instab > self.instab_kappa:
+                        throttle = True
+                    else:
+                        self._gn_slow = 0.99 * self._gn_slow + 0.01 * grad_norm
+            if self.rate_gate is not None and spike_rate is not None:
+                lo, hi = self.rate_gate
+                if not (lo <= float(spike_rate) <= hi):
+                    throttle = True
+            if throttle:
+                for g in self.param_groups:
+                    if g.get('d', None) is not None:
+                        g['d'] = max(self.d_floor, g['d'] * self.d_decay)
+            elif self.probe_up > 0.0 and d_before is not None:
+                cur = self.param_groups[0].get('d', None)
+                if cur is not None and cur <= d_before * (1.0 + 1e-9):
+                    for g in self.param_groups:
+                        if g.get('d', None) is not None:
+                            g['d'] = g['d'] * (1.0 + self.probe_up)
 
         if self.d_max != float('inf'):               # cap opzionale di sicurezza
             for g in self.param_groups:
