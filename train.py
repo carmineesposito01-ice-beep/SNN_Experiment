@@ -1312,6 +1312,16 @@ def main():
                         help='EventProp C10: 1 = corregge la scala del denom adjoint per il bit-shift '
                              'leak (drive_eff = drive/(1-alpha_m) -> denom ~16x piu grande -> guadagno '
                              'per-spike <1 -> stabile per costruzione). 0 = denom grezzo (default).')
+    parser.add_argument('--eventprop_full_threshold_adjoint', type=int, default=0, choices=[0, 1],
+                        help='EventProp C13: 1 = adjoint COMPLETO della soglia adattiva (lambda_fatigue) '
+                             '-> thresh_jump si allena (32 param ora congelati a gradiente 0). '
+                             '0 = thresh_jump congelato all init (default, comportamento storico).')
+    parser.add_argument('--eventprop_thresh_jump_init', type=float, default=0.5,
+                        help='EventProp: init di thresh_jump (forza dell adattamento ALIF dopo lo spike). '
+                             'Con C13 off resta fisso a questo valore. 0 = LIF puro. Default 0.5.')
+    parser.add_argument('--eventprop_alpha_f', type=float, default=7.0 / 8.0,
+                        help='EventProp: decadimento del fatigue per tick (alpha_f). Piu vicino a 1 = '
+                             'adattamento su scale piu lunghe. Default 0.875 (= alpha_m).')
     parser.add_argument('--eventprop_lambda_spectral', type=float, default=0.0,
                         help='EventProp C11: peso del regolarizzatore spettrale relu(sigma_max(U@V)-'
                              'target)^2. Vincola il raggio spettrale della ricorrenza -> adjoint Rᵀ '
@@ -1492,6 +1502,9 @@ def main():
         eventprop_lambda_margin=args.eventprop_lambda_margin,
         eventprop_margin_target=args.eventprop_margin_target,
         eventprop_denom_leak_correct=bool(args.eventprop_denom_leak_correct),
+        eventprop_full_threshold_adjoint=bool(args.eventprop_full_threshold_adjoint),
+        eventprop_thresh_jump_init=args.eventprop_thresh_jump_init,
+        eventprop_alpha_f=args.eventprop_alpha_f,
     ).to(device)
     n_params = sum(p.numel() for p in model.parameters())
     # Log unificato: max_delay non sempre disponibile (LIF simple non lo espone)

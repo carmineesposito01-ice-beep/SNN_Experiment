@@ -300,7 +300,8 @@ class ALIFLayer_EventProp_Full(nn.Module):
                  alpha_m=7.0/8.0, alpha_f=7.0/8.0,
                  eps=1e-3, silent_repair=True,
                  jump_clamp=10.0, lv_clamp=50.0, denom_gate_scale=0.0,
-                 lambda_margin=0.0, margin_target=0.1, denom_leak_correct=False):
+                 lambda_margin=0.0, margin_target=0.1, denom_leak_correct=False,
+                 full_threshold_adjoint=False):
         super().__init__()
         self.in_features  = in_features
         self.out_features = out_features
@@ -326,6 +327,11 @@ class ALIFLayer_EventProp_Full(nn.Module):
         # dovrebbe usare V'(t*) ~ I - V_th = drive/(1-alpha_m) - V_th, NON drive - V_th (16x troppo
         # piccolo -> 1/denom spurio -> guadagno adjoint per-spike >1). False = comportamento attuale.
         self.denom_leak_correct = denom_leak_correct
+        # C13: adjoint COMPLETO della soglia adattiva. f[k+1]=alpha_f*f[k]+s[k]*tj, V_th=base_th+f.
+        # lambda_fatigue: lf[k] = gVth[k] + alpha_f*lf[k+1] (gVth = -s*lV = stesso termine di base_th);
+        # grad_thresh_jump = sum_k s[k]*lf[k+1]. Sblocca i 32 param di thresh_jump (ora gradiente 0).
+        # False = thresh_jump congelato (comportamento attuale).
+        self.full_threshold_adjoint = bool(full_threshold_adjoint)
         # Diagnostica (stash ultimo batch): frazione spike marginali + |denom| medio agli spike
         # + V_th_eff medio agli spike (sale se il fatigue accumula -> stringe il denom).
         self._marginal_frac = 0.0
@@ -500,6 +506,13 @@ class ALIFLayer_EventProp_Full(nn.Module):
         else:
             margin_term = None
 
+        # C13: adjoint del fatigue (lf) + accumulatore di grad_thresh_jump (per-sample)
+        if self.full_threshold_adjoint:
+            lf = torch.zeros(B, K, out_dim, device=device)
+            gtj = torch.zeros(B, out_dim, device=device)
+        else:
+            lf = None
+
         for k in range(K - 2, -1, -1):
             # Rec feedback: s[k+1] entra in rec_curr[k+2] = rec_full @ s[k+1]
             # che contribuisce a V_pre[k+2]. Adjoint da lV[k+2] back to s[k+1]:
@@ -561,7 +574,16 @@ class ALIFLayer_EventProp_Full(nn.Module):
             #    Soft reset: V_post[k+1] -= s[k+1] * V_th_eff[k+1]
             #    adjoint: grad_base_th += -s[k+1] * lV[k+1]
             #    (sum across time and batch)
-            grad_base_th = grad_base_th - s[:, k+1] * lV[:, k+1]
+            gVth = -s[:, k+1] * lV[:, k+1]               # grad reset-path su V_th[k+1]
+            grad_base_th = grad_base_th + gVth
+
+            # 4) C13: adjoint del fatigue. V_th[k+1] dipende da f[k+1] (= base_th + relu(f), deriv 1);
+            #    f[k+1] = alpha_f*f[k] + s[k]*thresh_jump. lf[k+1] = gVth[k+1] + alpha_f*lf[k+2];
+            #    grad_thresh_jump += s[k]*lf[k+1].
+            if lf is not None:
+                lf_next = lf[:, k+2] if k + 2 < K else 0.0
+                lf[:, k+1] = gVth + self.alpha_f * lf_next
+                gtj = gtj + s[:, k] * lf[:, k+1]
 
         # === Sum across batch ===
         grad_W_total = grad_W.sum(dim=0)
@@ -576,8 +598,11 @@ class ALIFLayer_EventProp_Full(nn.Module):
         grad_rec_U = grad_rec_full_total @ rec_V.t()
         grad_rec_V = rec_U.t() @ grad_rec_full_total
 
-        # thresh_jump: gradient complesso via fatigue dynamics, lasciato a zero
-        grad_thresh_jump = torch.zeros_like(thresh_jump)
+        # thresh_jump: zero se adjoint del fatigue disattivo (C13 off); altrimenti gtj sommato sul batch
+        if self.full_threshold_adjoint:
+            grad_thresh_jump = gtj.sum(dim=0)
+        else:
+            grad_thresh_jump = torch.zeros_like(thresh_jump)
 
         return (grad_input, grad_W_total, grad_rec_U, grad_rec_V,
                 grad_base_th_total, grad_thresh_jump)

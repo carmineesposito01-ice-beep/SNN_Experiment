@@ -1341,7 +1341,8 @@ class CF_FSNN_Net_EventProp_Full(CF_FSNN_Net):
                  eventprop_eps=1e-3, eventprop_jump_clamp=10.0,
                  eventprop_lv_clamp=50.0, eventprop_denom_gate_scale=0.0,
                  eventprop_lambda_margin=0.0, eventprop_margin_target=0.1,
-                 eventprop_denom_leak_correct=False):
+                 eventprop_denom_leak_correct=False, eventprop_full_threshold_adjoint=False,
+                 eventprop_thresh_jump_init=0.5, eventprop_alpha_f=7.0 / 8.0):
         nn.Module.__init__(self)
         from config import (
             CF_INPUT_SIZE, CF_HIDDEN_SIZE, CF_OUTPUT_SIZE,
@@ -1367,13 +1368,14 @@ class CF_FSNN_Net_EventProp_Full(CF_FSNN_Net):
             rank=rank,
             max_delay=max_delay,
             n_ticks=self.n_ticks,
-            base_th_init=1.5, thresh_jump_init=0.5,   # match baseline ALIFCell
-            alpha_m=7.0/8.0, alpha_f=7.0/8.0,         # bit_shift=3 leak
+            base_th_init=1.5, thresh_jump_init=eventprop_thresh_jump_init,   # ALIF: forza adattamento
+            alpha_m=7.0/8.0, alpha_f=eventprop_alpha_f,                      # alpha_f = decadimento fatigue
             silent_repair=True,
             eps=eventprop_eps, jump_clamp=eventprop_jump_clamp,
             lv_clamp=eventprop_lv_clamp, denom_gate_scale=eventprop_denom_gate_scale,
             lambda_margin=eventprop_lambda_margin, margin_target=eventprop_margin_target,
             denom_leak_correct=eventprop_denom_leak_correct,
+            full_threshold_adjoint=eventprop_full_threshold_adjoint,
         )
         # Output: bit-shift leak + Po2 quantize (matches baseline OutputLayer_LI)
         self.layer_out = LILayer_BitShift_Po2(
@@ -1388,10 +1390,31 @@ class CF_FSNN_Net_EventProp_Full(CF_FSNN_Net):
         self.register_buffer('param_hi', bounds[:, 1])
         ranges = bounds[:, 1] - bounds[:, 0]
         self.register_buffer('decode_scale', ranges / ranges.max())
+        # R29 DecoderFix per EventProp (prima ASSENTE -> decode saturava su T/s0):
+        # decode_offset (centra raw pre-sigmoid) + logit_tau (pendenza sigmoid per-canale).
+        # Default 0 / 1 = comportamento attuale. Usati da _decode_params (ereditato, getattr-safe).
+        self.register_buffer('decode_offset', torch.zeros(5, dtype=torch.float32))
+        self.register_buffer('logit_tau',     torch.ones(5, dtype=torch.float32))
 
     def reset_state(self, batch_size, device):
         """No-op: EventProp processa l'intera sequenza in un singolo manual_forward."""
         pass
+
+    def calibrate_decode_offset(self, x_sample):
+        """R29 DEC-3 per EventProp: decode_offset = media del raw (pre-sigmoid) su un campione.
+        Usa il forward EventProp (l'override di baseline assume layer per-timestep, incompatibile)."""
+        was_training = self.training
+        self.eval()
+        with torch.no_grad():
+            B, T_seq, _ = x_sample.shape
+            K = T_seq * self.n_ticks
+            spikes_all = self.layer_hidden(x_sample)          # (B, K, hidden)
+            raw_all = self.layer_out(spikes_all)              # (B, K, 5)
+            decode_idx = torch.arange(self.n_ticks - 1, K, self.n_ticks, device=raw_all.device)
+            raw_decoded = raw_all[:, decode_idx, :]           # (B, T_seq, 5)
+            self.decode_offset.copy_(raw_decoded.mean(dim=(0, 1)))
+        if was_training:
+            self.train()
 
     def forward_sequence_with_stats(self, x_seq_norm):
         """Forward: T_seq sequence steps x n_ticks internal ticks each.
@@ -1500,7 +1523,10 @@ def build_model(variant: str = 'baseline', hidden_size=None, rank=None,
             eventprop_denom_gate_scale=kwargs.get('eventprop_denom_gate_scale', 0.0),
             eventprop_lambda_margin=kwargs.get('eventprop_lambda_margin', 0.0),
             eventprop_margin_target=kwargs.get('eventprop_margin_target', 0.1),
-            eventprop_denom_leak_correct=kwargs.get('eventprop_denom_leak_correct', False))
+            eventprop_denom_leak_correct=kwargs.get('eventprop_denom_leak_correct', False),
+            eventprop_full_threshold_adjoint=kwargs.get('eventprop_full_threshold_adjoint', False),
+            eventprop_thresh_jump_init=kwargs.get('eventprop_thresh_jump_init', 0.5),
+            eventprop_alpha_f=kwargs.get('eventprop_alpha_f', 7.0 / 8.0))
     raise ValueError(
         f"Variant '{variant}' non supportata. Choices:\n"
         "  baseline | stacked_2 | stacked_2_skip | stacked_3_thin | max_delay_12 | "
