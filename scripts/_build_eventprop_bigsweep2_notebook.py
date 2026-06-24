@@ -107,14 +107,18 @@ def pe_arm(t, gp):
     return ('PE_t' + _f(t) + '_gp' + _f(gp), 'eventprop_alif_full',
             list(PE) + ['--prodigy_po_good_probe', gp] + SPEC(t))
 
-# ===== Riferimento BPTT (champion single-cycle, con la sua calibrazione) =====
+# ===== Riferimento BPTT = CHAMPION ESATTO (LS3_PEAK_R0_launch_d03, min val_data 0.1926) =====
+# Config replicata dal config_snapshot del champion: Prodigy + custom_restart (T0 12, decay 0.3,
+# warmup 2), growth INF (lo doma il restart, non il cap), grad_clip NONE (override dell'agc di COMMON).
+# Il BPTT_REF del BigSweep era sbagliato (cosine_no_restart + growth 1.05) -> esplose. Questo e' il vero.
 BPTT_DECODE = ['--cf_init_bias_shift', '1', '--cf_logit_tau_per_channel', '10.0,3.0,10.0,3.0,3.0']
-PRODIGY_STD = ['--optimizer', 'prodigy', '--lr', '0.5', '--prodigy_betas', '0.9,0.99', '--prodigy_d_coef', '1.0',
-               '--prodigy_d0', '1e-6', '--prodigy_weight_decay', '0.01', '--prodigy_use_bias_correction', '1',
-               '--prodigy_safeguard_warmup', '1']
-BPTT_REF = ('BPTT_REF', 'baseline', BPTT_DECODE + PRODIGY_STD +
-            ['--scheduler', 'cosine_no_restart', '--max_lr', '0.5', '--prodigy_growth_rate', '1.02'])
-# growth 1.02 (non 1.05): nel BigSweep il BPTT_REF a 1.05 e' ESPLOSO (grad 2e17, abort@16).
+CHAMPION = ['--optimizer', 'prodigy', '--lr', '0.5', '--max_lr', '0.5',
+            '--scheduler', 'custom_restart', '--restart_T0', '12', '--restart_decay', '0.3',
+            '--restart_warmup_epochs', '2', '--restart_adaptive', '0', '--restart_lr_after', '-1.0',
+            '--prodigy_growth_rate', 'inf', '--prodigy_betas', '0.9,0.99', '--prodigy_d_coef', '1.0',
+            '--prodigy_d0', '1e-6', '--prodigy_weight_decay', '0.01', '--prodigy_use_bias_correction', '1',
+            '--prodigy_safeguard_warmup', '1', '--grad_clip', 'none', '--cf_rank', '8']
+BPTT_REF = ('BPTT_REF', 'baseline', BPTT_DECODE + CHAMPION)
 
 # ===== Assemblaggio (best-first): ref, teaser correzioni, Parte 1 (conclude Adam), Parte 2 =====
 ARMS = []

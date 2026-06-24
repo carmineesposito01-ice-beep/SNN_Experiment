@@ -113,8 +113,10 @@ totalmente silenti all'init ma non quelli che muoiono in training. **Capacita' s
 - **Ottimo = lr 3e-3 + target 0.8 = 0.2161**; monotòno verso target più basso → **il vero ottimo è <0.8**.
 - **lr alto + target ≥1.2 ESPLODE** (grad 2800-7200). Spingere lr richiede target basso.
 - lr 5e-4/1e-3 inutili (0.24/0.23). → Sweep fine in `lr{2e3,3e3,5e3} x target{0.5,0.6,0.7}` (decode off).
-- **BPTT_REF è ESPLOSO** (grad 2e17, abort@16) → riferimento inaffidabile in questo run; in BigSweep2
-  riportato a `growth 1.02`.
+- **BPTT_REF del BigSweep era la config SBAGLIATA** (`cosine_no_restart` + growth 1.05 → esplose, grad
+  2e17). **Il vero champion è `LS3_PEAK_R0_launch_d03`** (Prodigy + `custom_restart` T0 12 / **decay 0.3** /
+  warmup 2, **growth inf**, **grad_clip none**, decode on, rank 8): **min val_data 0.1926** (NRMSE v0 0.24,
+  T 0.276, s0 0.172, a 0.284, b 0.316). In BigSweep2 il BPTT_REF replica ESATTAMENTE questa config.
 
 ### ProdigyEvent loss-aware — NON competitivo (archiviare)
 Tutti gli arm PE a **0.29-0.51** (migliore completato bd03_gp002 = **0.295**) vs AdamW 0.216. Gli arm
@@ -143,8 +145,8 @@ produzione.
 `EventProp_BigSweep2.ipynb` — 24 arm, 50ep, best-first, SKIP+RESUME:
 - **Parte 1** (9): conclude AdamW spettrale, `lr{2e3,3e3,5e3} x target{0.5,0.6,0.7}` (decode OFF).
 - **Parte 2** (12): TUTTE le correzioni, `AdamW + decode + rank{8,16}` su `lr{2e3,3e3} x target{0.5,0.6,0.7}`.
-- **PE** (2) + **BPTT_REF** (1, hardened). Atteso Parte 2: decode (~-0.02) + rank16 → val ben sotto 0.216,
-  probabile sorpasso del champion storico ~0.19.
+- **PE** (2) + **BPTT_REF** (1, = champion esatto `LS3_..._d03`, atteso ~0.1926). Atteso Parte 2: decode
+  (~-0.02) + rank16 → val ben sotto 0.216, obiettivo **battere il champion 0.1926**.
 
 ## 4. Infrastruttura
 - `scripts/scout.sh ... --tag X` -> run spuria pushata in `results/_scratch/X` (recuperabile).
