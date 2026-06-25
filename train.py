@@ -1322,6 +1322,9 @@ def main():
     parser.add_argument('--eventprop_alpha_f', type=float, default=7.0 / 8.0,
                         help='EventProp: decadimento del fatigue per tick (alpha_f). Piu vicino a 1 = '
                              'adattamento su scale piu lunghe. Default 0.875 (= alpha_m).')
+    parser.add_argument('--seed', type=int, default=None,
+                        help='Override del SEED globale (per multi-seed / robustezza). None = SEED da config. '
+                             'I dati restano gli stessi (cache); varia init modello + ordine minibatch.')
     parser.add_argument('--eventprop_lambda_spectral', type=float, default=0.0,
                         help='EventProp C11: peso del regolarizzatore spettrale relu(sigma_max(U@V)-'
                              'target)^2. Vincola il raggio spettrale della ricorrenza -> adjoint Rᵀ '
@@ -1365,7 +1368,7 @@ def main():
               f" n_train<={args.n_train}, n_val<={args.n_val},"
               " 1 epoca, LOG_EVERY=1, max_inf_streak=5, norme per-layer attive")
 
-    set_seed(SEED)
+    set_seed(args.seed if args.seed is not None else SEED)
     device   = DEVICE
     # cudnn.benchmark: ottimizza i kernel CUDA per le dimensioni fisse dei batch
     # (utile su GPU come T4/V100 con modelli piccoli e batch costanti)
@@ -1382,7 +1385,7 @@ def main():
     # ── Salva snapshot della config ───────────────────────────────
     config_snap = vars(args)
     config_snap['device'] = str(device)
-    config_snap['seed']   = SEED
+    config_snap['seed']   = args.seed if args.seed is not None else SEED
     with open(os.path.join(save_dir, 'config_snapshot.json'), 'w') as f:
         json.dump(config_snap, f, indent=2)
 

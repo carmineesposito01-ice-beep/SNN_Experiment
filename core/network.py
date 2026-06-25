@@ -406,10 +406,11 @@ class CF_FSNN_Net(nn.Module):
     # ----------------------------------------------------------
     # Decodifica parametri
     # ----------------------------------------------------------
-    def _decode_params(self, raw):
+    def _decode_params(self, raw, off=None, tau=None):
         """Potenziale LI grezzo → parametri IDM fisici via sigmoid.
 
         raw:     (batch, 5)
+        off/tau: opzionali (batch, 5) per override PER-CAMPIONE (modulatore adattivo).
         returns: (batch, 5) in unità fisiche
 
         FIX-BUG-1 (2026-06-03): rimosso F5 pre-scaling (raw_eq = raw / decode_scale).
@@ -427,8 +428,12 @@ class CF_FSNN_Net(nn.Module):
         """
         # R29 decode_offset/logit_tau: getattr-safe per varianti che NON li registrano
         # (es. EventProp, pre-R29). Assenti -> offset 0 / tau 1 = comportamento pre-R29 identico.
-        off = self.decode_offset if hasattr(self, 'decode_offset') else 0.0
-        tau = self.logit_tau if hasattr(self, 'logit_tau') else 1.0
+        # off/tau opzionali (default None): se forniti, override PER-CAMPIONE (modulatore adattivo
+        # FiLM-lite). Con None = comportamento globale identico (backward-compat).
+        if off is None:
+            off = self.decode_offset if hasattr(self, 'decode_offset') else 0.0
+        if tau is None:
+            tau = self.logit_tau if hasattr(self, 'logit_tau') else 1.0
         adj = (raw - off) / tau
         return self.param_lo + (self.param_hi - self.param_lo) * torch.sigmoid(adj)
 

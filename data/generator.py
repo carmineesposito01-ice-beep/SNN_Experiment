@@ -590,9 +590,14 @@ def _sample_scenario(rng, scenario_mix=None, cut_in_ratio=None):
 # 8. GENERAZIONE DEL DATASET COMPLETO
 # ===========================================================
 
+# Bound fisici dei 5 parametri (= CF_FSNN_Net._PARAM_BOUNDS). Usati da wide_params per coprire
+# l'INTERO range fisico (s0 e b nel campionamento per-scenario restano fissi ai preset -> coverage scarsa).
+_PHYS_BOUNDS = {'v0': (8.0, 45.0), 'T': (0.5, 2.5), 's0': (1.0, 5.0), 'a': (0.3, 2.5), 'b': (0.5, 3.0)}
+
+
 def generate_dataset(n_scenarios, base_seed=SEED,
                      scenario_mix=None, cut_in_ratio=None,
-                     noise_scale=1.0):
+                     noise_scale=1.0, wide_params=False):
     """
     Genera n_scenarios traiettorie ACC-IDM.
 
@@ -619,6 +624,13 @@ def generate_dataset(n_scenarios, base_seed=SEED,
     for i in range(n_scenarios):
         seed_i             = int(rng.integers(0, 2**31))
         p, prof, stype, is_cutin = _sample_scenario(rng, scenario_mix, cut_in_ratio)
+
+        # wide_params: ri-campiona TUTTI e 5 i parametri uniformemente sull'intero range fisico
+        # (copre s0/b che altrimenti restano discreti ai preset). Profilo/scenario invariati.
+        if wide_params:
+            p = dict(p)
+            for _k, (_lo, _hi) in _PHYS_BOUNDS.items():
+                p[_k] = float(rng.uniform(_lo, _hi))
 
         if is_cutin:
             traj = simulate_cut_in_trajectory(p, profile=prof, seed=seed_i,
