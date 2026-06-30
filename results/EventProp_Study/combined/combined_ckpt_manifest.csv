@@ -98,13 +98,13 @@ SPEC_l05_t20,Spectral_Sweep,True,True,ok,ok,ok,ok,ok
 SPEC_l05_t25,Spectral_Sweep,True,True,ok,ok,ok,ok,ok
 SPEC_l100_t12,Spectral_Sweep,True,True,ok,ok,ok,ok,ok
 SPEC_l100_t15,Spectral_Sweep,True,True,ok,ok,ok,ok,ok
-SPEC_l100_t20,Spectral_Sweep,True,,,,,,gia fatto (skip)
-SPEC_l100_t25,Spectral_Sweep,True,,,,,,gia fatto (skip)
-SPEC_l10_t12,Spectral_Sweep,True,,,,,,gia fatto (skip)
-SPEC_l10_t15,Spectral_Sweep,True,,,,,,gia fatto (skip)
-SPEC_l10_t20,Spectral_Sweep,True,,,,,,gia fatto (skip)
-SPEC_l10_t25,Spectral_Sweep,True,,,,,,gia fatto (skip)
-SPEC_l30_t12,Spectral_Sweep,True,,,,,,gia fatto (skip)
-SPEC_l30_t15,Spectral_Sweep,True,,,,,,gia fatto (skip)
-SPEC_l30_t20,Spectral_Sweep,True,,,,,,gia fatto (skip)
-SPEC_l30_t25,Spectral_Sweep,True,,,,,,gia fatto (skip)
+SPEC_l100_t20,Spectral_Sweep,True,True,ok,ok,ok,ok,ok
+SPEC_l100_t25,Spectral_Sweep,True,True,ok,ok,ok,ok,ok
+SPEC_l10_t12,Spectral_Sweep,True,True,ok,ok,ok,ok,ok
+SPEC_l10_t15,Spectral_Sweep,True,True,ok,ok,ok,ok,ok
+SPEC_l10_t20,Spectral_Sweep,True,True,ok,ok,ok,ok,ok
+SPEC_l10_t25,Spectral_Sweep,True,True,ok,ok,ok,ok,ok
+SPEC_l30_t12,Spectral_Sweep,True,True,ok,ok,ok,ok,ok
+SPEC_l30_t15,Spectral_Sweep,True,True,ok,ok,ok,ok,ok
+SPEC_l30_t20,Spectral_Sweep,True,True,ok,ok,ok,ok,ok
+SPEC_l30_t25,Spectral_Sweep,True,True,ok,ok,ok,ok,ok
