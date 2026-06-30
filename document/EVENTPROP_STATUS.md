@@ -1,38 +1,44 @@
-# EventProp — Stato attuale + punto di ripresa (2026-06-26)
+# EventProp — Stato attuale + punto di ripresa (2026-06-30)
 
-Branch `EventProp_Study`. **Questo è il documento-master di ripresa dello studio EventProp**: dove siamo,
-cosa funziona, cosa è stato escluso e perché, le pratiche da seguire, e come continuare.
+Branch `EventProp_Study`. **Documento-master di ripresa dello studio EventProp**: dove siamo, cosa funziona,
+cosa è escluso e perché, le pratiche, e come continuare. Dettagli complementari: **`document/EVALUATE_UPGRADE.md`**
+(upgrade evaluate 6-tier), **`results/EventProp_Study/combined/INDEX.md`** (studio combinato), `HOW_IT_WORKS_v2.md`
++ `GLOSSARY.md` (architettura/fisica). Le §1-§8 sono il record storico dello studio EventProp; la **§9** è
+l'aggiornamento post-BigSweep3 (studio combinato + evaluate v3).
 
 ---
 
 ## 0. COME RIPRENDERE (leggere prima questo)
 
-**Progetto CF_FSNN**: una Spiking Neural Network (ALIF + EventProp) che, osservata una traiettoria di
-car-following, **identifica i 5 parametri ACC-IIDM** `[v0, T, s0, a, b]`. Target finale: deploy su FPGA
-PYNQ-Z1 (pesi quantizzati po2). Architettura e fisica: vedi `document/HOW_IT_WORKS_v2.md` + `GLOSSARY.md`.
+**Progetto CF_FSNN**: una SNN (ALIF + EventProp) che, osservata una traiettoria di car-following,
+**identifica i 5 parametri ACC-IIDM** `[v0, T, s0, a, b]`. Target finale: deploy FPGA PYNQ-Z1 (pesi po2).
 
-**Stato in una riga**: EventProp è stato reso stabile/convergente e mappato a fondo (BigSweep1+2). È su un
-**fronte di Pareto** con il BPTT champion (lui vince la fisica, EventProp+decode vince i parametri). Lo
-**studio si chiude (verosimilmente) con BigSweep3**, un notebook esaustivo già pushato e pronto da lanciare.
+**Stato in una riga (2026-06-30)**: studio EventProp **mappato e chiuso** (BigSweep1→3 + **studio combinato**
+su 102 arm). EventProp è su un **fronte di Pareto** col BPTT champion: il champion vince la fisica di ~5.5%,
+EventProp vince NRMSE + stabilità (raggio spettrale 0.5 vs 22) + FPGA-friendliness (rank8), e **entrambi
+guidano in SICUREZZA** (0 collisioni, min-gap preservato). Costruito un **evaluate v3 esaustivo (6-tier)** e
+il **notebook champion `Eval_v3_TURTLE_POWER`** (4 champion + oracolo) — in attesa di girare su Azure.
 
-**Per continuare:**
+**Per continuare (dal più fresco):**
 1. `git pull origin EventProp_Study`.
-2. Se `results/EventProp_BigSweep3/` NON ha i risultati → il BigSweep3 va ancora lanciato su Azure
-   (`jupyter nbconvert --to notebook --execute --inplace EventProp_BigSweep3.ipynb`), ~24h.
-3. Se i risultati ci sono → analizzarli **secondo la metodologia in §6** (fisica primaria, non NRMSE),
-   leggendo le sezioni/png in `results/EventProp_BigSweep3/` (vedi §5 per cosa contengono).
-4. Verdetto di chiusura: confronto Pareto vs champion su fisica + parametri + sicurezza closed-loop.
-   La chiusura è una **decisione dell'utente** sul quadro complessivo (non c'è soglia go/no-go hardcoded);
-   direzione post-chiusura (quantizzazione/deploy FPGA, multi-seed esteso) in `document/FUTURE_WORK.md`.
+2. **Evaluate v3** — se `results/evaluate/v3_TURTLE_POWER!!!/` è vuoto, lanciarlo su Azure:
+   `jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=-1 Eval_v3_TURTLE_POWER.ipynb`
+   (multi-ora, resiliente, auto-push). Se ci sono i risultati → leggere `.../v3_TURTLE_POWER!!!/README.md` +
+   `00_Scorecard/` e dare il **verdetto cross-champion** (vedi §9.4).
+3. **Caveat aperto (§9.4)**: i risultati closed-loop della famiglia **BPTT_champion** nello Stadio-2 combinato
+   (figure F24/F38) sono **sospetti** — il loader del ckpt-pass caricava i baseline come `eventprop_alif_full`
+   → readout random silenzioso. Fix (schema-detection) già nel notebook v3; da riportare nel ckpt-pass e
+   ri-lanciare i soli arm baseline.
+4. Post-eval: quantizzazione/deploy FPGA, multi-seed esteso → `document/FUTURE_WORK.md`.
 
-**Workflow operativo**: il training gira **su Azure** (macchina "sandokan", conda env `azureml_py38`,
-Python 3.10), **lanciato dall'utente** (l'assistente prepara i notebook e analizza i risultati pullati, non
-ha accesso diretto ad Azure). In locale (Windows) si fa pull, analisi e build notebook. Ogni arm si **pusha
-appena finito**; ogni sezione d'analisi **salta se l'output esiste già** (resiliente a crash multi-giorno).
+**Workflow operativo**: training/eval pesanti su **Azure** (sandokan, `azureml_py38`, Python 3.10), **lanciati
+dall'utente**; in locale pull/analisi/build-notebook. L'assistente NON ha accesso diretto ad Azure. Checkpoint
+`.pt` **solo su Azure** (`checkpoints/<tag>/best_model.pt`, gitignorati). **Push solo quando Azure è fermo**
+(i notebook fanno auto-push → evitare conflitti). Ogni sezione d'analisi **salta se l'output esiste**
+(resiliente a crash/idle-shutdown multi-ora).
 
-> **Stato LIVE del job Azure NON è nei documenti** (è runtime). L'assenza di `results/EventProp_BigSweep3/`
-> in locale NON distingue "mai lanciato" da "in corso senza arm completati" → **chiedere all'utente** lo stato
-> reale (mai lanciato / in corso / crashato / completato) prima di agire. È l'unica cosa che i doc non danno.
+> **Stato LIVE del job Azure NON è nei documenti** (è runtime): l'assenza di risultati in locale NON distingue
+> "mai lanciato" da "in corso" → **chiedere all'utente** lo stato reale prima di agire.
 
 ---
 
@@ -220,3 +226,64 @@ Decode OFF vs ON (best-Adam, 10ep) — la conferma che il decode de-satura T/s0:
 | a | 0.282 | 0.227 | 0.284 |
 | b | 0.310 | 0.173 | 0.316 |
 | val_min | 0.2563 | 0.2374 | 0.1926 |
+
+---
+
+## 9. Post-BigSweep3 — studio combinato + Evaluate v3 (2026-06-30)
+
+### 9.1 Verdetto BigSweep3 (CHIUSO)
+22 arm, 50ep. **Best EventProp** `A_lr1e2_t06_r16` val_data **0.2031** (gap **+5.5%** vs champion 0.1926; era
++8.8% in BS1/2). **rank8 sufficiente** (val_data peggiora monotòno col rank → ideale FPGA). **decode-ON
+essenziale** (decode-OFF: val 0.217-0.231, NRMSE 0.30-0.38). **Multi-seed std 0.0011** → caveat single-seed
+CHIUSO. **Sicurezza closed-loop**: 0 collisioni, min-gap preservato per champion ed EventProp. Dataset
+full-range (`wide`/`widebig`): l'identificazione sul range fisico pieno resta dura (phys residuo domina) →
+FUTURE_WORK, non un quick-win.
+
+### 9.2 Studio combinato (`results/EventProp_Study/combined/`, 36 figure + INDEX.md)
+Aggrega i **102 arm** delle 5 campagne (Study/Spectral/BigSweep/BS2/BS3) su **val-set comune**
+(`cache_1500_launch`) → metrica confrontabile. **29 figure Stage-1** (dai `training_log.csv`) + **7 figure
+Stage-2** (dai checkpoint, 100/100 arm). Builder: `scripts/_build_eventprop_study_combined.py` (Stage-1, locale)
++ `scripts/_eventprop_combined_ckpt_pass.py` (Stage-2, gira su Azure, resiliente+manifest). Backbone:
+`combined_arm_index.csv` + `combined_epoch_long.csv`. **Findings chiave:**
+- **La FISICA (val_data) governa la sicurezza, non l'NRMSE** (F24): arm a fisica migliore → min-gap vicino
+  all'oracolo (12.6 m). **ProdigyEvent consuma −2.45 m di margine di gap** (vs −0.3/−0.5 AdamW, champion +0.25):
+  paradosso "NRMSE bassa ≠ guida sicura" **confermato in closed-loop** (F38).
+- Meccanismo stabilità (F12): raggio spettrale champion sale a **~22**, EventProp vincolato a **~0.5** (C11);
+  `is_inf_grad` SOLO nella famiglia BPTT_champion, mai EventProp (F35).
+- `lr` è la leva dominante (F32, |corr| 0.71). Champion: **11 neuroni morti** / eff_rank 1.75; EventProp: **0 morti**.
+
+### 9.3 Evaluate v3 — upgrade 6-tier (`document/EVALUATE_UPGRADE.md`; tutto opt-in/backward-compat; 21 test verdi)
+Da validazione *data-driven* a *physics/network-driven*. **T0** reporting (distribuzioni/Wilson/CI-bootstrap/
+per-scenario+worst-case/flag-ISO/intra_std + **metriche-sicurezza CONTINUE** `brake_margin_min` con segno e
+`impact_dv`, che NON saturano come collision_rate) · **T1** scenari di coda (cut_out/static/panic-9/aggressive)
++ soglie DRAC/TTC/CPI + efficienza + energia + curva-di-rottura · **T2** plant fisico L4 (lag attuatore/μ/
+pendenza/drag) + canale V2X L3 (pdr/Gilbert/latenza/jitter/OU/AoI/chattering) dentro `simulate(plant,channel)` ·
+**T3** string stability **plotone** (catena N, |Γ(ω)| via chirp, L2/Linf) · **T4** identificabilità **FIM**/
+equifinalità/excitation/causal/calibrazione/reachability/naturalisticità · **T5** quantizzazione **FPGA** (Qm.n/po2).
+File: `utils/closed_loop_eval.py`, `scripts/closed_loop_identify.py`, `utils/identifiability.py`,
+`utils/quantize.py`, `tests/test_eval_tier0.py`.
+
+### 9.4 Notebook champion v3 — "TURTLE POWER!!!" (`Eval_v3_TURTLE_POWER.ipynb`)
+4 champion + oracolo, evaluate 6-tier completo, **figure + csv per ogni dimensione**, output in
+`results/evaluate/v3_TURTLE_POWER!!!/` (00_Scorecard, 01_Accuracy … 09_Trajectories + README.md). Champion:
+
+| alias | tag checkpoint | variant | colore | carattere |
+|---|---|---|---|---|
+| Master Splinter | *oracolo* (param veri) | — | grigio | riferimento |
+| Raffaello | `R33_C2_A1_T12_fix` | baseline | rosso | Prodigy, aggressivo |
+| Leonardo | `LS3_PEAK_R0_launch_d03` | baseline | azzurro | champion BPTT, conservativo |
+| Donatello | `PE_t05_gp0002` | eventprop_alif_full | viola | best-NRMSE (0.152) |
+| Michelangelo | `A_lr1e2_t06_r16` | eventprop_alif_full | arancione | best-Adam (0.2031) |
+
+**Loader robusto**: variante dedotta dallo **schema chiavi** del checkpoint (`layer_out.fc_weight`=baseline vs
+`layer_out.weight`=eventprop) + **validazione readout** (se non carica → scarta, niente output random silenzioso);
+rank/hidden inferiti da `rec_U`. **Energia**: fonte-spike uniforme `forward_sequence_with_stats` (nJ per tutti;
+raster per-neurone vero solo per i baseline). **Resiliente**: `resilient` per-cella + `timeout:-1` nei metadata
++ csv-salvato-per-ultimo + auto-push. Verificato: 13 celle compilano, smoke-test su cache reale, review
+adversariale a 3 agenti.
+
+> **⚠️ BUG STORICO da correggere**: il ckpt-pass dello Stadio-2 combinato (§9.2) NON aveva la fix
+> schema-detection del loader → ha caricato i **baseline** (famiglia BPTT_champion: BPTT_REF, ecc.) come
+> `eventprop_alif_full` → **readout random silenzioso** → i risultati closed-loop del *champion* nelle figure
+> F24/F38 sono **artefatti** (gli arm EventProp, la maggioranza, sono corretti). Fix: portare lo schema-detection
+> in `_eventprop_combined_ckpt_pass.py::build_and_load` e ri-lanciare i soli arm baseline su Azure.

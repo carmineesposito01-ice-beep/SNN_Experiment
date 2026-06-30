@@ -132,7 +132,34 @@
 | 4 | Metodologia (identificabilita') | ✅ fatto (test verde) |
 | 5 | Hardware FPGA | ✅ fatto (test verde) |
 
-**TUTTI I 6 TIER COMPLETATI** — 56 item LX implementati, backward-compat (default = legacy), test
-`tests/test_eval_tier0.py` 20/20 verde. Manca solo: (a) costruire un **notebook di evaluation champion**
-che orchestra `eval_safety(rich,tail,plant,channel)` + `eval_string_stability` + `eval_quantization` +
-`identifiability.*` su modelli reali; (b) riconciliazione git (pull→push) a fine Stadio-2 Azure.
+**TUTTI I 6 TIER COMPLETATI** — 56 item LX + T0.10 (sicurezza continua) implementati, backward-compat
+(default = legacy), test `tests/test_eval_tier0.py` **21/21 verde**.
+
+---
+
+## Deliverable: notebook champion v3 — "TURTLE POWER!!!" (FATTO, in attesa di Azure)
+`Eval_v3_TURTLE_POWER.ipynb` (builder `scripts/_build_eval_v3_notebook.py`) orchestra l'intera libreria 6-tier
+su **4 champion + oracolo**, producendo **figure + csv per ogni dimensione** in `results/evaluate/v3_TURTLE_POWER!!!/`.
+
+**Champion**: Master Splinter (oracolo, grigio) · Raffaello `R33_C2_A1_T12_fix` (baseline, rosso) ·
+Leonardo `LS3_PEAK_R0_launch_d03` (baseline, azzurro) · Donatello `PE_t05_gp0002` (eventprop, viola) ·
+Michelangelo `A_lr1e2_t06_r16` (eventprop, arancione). Dettagli/verdetto in `EVENTPROP_STATUS.md §9.4`.
+
+**Celle**: ENV (loader robusto schema-detection + validazione readout) · Accuracy · Closed-loop rich+tail
+(min-gap/brake_margin/TTC/DRAC/jerk) · String stability plotone · Identificabilità FIM · Quantizzazione ·
+V2X · Plant L4 · Energia/spiking · Traiettorie · **Scorecard radar** · Push.
+
+**Robustezza (da review adversariale a 3 agenti)**: `timeout:-1` nei metadata (le celle pesanti durano
+minuti/ore; il CellTimeoutError sarebbe fuori dal try/except) · ogni cella d'analisi `resilient`
+(errore→`ERROR_<sez>.txt`, prosegue) · guardie `AVAIL` vuoto · **csv-salvato-per-ultimo** (skip-robusto
+all'idle-shutdown) · radar nan/1-champion-safe. Lancio: `jupyter nbconvert --to notebook --execute --inplace
+--ExecutePreprocessor.timeout=-1 Eval_v3_TURTLE_POWER.ipynb`.
+
+**Caveat**: energia → nJ per tutti (fonte uniforme `forward_sequence_with_stats`), ma raster per-neurone vero
+solo per i baseline (Raffaello/Leonardo); eventprop → curva spike-rate.
+
+## In sospeso
+- **Run v3 su Azure** (multi-ora, auto-push) → poi verdetto cross-champion dallo `00_Scorecard`.
+- **Fix ckpt-pass combinato** (`_eventprop_combined_ckpt_pass.py::build_and_load`): portare lo schema-detection
+  del loader v3 e ri-lanciare i soli arm baseline (le figure F24/F38 del champion sono artefatti — vedi
+  `EVENTPROP_STATUS.md §9.4`).
