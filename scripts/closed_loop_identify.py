@@ -167,7 +167,8 @@ def _agg_rich(rec_full, id_intra, paired=None):
     return out
 
 
-def eval_safety(model, cache, n_drivers=20, seq_len=50, device='cpu', rich=False, n_seeds=1, tail=False):
+def eval_safety(model, cache, n_drivers=20, seq_len=50, device='cpu', rich=False, n_seeds=1, tail=False,
+                plant=None, channel=None):
     """Sicurezza closed-loop: ORACOLO (param veri) vs SNN (param identificati), su scenari avversari.
 
     Per ogni driver: identifica i param dalla prima finestra, costruisce gli scenari avversari (coi param
@@ -202,12 +203,14 @@ def eval_safety(model, cache, n_drivers=20, seq_len=50, device='cpu', rich=False
             for name, vl, s_i, v_i, cut in build_scenarios(true_pg, N=400, rng=rng, include_tail=tail):
                 trs = {}
                 for key, ctrl in [('oracle', true_pg), ('snn', id_pg)]:
-                    tr = simulate(None, ctrl, vl, s_i, v_i, cut_in=cut, device=device)
+                    tr = simulate(None, ctrl, vl, s_i, v_i, cut_in=cut, device=device,
+                                  plant=plant, channel=channel)
                     trs[key] = tr
                     sm = safety_metrics(tr); cm = comfort_metrics(tr)
                     rec[key].append((int(sm['collided']), sm['min_gap'], cm['max_decel'], cm['rms_jerk']))
                     if rich:
-                        rec_full[key].append({**sm, **cm, **tracking_metrics(tr), 'scenario': name})
+                        extra = {'aoi_mean': tr['aoi_mean']} if 'aoi_mean' in tr else {}
+                        rec_full[key].append({**sm, **cm, **tracking_metrics(tr), **extra, 'scenario': name})
                 if rich:
                     pr = _paired_rollout(trs['oracle'], trs['snn'], name)
                     if pr:
@@ -284,6 +287,36 @@ def breakdown_curve(model, cache, n_drivers=15, seq_len=50, device='cpu',
     panic = [dict(zip(('decel', 'oracle', 'snn'), (d,) + _rate(_panic, d))) for d in decels]
     cutin = [dict(zip(('gap', 'oracle', 'snn'), (g,) + _rate(_cutin, g))) for g in gaps]
     return {'panic': panic, 'cut_in': cutin, 'n_drivers': len(ids)}
+
+
+def cbr_to_pdr(density, cbr_max=0.6):
+    """T2.16 — proxy DCC: densita' veicolare -> Channel Busy Ratio -> PDR (piu' densita' = piu' CBR = meno PDR).
+    Mapping lineare semplice (raffinabile con modelli ETSI DCC / SAE J2945). density in veic/km circa."""
+    cbr = min(cbr_max, 0.02 * float(density))
+    return max(0.3, 1.0 - cbr)
+
+
+def v2x_robustness_sweep(model, cache, n_drivers=15, device='cpu',
+                         pdrs=(1.0, 0.9, 0.7, 0.5), latencies=(0, 1, 2, 3)):
+    """T2.12 — sweep robustezza V2X in closed-loop: per ogni PDR e per ogni latenza (in step DT),
+    misura collision_rate (SNN) e p5 di min_TTC -> degrado graceful vs catastrofico (knee-point).
+    Riusa eval_safety(channel=...). Usa scenari di coda (tail=True) per stressare i margini."""
+    rows = []
+    for pdr in pdrs:
+        r = eval_safety(model, cache, n_drivers=n_drivers, device=device, rich=True, tail=True,
+                        channel={'pdr': float(pdr), 'seed': 0})
+        rows.append({'axis': 'pdr', 'val': float(pdr),
+                     'collision_rate': r['snn']['collision_rate'],
+                     'min_ttc_p5': r['rich']['snn']['min_ttc']['p5'],
+                     'aoi': None})
+    for lat in latencies:
+        r = eval_safety(model, cache, n_drivers=n_drivers, device=device, rich=True, tail=True,
+                        channel={'latency_steps': int(lat), 'seed': 0})
+        rows.append({'axis': 'latency', 'val': int(lat),
+                     'collision_rate': r['snn']['collision_rate'],
+                     'min_ttc_p5': r['rich']['snn']['min_ttc']['p5'],
+                     'aoi': None})
+    return rows
 
 
 if __name__ == '__main__':

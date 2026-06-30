@@ -39,13 +39,104 @@ def _norm_obs(s, v, dv, vl):
     return torch.tensor([[s_n, v_n, dv_n, vl_n]], dtype=torch.float32)
 
 
-def simulate(model, params_gt, v_leader, s_init, v_init, cut_in=None, device='cpu'):
+def _plant_step(a_cmd, v, st, cfg):
+    """L4 — plant fisico EGO: lag attuatore 1° ordine (asimm. opz.), + grade + drag/rolling, jerk-limit,
+    clip aderenza -mu*g. st = stato mutabile {'a_real'}. cfg dict (chiavi assenti = effetto off).
+    Ritorna a_real (accelerazione REALIZZATA)."""
+    a_prev = st.get('a_real', a_cmd)
+    # lag attuatore (T2.1/T2.8: tau_brake quando si frena, tau_throttle altrimenti; fallback tau_act)
+    tau = cfg.get('tau_brake' if a_cmd < a_prev else 'tau_throttle', cfg.get('tau_act', 0.0))
+    a_real = a_cmd if not tau else (np.exp(-DT / tau) * a_prev + (1.0 - np.exp(-DT / tau)) * a_cmd)
+    # disturbi additivi (T2.3 grade, T2.4 drag+rolling)
+    theta = cfg.get('grade', 0.0)
+    if theta:
+        a_real += -9.81 * np.sin(theta)
+    if cfg.get('drag'):
+        rho = cfg.get('rho', 1.2); cd = cfg.get('Cd', 0.3); af = cfg.get('A', 2.2)
+        m = cfg.get('m', 1500.0); crr = cfg.get('Crr', 0.01)
+        if v > 0:
+            a_real += -(0.5 * rho * cd * af * v * v) / m - crr * 9.81
+    # jerk limiter (T2.7)
+    jmax = cfg.get('jerk_max')
+    if jmax:
+        dj = float(np.clip(a_real - a_prev, -jmax * DT, jmax * DT))
+        a_real = a_prev + dj
+    # clip aderenza (T2.2): decel max ~ -mu*g (e accel max ~ +mu*g per trazione)
+    mu = cfg.get('mu')
+    if mu is not None:
+        lim = mu * 9.81
+        a_real = float(np.clip(a_real, -lim, lim))
+    st['a_real'] = a_real
+    return a_real
+
+
+def _channel_obs(s_true, vl_true, st, cfg, rng):
+    """L3 — canale V2X: degrada l'osservazione del LEADER (gap+vel). packet-loss (hold-last-CAM),
+    Gilbert-Elliott (burst), latenza+jitter (buffer), blackout forzato, rumore OU sensoriale.
+    st = stato mutabile. Ritorna (s_obs, vl_obs, aoi_steps)."""
+    buf = st.setdefault('buf', [])
+    buf.append((s_true, vl_true))
+    lat = int(cfg.get('latency_steps', 0)); jit = int(cfg.get('jitter_steps', 0))
+    k = max(0, lat + (int(rng.integers(-jit, jit + 1)) if jit > 0 else 0))
+    s_rx, vl_rx = buf[max(0, len(buf) - 1 - k)]
+    t_now = len(buf) - 1
+    bw = cfg.get('blackout_steps')
+    if bw is not None and bw[0] <= t_now <= bw[1]:           # T2.15 — blackout avversario
+        received = False
+    elif 'gilbert' in cfg:                                    # T2.9 — burst (Gilbert-Elliott)
+        p_bad, p_good = cfg['gilbert']
+        bad = st.get('ge_bad', False)
+        bad = (rng.random() > p_good) if bad else (rng.random() < p_bad)
+        st['ge_bad'] = bad
+        received = not bad
+    else:
+        received = rng.random() < cfg.get('pdr', 1.0)         # T2.9 — Bernoulli(PDR)
+    if received or 'last' not in st:
+        st['last'] = (s_rx, vl_rx); st['age'] = k
+    else:
+        st['age'] = st.get('age', 0) + 1                      # hold-last-CAM
+    s_obs, vl_obs = st['last']
+    ns = cfg.get('sensor_noise_scale', 0.0)                   # T2.11 — rumore OU su gap/vel
+    if ns:
+        from config import NOISE_GAP_REL, NOISE_VEL_OPT, NOISE_TAU_S, NOISE_TAU_V
+        st['eta_s'] = np.exp(-DT / NOISE_TAU_S) * st.get('eta_s', 0.0) + np.sqrt(2 * DT / NOISE_TAU_S) * rng.standard_normal()
+        st['eta_v'] = np.exp(-DT / NOISE_TAU_V) * st.get('eta_v', 0.0) + np.sqrt(2 * DT / NOISE_TAU_V) * rng.standard_normal()
+        s_obs = s_obs * np.exp(ns * NOISE_GAP_REL * st['eta_s'])
+        vl_obs = vl_obs - s_obs * ns * NOISE_VEL_OPT * st['eta_v']
+    return float(s_obs), float(vl_obs), int(st.get('age', 0))
+
+
+def param_chattering(traj, f_thr=0.5):
+    """T2.13 — chattering dei param identificati: std per-canale + frazione energia spettrale > f_thr Hz.
+    Significativo solo in modalita' forward_step (param variabili per-step; coi param costanti ~0)."""
+    P = traj.get('params')
+    PNL = ['v0', 'T', 's0', 'a', 'b']
+    if P is None or len(P) < 4:
+        return {}
+    freqs = np.fft.rfftfreq(P.shape[0], d=DT)
+    hi = freqs >= f_thr
+    out = {}
+    for i, nm in enumerate(PNL):
+        x = P[:, i] - P[:, i].mean()
+        spec = np.abs(np.fft.rfft(x)) ** 2
+        out['chatter_std_' + nm] = float(P[:, i].std())
+        out['chatter_hf_' + nm] = float(spec[hi].sum() / (spec.sum() + 1e-12))
+    return out
+
+
+def simulate(model, params_gt, v_leader, s_init, v_init, cut_in=None, device='cpu',
+             plant=None, channel=None):
     """Closed-loop. model=None -> ORACOLO (usa params_gt costanti).
 
     params_gt: array (5,) [v0,T,s0,a,b] veri dello scenario (per oracolo e tracking).
     v_leader:  array (N,) profilo velocita' leader [m/s].
     cut_in:    None | (t_cut:int, new_gap:float) — a t_cut il gap crolla (nuovo leader vicino).
-    Ritorna dict con serie temporali + flag collided.
+    plant:     None (default) | dict — plant fisico EGO (L4): tau_act/tau_brake/tau_throttle, mu, grade,
+               drag, jerk_max. None => accel comandata applicata istantaneamente (comportamento legacy).
+    channel:   None (default) | dict — canale V2X (L3): pdr, gilbert, latency_steps/jitter_steps,
+               blackout_steps, sensor_noise_scale, seed. None => osservazione esatta (legacy).
+    Backward-compat: plant=None e channel=None => percorso e risultato IDENTICI alla versione precedente.
+    Ritorna dict con serie temporali + flag collided (+ aoi_* se channel attivo).
     """
     N = len(v_leader)
     alpha_al = float(np.exp(-DT / ACC_AL_TAU))
@@ -59,32 +150,47 @@ def simulate(model, params_gt, v_leader, s_init, v_init, cut_in=None, device='cp
     series = {k: [] for k in ('s', 'v', 'vl', 'dv', 'a_ego')}
     params_used = []
     collided = False
+    pl_state = {}                                              # stato plant (L4)
+    ch_state = {}; aoi_series = []                             # stato canale V2X (L3)
+    ch_rng = np.random.default_rng(channel.get('seed', 0)) if channel is not None else None
 
     with torch.no_grad():
         for t in range(N):
             if cut_in is not None and t == int(cut_in[0]):
                 s = float(cut_in[1])              # nuovo leader piu' vicino
             vl = float(v_leader[t])
-            dv = v - vl                            # >0 = avvicinamento
+            dv = v - vl                            # >0 = avvicinamento (TRUE, per le serie/fisica)
+
+            # --- canale V2X (opt-in): cosa OSSERVA il controllore del leader ---
+            if channel is not None:
+                s_obs, vl_obs, age = _channel_obs(s, vl, ch_state, channel, ch_rng)
+                aoi_series.append(age)
+            else:
+                s_obs, vl_obs = s, vl
+            dv_obs = v - vl_obs
 
             if model is not None:
-                params = model.forward_step(_norm_obs(s, v, dv, vl).to(device))
+                params = model.forward_step(_norm_obs(s_obs, v, dv_obs, vl_obs).to(device))
             else:
                 params = pg
 
-            a_l_raw  = (vl - vl_prev) / DT
+            a_l_raw  = (vl_obs - vl_prev) / DT
             a_l_filt = alpha_al * a_l_filt + (1.0 - alpha_al) * a_l_raw
-            vl_prev  = vl
+            vl_prev  = vl_obs
 
-            a_ego = float(CF_FSNN_Net.acc_iidm_accel(
-                torch.tensor([max(s, 1e-3)]), torch.tensor([v]), torch.tensor([dv]),
+            a_cmd = float(CF_FSNN_Net.acc_iidm_accel(
+                torch.tensor([max(s_obs, 1e-3)]), torch.tensor([v]), torch.tensor([dv_obs]),
                 torch.tensor([a_l_filt]), params, coolness=ACC_COOLNESS)[0])
+
+            # --- plant fisico EGO (opt-in): accel REALIZZATA ---
+            a_ego = _plant_step(a_cmd, v, pl_state, plant) if plant is not None else a_cmd
 
             series['s'].append(s); series['v'].append(v); series['vl'].append(vl)
             series['dv'].append(dv); series['a_ego'].append(a_ego)
             params_used.append(params.view(-1).cpu().numpy())
 
             # update balistico (Ch11). NB: gap NON clippato in basso -> collisione rilevabile.
+            # La fisica usa vl VERO (non osservato): il canale degrada solo la PERCEZIONE.
             v = max(0.0, v + a_ego * DT)
             s = s + (vl - v) * DT
             if s <= 0.0:
@@ -95,6 +201,9 @@ def simulate(model, params_gt, v_leader, s_init, v_init, cut_in=None, device='cp
     out['params'] = np.asarray(params_used, dtype=np.float64)   # (M,5)
     out['collided'] = collided
     out['min_gap'] = float(s) if collided else float(out['s'].min())
+    if channel is not None and aoi_series:                      # T2.14 — Age-of-Information
+        out['aoi_mean'] = float(np.mean(aoi_series)) * DT
+        out['aoi_max'] = float(np.max(aoi_series)) * DT
     return out
 
 

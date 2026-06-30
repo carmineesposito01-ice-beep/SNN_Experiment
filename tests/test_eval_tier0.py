@@ -10,7 +10,7 @@ import torch
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from utils.closed_loop_eval import comfort_metrics, safety_metrics  # noqa: E402
+from utils.closed_loop_eval import comfort_metrics, safety_metrics, simulate  # noqa: E402
 from scripts.closed_loop_identify import (eval_safety, _summarize, _wilson_ub,  # noqa: E402
                                           _bootstrap_ci)
 
@@ -172,6 +172,78 @@ def test_make_ood_cache():
     print('  OK make_ood_cache (driver OoD generati)')
 
 
+# ----------------------------- TIER 2 -----------------------------
+def _leader_brake(N=200, v_set=15.0, decel=6.0):
+    vl = np.full(N, v_set); bs = N // 3
+    for i in range(bs, N):
+        vl[i] = max(0.0, vl[i - 1] - decel * 0.1)
+    return vl
+
+
+def test_plant_channel_helpers():
+    from utils.closed_loop_eval import _plant_step, _channel_obs
+    # lag attuatore: dopo un init a 0, a_real insegue a_cmd senza raggiungerlo in 1 step
+    st = {}
+    _plant_step(0.0, 10.0, st, {'tau_act': 0.5})   # init: a_real=0
+    a1 = _plant_step(-5.0, 10.0, st, {'tau_act': 0.5})   # lag da 0 verso -5
+    assert -5.0 < a1 < 0.0, a1
+    # clip aderenza mu: decel non oltre -mu*g
+    st = {}
+    a2 = _plant_step(-9.0, 10.0, st, {'mu': 0.2})
+    assert a2 >= -0.2 * 9.81 - 1e-6, a2
+    # grade in salita riduce l'accel
+    st = {}
+    a_flat = _plant_step(0.0, 10.0, {}, {})
+    a_up = _plant_step(0.0, 10.0, {}, {'grade': 0.05})
+    assert a_up < a_flat
+    # canale: pdr=0 -> hold-last (sempre il primo campione ricevuto)
+    cst = {}; rng = np.random.default_rng(0)
+    s0o, vl0o, _ = _channel_obs(20.0, 8.0, cst, {'pdr': 0.0}, rng)
+    s1o, vl1o, age = _channel_obs(5.0, 2.0, cst, {'pdr': 0.0}, rng)
+    assert s1o == s0o and vl1o == vl0o and age >= 1   # tenuto l'ultimo
+    print('  OK plant/channel helpers (lag, mu-clip, grade, hold-last)')
+
+
+def test_simulate_plant_channel_backcompat():
+    pg = np.array([30.0, 1.2, 2.5, 1.1, 1.5], dtype=np.float32)
+    vl = _leader_brake()
+    s_i = pg[2] + 0.7 * pg[0] * pg[1]; v_i = 0.7 * pg[0]
+    base = simulate(None, pg, vl, s_i, v_i)
+    base2 = simulate(None, pg, vl, s_i, v_i, plant=None, channel=None)
+    assert np.allclose(base['a_ego'], base2['a_ego']), 'default deve essere identico'
+    # plant ON cambia l'accel realizzata
+    withlag = simulate(None, pg, vl, s_i, v_i, plant={'tau_act': 0.5, 'mu': 0.4})
+    assert not np.allclose(base['a_ego'][:len(withlag['a_ego'])], withlag['a_ego'][:len(base['a_ego'])]), 'plant deve cambiare a_ego'
+    # channel ON produce AoI
+    withch = simulate(None, pg, vl, s_i, v_i, channel={'pdr': 0.5, 'latency_steps': 2, 'seed': 1})
+    assert 'aoi_mean' in withch and withch['aoi_mean'] >= 0.0
+    print('  OK simulate plant/channel (default invariato, plant/channel attivi cambiano)')
+
+
+def test_param_chattering():
+    from utils.closed_loop_eval import param_chattering
+    M = 200
+    t = np.arange(M)
+    P = np.tile([30.0, 1.2, 2.5, 1.1, 1.5], (M, 1)).astype(float)
+    P[:, 1] += 0.3 * np.sin(2 * np.pi * 2.0 * t * 0.1)   # T oscilla a 2 Hz (>0.5)
+    ch = param_chattering({'params': P})
+    assert ch['chatter_std_T'] > 0.1 and ch['chatter_hf_T'] > 0.3, ch
+    flat = param_chattering({'params': np.tile([30.0, 1.2, 2.5, 1.1, 1.5], (M, 1)).astype(float)})
+    assert flat['chatter_std_v0'] < 1e-9
+    print('  OK param_chattering (HF rilevato, costante ~0)')
+
+
+def test_v2x_sweep_and_cbr():
+    from scripts.closed_loop_identify import v2x_robustness_sweep, cbr_to_pdr
+    model = StubModel(); cache = _synth_cache(2)
+    rows = v2x_robustness_sweep(model, cache, n_drivers=2, pdrs=(1.0, 0.5), latencies=(0, 3))
+    assert len(rows) == 4
+    for r in rows:
+        assert 'collision_rate' in r and 'min_ttc_p5' in r and r['axis'] in ('pdr', 'latency')
+    assert cbr_to_pdr(0) > cbr_to_pdr(50)          # piu' densita' -> meno PDR
+    print('  OK v2x_robustness_sweep + cbr_to_pdr')
+
+
 if __name__ == '__main__':
     print('[TEST Tier0]')
     test_comfort_iso_flags()
@@ -183,4 +255,9 @@ if __name__ == '__main__':
     test_eval_tail_and_rollout()
     test_breakdown_curve()
     test_make_ood_cache()
+    print('[TEST Tier2]')
+    test_plant_channel_helpers()
+    test_simulate_plant_channel_backcompat()
+    test_param_chattering()
+    test_v2x_sweep_and_cbr()
     print('TUTTI I TEST OK')

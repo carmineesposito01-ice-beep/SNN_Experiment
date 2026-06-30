@@ -54,23 +54,27 @@
 - [x] **T1.11** `L1.braking_dist` — `rich.rollout.braking_dist_err` per scenario di arresto
 - [x] **T1.12** `L4.energy_comfort` — `energy_proxy` (load-based ∫max(0,v·a)); bande ISO 2631 derivabili da `rms_accel`
 
-## TIER 2 — Plant fisico (L4) + degradazione V2X (L3) in closed-loop
-- [ ] **T2.1** `L4.actuator_lag` — lag attuatore EGO 1° ordine (τ≈0.3-0.5s), sweep {0,0.2,0.5}
-- [ ] **T2.2** `L4.friction_limit` — clip decel a −μ·g (μ dry/wet/ice = 0.9/0.45/0.18)
-- [ ] **T2.3** `L4.grade` — pendenza −g·sinθ (costante e/o profilo OU)
-- [ ] **T2.4** `L4.drag_rolling` — drag ½ρCdAv² + rolling (Cd0.3,A2.2,m1500,Crr0.01)
-- [ ] **T2.5** `L4.plant_module` — funzione `plant()` unificata + **ablation con/senza plant**
-- [ ] **T2.6** `L4.extra:plant_in_eval` — plant anche in `eval_safety` (ramo EventProp/FPGA)
-- [ ] **T2.7** `L4.extra:jerk_limiter` — saturazione jerk fisico (|jerk|≤~10)
-- [ ] **T2.8** `L4.extra:asym_tau` — τ_brake ≠ τ_throttle (asimmetria attuatore)
-- [ ] **T2.9** `L3-01` — packet-loss → hold-last-CAM, sweep PDR {90,70,50}% (+ opz. Gilbert-Elliott burst)
-- [ ] **T2.10** `L3-02` — latenza+jitter: buffer FIFO ritardato k=round(lat/DT) step ({50,100,200,300}ms)
-- [ ] **T2.11** `L3-03` — rumore sensoriale OU/GNSS in eval (riusa `_ou_step`; CEP~1.5-5m)
-- [ ] **T2.12** `L3-04` — slope degrado **graceful vs catastrofico** (knee-point) vs PDR/latenza
-- [ ] **T2.13** `L3-05` — **parameter chattering**: std + FFT (>0.5Hz) dei 5 param (in forward_step)
-- [ ] **T2.14** `L3-06` — **Age-of-Information** effettiva come ascissa unificante
-- [ ] **T2.15** `L3.extra:adversarial_loss` — loss correlato all'evento (blackout su cut_in/hard_brake)
-- [ ] **T2.16** `L3.extra:DCC_CBR` — rate CAM adattivo densita'→CBR→AoI
+## TIER 2 — Plant fisico (L4) + degradazione V2X (L3) in closed-loop ✅ FATTO
+> `utils/closed_loop_eval.py`: `_plant_step` (L4), `_channel_obs` (L3), `param_chattering`, e
+> `simulate(plant=None, channel=None)` (default = legacy identico, verificato dal test).
+> `scripts/closed_loop_identify.py`: `eval_safety(plant=, channel=)` passthrough, `v2x_robustness_sweep()`,
+> `cbr_to_pdr()`. Il canale degrada solo la PERCEZIONE del leader; la fisica usa vl VERO.
+- [x] **T2.1** `L4.actuator_lag` — `plant={'tau_act':0.3..0.5}` (lag 1° ordine su a_cmd)
+- [x] **T2.2** `L4.friction_limit` — `plant={'mu':0.9/0.45/0.18}` → clip a ±μ·g
+- [x] **T2.3** `L4.grade` — `plant={'grade':θ}` → −g·sinθ
+- [x] **T2.4** `L4.drag_rolling` — `plant={'drag':True, Cd,A,m,Crr}` → ½ρCdAv²+rolling
+- [x] **T2.5** `L4.plant_module` — `_plant_step()` unificato; **ablation** = eval con `plant=None` vs `plant={...}`
+- [x] **T2.6** `L4.extra:plant_in_eval` — `eval_safety(plant=...)` → simulate (ramo identificato/EventProp)
+- [x] **T2.7** `L4.extra:jerk_limiter` — `plant={'jerk_max':...}`
+- [x] **T2.8** `L4.extra:asym_tau` — `plant={'tau_brake':..,'tau_throttle':..}`
+- [x] **T2.9** `L3-01` — `channel={'pdr':..}` hold-last-CAM (+ `{'gilbert':(p_bad,p_good)}` burst)
+- [x] **T2.10** `L3-02` — `channel={'latency_steps':k,'jitter_steps':j}` (buffer FIFO ritardato)
+- [x] **T2.11** `L3-03` — `channel={'sensor_noise_scale':..}` (OU su gap/vel, riusa NOISE_* di config)
+- [x] **T2.12** `L3-04` — `v2x_robustness_sweep()` → collision_rate + min_ttc_p5 vs PDR/latenza (curva = knee)
+- [x] **T2.13** `L3-05` — `param_chattering()` (std + frazione energia FFT >0.5Hz per canale)
+- [x] **T2.14** `L3-06` — `simulate()` ritorna `aoi_mean`/`aoi_max` (Age-of-Information) quando channel attivo
+- [x] **T2.15** `L3.extra:adversarial_loss` — `channel={'blackout_steps':(t0,t1)}` (loss forzato sull'evento)
+- [x] **T2.16** `L3.extra:DCC_CBR` — `cbr_to_pdr(density)` (proxy DCC densità→CBR→PDR)
 
 ## TIER 3 — String stability macroscopica (L5)
 - [ ] **T3.1** `L5.platoon` — catena N=5-10 follower (ego_i → leader di i+1), head-to-tail gain
@@ -108,7 +112,7 @@
 |---|---|---|
 | 0 | Fondazione reporting | ✅ fatto (test verde) |
 | 1 | Scenari coda + soglie + energia | ✅ fatto (test verde) |
-| 2 | Plant L4 + V2X L3 | da fare |
+| 2 | Plant L4 + V2X L3 | ✅ fatto (test verde) |
 | 3 | String stability L5 | da fare |
 | 4 | Metodologia (identificabilita') | da fare |
 | 5 | Hardware FPGA | da fare |
