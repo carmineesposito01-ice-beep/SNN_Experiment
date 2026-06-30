@@ -1,8 +1,8 @@
 Traceback (most recent call last):
-  File "/tmp/ipykernel_10220/801942496.py", line 21, in <module>
+  File "/tmp/ipykernel_11018/801942496.py", line 21, in <module>
     model = load_arm(best_tag)
-  File "/tmp/ipykernel_10220/1859091619.py", line 33, in load_arm
+  File "/tmp/ipykernel_11018/1859091619.py", line 33, in load_arm
     from scripts.decode_lut_calibrate import load_model
   File "/mnt/batch/tasks/shared/LS_root/mounts/clusters/sandokan/code/SNN_Experiment/scripts/decode_lut_calibrate.py", line 25, in <module>
     RANK = int(sys.argv[2]) if len(sys.argv) > 2 else 16
-ValueError: invalid literal for int() with base 10: '/tmp/tmpla_b1hvv.json'
+ValueError: invalid literal for int() with base 10: '/home/azureuser/.local/share/jupyter/runtime/kernel-43b38957-8721-4f68-b9cf-e9d2dc8c7ceb.json'
