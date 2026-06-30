@@ -21,8 +21,11 @@ import torch
 from core.network import build_model
 from scripts.decode_headroom_probe import extract_raw, decode, nrmse, fit_offtau
 
-CKPT = sys.argv[1] if len(sys.argv) > 1 else 'checkpoints/ADEC_OFF_12/best_model.pt'
-RANK = int(sys.argv[2]) if len(sys.argv) > 2 else 16
+# argv solo quando lanciato come SCRIPT: all'import (es. da notebook/altri moduli) sys.argv e' quello
+# del kernel Jupyter e int(sys.argv[2]) esplodeva -> guardia su __main__, default su import. CLI invariata.
+_IS_MAIN = (__name__ == '__main__')
+CKPT = sys.argv[1] if (_IS_MAIN and len(sys.argv) > 1) else 'checkpoints/ADEC_OFF_12/best_model.pt'
+RANK = int(sys.argv[2]) if (_IS_MAIN and len(sys.argv) > 2) else 16
 CACHE = 'data/cache_1500_launch_cut0.0_ou0.0.pt'
 SEQ_LEN = 50
 FIT_CAP = 8000   # finestre train max per il fit (2 param/canale/bin -> bastano)
