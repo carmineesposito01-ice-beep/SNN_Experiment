@@ -40,7 +40,7 @@ def _synth_cache(n=3):
 def test_comfort_iso_flags():
     # a_ego con un picco di decel a -4 (>ISO 3.5) e accel a +3 (>ISO 2): i flag devono accendersi.
     a = np.array([0.0, 1.0, 3.0, -4.0, 0.0, 0.0], dtype=np.float64)
-    cm = comfort_metrics({'a_ego': a})
+    cm = comfort_metrics({'a_ego': a, 'v': np.full(len(a), 10.0)})
     for k in ['rms_accel', 'max_decel', 'rms_jerk']:           # legacy intatte
         assert k in cm, k
     for k in ['max_abs_jerk', 'frac_jerk_uncomf', 'frac_decel_iso_viol', 'frac_accel_iso_viol']:
@@ -95,9 +95,92 @@ def test_eval_safety_backward_compat_and_rich():
     print('  OK eval_safety backward-compat + rich (per-scenario=%d)' % len(r['per_scenario']))
 
 
+# ----------------------------- TIER 1 -----------------------------
+def _synth_traj(M=100):
+    a = np.concatenate([np.linspace(0, 1.0, M // 2), -np.linspace(0, 4.0, M - M // 2)])
+    return {'s': np.linspace(25, 4, M), 'v': np.full(M, 10.0), 'dv': np.linspace(0, 4, M),
+            'vl': np.full(M, 8.0), 'a_ego': a,
+            'params': np.tile([30.0, 1.2, 2.5, 1.1, 1.5], (M, 1)).astype(float),
+            'collided': False, 'min_gap': 4.0}
+
+
+def test_tail_scenarios():
+    from utils.closed_loop_eval import build_scenarios
+    pg = np.array([30.0, 1.2, 2.5, 1.1, 1.5], dtype=np.float32)
+    base = build_scenarios(pg, N=200, rng=np.random.default_rng(0))
+    full = build_scenarios(pg, N=200, rng=np.random.default_rng(0), include_tail=True)
+    assert len(base) == 5, len(base)
+    names = [s[0] for s in full]
+    for nm in ['cut_out', 'static_target', 'panic_stop', 'aggressive_cut_in']:
+        assert nm in names, nm
+    assert len(full) == 9, len(full)
+    # static_target ha leader fermo
+    vl_static = dict((s[0], s[1]) for s in full)['static_target']
+    assert np.all(vl_static == 0.0)
+    print('  OK tail scenarios (base=5, +tail=9)')
+
+
+def test_new_metric_keys():
+    from utils.closed_loop_eval import safety_metrics, comfort_metrics, tracking_metrics
+    tr = _synth_traj()
+    sm = safety_metrics(tr)
+    for k in ['frac_drac_critical', 'TED_drac', 'TID_drac', 'frac_ttc_below_1.5', 'frac_ttc_below_1.0']:
+        assert k in sm, k
+    assert 0.0 <= sm['frac_drac_critical'] <= 1.0
+    cm = comfort_metrics(tr)
+    assert 'energy_proxy' in cm and cm['energy_proxy'] >= 0.0
+    tm = tracking_metrics(tr)
+    for k in ['mean_abs_dv_ss', 'mean_abs_gap_err_ss']:
+        assert k in tm and tm[k] == tm[k], k
+    print('  OK nuove metriche (DRAC/TTC soglie, energia, steady-state)')
+
+
+def test_eval_tail_and_rollout():
+    model = StubModel(); cache = _synth_cache(3)
+    torch.manual_seed(0)
+    out = eval_safety(model, cache, n_drivers=3, rich=True, tail=True)
+    r = out['rich']
+    assert len(r['per_scenario']) == 9, len(r['per_scenario'])
+    assert 'rollout' in r and 'rmse_accel' in r['rollout'] and 'mae_accel' in r['rollout']
+    assert 'braking_dist_err' in r['rollout'] and len(r['rollout']['braking_dist_err']) >= 1
+    # backward-compat: tail=False default invariato (5 scenari)
+    torch.manual_seed(0)
+    out0 = eval_safety(model, cache, n_drivers=3, rich=True)
+    assert len(out0['rich']['per_scenario']) == 5
+    print('  OK eval tail (9 scenari) + rollout RMSE/braking-dist')
+
+
+def test_breakdown_curve():
+    from scripts.closed_loop_identify import breakdown_curve
+    model = StubModel(); cache = _synth_cache(2)
+    bc = breakdown_curve(model, cache, n_drivers=2, decels=(6.0, 9.0), gaps=(6.0, 3.0))
+    assert len(bc['panic']) == 2 and len(bc['cut_in']) == 2
+    for row in bc['panic']:
+        assert 'decel' in row and 'oracle' in row and 'snn' in row
+        assert 0.0 <= row['snn'] <= 1.0
+    print('  OK breakdown curve (panic+cut_in, oracolo vs snn)')
+
+
+def test_make_ood_cache():
+    from scripts.closed_loop_identify import make_ood_cache
+    from data.generator import _PHYS_BOUNDS
+    c = make_ood_cache(n_drivers=2, seed=1)
+    assert len(c['val']) == 2
+    for it in c['val']:
+        assert it['x'].ndim == 2 and it['x'].shape[1] == 4
+        assert set(['v0', 'T', 's0', 'a', 'b']).issubset(it['params'].keys())
+    print('  OK make_ood_cache (driver OoD generati)')
+
+
 if __name__ == '__main__':
     print('[TEST Tier0]')
     test_comfort_iso_flags()
     test_helpers()
     test_eval_safety_backward_compat_and_rich()
+    print('[TEST Tier1]')
+    test_tail_scenarios()
+    test_new_metric_keys()
+    test_eval_tail_and_rollout()
+    test_breakdown_curve()
+    test_make_ood_cache()
     print('TUTTI I TEST OK')

@@ -16,9 +16,12 @@ import numpy as np
 import torch
 
 from utils.closed_loop_eval import (simulate, safety_metrics, comfort_metrics,
-                                    tracking_metrics, build_scenarios, TTC_STAR)
+                                    tracking_metrics, build_scenarios, TTC_STAR,
+                                    _equilibrium_init)
+from config import DT
 
 PN = ['v0', 'T', 's0', 'a', 'b']
+BRAKING_SCEN = {'hard_brake', 'panic_stop', 'cut_out', 'static_target'}   # scenari di arresto (braking-distance)
 
 
 @torch.no_grad()
@@ -82,9 +85,33 @@ def _numeric_keys(records):
     return sorted(keys)
 
 
-def _agg_rich(rec_full, id_intra):
+def _brake_dist(tr):
+    """Spazio percorso dall'ego fino al quasi-arresto (v<0.5) o intera traiettoria [m]."""
+    v = tr['v']
+    below = np.where(v < 0.5)[0]
+    end = int(below[0]) if below.size else len(v)
+    return float(np.sum(v[:end]) * DT)
+
+
+def _paired_rollout(tr_o, tr_s, name):
+    """T1.10/T1.11 — confronto SNN-vs-oracolo sulla STESSA scena (rollout, non teacher-forcing):
+    RMSE/MAE dell'accel + errore di spazio di frenata sugli scenari di arresto. Le traiettorie
+    DIVERGONO (stati diversi) -> e' un RMSE su rollout, da interpretare come errore accumulato."""
+    a_o = np.asarray(tr_o['a_ego']); a_s = np.asarray(tr_s['a_ego'])
+    m = min(len(a_o), len(a_s))
+    if m == 0:
+        return None
+    d = a_s[:m] - a_o[:m]
+    out = {'scenario': name, 'rmse_accel': float(np.sqrt(np.mean(d ** 2))),
+           'mae_accel': float(np.mean(np.abs(d)))}
+    if name in BRAKING_SCEN:
+        out['braking_dist_err'] = float(_brake_dist(tr_s) - _brake_dist(tr_o))
+    return out
+
+
+def _agg_rich(rec_full, id_intra, paired=None):
     """Aggregazione RICCA additiva: distribuzioni per metrica, Wilson sul collision, per-scenario +
-    worst-case, Δ SNN-oracolo (appaiato) con CI bootstrap, intra_std dell'identificazione."""
+    worst-case, Δ SNN-oracolo (appaiato) con CI bootstrap, intra_std, rollout RMSE/braking-dist."""
     metrics = _numeric_keys(rec_full['oracle'] + rec_full['snn'])
     out = {}
     for key in ('oracle', 'snn'):
@@ -128,10 +155,19 @@ def _agg_rich(rec_full, id_intra):
     # T0.8 — intra_std dell'identificazione (std su T di forward_sequence): alto = stima instabile
     out['intra_std'] = {p: (float(np.mean(id_intra[p])) if id_intra[p] else float('nan')) for p in PN}
     out['ttc_star'] = TTC_STAR
+
+    # T1.10/T1.11 — rollout SNN-vs-oracolo: RMSE/MAE accel + errore spazio di frenata (per scenario di arresto)
+    if paired:
+        out['rollout'] = {'rmse_accel': _summarize([p['rmse_accel'] for p in paired]),
+                          'mae_accel': _summarize([p['mae_accel'] for p in paired])}
+        bd_scen = sorted(set(p['scenario'] for p in paired if 'braking_dist_err' in p))
+        out['rollout']['braking_dist_err'] = {
+            sc: _summarize([p['braking_dist_err'] for p in paired
+                            if p['scenario'] == sc and 'braking_dist_err' in p]) for sc in bd_scen}
     return out
 
 
-def eval_safety(model, cache, n_drivers=20, seq_len=50, device='cpu', rich=False, n_seeds=1):
+def eval_safety(model, cache, n_drivers=20, seq_len=50, device='cpu', rich=False, n_seeds=1, tail=False):
     """Sicurezza closed-loop: ORACOLO (param veri) vs SNN (param identificati), su scenari avversari.
 
     Per ogni driver: identifica i param dalla prima finestra, costruisce gli scenari avversari (coi param
@@ -146,6 +182,7 @@ def eval_safety(model, cache, n_drivers=20, seq_len=50, device='cpu', rich=False
     """
     rec = {'oracle': [], 'snn': []}
     rec_full = {'oracle': [], 'snn': []}            # dict completi per-traiettoria (solo rich)
+    paired = []                                     # rollout SNN-vs-oracolo per (driver,scenario) (solo rich)
     id_err = {p: [] for p in PN}
     id_intra = {p: [] for p in PN}                  # std su T dell'identificazione (solo rich)
     for seed in range(n_seeds):
@@ -162,18 +199,91 @@ def eval_safety(model, cache, n_drivers=20, seq_len=50, device='cpu', rich=False
                     id_intra[p].append(float(id_sd[i]))
             for i, p in enumerate(PN):
                 id_err[p].append(abs(id_pg[i] - true_pg[i]))
-            for name, vl, s_i, v_i, cut in build_scenarios(true_pg, N=400, rng=rng):
+            for name, vl, s_i, v_i, cut in build_scenarios(true_pg, N=400, rng=rng, include_tail=tail):
+                trs = {}
                 for key, ctrl in [('oracle', true_pg), ('snn', id_pg)]:
                     tr = simulate(None, ctrl, vl, s_i, v_i, cut_in=cut, device=device)
+                    trs[key] = tr
                     sm = safety_metrics(tr); cm = comfort_metrics(tr)
                     rec[key].append((int(sm['collided']), sm['min_gap'], cm['max_decel'], cm['rms_jerk']))
                     if rich:
                         rec_full[key].append({**sm, **cm, **tracking_metrics(tr), 'scenario': name})
+                if rich:
+                    pr = _paired_rollout(trs['oracle'], trs['snn'], name)
+                    if pr:
+                        paired.append(pr)
     out = {k: _agg(v) for k, v in rec.items()}
     out['id_abs_err'] = {p: float(np.mean(id_err[p])) for p in PN}
     if rich:
-        out['rich'] = _agg_rich(rec_full, id_intra)
+        out['rich'] = _agg_rich(rec_full, id_intra, paired)
     return out
+
+
+def make_ood_cache(n_drivers=20, profile='launch', beyond=1.2, seed=0, edge=True):
+    """T1.5 — cache OoD: driver con i 5 param OLTRE/ai bordi di _PHYS_BOUNDS, finestre dal generatore.
+    Si da' in pasto a eval_safety: eval_safety(model, make_ood_cache(...), rich=True, tail=True).
+    beyond>1 estende il range (1.2 = +20% per lato); edge=True biasa verso i bordi estremi."""
+    from data.generator import simulate_trajectory, _PHYS_BOUNDS, normalize
+    from config import WARMUP_DURATION
+    rng = np.random.default_rng(seed)
+    warm = int(WARMUP_DURATION / DT)
+    floors = {'v0': 3.0, 'T': 0.2, 's0': 0.3, 'a': 0.1, 'b': 0.2}   # clip difensivo (positivita' fisica)
+    val = []
+    for _ in range(n_drivers):
+        p = {'delta': 4.0}
+        for k, (lo, hi) in _PHYS_BOUNDS.items():
+            ext = (beyond - 1.0) * (hi - lo) / 2.0
+            lo2, hi2 = lo - ext, hi + ext
+            if edge and rng.random() < 0.5:
+                p[k] = float(lo2 if rng.random() < 0.5 else hi2)
+            else:
+                p[k] = float(rng.uniform(lo2, hi2))
+            p[k] = max(p[k], floors[k])
+        traj = simulate_trajectory(p, profile=profile, seed=int(rng.integers(0, 2 ** 31)), noise_scale=1.0)
+        x, _y, _m = normalize(traj[warm:])
+        val.append({'x': x, 'params': p})
+    return {'val': val}
+
+
+def breakdown_curve(model, cache, n_drivers=15, seq_len=50, device='cpu',
+                    decels=(5.0, 6.0, 7.0, 8.0, 9.0, 10.0), gaps=(8.0, 6.0, 5.0, 4.0, 3.0, 2.0)):
+    """T1.6 — CURVA DI ROTTURA: sweep di severita' (decel del leader, gap di cut-in) -> collision_rate
+    ORACOLO vs SNN. Risponde: a quale severita' il sistema inizia a collidere, e se SNN collassa PRIMA
+    dell'oracolo (margine consumato dall'identificazione)."""
+    N = 400
+    ids = []
+    for it in cache['val'][:n_drivers]:
+        true_pg = np.array([it['params'][k] for k in PN], dtype=np.float32)
+        x = torch.tensor(it['x'][:seq_len][None], dtype=torch.float32).to(device)
+        ids.append((true_pg, identify(model, x)))
+
+    def _rate(make_leader, sev):
+        c = {'oracle': 0, 'snn': 0}
+        for true_pg, id_pg in ids:
+            vl, s_i, v_i, cut = make_leader(true_pg, sev)
+            for key, ctrl in (('oracle', true_pg), ('snn', id_pg)):
+                tr = simulate(None, ctrl, vl, s_i, v_i, cut_in=cut, device=device)
+                c[key] += int(tr['collided'])
+        n = len(ids)
+        return c['oracle'] / n, c['snn'] / n
+
+    def _panic(true_pg, decel):
+        v_set = 0.7 * float(true_pg[0])
+        vl = np.full(N, v_set); bs = N // 3
+        for i in range(bs, N):
+            vl[i] = max(0.0, vl[i - 1] - decel * DT)
+        s_i, v_i = _equilibrium_init(true_pg, v_set)
+        return vl, s_i, v_i, None
+
+    def _cutin(true_pg, gap):
+        v0 = float(true_pg[0]); v_set = 0.7 * v0
+        vl = np.full(N, v_set); t_cut = N // 2; vl[t_cut:] = 0.30 * v0
+        s_i, v_i = _equilibrium_init(true_pg, v_set)
+        return vl, s_i, v_i, (t_cut, float(gap))
+
+    panic = [dict(zip(('decel', 'oracle', 'snn'), (d,) + _rate(_panic, d))) for d in decels]
+    cutin = [dict(zip(('gap', 'oracle', 'snn'), (g,) + _rate(_cutin, g))) for g in gaps]
+    return {'panic': panic, 'cut_in': cutin, 'n_drivers': len(ids)}
 
 
 if __name__ == '__main__':

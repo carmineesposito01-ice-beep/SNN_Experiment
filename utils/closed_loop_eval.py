@@ -24,6 +24,10 @@ B_MAX = 9.0            # decelerazione massima fisica [m/s^2]
 ISO_DECEL_LIMIT = 3.5  # decel max ACC confortevole [m/s^2] (ISO 15622)
 ISO_ACCEL_LIMIT = 2.0  # accel max ACC [m/s^2] (ISO 15622)
 JERK_COMFORT = 2.0     # |jerk| confortevole [m/s^3] (oltre = scomodo)
+# T1.7/T1.8 — soglie SSM di letteratura
+DRAC_STAR = 3.35       # DRAC critico (conflitto), Archer; AASHTO 3.40 [m/s^2]
+MADR_MEAN = 8.45       # Maximum Available Decel Rate medio (per CPI), N(8.45,1.42) troncata [m/s^2]
+TTC_THRESHOLDS = (1.0, 1.5, 2.0, 3.0)   # soglie TTC per la frazione-di-tempo-sotto
 
 
 def _norm_obs(s, v, dv, vl):
@@ -108,18 +112,30 @@ def safety_metrics(traj):
     tit = float(np.sum((TTC_STAR - ttc[in_danger]) * DT)) if in_danger.any() else 0.0
     drac = np.where(closing, dv ** 2 / (2.0 * np.maximum(s, 1e-3)), 0.0)
     th = np.where(v > 0.1, s / np.maximum(v, 1e-3), np.inf)
-    return {
+    # T1.7 — DRAC critico (soglia 3.35): tempo-esposto (TED) e tempo-integrato (TID) sopra soglia, frazione
+    in_drac = drac > DRAC_STAR
+    ted = float(in_drac.sum() * DT)
+    tid = float(np.sum((drac[in_drac] - DRAC_STAR) * DT)) if in_drac.any() else 0.0
+    out = {
         'collided': bool(traj['collided']),
         'min_gap': float(traj['min_gap']),
         'min_ttc': float(ttc.min()) if np.isfinite(ttc).any() else float('inf'),
         'TET': tet, 'TIT': tit,
         'max_DRAC': float(drac.max()),
         'min_time_headway': float(th[np.isfinite(th)].min()) if np.isfinite(th).any() else float('inf'),
+        'frac_drac_critical': float(in_drac.mean()),   # frazione tempo DRAC>3.35
+        'TED_drac': ted, 'TID_drac': tid,
+        'cpi': float((drac > MADR_MEAN).mean()),        # Crash-Potential-Index (proxy: MADR medio 8.45)
     }
+    # T1.8 — frazione di tempo con TTC sotto soglie multiple (solo sugli step in avvicinamento)
+    ttc_c = ttc[closing & np.isfinite(ttc)]
+    for thr in TTC_THRESHOLDS:
+        out['frac_ttc_below_%.1f' % thr] = float((ttc_c < thr).mean()) if ttc_c.size else 0.0
+    return out
 
 
 def comfort_metrics(traj):
-    a = traj['a_ego']
+    a = traj['a_ego']; v = traj['v']
     jerk = np.diff(a) / DT if len(a) > 1 else np.array([0.0])
     return {
         'rms_accel': float(np.sqrt(np.mean(a ** 2))),
@@ -130,6 +146,8 @@ def comfort_metrics(traj):
         'frac_jerk_uncomf': float(np.mean(np.abs(jerk) > JERK_COMFORT)),   # frazione tempo |jerk|>2
         'frac_decel_iso_viol': float(np.mean(a < -ISO_DECEL_LIMIT)),       # frazione decel oltre ISO -3.5
         'frac_accel_iso_viol': float(np.mean(a > ISO_ACCEL_LIMIT)),        # frazione accel oltre ISO +2
+        # T1.12 — proxy energia load-based (integrale potenza specifica positiva v*a+); ISO2631 = rms_accel.
+        'energy_proxy': float(np.sum(np.maximum(0.0, v * a)) * DT),
     }
 
 
@@ -141,10 +159,15 @@ def tracking_metrics(traj):
     s_star = s0 + np.maximum(0.0, v * T + v * dv / (2.0 * np.sqrt(np.maximum(a * b, 1e-6))))
     gap_err = s - s_star
     th = np.where(v > 0.1, s / np.maximum(v, 1e-3), np.nan)
+    # T1.9 — efficienza a REGIME (ultimo 50%): errore di velocita' Delta-v e gap (separati dai transitori).
+    k = M // 2
+    dv_ss = np.abs(dv[k:]); ge_ss = np.abs(gap_err[k:])
     return {
         'rms_gap_error': float(np.sqrt(np.mean(gap_err ** 2))),
         'mean_time_gap': float(np.nanmean(th)),
         'mean_T_pred': float(np.mean(T)),
+        'mean_abs_dv_ss': float(dv_ss.mean()) if dv_ss.size else float('nan'),     # |Delta-v| a regime
+        'mean_abs_gap_err_ss': float(ge_ss.mean()) if ge_ss.size else float('nan'),  # |gap error| a regime
     }
 
 
@@ -175,11 +198,17 @@ def _equilibrium_init(params_gt, v_set):
     return s0 + max(0.0, v_set * T), v_set
 
 
-def build_scenarios(params_gt, N=600, rng=None):
-    """Set completo di scenari avversari per un dato scenario-driver (params_gt)."""
+def build_scenarios(params_gt, N=600, rng=None, include_tail=False):
+    """Set di scenari avversari per un dato scenario-driver (params_gt).
+
+    Default (include_tail=False): i 5 scenari storici (following, stop_and_go, hard_brake, cut_in,
+    sinusoidal) — INVARIATO, cosi' eval_safety legacy non cambia. Con include_tail=True (T1) aggiunge
+    4 scenari di CODA/OoD: cut_out, static_target, panic_stop (-9), aggressive_cut_in.
+    """
     rng = rng or np.random.default_rng(0)
     v0 = float(params_gt[0])
     v_set = 0.7 * v0
+    _v0p, _T, _s0, _a, _b = (float(x) for x in params_gt)
     t = np.arange(N)
     scen = []
 
@@ -213,5 +242,38 @@ def build_scenarios(params_gt, N=600, rng=None):
     # 5. Sinusoidale (per string stability)
     vl = np.clip(v_set + 0.20 * v_set * np.sin(2 * np.pi * t / 80.0), 0, v0)
     scen.append(('sinusoidal', vl, *_equilibrium_init(params_gt, v_set), None))
+
+    if not include_tail:
+        return scen
+
+    # ---- T1: scenari di CODA / OoD (opt-in) ----
+    s_eq, _ = _equilibrium_init(params_gt, v_set)
+
+    # T1.1 cut_out: leader veloce ESCE -> ostacolo fermo (v=0) rivelato tardi (TTC~2s al gap residuo)
+    vl = np.full(N, v_set)
+    t_co = N // 2
+    vl[t_co:] = 0.0
+    gap_reveal = max(v_set * 2.0, 6.0)
+    scen.append(('cut_out', vl, s_eq, v_set, (t_co, gap_reveal)))
+
+    # T1.2 static_target: ostacolo fermo da subito (v_leader==0); ego in crociera con spazio di reazione
+    vl = np.zeros(N)
+    s_static = _s0 + v_set * _T + 2.0 * v_set       # gap iniziale = following + ~2s di margine
+    scen.append(('static_target', vl, s_static, v_set, None))
+
+    # T1.3 panic_stop: frenata del leader alla DECEL MASSIMA fisica (-B_MAX = -9), non -7
+    vl = np.full(N, v_set)
+    brake_start = N // 3
+    for i in range(brake_start, N):
+        vl[i] = max(0.0, vl[i - 1] - B_MAX * DT)
+    scen.append(('panic_stop', vl, s_eq, v_set, None))
+
+    # T1.4 aggressive_cut_in: gap al taglio < CUT_IN_S_MIN (training) e leader piu' lento -> DRAC -> B_MAX
+    vl = np.full(N, v_set)
+    t_cut = N // 2
+    vl[t_cut:] = 0.30 * v0
+    dv_cut = max(v_set - 0.30 * v0, 1.0)
+    gap_cut = max(dv_cut * 0.5, 3.0)                 # TTC~0.5s, sotto la coda evitabile
+    scen.append(('aggressive_cut_in', vl, s_eq, v_set, (t_cut, gap_cut)))
 
     return scen

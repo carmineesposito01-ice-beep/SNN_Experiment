@@ -36,19 +36,23 @@
 - [x] **T0.8** `audit:intra_std` — `intra_std` dell'identificazione (std su T di `forward_sequence`) come gate di stabilita'
 - [x] **T0.9** `audit:multi-seed` — `n_seeds` opt-in per CI riproducibili (default 1 = legacy)
 
-## TIER 1 — Scenari di coda + soglie + efficienza + energia
-- [ ] **T1.1** `L6.cut_out` — leader veloce → ostacolo fermo (v=0) rivelato tardi
-- [ ] **T1.2** `L6.static_target` — target statico permanente (v_leader≡0; punto di rottura ISO 15622)
-- [ ] **T1.3** `L6.panic_stop` — panic stop a −9 m/s² (oggi solo −7)
-- [ ] **T1.4** `L6.aggressive_cut_in` — cut-in gap<5m, DRAC→B_MAX (oggi DRAC~4 evitabile)
-- [ ] **T1.5** `L6.ood_params` — driver con param fuori/ai bordi di `_PHYS_BOUNDS`
-- [ ] **T1.6** `L6.extra:breakdown` — **curva di rottura** (sweep severita': a quale decel/gap il collision_rate passa 0→>0; soglia SNN vs oracolo)
-- [ ] **T1.7** `L2.DRAC` — soglia critica DRAC>3.35 (Archer) + CPI (P(DRAC>MADR)) + TET/TIT su DRAC
-- [ ] **T1.8** `L2.TTC` — frazione tempo sotto soglie multiple TTC {1.0,1.5,2.0,3.0}
-- [ ] **T1.9** `L2.deltav_eff` — efficienza: errore Δv e gap a regime (steady-state, separato dai transitori)
-- [ ] **T1.10** `L1.rmse_accel` — RMSE/MAE accel SNN-vs-oracolo in rollout closed-loop (ponte L1→L2)
-- [ ] **T1.11** `L1.braking_dist` — errore spazio di frenata (su hard_brake/panic)
-- [ ] **T1.12** `L4.energy_comfort` — proxy consumo (load-based) + bande comfort ISO 2631
+## TIER 1 — Scenari di coda + soglie + efficienza + energia ✅ FATTO
+> `utils/closed_loop_eval.py`: `build_scenarios(include_tail=True)` (+4 scenari), soglie in `safety_metrics`
+> (DRAC/TTC/CPI), `energy_proxy` in `comfort_metrics`, steady-state in `tracking_metrics`.
+> `scripts/closed_loop_identify.py`: `eval_safety(tail=True)` + rollout RMSE/braking-dist, `make_ood_cache()`,
+> `breakdown_curve()`. Test esteso (verde). Default (`tail=False`) = legacy invariato.
+- [x] **T1.1** `L6.cut_out` — leader veloce → ostacolo fermo (v=0) rivelato tardi (TTC~2s)
+- [x] **T1.2** `L6.static_target` — target statico permanente (v_leader≡0; punto di rottura ISO 15622)
+- [x] **T1.3** `L6.panic_stop` — panic stop a −B_MAX (−9 m/s²)
+- [x] **T1.4** `L6.aggressive_cut_in` — cut-in gap~3m (TTC~0.5s), leader 0.30·v0 → DRAC→B_MAX
+- [x] **T1.5** `L6.ood_params` — `make_ood_cache()`: param oltre/ai bordi `_PHYS_BOUNDS` (beyond, edge)
+- [x] **T1.6** `L6.extra:breakdown` — `breakdown_curve()`: sweep decel {5..10} e gap cut-in {8..2}, collision oracolo-vs-SNN
+- [x] **T1.7** `L2.DRAC` — `frac_drac_critical` (>3.35) + `TED_drac`/`TID_drac` + `cpi` (proxy MADR medio 8.45; raffinabile a MADR stocastico)
+- [x] **T1.8** `L2.TTC` — `frac_ttc_below_{1.0,1.5,2.0,3.0}`
+- [x] **T1.9** `L2.deltav_eff` — `mean_abs_dv_ss` + `mean_abs_gap_err_ss` (ultimo 50%)
+- [x] **T1.10** `L1.rmse_accel` — `rich.rollout.rmse_accel/mae_accel` (rollout SNN-vs-oracolo, non teacher-forcing)
+- [x] **T1.11** `L1.braking_dist` — `rich.rollout.braking_dist_err` per scenario di arresto
+- [x] **T1.12** `L4.energy_comfort` — `energy_proxy` (load-based ∫max(0,v·a)); bande ISO 2631 derivabili da `rms_accel`
 
 ## TIER 2 — Plant fisico (L4) + degradazione V2X (L3) in closed-loop
 - [ ] **T2.1** `L4.actuator_lag` — lag attuatore EGO 1° ordine (τ≈0.3-0.5s), sweep {0,0.2,0.5}
@@ -103,7 +107,7 @@
 | Tier | Titolo | Stato |
 |---|---|---|
 | 0 | Fondazione reporting | ✅ fatto (test verde) |
-| 1 | Scenari coda + soglie + energia | da fare |
+| 1 | Scenari coda + soglie + energia | ✅ fatto (test verde) |
 | 2 | Plant L4 + V2X L3 | da fare |
 | 3 | String stability L5 | da fare |
 | 4 | Metodologia (identificabilita') | da fare |
