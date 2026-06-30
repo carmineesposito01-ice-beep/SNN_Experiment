@@ -1,2 +1,12 @@
 arm,eff_rank,dead_neurons
 PE_t05_gp0002,8.14,0
+ADAM_lr1e3_t08,3.98,0
+ADAM_lr1e3_t10,3.44,0
+ADAM_lr1e3_t12,3.26,0
+ADAM_lr1e3_t14,2.98,0
+ADAM_lr2e3_t08,4.73,0
+ADAM_lr2e3_t10,4.43,0
+ADAM_lr2e3_t12,4.09,0
+ADAM_lr2e3_t14,2.96,0
+ADAM_lr3e3_t08,5.08,0
+ADAM_lr3e3_t10,5.27,0
