@@ -20,6 +20,10 @@ from core.network import CF_FSNN_Net
 VEH_LEN = 5.0          # lunghezza veicolo [m]: collisione se gap (bumper-to-bumper) <= 0
 TTC_STAR = 1.5         # soglia TTC critica [s] (letteratura: 1.5-3 s)
 B_MAX = 9.0            # decelerazione massima fisica [m/s^2]
+# T0.6 — soglie ISO/comfort (ISO 15622:2018 ACC; comfort generico). Usate dai flag di comfort_metrics.
+ISO_DECEL_LIMIT = 3.5  # decel max ACC confortevole [m/s^2] (ISO 15622)
+ISO_ACCEL_LIMIT = 2.0  # accel max ACC [m/s^2] (ISO 15622)
+JERK_COMFORT = 2.0     # |jerk| confortevole [m/s^3] (oltre = scomodo)
 
 
 def _norm_obs(s, v, dv, vl):
@@ -121,6 +125,11 @@ def comfort_metrics(traj):
         'rms_accel': float(np.sqrt(np.mean(a ** 2))),
         'max_decel': float(-a.min()),                    # decel piu' forte (valore positivo)
         'rms_jerk': float(np.sqrt(np.mean(jerk ** 2))),
+        # T0.6 — flag ISO/comfort (additivi; i lettori legacy usano le 3 chiavi sopra).
+        'max_abs_jerk': float(np.abs(jerk).max()),
+        'frac_jerk_uncomf': float(np.mean(np.abs(jerk) > JERK_COMFORT)),   # frazione tempo |jerk|>2
+        'frac_decel_iso_viol': float(np.mean(a < -ISO_DECEL_LIMIT)),       # frazione decel oltre ISO -3.5
+        'frac_accel_iso_viol': float(np.mean(a > ISO_ACCEL_LIMIT)),        # frazione accel oltre ISO +2
     }
 
 
