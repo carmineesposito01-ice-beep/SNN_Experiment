@@ -39,25 +39,34 @@ DS_wide,BigSweep3,True,True,ok,ok,ok,ok,ok
 DS_widebig,BigSweep3,True,True,ok,ok,ok,ok,ok
 EVP_ADAMW,Study,True,True,ok,ok,ok,ok,ok
 EVP_ADAMW_LSR,Study,True,True,ok,ok,ok,ok,ok
-EVP_PE_PROBE_LSR,Study,True,,,,,,gia fatto (skip)
-EVP_PRODIGYEVENT,Study,True,,,,,,gia fatto (skip)
-EVP_PRODIGYEVENT_PROBE,Study,True,,,,,,gia fatto (skip)
-P1_lr2e3_t05,BigSweep2,True,,,,,,gia fatto (skip)
-P1_lr2e3_t06,BigSweep2,True,,,,,,gia fatto (skip)
-P1_lr2e3_t07,BigSweep2,True,,,,,,gia fatto (skip)
-P1_lr3e3_t05,BigSweep2,True,,,,,,gia fatto (skip)
-P1_lr3e3_t06,BigSweep2,True,,,,,,gia fatto (skip)
-P1_lr3e3_t07,BigSweep2,True,,,,,,gia fatto (skip)
-P1_lr5e3_t05,BigSweep2,True,,,,,,gia fatto (skip)
-P1_lr5e3_t06,BigSweep2,True,,,,,,gia fatto (skip)
-P1_lr5e3_t07,BigSweep2,True,,,,,,gia fatto (skip)
-P2_lr2e3_t05_r16,BigSweep2,True,,,,,,gia fatto (skip)
-P2_lr2e3_t05_r8,BigSweep2,True,,,,,,gia fatto (skip)
-P2_lr2e3_t06_r16,BigSweep2,True,,,,,,gia fatto (skip)
-P2_lr2e3_t06_r8,BigSweep2,True,,,,,,gia fatto (skip)
-P2_lr2e3_t07_r16,BigSweep2,True,,,,,,gia fatto (skip)
-P2_lr2e3_t07_r8,BigSweep2,True,,,,,,gia fatto (skip)
-P2_lr3e3_t05_r16,BigSweep2,True,,,,,,gia fatto (skip)
+EVP_PE_PROBE_LSR,Study,True,True,ok,ok,ok,ok,ok
+EVP_PRODIGYEVENT,Study,True,True,ok,ok,ok,ok,ok
+EVP_PRODIGYEVENT_PROBE,Study,True,True,ok,ok,ok,ok,ok
+P1_lr2e3_t05,BigSweep2,True,False,,,,,"load FAIL: Error(s) in loading state_dict for CF_FSNN_Net_EventProp_Full:
+	size mismatch for layer_hidden.rec_U: copying a param wi"
+P1_lr2e3_t06,BigSweep2,True,False,,,,,"load FAIL: Error(s) in loading state_dict for CF_FSNN_Net_EventProp_Full:
+	size mismatch for layer_hidden.rec_U: copying a param wi"
+P1_lr2e3_t07,BigSweep2,True,False,,,,,"load FAIL: Error(s) in loading state_dict for CF_FSNN_Net_EventProp_Full:
+	size mismatch for layer_hidden.rec_U: copying a param wi"
+P1_lr3e3_t05,BigSweep2,True,False,,,,,"load FAIL: Error(s) in loading state_dict for CF_FSNN_Net_EventProp_Full:
+	size mismatch for layer_hidden.rec_U: copying a param wi"
+P1_lr3e3_t06,BigSweep2,True,False,,,,,"load FAIL: Error(s) in loading state_dict for CF_FSNN_Net_EventProp_Full:
+	size mismatch for layer_hidden.rec_U: copying a param wi"
+P1_lr3e3_t07,BigSweep2,True,False,,,,,"load FAIL: Error(s) in loading state_dict for CF_FSNN_Net_EventProp_Full:
+	size mismatch for layer_hidden.rec_U: copying a param wi"
+P1_lr5e3_t05,BigSweep2,True,False,,,,,"load FAIL: Error(s) in loading state_dict for CF_FSNN_Net_EventProp_Full:
+	size mismatch for layer_hidden.rec_U: copying a param wi"
+P1_lr5e3_t06,BigSweep2,True,False,,,,,"load FAIL: Error(s) in loading state_dict for CF_FSNN_Net_EventProp_Full:
+	size mismatch for layer_hidden.rec_U: copying a param wi"
+P1_lr5e3_t07,BigSweep2,True,False,,,,,"load FAIL: Error(s) in loading state_dict for CF_FSNN_Net_EventProp_Full:
+	size mismatch for layer_hidden.rec_U: copying a param wi"
+P2_lr2e3_t05_r16,BigSweep2,True,True,ok,ok,ok,ok,ok
+P2_lr2e3_t05_r8,BigSweep2,True,True,ok,ok,ok,ok,ok
+P2_lr2e3_t06_r16,BigSweep2,True,True,ok,ok,ok,ok,ok
+P2_lr2e3_t06_r8,BigSweep2,True,True,ok,ok,ok,ok,ok
+P2_lr2e3_t07_r16,BigSweep2,True,True,ok,ok,ok,ok,ok
+P2_lr2e3_t07_r8,BigSweep2,True,True,ok,ok,ok,ok,ok
+P2_lr3e3_t05_r16,BigSweep2,True,True,ok,ok,ok,ok,ok
 P2_lr3e3_t05_r8,BigSweep2,True,,,,,,gia fatto (skip)
 P2_lr3e3_t06_r16,BigSweep2,True,,,,,,gia fatto (skip)
 P2_lr3e3_t06_r8,BigSweep2,True,,,,,,gia fatto (skip)
