@@ -33,6 +33,23 @@ def cell(src, cid, ctype='code'):
     return c
 
 
+def resilient(body, name):
+    """Avvolge il corpo di una sezione d'analisi in try/except: se fallisce, scrive il
+    traceback in results/.../bigsweep3_<name>_ERROR.txt e PROSEGUE (non aborta il notebook,
+    cosi' le sezioni indipendenti girano e PUSH_DIAG le pusha). Niente f-string: i corpi
+    contengono graffe (dict/%), quindi sola concatenazione."""
+    indented = '\n'.join((('    ' + ln) if ln.strip() else ln) for ln in body.splitlines())
+    return ("import traceback as _tb, os as _os\n"
+            "try:\n"
+            + indented + "\n"
+            "except Exception:\n"
+            "    _os.makedirs(RESULTS, exist_ok=True)\n"
+            "    _ep = RESULTS + '/bigsweep3_" + name + "_ERROR.txt'\n"
+            "    open(_ep, 'w', encoding='utf-8').write(_tb.format_exc())\n"
+            "    print('[ERROR] " + name + " -> ' + _ep)\n"
+            "    print(_tb.format_exc())\n")
+
+
 INTRO = """# EventProp Big Sweep 3 — studio esaustivo di chiusura
 
 Metrica **PRIMARIA = `val_data`** (fisica, ricostruzione accel); NRMSE = lente **secondaria** (e' una PINN).
@@ -61,6 +78,18 @@ assert os.path.isfile(CACHE), 'missing cache: ' + CACHE
 PN = ['v0', 'T', 's0', 'a', 'b']
 
 def arm_rank(tag):
+    # Rank AUTOREVOLE dal config_snapshot.json dell'arm (la regex sul tag fallisce
+    # per gli arm senza suffisso _r, es. BPTT_REF che e' rank 8 -> regex dava 16 ->
+    # build_model rank16 vs pesi rank8 -> size mismatch in load_state_dict -> crash).
+    import json as _json
+    cfg = RESULTS + '/' + tag + '/config_snapshot.json'
+    if os.path.isfile(cfg):
+        try:
+            r = _json.load(open(cfg)).get('cf_rank')
+            if r:
+                return int(r)
+        except Exception:
+            pass
     m = re.search(r'_r(\\d+)', tag)
     return int(m.group(1)) if m else 16
 
@@ -688,17 +717,34 @@ else:
                          '(NRMSE down ma fisica up = scartare).'))
 """
 
-PUSH_DIAG = """# Cell 14 -- push tutti gli output dell'analisi
-import subprocess, os, glob
-for p in glob.glob(RESULTS + '/bigsweep3_*.csv') + glob.glob(RESULTS + '/bigsweep3_*.png'):
-    subprocess.run(['git', 'add', p], capture_output=True)
-r = subprocess.run(['git', 'commit', '-m', 'bigsweep3: analisi esaustiva'], capture_output=True, text=True)
-if r.returncode == 0 or 'nothing to commit' in (r.stdout + r.stderr):
-    subprocess.run(['git', 'pull', '--no-rebase', '--no-edit', 'origin', BRANCH], capture_output=True, text=True)
-    r2 = subprocess.run(['git', 'push', 'origin', BRANCH], capture_output=True, text=True)
-    print('push analisi:', 'OK' if r2.returncode == 0 else r2.stderr[-200:])
-else:
-    print('commit fail', r.stderr[-200:])
+PUSH_DIAG = """# Cell 14 -- push tutti gli output dell'analisi (retry robusto; fallimento RUMOROSO, mai silenzioso)
+# Rieseguibile da sola: se il push del run precedente e' fallito (es. non-fast-forward, rete, idle-shutdown
+# Azure), basta rilanciare QUESTA cella -> i file gia' su disco vengono (ri)committati e pushati con retry.
+import subprocess, os, glob, time
+def _git(*a):
+    return subprocess.run(['git', *a], capture_output=True, text=True)
+files = (glob.glob(RESULTS + '/bigsweep3_*.csv') + glob.glob(RESULTS + '/bigsweep3_*.png')
+         + glob.glob(RESULTS + '/bigsweep3_*.txt'))
+for p in files:
+    _git('add', p)
+print('[PUSH_DIAG] staged', len(files), 'file:', sorted(os.path.basename(f) for f in files))
+r = _git('commit', '-m', 'bigsweep3: analisi esaustiva')
+if r.returncode != 0 and 'nothing to commit' not in (r.stdout + r.stderr):
+    raise SystemExit('[PUSH_DIAG] COMMIT FALLITO:\\n' + r.stderr)
+pushed = False
+for attempt in range(1, 6):
+    pl = _git('pull', '--no-rebase', '--no-edit', 'origin', BRANCH)
+    if pl.returncode != 0:
+        print('[PUSH_DIAG] pull WARN (tentativo %d):\\n%s' % (attempt, pl.stderr[-400:]))
+    ps = _git('push', 'origin', BRANCH)
+    if ps.returncode == 0:
+        pushed = True; print('[PUSH_DIAG] push OK al tentativo', attempt); break
+    print('[PUSH_DIAG] push FALLITO (tentativo %d):\\n%s' % (attempt, ps.stderr[-400:]))
+    time.sleep(3)
+if not pushed:
+    raise SystemExit('[PUSH_DIAG] PUSH NON RIUSCITO dopo 5 tentativi. Gli output sono salvi su disco: '
+                     'risolvi (auth/rete) e ri-esegui SOLO questa cella, oppure pusha a mano.')
+print('[PUSH_DIAG] COMPLETATO: analisi pushata su', BRANCH)
 """
 
 DATASET = """# Cell -- DATASET: coverage param vs range fisico + confronto narrow/wide/widebig (val comune). SKIP.
@@ -778,17 +824,19 @@ cells = [
     cell(CONFIG, 'config'),
     cell(DATASETGEN, 'datasetgen'),
     cell(RUN, 'run'),
-    cell(DIAG, 'diag'),
-    cell(FULLLOSS, 'fullloss'),
-    cell(PARETO, 'pareto'),
-    cell(RANKCURVE, 'rankcurve'),
-    cell(SEEDVAR, 'seedvar'),
-    cell(PERREGIME, 'perregime'),
-    cell(DIAGNOSTICS, 'diagnostics'),
-    cell(VALIDATE, 'validate'),
-    cell(CLOSEDLOOP, 'closedloop'),
-    cell(DATASET, 'dataset'),
-    cell(SYNTHESIS, 'synthesis'),
+    # Sezioni d'analisi: ognuna avvolta in resilient() -> un crash (es. checkpoint) scrive
+    # bigsweep3_<sez>_ERROR.txt e PROSEGUE, cosi' le sezioni indipendenti girano e PUSH_DIAG le pusha.
+    cell(resilient(DIAG, 'diag'), 'diag'),
+    cell(resilient(FULLLOSS, 'fullloss'), 'fullloss'),
+    cell(resilient(PARETO, 'pareto'), 'pareto'),
+    cell(resilient(RANKCURVE, 'rankcurve'), 'rankcurve'),
+    cell(resilient(SEEDVAR, 'seedvar'), 'seedvar'),
+    cell(resilient(PERREGIME, 'perregime'), 'perregime'),
+    cell(resilient(DIAGNOSTICS, 'diagnostics'), 'diagnostics'),
+    cell(resilient(VALIDATE, 'validate'), 'validate'),
+    cell(resilient(CLOSEDLOOP, 'closedloop'), 'closedloop'),
+    cell(resilient(DATASET, 'dataset'), 'dataset'),
+    cell(resilient(SYNTHESIS, 'synthesis'), 'synthesis'),
     cell(PUSH_DIAG, 'pushdiag'),
 ]
 
