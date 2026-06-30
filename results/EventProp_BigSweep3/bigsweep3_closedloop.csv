@@ -1,0 +1,7 @@
+arm,role,collision_rate,mean_min_gap,mean_max_decel,mean_rms_jerk
+BPTT_REF,oracolo,0.0,12.607,4.083,1.898
+BPTT_REF,SNN-identif,0.0,13.162,4.116,1.684
+A_lr1e2_t06_r16,oracolo,0.0,12.607,4.083,1.898
+A_lr1e2_t06_r16,SNN-identif,0.0,12.499,4.01,1.583
+A_lr7e3_t05_r16_s3,oracolo,0.0,12.607,4.083,1.898
+A_lr7e3_t05_r16_s3,SNN-identif,0.0,12.313,4.021,1.573
