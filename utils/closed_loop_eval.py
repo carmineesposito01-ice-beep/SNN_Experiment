@@ -282,7 +282,9 @@ def tracking_metrics(traj):
 
 def string_stability_gain(traj, warmup_frac=0.3):
     """Guadagno = std(perturbazione v_ego) / std(perturbazione v_leader) a regime.
-    < 1 = string-stable (smorza). Usare su scenario sinusoidale."""
+    < 1 = smorza. ATTENZIONE (T3.5): e' un proxy LOCALE = il caso N=1 (un solo follower, una frequenza),
+    NON la string stability del plotone. Per il test vero usare simulate_platoon + platoon_string_metrics
+    + transfer_gain_fft (catena N veicoli, sweep in frequenza)."""
     v = traj['v']; vl = traj['vl']
     k = int(len(v) * warmup_frac)
     vl_s = vl[k:]; v_s = v[k:]
@@ -386,3 +388,60 @@ def build_scenarios(params_gt, N=600, rng=None, include_tail=False):
     scen.append(('aggressive_cut_in', vl, s_eq, v_set, (t_cut, gap_cut)))
 
     return scen
+
+
+# ============================================================
+# L5 — String stability: catena plotone + funzione di trasferimento
+# ============================================================
+
+def simulate_platoon(params_list, leader_v, device='cpu', plant=None, channel=None):
+    """T3.1 — plotone in CASCATA: veh0 = leader_v (profilo dato); il follower i segue il follower i-1
+    coi propri parametri (params_list[i]). Riusa simulate() invariato. params_list: lista di array(5,).
+    Ritorna {'v_profiles': (N+1, L), 'collided': [bool]*N}. L = lunghezza comune (tronca se collisione)."""
+    v_prev = np.asarray(leader_v, dtype=np.float64)
+    v_profiles = [v_prev]
+    collided = []
+    for pg in params_list:
+        pg = np.asarray(pg, dtype=np.float32)
+        v0 = float(v_prev[0])
+        s_i, _ = _equilibrium_init(pg, v0)
+        out = simulate(None, pg, v_prev, s_i, v0, device=device, plant=plant, channel=channel)
+        v_profiles.append(out['v'])
+        collided.append(bool(out['collided']))
+        v_prev = out['v']
+    L = min(len(v) for v in v_profiles)
+    return {'v_profiles': np.array([v[:L] for v in v_profiles]), 'collided': collided}
+
+
+def platoon_string_metrics(v_profiles, warmup_frac=0.3):
+    """T3.1/T3.3 — amplificazione per-veicolo (std, L2, Linf) + head-to-tail + strict string stability.
+    string-stable se ogni rapporto A_i/A_{i-1} <= 1 (l'oscillazione DECADE verso la coda)."""
+    V = np.asarray(v_profiles, dtype=np.float64)
+    k = int(V.shape[1] * warmup_frac)
+    dev = V[:, k:] - V[:, k:].mean(axis=1, keepdims=True)
+    eps = 1e-9
+    std = dev.std(axis=1); l2 = np.linalg.norm(dev, axis=1); linf = np.abs(dev).max(axis=1)
+    amp_ratio = (std[1:] / (std[:-1] + eps))
+    return {
+        'std_per_veh': std.tolist(),
+        'amp_ratio': amp_ratio.tolist(),
+        'l2_gain': (l2[1:] / (l2[:-1] + eps)).tolist(),
+        'linf_gain': (linf[1:] / (linf[:-1] + eps)).tolist(),
+        'head_to_tail': float(std[-1] / (std[0] + eps)),
+        'strict_string_stable': bool(np.all(amp_ratio <= 1.0 + 1e-3)),
+    }
+
+
+def transfer_gain_fft(v_in, v_out, band=(0.01, 0.3)):
+    """T3.2 — funzione di trasferimento empirica |Γ(ω)| = |FFT(v_out)|/|FFT(v_in)| sulla banda.
+    Usare con leader a chirp (swept-sine): una sola simulazione copre la banda. peak_gain<=1 = stabile."""
+    n = int(min(len(v_in), len(v_out)))
+    xi = np.asarray(v_in[:n]) - np.mean(v_in[:n]); xo = np.asarray(v_out[:n]) - np.mean(v_out[:n])
+    freqs = np.fft.rfftfreq(n, d=DT)
+    Fi = np.abs(np.fft.rfft(xi)); Fo = np.abs(np.fft.rfft(xo))
+    m = (freqs >= band[0]) & (freqs <= band[1]) & (Fi > 1e-6 * (Fi.max() + 1e-12))
+    if not m.any():
+        return {'peak_gain': float('nan'), 'peak_freq': float('nan'), 'freqs': [], 'gain': []}
+    g = Fo[m] / Fi[m]
+    return {'peak_gain': float(g.max()), 'peak_freq': float(freqs[m][g.argmax()]),
+            'freqs': freqs[m].tolist(), 'gain': g.tolist()}

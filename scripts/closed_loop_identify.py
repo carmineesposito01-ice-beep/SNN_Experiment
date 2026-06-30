@@ -17,7 +17,8 @@ import torch
 
 from utils.closed_loop_eval import (simulate, safety_metrics, comfort_metrics,
                                     tracking_metrics, build_scenarios, TTC_STAR,
-                                    _equilibrium_init)
+                                    _equilibrium_init, simulate_platoon,
+                                    platoon_string_metrics, transfer_gain_fft)
 from config import DT
 
 PN = ['v0', 'T', 's0', 'a', 'b']
@@ -287,6 +288,53 @@ def breakdown_curve(model, cache, n_drivers=15, seq_len=50, device='cpu',
     panic = [dict(zip(('decel', 'oracle', 'snn'), (d,) + _rate(_panic, d))) for d in decels]
     cutin = [dict(zip(('gap', 'oracle', 'snn'), (g,) + _rate(_cutin, g))) for g in gaps]
     return {'panic': panic, 'cut_in': cutin, 'n_drivers': len(ids)}
+
+
+def eval_string_stability(model, cache, N=8, n_platoons=5, seq_len=50, hetero=True,
+                          amp=1.0, f0=0.01, f1=0.3, latency_steps=0, device='cpu', perturb_len=600):
+    """T3 — string stability del PLOTONE coi parametri identificati dalla SNN.
+
+    Identifica i 5 param da piu' driver, costruisce plotoni di N follower (omogenei = stesso param;
+    hetero=True = param diversi per veicolo, robustezza realistica), con un leader a CHIRP (swept-sine,
+    banda f0..f1) -> una sola simulazione copre la banda. Misura: head-to-tail gain (std coda/testa),
+    strict string stability (A_i/A_{i-1}<=1 ovunque), peak |Γ(ω)| (criterio <=1), e mappa il T medio
+    identificato. latency_steps>0 inietta la latenza CAM NEL plotone (T3.6): la comunicazione ritardata
+    riduce il margine di string stability."""
+    ids = []
+    for it in cache['val'][:max(n_platoons * N, n_platoons)]:
+        x = torch.tensor(it['x'][:seq_len][None], dtype=torch.float32).to(device)
+        ids.append(identify(model, x))
+    if not ids:
+        return {}
+    t = np.arange(perturb_len)
+    f_inst = f0 + (f1 - f0) * t / perturb_len            # chirp lineare f0->f1
+    phase = 2.0 * np.pi * np.cumsum(f_inst) * DT
+    v_set = 0.7 * float(ids[0][0])
+    leader = v_set + amp * np.sin(phase)
+    channel = {'latency_steps': int(latency_steps), 'seed': 0} if latency_steps else None
+    rng = np.random.default_rng(0)
+    results = []
+    for p in range(n_platoons):
+        if hetero:
+            plist = [ids[int(j)] for j in rng.integers(0, len(ids), N)]
+        else:
+            plist = [ids[p % len(ids)]] * N
+        pl = simulate_platoon(plist, leader, device=device, channel=channel)
+        m = platoon_string_metrics(pl['v_profiles'])
+        tg = transfer_gain_fft(pl['v_profiles'][0], pl['v_profiles'][-1], band=(f0, f1))
+        m['peak_gain'] = tg['peak_gain']; m['peak_freq'] = tg['peak_freq']
+        m['any_collision'] = bool(any(pl['collided']))
+        m['mean_T'] = float(np.mean([pv[1] for pv in plist]))    # T3.7 — T identificato medio
+        results.append(m)
+    h2t = [r['head_to_tail'] for r in results]
+    pk = [r['peak_gain'] for r in results if r['peak_gain'] == r['peak_gain']]
+    return {'N': N, 'n_platoons': len(results), 'hetero': hetero, 'latency_steps': int(latency_steps),
+            'head_to_tail_mean': float(np.mean(h2t)), 'head_to_tail_ci95': _bootstrap_ci(h2t),
+            'peak_gain_mean': float(np.mean(pk)) if pk else float('nan'),
+            'peak_gain_max': float(np.max(pk)) if pk else float('nan'),
+            'frac_strict_stable': float(np.mean([r['strict_string_stable'] for r in results])),
+            'frac_collision': float(np.mean([r['any_collision'] for r in results])),
+            'mean_T': float(np.mean([r['mean_T'] for r in results])), 'platoons': results}
 
 
 def cbr_to_pdr(density, cbr_max=0.6):

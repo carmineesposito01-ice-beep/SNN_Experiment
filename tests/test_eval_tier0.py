@@ -244,6 +244,40 @@ def test_v2x_sweep_and_cbr():
     print('  OK v2x_robustness_sweep + cbr_to_pdr')
 
 
+# ----------------------------- TIER 3 -----------------------------
+def test_platoon_and_transfer():
+    from utils.closed_loop_eval import simulate_platoon, platoon_string_metrics, transfer_gain_fft
+    pg = np.array([30.0, 1.2, 2.5, 1.1, 1.5], dtype=np.float32)
+    N = 4; L = 400; dt = 0.1
+    leader = 21.0 + 1.0 * np.sin(2 * np.pi * 0.1 * (np.arange(L) * dt))
+    pl = simulate_platoon([pg] * N, leader)
+    V = pl['v_profiles']
+    assert V.shape[0] == N + 1, V.shape
+    assert len(pl['collided']) == N
+    m = platoon_string_metrics(V)
+    assert len(m['amp_ratio']) == N and len(m['l2_gain']) == N and len(m['linf_gain']) == N
+    assert m['head_to_tail'] == m['head_to_tail'] and isinstance(m['strict_string_stable'], bool)
+    # transfer gain: smorzato <1, amplificato >1
+    base = np.sin(2 * np.pi * 0.1 * (np.arange(L) * dt))
+    g_damp = transfer_gain_fft(base, 0.5 * base, band=(0.01, 0.3))['peak_gain']
+    g_amp = transfer_gain_fft(base, 2.0 * base, band=(0.01, 0.3))['peak_gain']
+    assert g_damp < 1.0 < g_amp, (g_damp, g_amp)
+    print('  OK platoon (N+1 profili, amp/L2/Linf) + transfer_gain_fft')
+
+
+def test_eval_string_stability():
+    from scripts.closed_loop_identify import eval_string_stability
+    model = StubModel(); cache = _synth_cache(6)
+    r = eval_string_stability(model, cache, N=4, n_platoons=2, hetero=True, perturb_len=300)
+    for k in ['head_to_tail_mean', 'peak_gain_mean', 'frac_strict_stable', 'mean_T', 'head_to_tail_ci95']:
+        assert k in r, k
+    assert r['N'] == 4 and r['n_platoons'] == 2
+    # con latenza CAM nel plotone (T3.6): deve girare e tornare la struttura
+    r2 = eval_string_stability(model, cache, N=3, n_platoons=1, hetero=False, latency_steps=2, perturb_len=300)
+    assert r2['latency_steps'] == 2 and r2['mean_T'] == r2['mean_T']
+    print('  OK eval_string_stability (plotone omogeneo/eterogeneo + latenza CAM)')
+
+
 if __name__ == '__main__':
     print('[TEST Tier0]')
     test_comfort_iso_flags()
@@ -260,4 +294,7 @@ if __name__ == '__main__':
     test_simulate_plant_channel_backcompat()
     test_param_chattering()
     test_v2x_sweep_and_cbr()
+    print('[TEST Tier3]')
+    test_platoon_and_transfer()
+    test_eval_string_stability()
     print('TUTTI I TEST OK')

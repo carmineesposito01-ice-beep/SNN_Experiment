@@ -76,14 +76,17 @@
 - [x] **T2.15** `L3.extra:adversarial_loss` — `channel={'blackout_steps':(t0,t1)}` (loss forzato sull'evento)
 - [x] **T2.16** `L3.extra:DCC_CBR` — `cbr_to_pdr(density)` (proxy DCC densità→CBR→PDR)
 
-## TIER 3 — String stability macroscopica (L5)
-- [ ] **T3.1** `L5.platoon` — catena N=5-10 follower (ego_i → leader di i+1), head-to-tail gain
-- [ ] **T3.2** `L5.freq_sweep` — sweep |Γ(ω)| (banda 0.005-0.5Hz) + criterio max_ω|Γ|≤1; **chirp+FFT** invece di K sinusoidi
-- [ ] **T3.3** `L5.L2_Linf` — norme L2/Linf (strict string stability) oltre allo std-ratio
-- [ ] **T3.4** `L5.distributions` — plotone **eterogeneo** (param identificati diversi) + CI
-- [ ] **T3.5** `L5.local_proxy` — rinominare/promuovere lo std-ratio attuale a caso N=1 (non confonderlo con string stability)
-- [ ] **T3.6** `L3-08`/`L5.extra:v2x` — latenza CAM **dentro** il plotone (destabilizzazione)
-- [ ] **T3.7** `L5.extra:spacing` — mappa T identificato → regione string-stabile IIDM
+## TIER 3 — String stability macroscopica (L5) ✅ FATTO
+> `utils/closed_loop_eval.py`: `simulate_platoon` (catena N, riusa simulate), `platoon_string_metrics`
+> (amp/L2/Linf/head-to-tail/strict), `transfer_gain_fft` (|Γ(ω)| via chirp). `scripts/closed_loop_identify.py`:
+> `eval_string_stability` (omogeneo/eterogeneo + CI + latenza CAM + T medio). Test verde.
+- [x] **T3.1** `L5.platoon` — `simulate_platoon` catena N (ego_i→leader i+1) + `head_to_tail`
+- [x] **T3.2** `L5.freq_sweep` — `transfer_gain_fft` (chirp swept-sine→|Γ(ω)|, `peak_gain`/`peak_freq`, criterio ≤1)
+- [x] **T3.3** `L5.L2_Linf` — `l2_gain`/`linf_gain`/`amp_ratio` + `strict_string_stable` (A_i/A_{i-1}≤1)
+- [x] **T3.4** `L5.distributions` — `hetero=True` (param per-veicolo diversi) + `head_to_tail_ci95` + `frac_strict_stable` su n_platoons
+- [x] **T3.5** `L5.local_proxy` — docstring di `string_stability_gain` aggiornato (= caso N=1, rimanda al test plotone)
+- [x] **T3.6** `L3-08`/`L5.extra:v2x` — `eval_string_stability(latency_steps=k)` → canale latenza nel plotone
+- [x] **T3.7** `L5.extra:spacing` — `mean_T` riportato con head-to-tail/peak_gain (mappa empirica T→stabilità; T_min analitico = refinement futuro)
 
 ## TIER 4 — Metodologia profonda (identificabilita', calibrazione, formale)
 - [ ] **T4.1** `L1.identifiability` ⭐ — FIM/Jacobiano (cond, autovettori piatti); correla cond(FIM) ai casi ProdigyEvent
@@ -113,6 +116,6 @@
 | 0 | Fondazione reporting | ✅ fatto (test verde) |
 | 1 | Scenari coda + soglie + energia | ✅ fatto (test verde) |
 | 2 | Plant L4 + V2X L3 | ✅ fatto (test verde) |
-| 3 | String stability L5 | da fare |
+| 3 | String stability L5 | ✅ fatto (test verde) |
 | 4 | Metodologia (identificabilita') | da fare |
 | 5 | Hardware FPGA | da fare |
