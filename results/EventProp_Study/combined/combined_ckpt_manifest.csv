@@ -9,16 +9,16 @@ ADAM_lr2e3_t12,BigSweep,True,True,ok,ok,ok,ok,ok
 ADAM_lr2e3_t14,BigSweep,True,True,ok,ok,ok,ok,ok
 ADAM_lr3e3_t08,BigSweep,True,True,ok,ok,ok,ok,ok
 ADAM_lr3e3_t10,BigSweep,True,True,ok,ok,ok,ok,ok
-ADAM_lr3e3_t12,BigSweep,True,,,,,,gia fatto (skip)
-ADAM_lr3e3_t14,BigSweep,True,,,,,,gia fatto (skip)
-ADAM_lr5e4_t08,BigSweep,True,,,,,,gia fatto (skip)
-ADAM_lr5e4_t10,BigSweep,True,,,,,,gia fatto (skip)
-ADAM_lr5e4_t12,BigSweep,True,,,,,,gia fatto (skip)
-ADAM_lr5e4_t14,BigSweep,True,,,,,,gia fatto (skip)
-A_lr15e2_t05_r16,BigSweep3,True,,,,,,gia fatto (skip)
-A_lr1e2_t04_r16,BigSweep3,True,,,,,,gia fatto (skip)
-A_lr1e2_t05_r16,BigSweep3,True,,,,,,gia fatto (skip)
-A_lr1e2_t05_r16_noDEC,BigSweep3,True,,,,,,gia fatto (skip)
+ADAM_lr3e3_t12,BigSweep,True,True,ok,ok,ok,ok,ok
+ADAM_lr3e3_t14,BigSweep,True,True,ok,ok,ok,ok,ok
+ADAM_lr5e4_t08,BigSweep,True,True,ok,ok,ok,ok,ok
+ADAM_lr5e4_t10,BigSweep,True,True,ok,ok,ok,ok,ok
+ADAM_lr5e4_t12,BigSweep,True,True,ok,ok,ok,ok,ok
+ADAM_lr5e4_t14,BigSweep,True,True,ok,ok,ok,ok,ok
+A_lr15e2_t05_r16,BigSweep3,True,True,ok,ok,ok,ok,ok
+A_lr1e2_t04_r16,BigSweep3,True,True,ok,ok,ok,ok,ok
+A_lr1e2_t05_r16,BigSweep3,True,True,ok,ok,ok,ok,ok
+A_lr1e2_t05_r16_noDEC,BigSweep3,True,True,ok,ok,ok,ok,ok
 A_lr1e2_t06_r16,BigSweep3,True,,,,,,gia fatto (skip)
 A_lr5e3_t04_r16,BigSweep3,True,,,,,,gia fatto (skip)
 A_lr5e3_t05_r16,BigSweep3,True,,,,,,gia fatto (skip)
