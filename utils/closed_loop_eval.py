@@ -149,7 +149,7 @@ def simulate(model, params_gt, v_leader, s_init, v_init, cut_in=None, device='cp
     a_l_filt = 0.0; vl_prev = float(v_leader[0])
     series = {k: [] for k in ('s', 'v', 'vl', 'dv', 'a_ego')}
     params_used = []
-    collided = False
+    collided = False; impact_dv = 0.0                         # T0.10 — Δv relativa al contatto (severita')
     pl_state = {}                                              # stato plant (L4)
     ch_state = {}; aoi_series = []                             # stato canale V2X (L3)
     ch_rng = np.random.default_rng(channel.get('seed', 0)) if channel is not None else None
@@ -195,12 +195,14 @@ def simulate(model, params_gt, v_leader, s_init, v_init, cut_in=None, device='cp
             s = s + (vl - v) * DT
             if s <= 0.0:
                 collided = True
+                impact_dv = max(0.0, v - vl)        # velocita' relativa all'impatto (severita' collisione)
                 break
 
     out = {k: np.asarray(val, dtype=np.float64) for k, val in series.items()}
     out['params'] = np.asarray(params_used, dtype=np.float64)   # (M,5)
     out['collided'] = collided
     out['min_gap'] = float(s) if collided else float(out['s'].min())
+    out['impact_dv'] = float(impact_dv)                         # 0 se nessuna collisione
     if channel is not None and aoi_series:                      # T2.14 — Age-of-Information
         out['aoi_mean'] = float(np.mean(aoi_series)) * DT
         out['aoi_max'] = float(np.max(aoi_series)) * DT
@@ -221,6 +223,10 @@ def safety_metrics(traj):
     tit = float(np.sum((TTC_STAR - ttc[in_danger]) * DT)) if in_danger.any() else 0.0
     drac = np.where(closing, dv ** 2 / (2.0 * np.maximum(s, 1e-3)), 0.0)
     th = np.where(v > 0.1, s / np.maximum(v, 1e-3), np.inf)
+    # T0.10 — margine di EVITABILITA' fisica (con segno, NON satura): distanza dal confine in cui la
+    # decelerazione richiesta supera B_MAX. brake_margin = s - dv+²/(2·B_MAX) (forma-distanza di B_MAX-DRAC).
+    # min<0 => la collisione era fisicamente inevitabile di |min| metri (confrontabile anche quando si collide).
+    brake_margin = s - np.maximum(0.0, dv) ** 2 / (2.0 * B_MAX)
     # T1.7 — DRAC critico (soglia 3.35): tempo-esposto (TED) e tempo-integrato (TID) sopra soglia, frazione
     in_drac = drac > DRAC_STAR
     ted = float(in_drac.sum() * DT)
@@ -235,6 +241,8 @@ def safety_metrics(traj):
         'frac_drac_critical': float(in_drac.mean()),   # frazione tempo DRAC>3.35
         'TED_drac': ted, 'TID_drac': tid,
         'cpi': float((drac > MADR_MEAN).mean()),        # Crash-Potential-Index (proxy: MADR medio 8.45)
+        'brake_margin_min': float(brake_margin.min()),  # T0.10 — margine evitabilita' (m, con segno; <0 = inevitabile)
+        'impact_dv': float(traj.get('impact_dv', 0.0)),  # T0.10 — severita' collisione (Δv al contatto; 0 se no-coll.)
     }
     # T1.8 — frazione di tempo con TTC sotto soglie multiple (solo sugli step in avvicinamento)
     ttc_c = ttc[closing & np.isfinite(ttc)]

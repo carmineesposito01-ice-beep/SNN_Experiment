@@ -35,6 +35,12 @@
 - [x] **T0.7** `audit:oracle-gate` — gate **oracolo-relativo** (`delta_snn_minus_oracle` con CI)
 - [x] **T0.8** `audit:intra_std` — `intra_std` dell'identificazione (std su T di `forward_sequence`) come gate di stabilita'
 - [x] **T0.9** `audit:multi-seed` — `n_seeds` opt-in per CI riproducibili (default 1 = legacy)
+- [x] **T0.10** `safety:continuous` — metriche di sicurezza CONTINUE (non saturano come collision_rate):
+  `brake_margin_min` = `min_t( s − Δv₊²/(2·B_MAX) )` (margine di evitabilità in metri, **con segno**: <0 = collisione
+  fisicamente inevitabile di |·| m → confrontabile anche nel regime saturo) + `impact_dv` = Δv relativa al
+  contatto (**severità**; ordina anche due collisioni). In `simulate()`+`safety_metrics()`, additivi; entrano
+  in `rich` e per-scenario. *Motivazione: collision_rate è binaria/satura (0 troppo-facile, 1 inevitabile); il
+  margine/severità rendono il confronto continuo ovunque e abilitano gli scenari severi (panic −9, cut-in 3 m).*
 
 ## TIER 1 — Scenari di coda + soglie + efficienza + energia ✅ FATTO
 > `utils/closed_loop_eval.py`: `build_scenarios(include_tail=True)` (+4 scenari), soglie in `safety_metrics`

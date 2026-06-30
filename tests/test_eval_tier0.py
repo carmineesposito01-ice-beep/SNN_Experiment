@@ -96,6 +96,21 @@ def test_eval_safety_backward_compat_and_rich():
     print('  OK eval_safety backward-compat + rich (per-scenario=%d)' % len(r['per_scenario']))
 
 
+def test_continuous_safety_metrics():
+    # T0.10 — margine di evitabilita' (con segno) + severita' d'impatto (Δv): continue, non saturano.
+    pg = np.array([30.0, 1.2, 2.5, 1.1, 1.5], dtype=np.float32)
+    tr_c = simulate(None, pg, np.zeros(200), 3.0, 25.0)        # leader fermo, gap minuscolo, ego veloce
+    sm_c = safety_metrics(tr_c)
+    assert tr_c['collided'] and tr_c['impact_dv'] > 0
+    assert sm_c['impact_dv'] > 0 and sm_c['brake_margin_min'] < 0   # inevitabile -> margine negativo
+    tr_s = simulate(None, pg, np.full(200, 18.0), float(pg[2] + 18.0 * pg[1]), 18.0)  # following safe
+    assert not tr_s['collided'] and safety_metrics(tr_s)['impact_dv'] == 0.0
+    # CONTINUITA': due collisioni si ORDINANO per severita' (15 m/s impatta meno di 25) -> non satura
+    sm_c2 = safety_metrics(simulate(None, pg, np.zeros(200), 3.0, 15.0))
+    assert sm_c2['impact_dv'] < sm_c['impact_dv']
+    print('  OK metriche continue: brake_margin_min (segno) + impact_dv (ordina anche le collisioni)')
+
+
 # ----------------------------- TIER 1 -----------------------------
 def _synth_traj(M=100):
     a = np.concatenate([np.linspace(0, 1.0, M // 2), -np.linspace(0, 4.0, M - M // 2)])
@@ -363,6 +378,7 @@ if __name__ == '__main__':
     test_comfort_iso_flags()
     test_helpers()
     test_eval_safety_backward_compat_and_rich()
+    test_continuous_safety_metrics()
     print('[TEST Tier1]')
     test_tail_scenarios()
     test_new_metric_keys()

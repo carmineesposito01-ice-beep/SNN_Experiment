@@ -124,7 +124,8 @@ def _agg_rich(rec_full, id_intra, paired=None):
         out[key] = d
 
     # T0.5 — per-scenario + worst-case (no media trasversale che annacqua lo scenario critico)
-    SCEN_METRICS = ['min_gap', 'min_ttc', 'max_DRAC', 'max_decel', 'rms_jerk', 'rms_gap_error']
+    SCEN_METRICS = ['min_gap', 'min_ttc', 'max_DRAC', 'max_decel', 'rms_jerk', 'rms_gap_error',
+                    'brake_margin_min', 'impact_dv']
     scen = sorted(set(r.get('scenario', 'NA') for r in rec_full['snn']))
     per = {}
     for sc in scen:
