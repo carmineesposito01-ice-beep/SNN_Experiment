@@ -77,16 +77,16 @@ PEAK_SINGLECYCLE,Study,True,True,ok,ok,ok,ok,ok
 PE_axis_gr101,BigSweep,True,True,ok,ok,ok,ok,ok
 PE_axis_gr105,BigSweep,True,True,ok,ok,ok,ok,ok
 PE_axis_lr03,BigSweep,True,True,ok,ok,ok,ok,ok
-PE_axis_lr10,BigSweep,True,,,,,,gia fatto (skip)
-PE_axis_pp15,BigSweep,True,,,,,,gia fatto (skip)
-PE_axis_pp40,BigSweep,True,,,,,,gia fatto (skip)
-PE_bd03_gp0,BigSweep,True,,,,,,gia fatto (skip)
-PE_bd03_gp0005,BigSweep,True,,,,,,gia fatto (skip)
-PE_bd03_gp002,BigSweep,True,,,,,,gia fatto (skip)
-PE_bd05_gp0,BigSweep,True,,,,,,gia fatto (skip)
-PE_bd05_gp0005,BigSweep,True,,,,,,gia fatto (skip)
-PE_bd05_gp002,BigSweep,True,,,,,,gia fatto (skip)
-PE_bd07_gp0,BigSweep,True,,,,,,gia fatto (skip)
+PE_axis_lr10,BigSweep,True,True,ok,ok,ok,ok,ok
+PE_axis_pp15,BigSweep,True,True,ok,ok,ok,ok,ok
+PE_axis_pp40,BigSweep,True,True,ok,ok,ok,ok,ok
+PE_bd03_gp0,BigSweep,True,True,ok,ok,ok,ok,ok
+PE_bd03_gp0005,BigSweep,True,True,ok,ok,ok,ok,ok
+PE_bd03_gp002,BigSweep,True,True,ok,ok,ok,ok,ok
+PE_bd05_gp0,BigSweep,True,True,ok,ok,ok,ok,ok
+PE_bd05_gp0005,BigSweep,True,True,ok,ok,ok,ok,ok
+PE_bd05_gp002,BigSweep,True,True,ok,ok,ok,ok,ok
+PE_bd07_gp0,BigSweep,True,True,ok,ok,ok,ok,ok
 PE_bd07_gp0005,BigSweep,True,,,,,,gia fatto (skip)
 PE_bd07_gp002,BigSweep,True,,,,,,gia fatto (skip)
 PE_t05_gp00,BigSweep2,True,,,,,,gia fatto (skip)
