@@ -1,0 +1,3 @@
+arm,role,collision_rate,mean_min_gap,mean_max_decel,mean_rms_jerk
+PE_t05_gp0002,oracolo,0.0,12.607,4.083,1.898
+PE_t05_gp0002,SNN,0.0,12.035,4.023,1.675
