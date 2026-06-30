@@ -87,17 +87,17 @@ PE_bd05_gp0,BigSweep,True,True,ok,ok,ok,ok,ok
 PE_bd05_gp0005,BigSweep,True,True,ok,ok,ok,ok,ok
 PE_bd05_gp002,BigSweep,True,True,ok,ok,ok,ok,ok
 PE_bd07_gp0,BigSweep,True,True,ok,ok,ok,ok,ok
-PE_bd07_gp0005,BigSweep,True,,,,,,gia fatto (skip)
-PE_bd07_gp002,BigSweep,True,,,,,,gia fatto (skip)
-PE_t05_gp00,BigSweep2,True,,,,,,gia fatto (skip)
+PE_bd07_gp0005,BigSweep,True,True,ok,ok,ok,ok,ok
+PE_bd07_gp002,BigSweep,True,True,ok,ok,ok,ok,ok
+PE_t05_gp00,BigSweep2,True,True,ok,ok,ok,ok,ok
 PE_t05_gp0002,BigSweep2,True,,,,,,gia fatto (skip)
-SPEC_REF_noconstraint,Spectral_Sweep,True,,,,,,gia fatto (skip)
-SPEC_l05_t12,Spectral_Sweep,True,,,,,,gia fatto (skip)
-SPEC_l05_t15,Spectral_Sweep,True,,,,,,gia fatto (skip)
-SPEC_l05_t20,Spectral_Sweep,True,,,,,,gia fatto (skip)
-SPEC_l05_t25,Spectral_Sweep,True,,,,,,gia fatto (skip)
-SPEC_l100_t12,Spectral_Sweep,True,,,,,,gia fatto (skip)
-SPEC_l100_t15,Spectral_Sweep,True,,,,,,gia fatto (skip)
+SPEC_REF_noconstraint,Spectral_Sweep,True,True,ok,ok,ok,ok,ok
+SPEC_l05_t12,Spectral_Sweep,True,True,ok,ok,ok,ok,ok
+SPEC_l05_t15,Spectral_Sweep,True,True,ok,ok,ok,ok,ok
+SPEC_l05_t20,Spectral_Sweep,True,True,ok,ok,ok,ok,ok
+SPEC_l05_t25,Spectral_Sweep,True,True,ok,ok,ok,ok,ok
+SPEC_l100_t12,Spectral_Sweep,True,True,ok,ok,ok,ok,ok
+SPEC_l100_t15,Spectral_Sweep,True,True,ok,ok,ok,ok,ok
 SPEC_l100_t20,Spectral_Sweep,True,,,,,,gia fatto (skip)
 SPEC_l100_t25,Spectral_Sweep,True,,,,,,gia fatto (skip)
 SPEC_l10_t12,Spectral_Sweep,True,,,,,,gia fatto (skip)
