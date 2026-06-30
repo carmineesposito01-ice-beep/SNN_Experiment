@@ -63,14 +63,20 @@ def discover_arms():
 
 def build_and_load(tag, cfg):
     from core.network import build_model
-    hidden = int(cfg.get('cf_hidden_size') or 32)
-    rank = int(cfg.get('cf_rank') or 16)
-    max_delay = int(cfg.get('cf_max_delay') or 6)
-    bit_shift = int(cfg.get('cf_bit_shift') or 3)
-    m = build_model('eventprop_alif_full', hidden_size=hidden, rank=rank,
-                    max_delay=max_delay, bit_shift=bit_shift)
     ck = torch.load(ckpt_path(tag), map_location='cpu', weights_only=False)
     state = ck['model_state'] if 'model_state' in ck else ck
+    max_delay = int(cfg.get('cf_max_delay') or 6)
+    bit_shift = int(cfg.get('cf_bit_shift') or 3)
+    # Rank/hidden INFERITI dalla forma del checkpoint (rec_U: (hidden, rank)) — autorevole quando il
+    # config ha cf_rank=None (arm vecchi, es. P1_*): cosi' build_model combacia ed evita il size mismatch.
+    if 'layer_hidden.rec_U' in state:
+        hidden = int(state['layer_hidden.rec_U'].shape[0])
+        rank = int(state['layer_hidden.rec_U'].shape[1])
+    else:
+        hidden = int(cfg.get('cf_hidden_size') or 32)
+        rank = int(cfg.get('cf_rank') or 16)
+    m = build_model('eventprop_alif_full', hidden_size=hidden, rank=rank,
+                    max_delay=max_delay, bit_shift=bit_shift)
     m.load_state_dict(state, strict=False)
     m.eval()
     return m, rank, state
@@ -205,10 +211,11 @@ def main():
             manifest.append(man); print('[skip] %-28s ckpt assente' % tag); continue
         try:
             model, rank, state = build_and_load(tag, cfg)
+            cfg = {**cfg, 'cf_rank': rank}   # propaga il rank INFERITO (an_pathb ricarica il modello con esso)
             man['loaded'] = True
         except Exception as e:
-            man['loaded'] = False; man['status'] = 'load FAIL: %s' % str(e)[:120]
-            manifest.append(man); print('[FAIL load] %-28s %s' % (tag, str(e)[:80])); continue
+            man['loaded'] = False; man['status'] = 'load FAIL: %s' % str(e)[:180]
+            manifest.append(man); print('[FAIL load] %-28s %s' % (tag, str(e)[:120])); continue
         for name, fn in ANALYSES:
             done, rows = store[name]
             if tag in done:
