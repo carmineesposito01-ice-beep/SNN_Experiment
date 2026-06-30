@@ -326,6 +326,38 @@ def test_reachability():
     print('  OK reachability_frontier (frontiera safe oracolo vs snn)')
 
 
+# ----------------------------- TIER 5 -----------------------------
+def test_quantization():
+    from utils.quantize import fake_quant, quantize_po2, QuantParamModel
+    # fixed-point: su griglia 2^-frac_bits; meno bit = piu' errore
+    q4 = fake_quant(0.1, frac_bits=4)
+    assert abs(q4 - 0.125) < 1e-9, q4
+    err4 = abs(fake_quant(0.1, 4) - 0.1); err8 = abs(fake_quant(0.1, 8) - 0.1)
+    assert err4 >= err8
+    assert abs(quantize_po2(0.1) - 0.125) < 1e-9         # 2^round(log2 0.1)=2^-3
+    # wrapper: output quantizzato sulla griglia
+    model = StubModel()
+    qm = QuantParamModel(model, frac_bits=6)
+    x = torch.zeros(1, 50, 4)
+    out = qm.forward_sequence(x).cpu().numpy()
+    assert np.allclose(out * 64, np.round(out * 64))     # multipli di 2^-6
+    print('  OK quantize (fixed-point/po2 + QuantParamModel)')
+
+
+def test_eval_quantization():
+    from scripts.closed_loop_identify import eval_quantization
+    model = StubModel(); cache = _synth_cache(4)
+    r = eval_quantization(model, cache, frac_bits_list=(8, 4), n_drivers=3)
+    assert r['curve'][0]['frac_bits'] == 'float' and len(r['curve']) == 3
+    for row in r['curve']:
+        assert 'id_err_mean' in row and 'collision_rate' in row and 'min_ttc_p5' in row
+    assert r['with_v2x'] is False
+    # T5.2: quant + V2X combinati
+    r2 = eval_quantization(model, cache, frac_bits_list=(6,), n_drivers=2, channel={'pdr': 0.7, 'seed': 0})
+    assert r2['with_v2x'] is True and len(r2['curve']) == 2
+    print('  OK eval_quantization (curva float-vs-fixed + gemello V2X)')
+
+
 if __name__ == '__main__':
     print('[TEST Tier0]')
     test_comfort_iso_flags()
@@ -349,4 +381,7 @@ if __name__ == '__main__':
     test_fim_identifiability()
     test_causal_stratified_natural()
     test_reachability()
+    print('[TEST Tier5]')
+    test_quantization()
+    test_eval_quantization()
     print('TUTTI I TEST OK')

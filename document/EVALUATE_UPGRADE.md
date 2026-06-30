@@ -100,9 +100,13 @@
 - [x] **T4.7** `L5.formal_safety` — `reachability_frontier` (worst-case: gap minimo safe vs Δv, oracolo vs SNN)
 - [x] **T4.8** `extra:naturalisticity` — `naturalisticity` (KS time-gap & jerk SNN-ego vs driver reale)
 
-## TIER 5 — Validita' hardware (FPGA)
-- [ ] **T5.1** `L6.fpga` — quantizzazione fixed-point (fake-quant pesi+readout) → Δ NRMSE + closed-loop float-vs-quant
-- [ ] **T5.2** `L3.extra:fixedpoint_twin` — quantizzazione combinata con degradazione V2X (validita' esterna hardware completa)
+## TIER 5 — Validita' hardware (FPGA) ✅ FATTO
+> Nuovo modulo `utils/quantize.py` (`fake_quant` Qm.n, `quantize_po2`, `QuantParamModel`) +
+> `eval_quantization()` in `scripts/closed_loop_identify.py`. Test verde.
+- [x] **T5.1** `L6.fpga` — `QuantParamModel` (quantizza i 5 param = output FPGA) + `eval_quantization` (curva
+  float-vs-fixed Qm.n su id_abs_err + collision/min_TTC). *Nota: quantizza il readout-param; il full val_epoch
+  con pesi-quant e' un'estensione (i pesi sono gia' po2-trained).*
+- [x] **T5.2** `L3.extra:fixedpoint_twin` — `eval_quantization(channel=...)` → quant + degradazione V2X combinate
 
 ---
 
@@ -120,4 +124,9 @@
 | 2 | Plant L4 + V2X L3 | ✅ fatto (test verde) |
 | 3 | String stability L5 | ✅ fatto (test verde) |
 | 4 | Metodologia (identificabilita') | ✅ fatto (test verde) |
-| 5 | Hardware FPGA | da fare |
+| 5 | Hardware FPGA | ✅ fatto (test verde) |
+
+**TUTTI I 6 TIER COMPLETATI** — 56 item LX implementati, backward-compat (default = legacy), test
+`tests/test_eval_tier0.py` 20/20 verde. Manca solo: (a) costruire un **notebook di evaluation champion**
+che orchestra `eval_safety(rich,tail,plant,channel)` + `eval_string_stability` + `eval_quantization` +
+`identifiability.*` su modelli reali; (b) riconciliazione git (pull→push) a fine Stadio-2 Azure.

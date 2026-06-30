@@ -370,6 +370,27 @@ def reachability_frontier(model, cache, n_drivers=10, seq_len=50,
     return out
 
 
+def eval_quantization(model, cache, frac_bits_list=(12, 8, 6, 4), n_drivers=15, device='cpu',
+                      mode='fixed', channel=None, tail=True):
+    """T5.1/T5.2 — validita' hardware: confronta FLOAT vs fixed-point Qm.n dei param identificati (cio' che
+    va sull'FPGA) su identificazione (id_abs_err) e closed-loop (collision_rate, p5 min_TTC). channel!=None
+    => quantizzazione + degradazione V2X COMBINATE (T5.2 gemello hardware). Curva di degrado vs frac_bits."""
+    from utils.quantize import QuantParamModel
+
+    def _row(label, r):
+        return {'frac_bits': label, 'id_err_mean': float(np.mean(list(r['id_abs_err'].values()))),
+                'collision_rate': r['snn']['collision_rate'],
+                'min_ttc_p5': r['rich']['snn']['min_ttc']['p5']}
+
+    base = eval_safety(model, cache, n_drivers=n_drivers, device=device, rich=True, tail=tail, channel=channel)
+    curve = [_row('float', base)]
+    for fb in frac_bits_list:
+        qm = QuantParamModel(model, frac_bits=fb, mode=mode)
+        r = eval_safety(qm, cache, n_drivers=n_drivers, device=device, rich=True, tail=tail, channel=channel)
+        curve.append(_row(fb, r))
+    return {'mode': mode, 'with_v2x': channel is not None, 'curve': curve}
+
+
 def cbr_to_pdr(density, cbr_max=0.6):
     """T2.16 — proxy DCC: densita' veicolare -> Channel Busy Ratio -> PDR (piu' densita' = piu' CBR = meno PDR).
     Mapping lineare semplice (raffinabile con modelli ETSI DCC / SAE J2945). density in veic/km circa."""
