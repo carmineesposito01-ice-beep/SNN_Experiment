@@ -50,3 +50,13 @@ P2_lr2e3_t06_r8,4.75,0
 P2_lr2e3_t07_r16,7.59,0
 P2_lr2e3_t07_r8,4.73,0
 P2_lr3e3_t05_r16,9.29,0
+P2_lr3e3_t05_r8,6.1,0
+P2_lr3e3_t06_r16,8.81,0
+P2_lr3e3_t06_r8,5.78,0
+P2_lr3e3_t07_r16,7.42,0
+P2_lr3e3_t07_r8,5.52,0
+PEAK_BASELINE,1.75,11
+PEAK_SINGLECYCLE,4.0,9
+PE_axis_gr101,6.47,0
+PE_axis_gr105,2.89,0
+PE_axis_lr03,5.46,0

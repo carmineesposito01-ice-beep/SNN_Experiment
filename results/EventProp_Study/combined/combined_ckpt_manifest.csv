@@ -67,16 +67,16 @@ P2_lr2e3_t06_r8,BigSweep2,True,True,ok,ok,ok,ok,ok
 P2_lr2e3_t07_r16,BigSweep2,True,True,ok,ok,ok,ok,ok
 P2_lr2e3_t07_r8,BigSweep2,True,True,ok,ok,ok,ok,ok
 P2_lr3e3_t05_r16,BigSweep2,True,True,ok,ok,ok,ok,ok
-P2_lr3e3_t05_r8,BigSweep2,True,,,,,,gia fatto (skip)
-P2_lr3e3_t06_r16,BigSweep2,True,,,,,,gia fatto (skip)
-P2_lr3e3_t06_r8,BigSweep2,True,,,,,,gia fatto (skip)
-P2_lr3e3_t07_r16,BigSweep2,True,,,,,,gia fatto (skip)
-P2_lr3e3_t07_r8,BigSweep2,True,,,,,,gia fatto (skip)
-PEAK_BASELINE,Study,True,,,,,,gia fatto (skip)
-PEAK_SINGLECYCLE,Study,True,,,,,,gia fatto (skip)
-PE_axis_gr101,BigSweep,True,,,,,,gia fatto (skip)
-PE_axis_gr105,BigSweep,True,,,,,,gia fatto (skip)
-PE_axis_lr03,BigSweep,True,,,,,,gia fatto (skip)
+P2_lr3e3_t05_r8,BigSweep2,True,True,ok,ok,ok,ok,ok
+P2_lr3e3_t06_r16,BigSweep2,True,True,ok,ok,ok,ok,ok
+P2_lr3e3_t06_r8,BigSweep2,True,True,ok,ok,ok,ok,ok
+P2_lr3e3_t07_r16,BigSweep2,True,True,ok,ok,ok,ok,ok
+P2_lr3e3_t07_r8,BigSweep2,True,True,ok,ok,ok,ok,ok
+PEAK_BASELINE,Study,True,True,ok,ok,ok,ok,ok
+PEAK_SINGLECYCLE,Study,True,True,ok,ok,ok,ok,ok
+PE_axis_gr101,BigSweep,True,True,ok,ok,ok,ok,ok
+PE_axis_gr105,BigSweep,True,True,ok,ok,ok,ok,ok
+PE_axis_lr03,BigSweep,True,True,ok,ok,ok,ok,ok
 PE_axis_lr10,BigSweep,True,,,,,,gia fatto (skip)
 PE_axis_pp15,BigSweep,True,,,,,,gia fatto (skip)
 PE_axis_pp40,BigSweep,True,,,,,,gia fatto (skip)
