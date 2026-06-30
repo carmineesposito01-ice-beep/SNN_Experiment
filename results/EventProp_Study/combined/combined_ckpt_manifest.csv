@@ -29,16 +29,16 @@ A_lr7e3_t05_r16_noDEC,BigSweep3,True,True,ok,ok,ok,ok,ok
 A_lr7e3_t05_r16_s1,BigSweep3,True,True,ok,ok,ok,ok,ok
 A_lr7e3_t05_r16_s2,BigSweep3,True,True,ok,ok,ok,ok,ok
 A_lr7e3_t05_r16_s3,BigSweep3,True,True,ok,ok,ok,ok,ok
-A_lr7e3_t05_r24,BigSweep3,True,,,,,,gia fatto (skip)
-A_lr7e3_t05_r32,BigSweep3,True,,,,,,gia fatto (skip)
-A_lr7e3_t05_r8,BigSweep3,True,,,,,,gia fatto (skip)
-A_lr7e3_t06_r16,BigSweep3,True,,,,,,gia fatto (skip)
-BPTT_REF,BigSweep3,True,,,,,,gia fatto (skip)
-DS_narrow,BigSweep3,True,,,,,,gia fatto (skip)
-DS_wide,BigSweep3,True,,,,,,gia fatto (skip)
-DS_widebig,BigSweep3,True,,,,,,gia fatto (skip)
-EVP_ADAMW,Study,True,,,,,,gia fatto (skip)
-EVP_ADAMW_LSR,Study,True,,,,,,gia fatto (skip)
+A_lr7e3_t05_r24,BigSweep3,True,True,ok,ok,ok,ok,ok
+A_lr7e3_t05_r32,BigSweep3,True,True,ok,ok,ok,ok,ok
+A_lr7e3_t05_r8,BigSweep3,True,True,ok,ok,ok,ok,ok
+A_lr7e3_t06_r16,BigSweep3,True,True,ok,ok,ok,ok,ok
+BPTT_REF,BigSweep3,True,True,ok,ok,ok,ok,ok
+DS_narrow,BigSweep3,True,True,ok,ok,ok,ok,ok
+DS_wide,BigSweep3,True,True,ok,ok,ok,ok,ok
+DS_widebig,BigSweep3,True,True,ok,ok,ok,ok,ok
+EVP_ADAMW,Study,True,True,ok,ok,ok,ok,ok
+EVP_ADAMW_LSR,Study,True,True,ok,ok,ok,ok,ok
 EVP_PE_PROBE_LSR,Study,True,,,,,,gia fatto (skip)
 EVP_PRODIGYEVENT,Study,True,,,,,,gia fatto (skip)
 EVP_PRODIGYEVENT_PROBE,Study,True,,,,,,gia fatto (skip)

@@ -30,3 +30,13 @@ A_lr7e3_t05_r16_noDEC,10.75,0
 A_lr7e3_t05_r16_s1,10.54,0
 A_lr7e3_t05_r16_s2,10.45,0
 A_lr7e3_t05_r16_s3,10.7,0
+A_lr7e3_t05_r24,12.88,0
+A_lr7e3_t05_r32,15.02,0
+A_lr7e3_t05_r8,6.49,0
+A_lr7e3_t06_r16,10.75,0
+BPTT_REF,1.75,11
+DS_narrow,10.82,0
+DS_wide,11.16,0
+DS_widebig,10.7,0
+EVP_ADAMW,2.29,0
+EVP_ADAMW_LSR,2.38,0
