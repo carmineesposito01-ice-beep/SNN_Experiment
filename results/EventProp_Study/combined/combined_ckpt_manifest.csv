@@ -1,0 +1,110 @@
+arm,sweep,ckpt_found,loaded,diag,perregime,closedloop,pathb,status
+ADAM_lr1e3_t08,BigSweep,True,True,ok,ok,ok,ok,ok
+ADAM_lr1e3_t10,BigSweep,True,True,ok,ok,ok,ok,ok
+ADAM_lr1e3_t12,BigSweep,True,True,ok,ok,ok,ok,ok
+ADAM_lr1e3_t14,BigSweep,True,True,ok,ok,ok,ok,ok
+ADAM_lr2e3_t08,BigSweep,True,True,ok,ok,ok,ok,ok
+ADAM_lr2e3_t10,BigSweep,True,True,ok,ok,ok,ok,ok
+ADAM_lr2e3_t12,BigSweep,True,True,ok,ok,ok,ok,ok
+ADAM_lr2e3_t14,BigSweep,True,True,ok,ok,ok,ok,ok
+ADAM_lr3e3_t08,BigSweep,True,True,ok,ok,ok,ok,ok
+ADAM_lr3e3_t10,BigSweep,True,True,ok,ok,ok,ok,ok
+ADAM_lr3e3_t12,BigSweep,True,True,ok,ok,ok,ok,ok
+ADAM_lr3e3_t14,BigSweep,True,True,ok,ok,ok,ok,ok
+ADAM_lr5e4_t08,BigSweep,True,True,ok,ok,ok,ok,ok
+ADAM_lr5e4_t10,BigSweep,True,True,ok,ok,ok,ok,ok
+ADAM_lr5e4_t12,BigSweep,True,True,ok,ok,ok,ok,ok
+ADAM_lr5e4_t14,BigSweep,True,True,ok,ok,ok,ok,ok
+A_lr15e2_t05_r16,BigSweep3,True,True,ok,ok,ok,ok,ok
+A_lr1e2_t04_r16,BigSweep3,True,True,ok,ok,ok,ok,ok
+A_lr1e2_t05_r16,BigSweep3,True,True,ok,ok,ok,ok,ok
+A_lr1e2_t05_r16_noDEC,BigSweep3,True,True,ok,ok,ok,ok,ok
+A_lr1e2_t06_r16,BigSweep3,True,True,ok,ok,ok,ok,ok
+A_lr5e3_t04_r16,BigSweep3,True,True,ok,ok,ok,ok,ok
+A_lr5e3_t05_r16,BigSweep3,True,True,ok,ok,ok,ok,ok
+A_lr5e3_t06_r16,BigSweep3,True,True,ok,ok,ok,ok,ok
+A_lr7e3_t04_r16,BigSweep3,True,True,ok,ok,ok,ok,ok
+A_lr7e3_t05_r16,BigSweep3,True,True,ok,ok,ok,ok,ok
+A_lr7e3_t05_r16_noDEC,BigSweep3,True,True,ok,ok,ok,ok,ok
+A_lr7e3_t05_r16_s1,BigSweep3,True,True,ok,ok,ok,ok,ok
+A_lr7e3_t05_r16_s2,BigSweep3,True,True,ok,ok,ok,ok,ok
+A_lr7e3_t05_r16_s3,BigSweep3,True,True,ok,ok,ok,ok,ok
+A_lr7e3_t05_r24,BigSweep3,True,True,ok,ok,ok,ok,ok
+A_lr7e3_t05_r32,BigSweep3,True,True,ok,ok,ok,ok,ok
+A_lr7e3_t05_r8,BigSweep3,True,True,ok,ok,ok,ok,ok
+A_lr7e3_t06_r16,BigSweep3,True,True,ok,ok,ok,ok,ok
+BPTT_REF,BigSweep3,True,True,ok,ok,ok,ok,ok
+DS_narrow,BigSweep3,True,True,ok,ok,ok,ok,ok
+DS_wide,BigSweep3,True,True,ok,ok,ok,ok,ok
+DS_widebig,BigSweep3,True,True,ok,ok,ok,ok,ok
+EVP_ADAMW,Study,True,True,ok,ok,ok,ok,ok
+EVP_ADAMW_LSR,Study,True,True,ok,ok,ok,ok,ok
+EVP_PE_PROBE_LSR,Study,True,True,ok,ok,ok,ok,ok
+EVP_PRODIGYEVENT,Study,True,True,ok,ok,ok,ok,ok
+EVP_PRODIGYEVENT_PROBE,Study,True,True,ok,ok,ok,ok,ok
+P1_lr2e3_t05,BigSweep2,True,False,,,,,"load FAIL: Error(s) in loading state_dict for CF_FSNN_Net_EventProp_Full:
+	size mismatch for layer_hidden.rec_U: copying a param wi"
+P1_lr2e3_t06,BigSweep2,True,False,,,,,"load FAIL: Error(s) in loading state_dict for CF_FSNN_Net_EventProp_Full:
+	size mismatch for layer_hidden.rec_U: copying a param wi"
+P1_lr2e3_t07,BigSweep2,True,False,,,,,"load FAIL: Error(s) in loading state_dict for CF_FSNN_Net_EventProp_Full:
+	size mismatch for layer_hidden.rec_U: copying a param wi"
+P1_lr3e3_t05,BigSweep2,True,False,,,,,"load FAIL: Error(s) in loading state_dict for CF_FSNN_Net_EventProp_Full:
+	size mismatch for layer_hidden.rec_U: copying a param wi"
+P1_lr3e3_t06,BigSweep2,True,False,,,,,"load FAIL: Error(s) in loading state_dict for CF_FSNN_Net_EventProp_Full:
+	size mismatch for layer_hidden.rec_U: copying a param wi"
+P1_lr3e3_t07,BigSweep2,True,False,,,,,"load FAIL: Error(s) in loading state_dict for CF_FSNN_Net_EventProp_Full:
+	size mismatch for layer_hidden.rec_U: copying a param wi"
+P1_lr5e3_t05,BigSweep2,True,False,,,,,"load FAIL: Error(s) in loading state_dict for CF_FSNN_Net_EventProp_Full:
+	size mismatch for layer_hidden.rec_U: copying a param wi"
+P1_lr5e3_t06,BigSweep2,True,False,,,,,"load FAIL: Error(s) in loading state_dict for CF_FSNN_Net_EventProp_Full:
+	size mismatch for layer_hidden.rec_U: copying a param wi"
+P1_lr5e3_t07,BigSweep2,True,False,,,,,"load FAIL: Error(s) in loading state_dict for CF_FSNN_Net_EventProp_Full:
+	size mismatch for layer_hidden.rec_U: copying a param wi"
+P2_lr2e3_t05_r16,BigSweep2,True,True,ok,ok,ok,ok,ok
+P2_lr2e3_t05_r8,BigSweep2,True,True,ok,ok,ok,ok,ok
+P2_lr2e3_t06_r16,BigSweep2,True,True,ok,ok,ok,ok,ok
+P2_lr2e3_t06_r8,BigSweep2,True,True,ok,ok,ok,ok,ok
+P2_lr2e3_t07_r16,BigSweep2,True,True,ok,ok,ok,ok,ok
+P2_lr2e3_t07_r8,BigSweep2,True,True,ok,ok,ok,ok,ok
+P2_lr3e3_t05_r16,BigSweep2,True,True,ok,ok,ok,ok,ok
+P2_lr3e3_t05_r8,BigSweep2,True,True,ok,ok,ok,ok,ok
+P2_lr3e3_t06_r16,BigSweep2,True,True,ok,ok,ok,ok,ok
+P2_lr3e3_t06_r8,BigSweep2,True,True,ok,ok,ok,ok,ok
+P2_lr3e3_t07_r16,BigSweep2,True,True,ok,ok,ok,ok,ok
+P2_lr3e3_t07_r8,BigSweep2,True,True,ok,ok,ok,ok,ok
+PEAK_BASELINE,Study,True,True,ok,ok,ok,ok,ok
+PEAK_SINGLECYCLE,Study,True,True,ok,ok,ok,ok,ok
+PE_axis_gr101,BigSweep,True,True,ok,ok,ok,ok,ok
+PE_axis_gr105,BigSweep,True,True,ok,ok,ok,ok,ok
+PE_axis_lr03,BigSweep,True,True,ok,ok,ok,ok,ok
+PE_axis_lr10,BigSweep,True,True,ok,ok,ok,ok,ok
+PE_axis_pp15,BigSweep,True,True,ok,ok,ok,ok,ok
+PE_axis_pp40,BigSweep,True,True,ok,ok,ok,ok,ok
+PE_bd03_gp0,BigSweep,True,True,ok,ok,ok,ok,ok
+PE_bd03_gp0005,BigSweep,True,True,ok,ok,ok,ok,ok
+PE_bd03_gp002,BigSweep,True,True,ok,ok,ok,ok,ok
+PE_bd05_gp0,BigSweep,True,True,ok,ok,ok,ok,ok
+PE_bd05_gp0005,BigSweep,True,True,ok,ok,ok,ok,ok
+PE_bd05_gp002,BigSweep,True,True,ok,ok,ok,ok,ok
+PE_bd07_gp0,BigSweep,True,True,ok,ok,ok,ok,ok
+PE_bd07_gp0005,BigSweep,True,True,ok,ok,ok,ok,ok
+PE_bd07_gp002,BigSweep,True,True,ok,ok,ok,ok,ok
+PE_t05_gp00,BigSweep2,True,True,ok,ok,ok,ok,ok
+PE_t05_gp0002,BigSweep2,True,,,,,,gia fatto (skip)
+SPEC_REF_noconstraint,Spectral_Sweep,True,True,ok,ok,ok,ok,ok
+SPEC_l05_t12,Spectral_Sweep,True,True,ok,ok,ok,ok,ok
+SPEC_l05_t15,Spectral_Sweep,True,True,ok,ok,ok,ok,ok
+SPEC_l05_t20,Spectral_Sweep,True,True,ok,ok,ok,ok,ok
+SPEC_l05_t25,Spectral_Sweep,True,True,ok,ok,ok,ok,ok
+SPEC_l100_t12,Spectral_Sweep,True,True,ok,ok,ok,ok,ok
+SPEC_l100_t15,Spectral_Sweep,True,True,ok,ok,ok,ok,ok
+SPEC_l100_t20,Spectral_Sweep,True,True,ok,ok,ok,ok,ok
+SPEC_l100_t25,Spectral_Sweep,True,True,ok,ok,ok,ok,ok
+SPEC_l10_t12,Spectral_Sweep,True,True,ok,ok,ok,ok,ok
+SPEC_l10_t15,Spectral_Sweep,True,True,ok,ok,ok,ok,ok
+SPEC_l10_t20,Spectral_Sweep,True,True,ok,ok,ok,ok,ok
+SPEC_l10_t25,Spectral_Sweep,True,True,ok,ok,ok,ok,ok
+SPEC_l30_t12,Spectral_Sweep,True,True,ok,ok,ok,ok,ok
+SPEC_l30_t15,Spectral_Sweep,True,True,ok,ok,ok,ok,ok
+SPEC_l30_t20,Spectral_Sweep,True,True,ok,ok,ok,ok,ok
+SPEC_l30_t25,Spectral_Sweep,True,True,ok,ok,ok,ok,ok
