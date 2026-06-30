@@ -1002,6 +1002,199 @@ def fig_settling(arms, epoch_rows):
     return 'F36_settling'
 
 
+# ================== STADIO 2 — figure dai csv-checkpoint (Azure) ==================
+def _ckpt_df(name):
+    import pandas as pd
+    p = os.path.join(OUTDIR, 'combined_ckpt_%s.csv' % name)
+    return pd.read_csv(p) if os.path.isfile(p) else None
+
+
+def _tag_meta(arms):
+    """tag -> {family, rank, val_data, nrmse}. Per tag duplicati vince l'ultima campagna (BPTT_REF=BS3),
+    coerente col checkpoint sopravvissuto."""
+    m = {}
+    for a in arms:
+        m[a['arm']] = {'family': a['family'], 'rank': a['rank'],
+                       'val_data': a['val_data_min'], 'nrmse': a['nrmse_mean']}
+    return m
+
+
+@_safe
+def fig_ckpt_diag(arms):
+    import numpy as np, matplotlib.pyplot as plt
+    d = _ckpt_df('diag')
+    if d is None:
+        return 'F23_skip'
+    meta = _tag_meta(arms); d = d[d['arm'].isin(meta)].copy()
+    fam = d['arm'].map(lambda t: meta[t]['family'])
+    rank = d['arm'].map(lambda t: meta[t]['rank'] if meta[t]['rank'] else np.nan)
+    fig, ax = plt.subplots(1, 2, figsize=(13, 4.8))
+    for f in FAM_COLORS:
+        mk = (fam == f).values
+        if mk.any():
+            ax[0].scatter(rank[mk], d['eff_rank'][mk], c=FAM_COLORS[f], label=f, s=42, alpha=0.85,
+                          edgecolors='k', linewidths=0.3)
+    hi = np.nanmax([rank.max(), d['eff_rank'].max()]) + 2
+    ax[0].plot([0, hi], [0, hi], '--', color='gray', alpha=0.5)
+    ax[0].set_xlabel('rank nominale'); ax[0].set_ylabel('rank effettivo (U@V)')
+    ax[0].set_title('F23a — rank effettivo vs nominale'); ax[0].legend(fontsize=6); ax[0].grid(alpha=0.3)
+    fams = [f for f in FAM_COLORS if (fam == f).any()]
+    ax[1].bar(fams, [d['dead_neurons'][(fam == f).values].mean() for f in fams],
+              color=[FAM_COLORS[f] for f in fams])
+    ax[1].set_ylabel('neuroni morti (media)'); ax[1].set_title('F23b — neuroni morti per famiglia')
+    ax[1].tick_params(axis='x', rotation=35, labelsize=7)
+    plt.tight_layout(); plt.savefig(os.path.join(OUTDIR, 'combined_F23_ckpt_diag.png'), dpi=120); plt.close()
+    return 'F23_ckpt_diag'
+
+
+@_safe
+def fig_ckpt_closedloop(arms):
+    import numpy as np, matplotlib.pyplot as plt
+    d = _ckpt_df('closedloop')
+    if d is None:
+        return 'F24_skip'
+    meta = _tag_meta(arms)
+    snn = d[d.role == 'SNN'].set_index('arm'); orc = d[d.role == 'oracolo'].set_index('arm')
+    tags = [t for t in snn.index if t in meta and meta[t]['val_data'] is not None]
+    fig, ax = plt.subplots(1, 2, figsize=(13, 4.8))
+    for f in FAM_COLORS:
+        idx = [t for t in tags if meta[t]['family'] == f]
+        if idx:
+            ax[0].scatter([meta[t]['val_data'] for t in idx], [snn.loc[t, 'mean_min_gap'] for t in idx],
+                          c=FAM_COLORS[f], label=f, s=42, alpha=0.85, edgecolors='k', linewidths=0.3)
+    ax[0].axhline(orc['mean_min_gap'].mean(), color='red', ls='--', label='oracolo %.1f' % orc['mean_min_gap'].mean())
+    ax[0].set_xlabel('val_data (fisica)'); ax[0].set_ylabel('min-gap medio SNN [m]')
+    ax[0].set_title('F24a — sicurezza (min-gap) vs fisica'); ax[0].legend(fontsize=6); ax[0].grid(alpha=0.3)
+    ax[0].text(0.02, 0.03, 'collision_rate SNN max = %.3f' % snn['collision_rate'].max(),
+               transform=ax[0].transAxes, fontsize=7, color='gray')
+    delta = {t: snn.loc[t, 'mean_min_gap'] - orc.loc[t, 'mean_min_gap'] for t in tags if t in orc.index}
+    fams = [f for f in FAM_COLORS if any(meta[t]['family'] == f for t in delta)]
+    ax[1].bar(fams, [np.mean([delta[t] for t in delta if meta[t]['family'] == f]) for f in fams],
+              color=[FAM_COLORS[f] for f in fams])
+    ax[1].axhline(0, color='k', lw=0.6); ax[1].set_ylabel('Δ min-gap (SNN−oracolo) [m]')
+    ax[1].set_title('F24b — margine di gap consumato dall identificazione'); ax[1].tick_params(axis='x', rotation=35, labelsize=7)
+    plt.tight_layout(); plt.savefig(os.path.join(OUTDIR, 'combined_F24_ckpt_closedloop.png'), dpi=120); plt.close()
+    return 'F24_ckpt_closedloop'
+
+
+@_safe
+def fig_ckpt_perregime(arms):
+    import numpy as np, matplotlib.pyplot as plt
+    d = _ckpt_df('perregime')
+    if d is None:
+        return 'F25_skip'
+    scen = sorted(d['scenario'].unique())
+    fig, ax = plt.subplots(1, 2, figsize=(13, 4.8))
+    x = np.arange(len(scen)); w = 0.4
+    ax[0].bar(x - w / 2, [d[d.scenario == s]['data'].mean() for s in scen], w, label='data')
+    ax[0].bar(x + w / 2, [d[d.scenario == s]['phys'].mean() for s in scen], w, label='phys')
+    ax[0].set_xticks(x); ax[0].set_xticklabels(scen, rotation=30, fontsize=8)
+    ax[0].set_title('F25a — data/phys per scenario (media arm)'); ax[0].legend()
+    M = np.array([[d[d.scenario == s]['nrmse_' + c].mean() for c in PN] for s in scen])
+    im = ax[1].imshow(M, aspect='auto', cmap='YlOrRd')
+    ax[1].set_xticks(range(len(PN))); ax[1].set_xticklabels(PN)
+    ax[1].set_yticks(range(len(scen))); ax[1].set_yticklabels(scen, fontsize=8)
+    for i in range(len(scen)):
+        for j in range(len(PN)):
+            ax[1].text(j, i, '%.2f' % M[i, j], ha='center', va='center', fontsize=6)
+    ax[1].set_title('F25b — NRMSE per-canale × scenario'); plt.colorbar(im, ax=ax[1])
+    plt.tight_layout(); plt.savefig(os.path.join(OUTDIR, 'combined_F25_ckpt_perregime.png'), dpi=120); plt.close()
+    return 'F25_ckpt_perregime'
+
+
+@_safe
+def fig_ckpt_pathb(arms):
+    import matplotlib.pyplot as plt
+    d = _ckpt_df('pathb')
+    if d is None:
+        return 'F26_skip'
+    meta = _tag_meta(arms); d = d[d['arm'].isin(meta)].copy()
+    fam = d['arm'].map(lambda t: meta[t]['family'])
+    dn = d['nrmse_refit'] - d['nrmse_glob']; dp = d['phys_refit'] - d['phys_glob']
+    fig, ax = plt.subplots(figsize=(8, 5.5))
+    for f in FAM_COLORS:
+        mk = (fam == f).values
+        if mk.any():
+            ax.scatter(dn[mk], dp[mk], c=FAM_COLORS[f], label=f, s=42, alpha=0.85, edgecolors='k', linewidths=0.3)
+    ax.axhline(0, color='k', lw=0.6); ax.axvline(0, color='k', lw=0.6)
+    ax.set_xlabel('Δ NRMSE (refit−globale)  ← migliora'); ax.set_ylabel('Δ phys (refit−globale)  ↑ peggiora')
+    ax.set_title('F26 — Path-B: NRMSE migliora MA la fisica peggiora (basso-dx = trade da scartare)')
+    ax.legend(fontsize=7); ax.grid(alpha=0.3)
+    plt.tight_layout(); plt.savefig(os.path.join(OUTDIR, 'combined_F26_ckpt_pathb.png'), dpi=120); plt.close()
+    return 'F26_ckpt_pathb'
+
+
+_PE3 = [('ProdigyEvent', '#2ca02c', 'ProdigyEvent'), ('AdamW_decodeON', '#1f77b4', 'AdamW dec-ON'),
+        ('BPTT_champion', '#d62728', 'champion')]
+
+
+@_safe
+def fig_pe_safety(arms):
+    import matplotlib.pyplot as plt
+    d = _ckpt_df('closedloop')
+    if d is None:
+        return 'F38_skip'
+    meta = _tag_meta(arms); snn = d[d.role == 'SNN'].set_index('arm')
+    tags = [t for t in snn.index if t in meta and meta[t]['nrmse'] is not None]
+    fig, ax = plt.subplots(1, 2, figsize=(13, 4.8))
+    for f, col, lab in _PE3:
+        idx = [t for t in tags if meta[t]['family'] == f]
+        if idx:
+            ax[0].scatter([meta[t]['nrmse'] for t in idx], [snn.loc[t, 'mean_min_gap'] for t in idx],
+                          c=col, label=lab, s=46, alpha=0.85, edgecolors='k', linewidths=0.3)
+            ax[1].scatter([meta[t]['nrmse'] for t in idx], [snn.loc[t, 'mean_max_decel'] for t in idx],
+                          c=col, label=lab, s=46, alpha=0.85, edgecolors='k', linewidths=0.3)
+    ax[0].set_xlabel('NRMSE (più bassa →)'); ax[0].set_ylabel('min-gap medio SNN [m]')
+    ax[0].set_title('F38a — il "best NRMSE" (PE) guida meno sicuro? (min-gap)'); ax[0].legend(fontsize=7); ax[0].grid(alpha=0.3)
+    ax[1].set_xlabel('NRMSE'); ax[1].set_ylabel('max decel medio [m/s²]')
+    ax[1].set_title('F38b — NRMSE vs decelerazione max'); ax[1].legend(fontsize=7); ax[1].grid(alpha=0.3)
+    plt.tight_layout(); plt.savefig(os.path.join(OUTDIR, 'combined_F38_pe_safety.png'), dpi=120); plt.close()
+    return 'F38_pe_safety'
+
+
+@_safe
+def fig_pe_perregime(arms):
+    import numpy as np, matplotlib.pyplot as plt
+    d = _ckpt_df('perregime')
+    if d is None:
+        return 'F39_skip'
+    meta = _tag_meta(arms); d = d[d['arm'].isin(meta)].copy()
+    d['family'] = d['arm'].map(lambda t: meta[t]['family'])
+    scen = sorted(d['scenario'].unique()); x = np.arange(len(scen)); w = 0.27
+    fig, ax = plt.subplots(figsize=(11, 4.8))
+    for k, (f, col, lab) in enumerate(_PE3):
+        sub = d[d.family == f]
+        if len(sub):
+            nr = [sub[sub.scenario == s][['nrmse_' + c for c in PN]].mean(axis=1).mean() for s in scen]
+            ax.bar(x + (k - 1) * w, nr, w, label=lab, color=col)
+    ax.set_xticks(x); ax.set_xticklabels(scen, rotation=30, fontsize=8)
+    ax.set_ylabel('NRMSE medio (5 canali)'); ax.set_title('F39 — NRMSE per scenario: PE vs AdamW vs champion')
+    ax.legend(fontsize=7)
+    plt.tight_layout(); plt.savefig(os.path.join(OUTDIR, 'combined_F39_pe_perregime.png'), dpi=120); plt.close()
+    return 'F39_pe_perregime'
+
+
+@_safe
+def fig_pe_comfort(arms):
+    import matplotlib.pyplot as plt
+    d = _ckpt_df('closedloop')
+    if d is None:
+        return 'F40_skip'
+    meta = _tag_meta(arms); snn = d[d.role == 'SNN'].set_index('arm')
+    tags = [t for t in snn.index if t in meta and meta[t]['nrmse'] is not None]
+    groups = _PE3 + [('AdamW_decodeOFF', '#7f7f7f', 'AdamW dec-OFF')]
+    fig, ax = plt.subplots(figsize=(8, 5))
+    for f, col, lab in groups:
+        idx = [t for t in tags if meta[t]['family'] == f]
+        if idx:
+            ax.scatter([meta[t]['nrmse'] for t in idx], [snn.loc[t, 'mean_rms_jerk'] for t in idx],
+                       c=col, label=lab, s=46, alpha=0.85, edgecolors='k', linewidths=0.3)
+    ax.set_xlabel('NRMSE'); ax.set_ylabel('rms jerk medio SNN [m/s³]')
+    ax.set_title('F40 — comfort (jerk) vs NRMSE per famiglia'); ax.legend(fontsize=7); ax.grid(alpha=0.3)
+    plt.tight_layout(); plt.savefig(os.path.join(OUTDIR, 'combined_F40_pe_comfort.png'), dpi=120); plt.close()
+    return 'F40_pe_comfort'
+
+
 if __name__ == '__main__':
     arms, epoch_rows = ingest()
     p1, p2 = write_backbone(arms, epoch_rows)
@@ -1024,6 +1217,10 @@ if __name__ == '__main__':
         (fig_t_tracking, (arms, epoch_rows)), (fig_alif_threshold, (arms, epoch_rows)),
         (fig_grad_equalization, (arms,)), (fig_instability_timeline, (arms,)),
         (fig_settling, (arms, epoch_rows)),
+        # Stadio 2 (csv-checkpoint Azure)
+        (fig_ckpt_diag, (arms,)), (fig_ckpt_closedloop, (arms,)), (fig_ckpt_perregime, (arms,)),
+        (fig_ckpt_pathb, (arms,)), (fig_pe_safety, (arms,)), (fig_pe_perregime, (arms,)),
+        (fig_pe_comfort, (arms,)),
     ]
     ok = 0
     for fn, args in jobs:

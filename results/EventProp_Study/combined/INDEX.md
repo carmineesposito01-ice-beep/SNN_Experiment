@@ -73,11 +73,22 @@ AdamW_decodeON_seed (multi-seed), Dataset (DS narrow/wide/widebig).
 ### Tema 8 — Paradosso NRMSE ProdigyEvent
 | F37 | `combined_F37_pe_dissection.png` | **PE: NRMSE più bassa di tutti MA fisica peggiore**; per-canale PE batte AdamW ovunque |
 
-## In sospeso — Stadio 2 (passo Azure sui checkpoint)
-Richiedono i pesi `.pt` (gitignorati, solo su Azure). Da rigenerare cross-sweep per tutti gli EventProp
-+ BPTT_REF (resiliente + manifest):
-- **F23** eff_rank / dead_neurons · **F24** closed-loop safety (oracolo vs SNN) · **F25** per-regime ·
-  **F26** Path-B refit · **F27** rank→val_data→eff_rank · **F38-F40** PE closed-loop/per-regime/consistenza.
+## Stadio 2 — figure dai checkpoint (Azure ckpt-pass, 100/100 arm) ✅
+Da `combined_ckpt_{diag,closedloop,perregime,pathb}.csv` (rigenerati cross-sweep, manifest in `combined_ckpt_manifest.csv`).
+| fig | file | cosa mostra |
+|---|---|---|
+| F23 | `combined_F23_ckpt_diag.png` | rank effettivo vs nominale (incl. F27) + neuroni morti per famiglia |
+| F24 | `combined_F24_ckpt_closedloop.png` | **sicurezza vs fisica**: min-gap SNN vs val_data + Δ(SNN−oracolo) per famiglia |
+| F25 | `combined_F25_ckpt_perregime.png` | data/phys + NRMSE per-canale × scenario (media arm) |
+| F26 | `combined_F26_ckpt_pathb.png` | Path-B: ΔNRMSE↓ ma Δphys↑ (trade da scartare) |
+| F38 | `combined_F38_pe_safety.png` | **paradosso PE**: NRMSE bassa vs min-gap/decel (guida meno sicuro?) |
+| F39 | `combined_F39_pe_perregime.png` | NRMSE per scenario: PE vs AdamW vs champion |
+| F40 | `combined_F40_pe_comfort.png` | jerk vs NRMSE per famiglia |
+
+**Risultati chiave Stadio-2**: la **fisica (val_data) governa la sicurezza**, non l'NRMSE — gli arm a fisica
+migliore guidano con min-gap vicino all'oracolo (12.6 m). I **ProdigyEvent** (NRMSE bassa, fisica peggiore)
+consumano **−2.45 m** di margine di gap (vs −0.3/−0.5 AdamW) e frenano più forte; il **champion** è +0.25 m
+(più conservativo dell'oracolo). `collision_rate` SNN max 0.200 → ora discrimina (non più saturo).
 
 ## Note di lettura
 - **F32** è una correlazione GLOBALE (confonde le famiglie); `lr`/`decode_on` variano molto ed è
