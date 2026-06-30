@@ -61,9 +61,14 @@ AdamW_decodeON_seed (multi-seed), Dataset (DS narrow/wide/widebig).
 
 ### Extra (colonne finora inutilizzate)
 | F28 | `combined_F28_intra_std.png` | intra_std per-canale (confidenza identificazione) |
-| F32 | `combined_F32_hyperparam.png` | importanza iperparametri (|corr| con val_data) |
+| F29 | `combined_F29_t_tracking.png` | tracking del parametro dinamico T (corr) per famiglia |
+| F30 | `combined_F30_alif_threshold.png` | dinamica soglia ALIF (vth/margine) vs epoca |
+| F31 | `combined_F31_grad_equalization.png` | equalizzazione gradiente per-canale: decode ON vs OFF |
+| F32 | `combined_F32_hyperparam.png` | importanza iperparametri (\|corr\| con val_data; solo completi) |
 | F33 | `combined_F33_compute_pareto.png` | Pareto compute-efficiency (accuratezza/minuto) |
 | F34 | `combined_F34_decode_delta.png` | effetto decode on↔off per-canale |
+| F35 | `combined_F35_instability.png` | eventi is_nan/is_inf per-arm (solo famiglia BPTT_champion) |
+| F36 | `combined_F36_settling.png` | settling di convergenza (std val_data ultime 5 epoche) |
 
 ### Tema 8 — Paradosso NRMSE ProdigyEvent
 | F37 | `combined_F37_pe_dissection.png` | **PE: NRMSE più bassa di tutti MA fisica peggiore**; per-canale PE batte AdamW ovunque |
@@ -74,6 +79,8 @@ Richiedono i pesi `.pt` (gitignorati, solo su Azure). Da rigenerare cross-sweep 
 - **F23** eff_rank / dead_neurons · **F24** closed-loop safety (oracolo vs SNN) · **F25** per-regime ·
   **F26** Path-B refit · **F27** rank→val_data→eff_rank · **F38-F40** PE closed-loop/per-regime/consistenza.
 
-## Extra non ancora costruiti (cheap, su richiesta)
-F29 T-tracking corr · F30 dinamica soglia ALIF (vth/margin) · F31 equalizzazione gradiente per-canale ·
-F35 timeline eventi is_nan/is_inf · F36 settling di convergenza.
+## Note di lettura
+- **F32** è una correlazione GLOBALE (confonde le famiglie); `lr`/`decode_on` variano molto ed è
+  significativa, `lambda`/`rank` variano poco a livello globale → leggerle con cautela.
+- **F35**: gli unici arm con instabilità numerica (`is_inf_grad`) sono della famiglia BPTT_champion;
+  nessun EventProp. Gli eventi calano da ~180-260 (Study/BS1) a ~1 (BS2/BS3).

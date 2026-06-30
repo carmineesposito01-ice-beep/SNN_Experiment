@@ -474,8 +474,7 @@ def fig_speed(arms, epoch_rows):
 def fig_gradnorm(arms, epoch_rows):
     import matplotlib.pyplot as plt
     df = _epoch_df(epoch_rows)
-    best = _best_per_family(arms)
-    # aggiungi esplicitamente il champion + un arm aborted instabile, se presenti
+    best = _best_per_family(arms, exclude_champion=True)  # il champion lo aggiungo a parte (no duplicato in legenda)
     champ = next((a for a in arms if a['family'] == 'BPTT_champion' and a['sweep'] == 'BigSweep3'), None)
     fig, ax = plt.subplots(figsize=(9, 5))
     for f, a in best.items():
@@ -625,7 +624,7 @@ def fig_lr_target_heat(arms):
     fig, ax = plt.subplots(figsize=(7, 5))
     im = ax.imshow(M, aspect='auto', cmap='viridis_r')
     ax.set_xticks(range(len(tgs))); ax.set_xticklabels(tgs); ax.set_xlabel('spectral_target')
-    ax.set_yticks(range(len(lrs))); ax.set_yticklabels(['%.0e' % x for x in lrs]); ax.set_ylabel('lr')
+    ax.set_yticks(range(len(lrs))); ax.set_yticklabels(['%g' % x for x in lrs]); ax.set_ylabel('lr')
     for i in range(len(lrs)):
         for j in range(len(tgs)):
             if not np.isnan(M[i, j]):
@@ -781,7 +780,8 @@ def fig_intra_std(arms, epoch_rows):
 @_safe
 def fig_hyperparam_importance(arms):
     import numpy as np, matplotlib.pyplot as plt
-    sub = [a for a in arms if a['common_val'] and a['val_data_min'] is not None]
+    # SOLO arm completi: un aborted ha val_data alto per l'abort, non per l'iperparam -> gonfia le corr.
+    sub = [a for a in arms if a['common_val'] and not a['aborted'] and a['val_data_min'] is not None]
     feats = {'lr': [], 'spectral_target': [], 'rank': [], 'decode_on': [], 'spectral_lambda': []}
     y = []
     for a in sub:
@@ -801,7 +801,10 @@ def fig_hyperparam_importance(arms):
     fig, ax = plt.subplots(figsize=(7, 4.2))
     items = sorted(corrs.items(), key=lambda x: -x[1])
     ax.bar([k for k, _ in items], [v for _, v in items], color='slateblue')
-    ax.set_ylabel('|corr| con val_data'); ax.set_title('F32 — Importanza iperparametri (|correlazione| con la fisica)')
+    ax.set_ylabel('|corr| con val_data')
+    ax.set_title('F32 — Importanza iperparametri (|corr| globale, solo arm completi)')
+    ax.text(0.98, 0.95, 'caveat: corr globale confonde le famiglie;\nlambda/rank variano poco globalmente',
+            transform=ax.transAxes, ha='right', va='top', fontsize=6, color='gray')
     plt.tight_layout(); plt.savefig(os.path.join(OUTDIR, 'combined_F32_hyperparam.png'), dpi=120); plt.close()
     return 'F32_hyperparam'
 
@@ -872,6 +875,133 @@ def fig_pe_dissection(arms):
     return 'F37_pe_dissection'
 
 
+# ---------------- EXTRA addizionali ----------------
+@_safe
+def fig_t_tracking(arms, epoch_rows):
+    import numpy as np, matplotlib.pyplot as plt
+    df = _epoch_df(epoch_rows)
+    fams = [f for f in FAM_COLORS if any(a['family'] == f and a['common_val'] for a in arms)]
+    vals = []
+    for f in fams:
+        keys = [a['key'] for a in arms if a['family'] == f and a['common_val']]
+        v = []
+        for k in keys:
+            d = df[df.key == k]
+            if 'val_T_tracking_corr' in d and d['val_T_tracking_corr'].notna().any():
+                v.append(d['val_T_tracking_corr'].dropna().iloc[-1])
+        vals.append(np.mean(v) if v else np.nan)
+    fig, ax = plt.subplots(figsize=(7, 4.2))
+    ax.bar(fams, vals, color=[FAM_COLORS[f] for f in fams])
+    ax.set_ylabel('val_T_tracking_corr (finale, media)')
+    ax.set_title('F29 — Tracking del parametro dinamico T (corr; alto=meglio)')
+    ax.tick_params(axis='x', rotation=35, labelsize=7); ax.grid(alpha=0.3, axis='y')
+    plt.tight_layout(); plt.savefig(os.path.join(OUTDIR, 'combined_F29_t_tracking.png'), dpi=120); plt.close()
+    return 'F29_t_tracking'
+
+
+@_safe
+def fig_alif_threshold(arms, epoch_rows):
+    import matplotlib.pyplot as plt
+    df = _epoch_df(epoch_rows)
+    best = _best_per_family(arms, exclude_champion=True)
+    fig, ax = plt.subplots(1, 2, figsize=(13, 4.6))
+    for f, a in best.items():
+        d = df[df.key == a['key']].sort_values('epoch')
+        if 'mean_vth_at_spike' in d and d['mean_vth_at_spike'].notna().any():
+            ax[0].plot(d['epoch'], d['mean_vth_at_spike'], color=FAM_COLORS.get(f, '#333'), label=f, lw=1.4)
+        if 'mean_spike_margin' in d and d['mean_spike_margin'].notna().any():
+            ax[1].plot(d['epoch'], d['mean_spike_margin'], color=FAM_COLORS.get(f, '#333'), lw=1.4)
+    ax[0].set_xlabel('epoca'); ax[0].set_ylabel('mean_vth_at_spike'); ax[0].set_title('F30a — soglia ALIF allo spike')
+    ax[0].legend(fontsize=7); ax[0].grid(alpha=0.3)
+    ax[1].set_xlabel('epoca'); ax[1].set_ylabel('mean_spike_margin'); ax[1].set_title('F30b — margine di spike')
+    ax[1].grid(alpha=0.3)
+    plt.tight_layout(); plt.savefig(os.path.join(OUTDIR, 'combined_F30_alif_threshold.png'), dpi=120); plt.close()
+    return 'F30_alif_threshold'
+
+
+@_safe
+def fig_grad_equalization(arms):
+    import numpy as np, matplotlib.pyplot as plt
+    import pandas as pd
+    pairs = [('AdamW_decodeON', 'A_lr7e3_t05_r16', 'BigSweep3', 'decode ON'),
+             ('AdamW_decodeOFF', 'A_lr7e3_t05_r16_noDEC', 'BigSweep3', 'decode OFF')]
+    cols = ['gn_out_fc_%s' % c for c in PN]
+    fig, ax = plt.subplots(figsize=(8, 4.6))
+    x = np.arange(len(PN)); w = 0.38
+    for k, (fam, tag, label, lab) in enumerate(pairs):
+        d = _batch_df(label, tag)
+        if d is None or not all(c in d.columns for c in cols):
+            continue
+        means = [d[c].abs().mean() for c in cols]
+        ax.bar(x + (k - 0.5) * w, means, w, label=lab, color='#1f77b4' if k == 0 else '#7f7f7f')
+    ax.set_xticks(x); ax.set_xticklabels(PN); ax.set_ylabel('grad per-canale medio (out_fc)')
+    ax.set_yscale('log')
+    ax.set_title('F31 — Equalizzazione gradiente per-canale: decode ON vs OFF')
+    ax.legend()
+    plt.tight_layout(); plt.savefig(os.path.join(OUTDIR, 'combined_F31_grad_equalization.png'), dpi=120); plt.close()
+    return 'F31_grad_equalization'
+
+
+@_safe
+def fig_instability_timeline(arms):
+    import pandas as pd, matplotlib.pyplot as plt
+    rows = []
+    for a in arms:
+        p = os.path.join(RESULTS, FOLDER_OF[a['sweep']], a['arm'], 'training_batch_log.csv')
+        if not os.path.isfile(p):
+            continue
+        try:
+            d = pd.read_csv(p, usecols=lambda c: c in ('is_nan_loss', 'is_inf_grad'))
+        except Exception:
+            continue
+        n_inf = int(d['is_inf_grad'].sum()) if 'is_inf_grad' in d else 0
+        n_nan = int(d['is_nan_loss'].sum()) if 'is_nan_loss' in d else 0
+        if n_inf + n_nan > 0:
+            rows.append({'key': a['key'], 'inf': n_inf, 'nan': n_nan, 'aborted': a['aborted']})
+    if not rows:
+        # nessun evento: figura informativa "zero instabilita' numerica"
+        fig, ax = plt.subplots(figsize=(7, 2.2))
+        ax.text(0.5, 0.5, 'Nessun arm con eventi is_nan_loss / is_inf_grad\n(stabilita numerica su tutte le campagne)',
+                ha='center', va='center', fontsize=11)
+        ax.axis('off')
+        plt.tight_layout(); plt.savefig(os.path.join(OUTDIR, 'combined_F35_instability.png'), dpi=120); plt.close()
+        return 'F35_instability (0 eventi)'
+    rows = sorted(rows, key=lambda r: -(r['inf'] + r['nan']))
+    import numpy as np
+    fig, ax = plt.subplots(figsize=(max(7, 0.3 * len(rows)), 4.6))
+    x = np.arange(len(rows))
+    ax.bar(x, [r['inf'] for r in rows], label='is_inf_grad', color='crimson')
+    ax.bar(x, [r['nan'] for r in rows], bottom=[r['inf'] for r in rows], label='is_nan_loss', color='purple')
+    ax.set_xticks(x); ax.set_xticklabels([r['key'] for r in rows], rotation=90, fontsize=5)
+    ax.set_ylabel('# eventi (su tutto il training)')
+    ax.set_title('F35 — Eventi di instabilita numerica per-arm')
+    ax.legend()
+    plt.tight_layout(); plt.savefig(os.path.join(OUTDIR, 'combined_F35_instability.png'), dpi=120); plt.close()
+    return 'F35_instability (%d arm)' % len(rows)
+
+
+@_safe
+def fig_settling(arms, epoch_rows):
+    import numpy as np, matplotlib.pyplot as plt
+    df = _epoch_df(epoch_rows)
+    sub = [a for a in arms if a['common_val'] and not a['aborted'] and a['val_data_min'] is not None]
+    fig, ax = plt.subplots(figsize=(8, 5))
+    for fam in FAM_COLORS:
+        fs = [a for a in sub if a['family'] == fam]
+        xs, ys = [], []
+        for a in fs:
+            d = df[df.key == a['key']].sort_values('epoch')['val_data'].dropna().values
+            if len(d) >= 5:
+                xs.append(a['val_data_min']); ys.append(float(np.std(d[-5:])))
+        if xs:
+            ax.scatter(xs, ys, c=FAM_COLORS[fam], s=45, label=fam, alpha=0.8, edgecolors='k', linewidths=0.3)
+    ax.set_xlabel('val_data_min'); ax.set_ylabel('std val_data (ultime 5 epoche)')
+    ax.set_title('F36 — Settling di convergenza (basso = stabile a fine training)')
+    ax.legend(fontsize=7); ax.grid(alpha=0.3)
+    plt.tight_layout(); plt.savefig(os.path.join(OUTDIR, 'combined_F36_settling.png'), dpi=120); plt.close()
+    return 'F36_settling'
+
+
 if __name__ == '__main__':
     arms, epoch_rows = ingest()
     p1, p2 = write_backbone(arms, epoch_rows)
@@ -891,6 +1021,9 @@ if __name__ == '__main__':
         (fig_diagnostics, (arms,)), (fig_intra_std, (arms, epoch_rows)),
         (fig_hyperparam_importance, (arms,)), (fig_compute_pareto, (arms,)),
         (fig_decode_delta, (arms,)), (fig_pe_dissection, (arms,)),
+        (fig_t_tracking, (arms, epoch_rows)), (fig_alif_threshold, (arms, epoch_rows)),
+        (fig_grad_equalization, (arms,)), (fig_instability_timeline, (arms,)),
+        (fig_settling, (arms, epoch_rows)),
     ]
     ok = 0
     for fn, args in jobs:
