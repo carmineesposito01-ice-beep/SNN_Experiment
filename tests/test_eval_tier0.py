@@ -33,6 +33,7 @@ def _synth_cache(n=3):
         val.append({
             'x': rng.random((60, 4)).astype(np.float32),
             'params': {'v0': 28.0 + i, 'T': 1.1 + 0.1 * i, 's0': 2.0 + 0.2 * i, 'a': 1.0 + 0.1 * i, 'b': 1.4 + 0.1 * i},
+            'scenario': ['following', 'highway', 'urban'][i % 3],
         })
     return {'val': val}
 
@@ -278,6 +279,53 @@ def test_eval_string_stability():
     print('  OK eval_string_stability (plotone omogeneo/eterogeneo + latenza CAM)')
 
 
+# ----------------------------- TIER 4 -----------------------------
+def test_fim_identifiability():
+    from utils.identifiability import (fisher_information, practical_identifiability,
+                                       equifinality_set, persistent_excitation)
+    T = 60
+    states = {'s': np.linspace(30, 15, T), 'v': np.full(T, 20.0), 'dv': np.full(T, 1.0),
+              'vl': np.full(T, 19.0), 'a_l': np.zeros(T)}
+    pg = [30.0, 1.2, 2.5, 1.1, 1.5]
+    fi = fisher_information(states, pg)
+    assert set(fi['sensitivity'].keys()) == set(['v0', 'T', 's0', 'a', 'b'])
+    assert fi['cond'] >= 1.0 and all(v >= 0 for v in fi['sensitivity'].values())
+    cache = _synth_cache(6)
+    pi = practical_identifiability(cache, n=4)
+    assert 'cond_mean' in pi and pi['least_identifiable'] in ['v0', 'T', 's0', 'a', 'b']
+    eq = equifinality_set(states, pg, n=80)
+    assert eq['n_equivalent'] >= 1 and set(eq['param_rel_spread'].keys()) == set(['v0', 'T', 's0', 'a', 'b'])
+    pe = persistent_excitation(cache, n=4)
+    assert 0 <= pe['rank'] <= 5 and isinstance(pe['under_excited'], list)
+    print('  OK FIM/identificabilita (cond=%.1f) + equifinalita + excitation (rank=%d)' % (fi['cond'], pe['rank']))
+
+
+def test_causal_stratified_natural():
+    from utils.identifiability import causal_sensitivity, nrmse_stratified, naturalisticity
+    model = StubModel(); cache = _synth_cache(6)
+    cs = causal_sensitivity(model, cache, n=6)
+    assert 'var_vl->T' in cs and len(cs) == 9
+    ns = nrmse_stratified(model, cache, n=6)
+    assert set(['following', 'highway', 'urban']).issubset(ns.keys())
+    for sc in ns:
+        assert set(ns[sc].keys()) == set(['v0', 'T', 's0', 'a', 'b'])
+    nat = naturalisticity(model, cache, n=4)
+    assert 'ks_time_gap' in nat and 'ks_jerk' in nat
+    from utils.identifiability import calibration_validation
+    cv = calibration_validation(model, cache, n=6, seq_len=30)
+    assert 'gap_rmspe_mean' in cv and 'within_floor' in cv and 'floor_intra_driver' in cv
+    print('  OK causal_sensitivity + nrmse_stratified + naturalisticity + calibration_validation')
+
+
+def test_reachability():
+    from scripts.closed_loop_identify import reachability_frontier
+    model = StubModel(); cache = _synth_cache(3)
+    rf = reachability_frontier(model, cache, n_drivers=2, gaps=(5.0, 15.0, 30.0), dvs=(0.0, 10.0))
+    assert 'min_safe_gap' in rf and 'oracle' in rf['min_safe_gap'] and 'snn' in rf['min_safe_gap']
+    assert set(rf['min_safe_gap']['snn'].keys()) == set([0.0, 10.0])
+    print('  OK reachability_frontier (frontiera safe oracolo vs snn)')
+
+
 if __name__ == '__main__':
     print('[TEST Tier0]')
     test_comfort_iso_flags()
@@ -297,4 +345,8 @@ if __name__ == '__main__':
     print('[TEST Tier3]')
     test_platoon_and_transfer()
     test_eval_string_stability()
+    print('[TEST Tier4]')
+    test_fim_identifiability()
+    test_causal_stratified_natural()
+    test_reachability()
     print('TUTTI I TEST OK')

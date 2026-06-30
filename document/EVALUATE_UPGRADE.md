@@ -88,15 +88,17 @@
 - [x] **T3.6** `L3-08`/`L5.extra:v2x` — `eval_string_stability(latency_steps=k)` → canale latenza nel plotone
 - [x] **T3.7** `L5.extra:spacing` — `mean_T` riportato con head-to-tail/peak_gain (mappa empirica T→stabilità; T_min analitico = refinement futuro)
 
-## TIER 4 — Metodologia profonda (identificabilita', calibrazione, formale)
-- [ ] **T4.1** `L1.identifiability` ⭐ — FIM/Jacobiano (cond, autovettori piatti); correla cond(FIM) ai casi ProdigyEvent
-- [ ] **T4.2** `extra:equifinality` — enumerare param I/O-equivalenti lungo gli autovettori piatti
-- [ ] **T4.3** `extra:excitation` — persistent excitation: gli scenari eccitano tutti i 5 param? (rango FIM cumulata)
-- [ ] **T4.4** `L1.causal_sensitivity` — corr param-predetti vs stato-CAM (dT/dvar(vl)>0?) = logica vs overfitting
-- [ ] **T4.5** `L2.calibration_protocol` — gap come MoP primaria + holdout temporale + floor intra/inter-driver (8-12%/12-32%)
-- [ ] **T4.6** `audit:nrmse_stratified` — NRMSE stratificato per regime/scenario (smaschera param non identificabili)
-- [ ] **T4.7** `L5.formal_safety` — reachability/worst-case set-based (frontiera regione safe) [high]
-- [ ] **T4.8** `extra:naturalisticity` — Wasserstein/KS time-gap & jerk SNN vs driver reali
+## TIER 4 — Metodologia profonda (identificabilita', calibrazione, formale) ✅ FATTO
+> Nuovo modulo `utils/identifiability.py` (FIM, equifinalita', excitation, causal, NRMSE stratificato,
+> naturalisticita', calibrazione) + `reachability_frontier()` in `scripts/closed_loop_identify.py`. Test verde.
+- [x] **T4.1** `L1.identifiability` ⭐ — `fisher_information`/`practical_identifiability` (cond, sensitivity, direzione piatta) → spiega ProdigyEvent (cond→∞ su param non eccitati)
+- [x] **T4.2** `extra:equifinality` — `equifinality_set` (cammina sulle direzioni piatte; spread fisico dei param I/O-equivalenti)
+- [x] **T4.3** `extra:excitation` — `persistent_excitation` (rango FIM cumulata + param `under_excited`)
+- [x] **T4.4** `L1.causal_sensitivity` — `causal_sensitivity` (Spearman feature-CAM ↔ param predetti, 9 corr)
+- [x] **T4.5** `L2.calibration_protocol` — `calibration_validation` (identify→holdout, **gap RMSPE** vs floor 8-12%)
+- [x] **T4.6** `audit:nrmse_stratified` — `nrmse_stratified` (NRMSE per-canale per scenario)
+- [x] **T4.7** `L5.formal_safety` — `reachability_frontier` (worst-case: gap minimo safe vs Δv, oracolo vs SNN)
+- [x] **T4.8** `extra:naturalisticity` — `naturalisticity` (KS time-gap & jerk SNN-ego vs driver reale)
 
 ## TIER 5 — Validita' hardware (FPGA)
 - [ ] **T5.1** `L6.fpga` — quantizzazione fixed-point (fake-quant pesi+readout) → Δ NRMSE + closed-loop float-vs-quant
@@ -117,5 +119,5 @@
 | 1 | Scenari coda + soglie + energia | ✅ fatto (test verde) |
 | 2 | Plant L4 + V2X L3 | ✅ fatto (test verde) |
 | 3 | String stability L5 | ✅ fatto (test verde) |
-| 4 | Metodologia (identificabilita') | da fare |
+| 4 | Metodologia (identificabilita') | ✅ fatto (test verde) |
 | 5 | Hardware FPGA | da fare |

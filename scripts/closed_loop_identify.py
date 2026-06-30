@@ -337,6 +337,39 @@ def eval_string_stability(model, cache, N=8, n_platoons=5, seq_len=50, hetero=Tr
             'mean_T': float(np.mean([r['mean_T'] for r in results])), 'platoons': results}
 
 
+def reachability_frontier(model, cache, n_drivers=10, seq_len=50,
+                          gaps=(5.0, 8.0, 12.0, 18.0, 25.0, 35.0, 50.0), dvs=(0.0, 5.0, 10.0, 15.0),
+                          worst_decel=9.0, device='cpu'):
+    """T4.7 — sicurezza WORST-CASE (Monte-Carlo avversario): per ogni (gap0, dv0) iniziale il leader frena
+    alla decel massima ammissibile; l'ego coi param SNN collide? Ritorna la FRONTIERA = gap minimo SENZA
+    collisione per ogni dv0 (e la differenza SNN vs oracolo = margine consumato dall'identificazione)."""
+    ids = []
+    for it in cache['val'][:n_drivers]:
+        true_pg = np.array([it['params'][k] for k in PN], dtype=np.float32)
+        x = torch.tensor(it['x'][:seq_len][None], dtype=torch.float32).to(device)
+        ids.append((true_pg, identify(model, x)))
+    N = 400
+
+    def _collides(ctrl, gap0, dv0):
+        v0 = 0.7 * float(ctrl[0]); v_lead0 = max(v0 - dv0, 0.0)
+        vl = np.full(N, v_lead0); bs = N // 5
+        for i in range(bs, N):
+            vl[i] = max(0.0, vl[i - 1] - worst_decel * DT)
+        return simulate(None, ctrl, vl, float(gap0), v0, device=device)['collided']
+
+    out = {'worst_decel': worst_decel, 'min_safe_gap': {}}
+    for key in ('oracle', 'snn'):
+        out['min_safe_gap'][key] = {}
+        for dv0 in dvs:
+            mins = []
+            for true_pg, id_pg in ids:
+                ctrl = true_pg if key == 'oracle' else id_pg
+                mg = next((g for g in sorted(gaps) if not _collides(ctrl, g, dv0)), max(gaps) + 10.0)
+                mins.append(mg)
+            out['min_safe_gap'][key][float(dv0)] = float(np.mean(mins))
+    return out
+
+
 def cbr_to_pdr(density, cbr_max=0.6):
     """T2.16 — proxy DCC: densita' veicolare -> Channel Busy Ratio -> PDR (piu' densita' = piu' CBR = meno PDR).
     Mapping lineare semplice (raffinabile con modelli ETSI DCC / SAE J2945). density in veic/km circa."""
