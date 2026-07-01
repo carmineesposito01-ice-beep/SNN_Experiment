@@ -5,9 +5,11 @@
 
 ---
 
-## 🟣 NEXT-PHASE 2026-06-30 — Valutazione FPGA (pre-silicio)
+## 🟣 NEXT-PHASE — Valutazione FPGA (pre-silicio)
 
-Doc-master: **[`document/FPGA_EVALUATION_FRAMEWORK.md`](FPGA_EVALUATION_FRAMEWORK.md)**. Contiene (A) l'analisi critica del framework a 6 punti (quantizzazione, risorse/DSE, timing/determinismo, HIL/IO, ISO 26262/SEU, energia/termica) e (B) il catalogo esaustivo dei dati estraibili dalla rete, con piano a **Tier F1–F6**:
+**Stato (2026-07-01): DESIGN della presentazione FATTO e bloccato per la Fase A** → **[`document/FPGA_EVALUATE_DESIGN.md`](FPGA_EVALUATE_DESIGN.md)** (10 sezioni, 46 figure, principi di design, prototipo a dati fittizi `scripts/_fpga_eval_mockup.py`). Deciso: **Fase A software_now ORA**; **Fase B/C (HDL/board) rinviate** — nodo aperto: import **Simulink → HDL Coder** per una SNN **ALIF custom** (nessun convertitore push-button; FINN/hls4ml non la gestiscono; percorso realistico = RTL/HLS custom). Prossimo build: `scripts/_build_fpga_eval_notebook.py` (Fase A sui tensori reali) + librerie `weight_profiler`/`state_profiler`/`latency_model`/`seu_inject`.
+
+Doc-master (analisi + catalogo dati): **[`document/FPGA_EVALUATION_FRAMEWORK.md`](FPGA_EVALUATION_FRAMEWORK.md)**. Contiene (A) l'analisi critica del framework a 6 punti (quantizzazione, risorse/DSE, timing/determinismo, HIL/IO, ISO 26262/SEU, energia/termica) e (B) il catalogo esaustivo dei dati estraibili dalla rete, con piano a **Tier F1–F6**:
 - **Fase A pre-silicio** (tutto `software_now`, nessun HDL/board): F1 quant pesi & QAT-vs-PTQ, F2 range stati/Qm.n, F3 latency-model/WCET, F4 SEU/bit-flip, F5 energia mW + I/O.
 - **Fase B** sintesi HDL (occupazione reale, Fmax/STA, potenza, TMR/ECC); **Fase C** board/HIL.
 

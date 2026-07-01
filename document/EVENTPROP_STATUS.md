@@ -30,6 +30,13 @@ il **notebook champion `Eval_v3_TURTLE_POWER`** (4 champion + oracolo) — in at
    → readout random silenzioso. Fix (schema-detection) già nel notebook v3; da riportare nel ckpt-pass e
    ri-lanciare i soli arm baseline.
 4. Post-eval: quantizzazione/deploy FPGA, multi-seed esteso → `document/FUTURE_WORK.md`.
+5. **FPGA-evaluate — design fatto (2026-07-01)**: la *presentazione* della valutazione FPGA è progettata e **bloccata
+   per la Fase A software_now** → **`document/FPGA_EVALUATE_DESIGN.md`** (struttura 10 sezioni + catalogo 46 figure +
+   principi + prototipo `scripts/_fpga_eval_mockup.py` a dati fittizi) e **`document/FPGA_EVALUATION_FRAMEWORK.md`**
+   (analisi + catalogo dati). **Fase B/C (HDL/board) rinviate** — nodo aperto: import Simulink → HDL Coder per una SNN
+   ALIF custom (nessun convertitore push-button; FINN/hls4ml non la gestiscono). Prossimo build:
+   `scripts/_build_fpga_eval_notebook.py` (Fase A sui tensori reali, come v3.1) + librerie `weight_profiler`/
+   `state_profiler`/`latency_model`/`seu_inject`.
 
 **Workflow operativo**: training/eval pesanti su **Azure** (sandokan, `azureml_py38`, Python 3.10), **lanciati
 dall'utente**; in locale pull/analisi/build-notebook. L'assistente NON ha accesso diretto ad Azure. Checkpoint
