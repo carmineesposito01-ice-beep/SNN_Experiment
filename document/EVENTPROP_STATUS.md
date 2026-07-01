@@ -21,16 +21,18 @@ il **notebook champion `Eval_v3_TURTLE_POWER`** (4 champion + oracolo) — in at
 
 **Per continuare (dal più fresco):**
 1. `git pull origin EventProp_Study`.
-2. **Evaluate v3 — GIRATO (2026-07-01), 13/15 sezioni complete** in `results/evaluate/v3_TURTLE_POWER!!!/`.
+2. **Evaluate v3 — COMPLETO (2026-07-01), 15/15 sezioni** in `results/evaluate/v3_TURTLE_POWER!!!/`
+   (re-run post-fix eseguito su Azure; `python scripts/verify_eval_v3.py` OK).
    **Verdetto cross-champion**: fixed-point output trascurabile fino a 2 bit; QAT funziona (pesi po2 ≤ float su 3/4 champion,
    `delta_qat_absorbed` negativo); energia 22–30×; **ρ(U@V): EventProp contrattivo (Donatello 0.05, Michelangelo 0.39) vs BPTT
    >1 (Raffaello 2.99, Leonardo 1.16) → EventProp più FPGA-friendly** (corregge la stima preliminare ρ≈0.16 del framework);
    V2X **blind = 0.67 collisione** (hold-last maschera moltissimo; la rete da sola è insicura); ghiaccio ~60% coll. anche per
    l'oracolo (limite fisico del plant). **Candidato deploy FPGA: Donatello** (contrattivo + best accuracy).
-   **⚠️ meso(12)/macro(13)/showcase(14) + diagnostica-energia eventprop erano falliti** (la variante `eventprop_alif_full` non
-   fa `forward_step` per-step) → **FIX pushed (`e42af18`)**: RI-LANCIARE il notebook su Azure (rigenera 08/12/13/14, le altre
-   saltano) poi `python scripts/verify_eval_v3.py`. Lancio:
-   `jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=-1 Eval_v3_TURTLE_POWER.ipynb`.
+   ✅ **RISOLTO**: meso(12)/macro(13)/showcase(14) + diagnostica-energia eventprop rigenerati dopo il fix `e42af18` (la
+   variante `eventprop_alif_full` non fa `forward_step` per-step; identify→model=None per meso/macro, spike_raster diretto).
+   **📄 Report di chiusura**: **`document/VALIDATION_REPORT_v3.md` / `.pdf`** (22 pag., 15 dimensioni, 4 champion + oracolo;
+   builder riproducibile `scripts/build_validation_report_v3.py`; figure-chiave ricostruite dai CSV; verifica avversariale
+   3-agenti superata — `e979ad1`).
 3. **Caveat aperto (§9.4)**: i risultati closed-loop della famiglia **BPTT_champion** nello Stadio-2 combinato
    (figure F24/F38) sono **sospetti** — il loader del ckpt-pass caricava i baseline come `eventprop_alif_full`
    → readout random silenzioso. Fix (schema-detection) già nel notebook v3; da riportare nel ckpt-pass e
