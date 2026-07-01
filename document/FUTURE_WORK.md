@@ -5,6 +5,16 @@
 
 ---
 
+## 🟣 NEXT-PHASE 2026-06-30 — Valutazione FPGA (pre-silicio)
+
+Doc-master: **[`document/FPGA_EVALUATION_FRAMEWORK.md`](FPGA_EVALUATION_FRAMEWORK.md)**. Contiene (A) l'analisi critica del framework a 6 punti (quantizzazione, risorse/DSE, timing/determinismo, HIL/IO, ISO 26262/SEU, energia/termica) e (B) il catalogo esaustivo dei dati estraibili dalla rete, con piano a **Tier F1–F6**:
+- **Fase A pre-silicio** (tutto `software_now`, nessun HDL/board): F1 quant pesi & QAT-vs-PTQ, F2 range stati/Qm.n, F3 latency-model/WCET, F4 SEU/bit-flip, F5 energia mW + I/O.
+- **Fase B** sintesi HDL (occupazione reale, Fmax/STA, potenza, TMR/ECC); **Fase C** board/HIL.
+
+Tesi: pesi **po2 → shift-add → DSP≈0**, spike **→ AC**, leak bit-shift; **~80% degli esperimenti è fattibile ORA in locale** sui tensori `.pt` riusando l'infrastruttura evaluate esistente. Primi moduli da scrivere: `utils/state_profiler.py`, `utils/weight_profiler.py`, `utils/latency_model.py`. **Sostituisce/estende** le voci storiche **DP** e **F5 (Deploy FPGA)** qui sotto.
+
+---
+
 ## 🔵 POST-LOSS_STUDY 2026-06-19 — opzioni aperte (branch Loss_Study)
 
 Vedi `LOSS_STUDY_AND_EVALUATION.md`. Stato: framework di evaluation completo; in attesa/analisi

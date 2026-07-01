@@ -252,12 +252,18 @@ def test_param_chattering():
 def test_v2x_sweep_and_cbr():
     from scripts.closed_loop_identify import v2x_robustness_sweep, cbr_to_pdr
     model = StubModel(); cache = _synth_cache(2)
-    rows = v2x_robustness_sweep(model, cache, n_drivers=2, pdrs=(1.0, 0.5), latencies=(0, 3))
-    assert len(rows) == 4
+    # sweep ESAUSTIVO: 6 assi (pdr/latency/jitter/gilbert/hold_mode/blackout) + AoI + oracolo sotto canale
+    rows = v2x_robustness_sweep(model, cache, n_drivers=2, pdrs=(1.0, 0.5), latencies=(0, 3),
+                                jitters=(1,), gilberts=((0.3, 0.5),), hold_modes=('hold_last', 'blind'),
+                                blackouts=((10, 20),))
+    assert len(rows) == 2 + 2 + 1 + 1 + 2 + 1, len(rows)          # = 9
+    assert set(r['axis'] for r in rows) == {'pdr', 'latency', 'jitter', 'gilbert', 'hold_mode', 'blackout'}
     for r in rows:
-        assert 'collision_rate' in r and 'min_ttc_p5' in r and r['axis'] in ('pdr', 'latency')
+        for k in ('collision_rate', 'collision_rate_oracle', 'min_ttc_p5', 'brake_margin_min', 'aoi'):
+            assert k in r, k
+    assert any(r['aoi'] is not None for r in rows), 'AoI mai popolata (bug fix fallito)'
     assert cbr_to_pdr(0) > cbr_to_pdr(50)          # piu' densita' -> meno PDR
-    print('  OK v2x_robustness_sweep + cbr_to_pdr')
+    print('  OK v2x_robustness_sweep esaustivo (6 assi + AoI + oracolo) + cbr_to_pdr')
 
 
 # ----------------------------- TIER 3 -----------------------------

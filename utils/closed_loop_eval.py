@@ -70,9 +70,11 @@ def _plant_step(a_cmd, v, st, cfg):
     return a_real
 
 
-def _channel_obs(s_true, vl_true, st, cfg, rng):
-    """L3 — canale V2X: degrada l'osservazione del LEADER (gap+vel). packet-loss (hold-last-CAM),
-    Gilbert-Elliott (burst), latenza+jitter (buffer), blackout forzato, rumore OU sensoriale.
+def _channel_obs(s_true, vl_true, st, cfg, rng, v_ego=0.0):
+    """L3 — canale V2X: degrada l'osservazione del LEADER (gap+vel). packet-loss, Gilbert-Elliott (burst),
+    latenza+jitter (buffer), blackout forzato, rumore OU sensoriale. Su PACCHETTO PERSO la gestione dipende
+    da cfg['hold_mode']: 'hold_last' (default, ZOH dell'ultimo CAM), 'dead_reckon' (estrapola il gap alla
+    velocita' relativa nota, usa v_ego), 'blind' (leader perso -> strada libera, nessun avvicinamento).
     st = stato mutabile. Ritorna (s_obs, vl_obs, aoi_steps)."""
     buf = st.setdefault('buf', [])
     buf.append((s_true, vl_true))
@@ -91,11 +93,21 @@ def _channel_obs(s_true, vl_true, st, cfg, rng):
         received = not bad
     else:
         received = rng.random() < cfg.get('pdr', 1.0)         # T2.9 — Bernoulli(PDR)
+    hold_mode = cfg.get('hold_mode', 'hold_last')
     if received or 'last' not in st:
         st['last'] = (s_rx, vl_rx); st['age'] = k
+        s_obs, vl_obs = st['last']
     else:
-        st['age'] = st.get('age', 0) + 1                      # hold-last-CAM
-    s_obs, vl_obs = st['last']
+        st['age'] = st.get('age', 0) + 1                      # pacchetto perso -> gestione hold_mode
+        s_last, vl_last = st['last']
+        if hold_mode == 'dead_reckon':                        # estrapola il gap alla vel. relativa nota (usa v_ego)
+            s_obs = max(0.5, s_last + (vl_last - v_ego) * DT)
+            vl_obs = vl_last
+            st['last'] = (s_obs, vl_obs)                       # la predizione si accumula durante l'outage
+        elif hold_mode == 'blind':                            # leader "perso": strada libera, nessun avvicinamento
+            s_obs, vl_obs = 200.0, v_ego
+        else:                                                 # 'hold_last' (default): ZOH dell'ultimo CAM
+            s_obs, vl_obs = s_last, vl_last
     ns = cfg.get('sensor_noise_scale', 0.0)                   # T2.11 — rumore OU su gap/vel
     if ns:
         from config import NOISE_GAP_REL, NOISE_VEL_OPT, NOISE_TAU_S, NOISE_TAU_V
@@ -163,7 +175,7 @@ def simulate(model, params_gt, v_leader, s_init, v_init, cut_in=None, device='cp
 
             # --- canale V2X (opt-in): cosa OSSERVA il controllore del leader ---
             if channel is not None:
-                s_obs, vl_obs, age = _channel_obs(s, vl, ch_state, channel, ch_rng)
+                s_obs, vl_obs, age = _channel_obs(s, vl, ch_state, channel, ch_rng, v)
                 aoi_series.append(age)
             else:
                 s_obs, vl_obs = s, vl

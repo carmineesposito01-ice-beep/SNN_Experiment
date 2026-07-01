@@ -163,3 +163,48 @@ solo per i baseline (Raffaello/Leonardo); eventprop → curva spike-rate.
 - **Fix ckpt-pass combinato** (`_eventprop_combined_ckpt_pass.py::build_and_load`): portare lo schema-detection
   del loader v3 e ri-lanciare i soli arm baseline (le figure F24/F38 del champion sono artefatti — vedi
   `EVENTPROP_STATUS.md §9.4`).
+
+---
+
+## v3.1 — Rewrite ESAUSTIVO (2026-07-01, dopo analisi del 1° run)
+
+Dall'analisi del 1° run v3 (dati troppo pochi vs piano e vs vecchie evaluate, troppi bar-chart, oracolo
+assente in molte sezioni) → riscrittura completa del builder + fix libreria. **Tutto verificato in locale**
+(compile-check 14 celle, integration key-check 9/9 con modello random+cache reale, plot-smoke 9/9 = 24 PNG,
+Tier0-5 test verdi). Esecuzione vera su Azure (checkpoint) + `python scripts/verify_eval_v3.py` post-run.
+
+**Fix libreria** (backward-compat, test verdi):
+- `utils/closed_loop_eval.py::_channel_obs`: aggiunto `hold_mode` (`hold_last` default / `dead_reckon` /
+  `blind`) con `v_ego` opzionale in coda → risponde al masking di hold-last-CAM (blind scopre il crollo di
+  sicurezza, dead_reckon lo compensa; smoke: min_gap 15.4/15.5/2.6). `simulate` passa `v` (ego).
+- `scripts/closed_loop_identify.py::v2x_robustness_sweep`: **BUG AoI risolto** (`'aoi': None` hardcoded →
+  ora legge `rich['snn']['aoi_mean']['mean']`, già aggregata da `eval_safety`); sweep esaustivo a **6 assi**
+  (pdr/latenza/jitter/Gilbert/hold_mode/blackout) + `collision_rate_oracle` (oracolo sotto lo stesso canale).
+- `frac_stable=0` **NON era un bug**: è `frac_strict_stable` (def. stretta: ogni coppia locale ≤1). Il
+  notebook ora mostra le **3 nozioni** (head_to_tail end-to-end, peak |Γ(ω)| in frequenza, frac_strict) + il
+  **profilo di amplificazione** lungo il plotone (spiega lo 0).
+
+**Nuovo modulo** `utils/net_diagnostics.py` (nessuno esisteva): `spike_raster` (raster reale per-neurone via
+hook, tutti i champion), `spike_stats` (dead/sat/rate), `effective_rank` (attività), `recurrence_spectral`
+(raggio spettrale/norma-2 di U@V po2, rilevante FPGA).
+
+**Builder** `_build_eval_v3_notebook.py` (14 celle code, +2 sezioni): 02 Closed-loop (SSM estese + comfort
+ISO + tracking; box da summary, Δ-vs-oracolo con CI, heatmap per-scenario con oracolo) · 03 String (scatter
++ amp_profile + oracolo) · 04 Ident (equifinality, spettro FIM, causal heatmap, naturalisticity KS,
+calibration) · 05 Quant (fixed+po2, 2-12 bit, per-parametro, ablazione pesi PO2 on/off) · 06 V2X (3 hold_mode
++ AoI-vs-safety + burst) · 07 Plant (ideale/bagnato/ghiaccio + oracolo) · 08 Energy (+ diagnostica rete +
+raster reale) · 09 Traj (5 scenari) · **10 Reachability** e **11 Breakdown** (nuove, oracolo vs SNN) · 00
+Scorecard (oracolo incluso). Oracolo esteso, viz variata (heatmap/scatter/box/spettro/line).
+
+**Verifica post-run**: `scripts/verify_eval_v3.py` (manifest file + oracolo presente + AoI popolata + quant
+fixed+po2 + string 3-nozioni + nessun `ERROR_*`). **Nota**: per il re-run Azure serve **push** (Azure fa pull).
+
+**v3.1b — micro→meso→macro completo + vetrina (riuso di codice esistente).** Controllo vs vecchie evaluate: le
+analisi **meso/macro + vetrina** esistevano già (Loss_Study `validation_full`) e i loro helper erano in
+`utils/platoon_eval.py` e `utils/snn_showcase.py::capture_run` → **riusati**, non reinventati. Aggiunte 3
+sezioni: **12_Mesoscopic** (plotone 12 veicoli: gain per veicolo + heatmap spazio-tempo + scorecard),
+**13_Macroscopic** (anello: diagramma fondamentale Q(ρ)/V(ρ) + capacità/densità-critica/jam + onde stop&go),
+**14_Showcase** (vetrina "come spara la rete": raster spike sincronizzato + phase-plane + energia + **GIF in
+diretta** auto+cursore-raster, best-effort pillow). Oracolo in meso/macro. Stile figure uniforme (rcParams in
+ENV). Ora **17 celle code**; verificato: compile 17/17, integration key-check **10/10**, plot-smoke completo
+(≈45 PNG + GIF), Tier0-5 verdi. Output totali attesi: **~45 PNG + 1 GIF + 18 CSV**.

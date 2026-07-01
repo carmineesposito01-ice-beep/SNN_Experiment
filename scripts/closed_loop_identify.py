@@ -400,25 +400,37 @@ def cbr_to_pdr(density, cbr_max=0.6):
 
 
 def v2x_robustness_sweep(model, cache, n_drivers=15, device='cpu',
-                         pdrs=(1.0, 0.9, 0.7, 0.5), latencies=(0, 1, 2, 3)):
-    """T2.12 — sweep robustezza V2X in closed-loop: per ogni PDR e per ogni latenza (in step DT),
-    misura collision_rate (SNN) e p5 di min_TTC -> degrado graceful vs catastrofico (knee-point).
-    Riusa eval_safety(channel=...). Usa scenari di coda (tail=True) per stressare i margini."""
+                         pdrs=(1.0, 0.9, 0.7, 0.5), latencies=(0, 1, 2, 3),
+                         jitters=(1, 2), gilberts=((0.2, 0.6), (0.4, 0.4)),
+                         hold_modes=('hold_last', 'dead_reckon', 'blind'),
+                         blackouts=((150, 200),)):
+    """T2.12 — sweep robustezza V2X in closed-loop ESAUSTIVO: PDR i.i.d., latenza, jitter, Gilbert-Elliott
+    (burst), hold_mode (hold_last/dead_reckon/blind), blackout forzato. Per ogni punto misura collision_rate
+    (SNN), p5 di min_TTC, brake_margin_min medio e l'Age-of-Information (AoI) media -> degrado graceful vs
+    catastrofico, knee-point, E il ruolo del masking di hold-last (dead_reckon migliore, blind peggiore).
+    Riusa eval_safety(channel=...) con scenari di coda (tail=True) per stressare i margini."""
+    def _run(ch, axis, val):
+        r = eval_safety(model, cache, n_drivers=n_drivers, device=device, rich=True, tail=True, channel=ch)
+        rs = r['rich']['snn']
+        return {'axis': axis, 'val': val,
+                'collision_rate': r['snn']['collision_rate'],
+                'collision_rate_oracle': r['oracle']['collision_rate'],   # oracolo sotto LO STESSO canale
+                'min_ttc_p5': rs['min_ttc']['p5'],
+                'brake_margin_min': rs['brake_margin_min']['mean'],
+                'aoi': rs.get('aoi_mean', {}).get('mean')}
     rows = []
     for pdr in pdrs:
-        r = eval_safety(model, cache, n_drivers=n_drivers, device=device, rich=True, tail=True,
-                        channel={'pdr': float(pdr), 'seed': 0})
-        rows.append({'axis': 'pdr', 'val': float(pdr),
-                     'collision_rate': r['snn']['collision_rate'],
-                     'min_ttc_p5': r['rich']['snn']['min_ttc']['p5'],
-                     'aoi': None})
+        rows.append(_run({'pdr': float(pdr), 'seed': 0}, 'pdr', float(pdr)))
     for lat in latencies:
-        r = eval_safety(model, cache, n_drivers=n_drivers, device=device, rich=True, tail=True,
-                        channel={'latency_steps': int(lat), 'seed': 0})
-        rows.append({'axis': 'latency', 'val': int(lat),
-                     'collision_rate': r['snn']['collision_rate'],
-                     'min_ttc_p5': r['rich']['snn']['min_ttc']['p5'],
-                     'aoi': None})
+        rows.append(_run({'latency_steps': int(lat), 'seed': 0}, 'latency', int(lat)))
+    for jit in jitters:
+        rows.append(_run({'latency_steps': 2, 'jitter_steps': int(jit), 'seed': 0}, 'jitter', int(jit)))
+    for gb in gilberts:
+        rows.append(_run({'gilbert': (float(gb[0]), float(gb[1])), 'seed': 0}, 'gilbert', '%.2f/%.2f' % (gb[0], gb[1])))
+    for hm in hold_modes:
+        rows.append(_run({'pdr': 0.5, 'hold_mode': hm, 'seed': 0}, 'hold_mode', hm))
+    for bo in blackouts:
+        rows.append(_run({'blackout_steps': (int(bo[0]), int(bo[1])), 'seed': 0}, 'blackout', '%d-%d' % (bo[0], bo[1])))
     return rows
 
 
