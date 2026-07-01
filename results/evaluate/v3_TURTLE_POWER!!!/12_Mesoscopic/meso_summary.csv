@@ -1,0 +1,6 @@
+n_vehicles,amp_leader,head_to_tail_gain,max_amplification,string_stable_headtail,strict_monotone_decay,convective_upstream,min_gap_platoon,min_ttc_platoon,collided,rms_accel_mean,max_decel_platoon,rms_jerk_mean,source
+12,2.099,0.069,0.523,True,False,True,30.087,13.997,False,0.255,1.305,0.084,Master Splinter
+12,2.099,0.109,0.238,True,False,True,29.016,12.397,False,0.11,0.887,0.027,Raffaello
+12,2.099,0.149,0.244,True,False,True,26.72,11.868,False,0.117,0.939,0.029,Leonardo
+12,2.099,0.122,0.358,True,False,True,25.699,12.252,False,0.177,1.176,0.052,Donatello
+12,2.099,0.128,0.33,True,False,True,26.318,12.038,False,0.16,1.113,0.045,Michelangelo
