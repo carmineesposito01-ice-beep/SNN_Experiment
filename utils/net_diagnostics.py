@@ -34,8 +34,21 @@ def spike_raster(model, x_seq, device='cpu', max_steps=None):
         x = x[:, :int(max_steps), :]
     B = x.shape[0]
     hid = _last_hidden(model)
-    if hid is None or not hasattr(hid, 'cell'):
+    if hid is None:
         return np.zeros((0, 0))
+    model.eval()
+    # Variante EventProp: la cella NON e' un ALIFCell hookabile e il forward vuole una sequenza 3D;
+    # il layer restituisce direttamente gli spike (B, K=T*n_ticks, hidden) -> catturali senza hook.
+    if not hasattr(hid, 'cell'):
+        try:
+            with torch.no_grad():
+                sp = model.layer_hidden(x)
+            if hasattr(sp, 'ndim') and sp.ndim == 3:
+                return sp[0].detach().float().cpu().numpy()    # (K, hidden)
+        except Exception:
+            pass
+        return np.zeros((0, 0))
+    # Baseline: hook su ALIFCell, un evento per tick interno.
     caps = []
 
     def _hook(_mod, _inp, out):
@@ -43,7 +56,6 @@ def spike_raster(model, x_seq, device='cpu', max_steps=None):
 
     h = hid.cell.register_forward_hook(_hook)
     try:
-        model.eval()
         model.reset_state(B, device)
         with torch.no_grad():
             model.forward_sequence(x)                          # forward pieno: il hook scatta a ogni tick

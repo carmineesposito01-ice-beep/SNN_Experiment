@@ -779,19 +779,22 @@ else:
 
 MESO = r"""# Cell -- MESO: plotone (12 veicoli) string stability + heatmap spazio-tempo + scorecard scalare (oracolo + champion)
 from utils.platoon_eval import simulate_platoon as sim_plat_meso, platoon_metrics
+from scripts.closed_loop_identify import identify
 D = '12_Mesoscopic'
 if done(D, 'meso_summary.csv'):
     print('[SKIP] meso'); display(pd.read_csv(os.path.join(RESULTS, D, 'meso_summary.csv')))
 elif not AVAIL:
     print('[skip] nessun champion disponibile')
 else:
-    PGT0 = np.array([33.3, 1.2, 2.5, 1.1, 1.5], dtype=np.float32)   # driver highway rappresentativo
+    it0 = CACHE_DATA['val'][0]; PGT0 = np.array([it0['params'][c] for c in PN], dtype=np.float32)
+    xwin = torch.tensor(it0['x'][:50][None], dtype=torch.float32)
     N_PLAT = 12; NSTEP = 500; t = np.arange(NSTEP); v_set = 0.7 * PGT0[0]
     v_leader = v_set + 0.15 * v_set * np.sin(2 * np.pi * t / 100.0)   # perturbazione sinusoidale in testa
-    sources = [(ORACLE, None)] + [(a, MODELS[a]) for a in AVAIL]
+    # eventprop-safe: param IDENTIFICATI (forward_sequence) + model=None; forward_step per-step non regge l eventprop
+    sources = [(ORACLE, PGT0)] + [(a, np.asarray(identify(MODELS[a], xwin), dtype=np.float32)) for a in AVAIL]
     rows = []; recs = {}
-    for src, mdl in sources:
-        rec = sim_plat_meso(mdl, PGT0, N_PLAT, v_leader); mt = platoon_metrics(rec); mt['source'] = src
+    for src, params in sources:
+        rec = sim_plat_meso(None, params, N_PLAT, v_leader); mt = platoon_metrics(rec); mt['source'] = src
         rows.append(mt); recs[src] = rec
     dfm = pd.DataFrame(rows)
     dfm.drop(columns=['gain_per_vehicle']).to_csv(os.path.join(sub(D), 'meso_summary.csv'), index=False)
@@ -831,12 +834,15 @@ if done(D, 'macro_summary.csv'):
 elif not AVAIL:
     print('[skip] nessun champion disponibile')
 else:
-    PGT0 = np.array([33.3, 1.2, 2.5, 1.1, 1.5], dtype=np.float32)
+    from scripts.closed_loop_identify import identify
+    it0 = CACHE_DATA['val'][0]; PGT0 = np.array([it0['params'][c] for c in PN], dtype=np.float32)
+    xwin = torch.tensor(it0['x'][:50][None], dtype=torch.float32)
     DENS = [8, 15, 25, 35, 45, 60, 80, 100, 120, 150]   # veh/km
-    sources = [(ORACLE, None)] + [(a, MODELS[a]) for a in AVAIL]
+    # eventprop-safe: param IDENTIFICATI + model=None
+    sources = [(ORACLE, PGT0)] + [(a, np.asarray(identify(MODELS[a], xwin), dtype=np.float32)) for a in AVAIL]
     fig, ax = plt.subplots(1, 2, figsize=(14, 5)); rows = []
-    for src, mdl in sources:
-        fd = fundamental_diagram(mdl, PGT0, DENS, ring_length=1000.0, n_steps=600)
+    for src, params in sources:
+        fd = fundamental_diagram(None, params, DENS, ring_length=1000.0, n_steps=600)
         c = COLOR.get(src, OCOL)
         rho = [p['rho_veh_km'] for p in fd]; Q = [p['Q_veh_h'] for p in fd]; V = [p['V_km_h'] for p in fd]
         ax[0].plot(rho, Q, 'o-', color=c, label=src); ax[1].plot(rho, V, 'o-', color=c, label=src)
@@ -860,8 +866,8 @@ else:
     # onde stop&go a densità congestionata (small multiples)
     fig, axes = plt.subplots(1, len(sources), figsize=(3.6 * len(sources), 4), sharey=True); axes = np.atleast_1d(axes)
     n_cong = max(2, int(60 / 1000.0 * 1000.0))
-    for ax_, (src, mdl) in zip(axes, sources):
-        rec = simulate_ring(mdl, PGT0, n_cong, 1000.0, 800)
+    for ax_, (src, params) in zip(axes, sources):
+        rec = simulate_ring(None, params, n_cong, 1000.0, 800)
         im = ax_.imshow(rec['v'].T, aspect='auto', origin='lower', cmap='RdYlGn', extent=[0, 800 * 0.1, 0, rec['n']])
         ax_.set_title(src, fontsize=9); ax_.set_xlabel('t [s]'); ax_.grid(False)
     axes[0].set_ylabel('veicolo'); fig.colorbar(im, ax=list(axes), label='v [m/s]', fraction=0.02)
@@ -869,34 +875,42 @@ else:
     display(dfM)
 """
 
-SHOWCASE = r"""# Cell -- VETRINA "come spara la rete": raster sincronizzato + scenario + phase-plane + energia + GIF in diretta
-from utils.snn_showcase import capture_run, energy_estimate
-from utils.closed_loop_eval import build_scenarios
+SHOWCASE = r"""# Cell -- VETRINA "come spara la rete": raster + scenario + phase-plane + GIF (eventprop-safe)
+from utils.snn_showcase import capture_run
+from utils.net_diagnostics import spike_raster
+from scripts.closed_loop_identify import identify
+from utils.closed_loop_eval import simulate, build_scenarios
 D = '14_Showcase'
 if not AVAIL:
     print('[skip] nessun champion disponibile')
 elif done(D, 'showcase_%s.png' % AVAIL[0].replace(' ', '_')):
     print('[SKIP] showcase')
 else:
-    pgt = np.array([33.3, 1.2, 2.5, 1.1, 1.5], dtype=np.float32)
+    it0 = CACHE_DATA['val'][0]; pgt = np.array([it0['params'][c] for c in PN], dtype=np.float32)
+    xwin = torch.tensor(it0['x'][:60][None], dtype=torch.float32)
     scen = {s[0]: s for s in build_scenarios(pgt, N=400, rng=np.random.default_rng(1), include_tail=True)}
     _, vl, s_i, v_i, cut = scen['cut_in']
     for alias in AVAIL:
         try:
-            traj, spikes = capture_run(MODELS[alias], pgt, vl, s_i, v_i, cut_in=cut)   # spikes (T,H)
-            T = spikes.shape[0]; tt = np.arange(T) * 0.1; en = energy_estimate(spikes, MODELS[alias])
+            m = MODELS[alias]
+            raster = spike_raster(m, xwin, max_steps=60)                        # (K,H), eventprop-safe (no forward_step)
+            idp = np.asarray(identify(m, torch.tensor(it0['x'][:50][None], dtype=torch.float32)), dtype=np.float32)
+            traj = simulate(None, idp, vl, s_i, v_i, cut_in=cut)               # traiettoria closed-loop (param identificati)
+            T = len(traj['s']); tt = np.arange(T) * 0.1
+            H = raster.shape[1] if raster.size else int(getattr(m, 'hidden_size', 32))
+            spr = float(raster.mean() * 100) if raster.size else float('nan')
+            nact = int((raster.sum(0) > 0).sum()) if raster.size else 0
             fig = plt.figure(figsize=(15, 9)); gs = fig.add_gridspec(3, 2, height_ratios=[2, 1, 1])
             axr = fig.add_subplot(gs[0, :]); axr.grid(False)
-            axr.imshow(spikes.T, aspect='auto', origin='lower', cmap='Greys', extent=[0, T * 0.1, 0, spikes.shape[1]])
-            if cut: axr.axvline(cut[0] * 0.1, color='r', ls='--', alpha=0.7, label='cut-in'); axr.legend(fontsize=7, loc='upper right')
-            axr.set_ylabel('neurone hidden')
-            axr.set_title('%s — RASTER spike (sparsità %.1f%%, %d/%d neuroni attivi, %d spike)'
-                          % (alias, en['mean_spike_rate_pct'], int((spikes.sum(0) > 0).sum()), spikes.shape[1], int(spikes.sum())))
-            a1 = fig.add_subplot(gs[1, 0]); a1.plot(tt, spikes.sum(1), color=COLOR[alias]); a1.set_ylabel('spike/step')
-            a1.set_title('Attività totale nel tempo (sparsità reale)')
-            if cut: a1.axvline(cut[0] * 0.1, color='r', ls='--', alpha=0.6)
+            if raster.size:
+                ys, xs = np.where(raster.T > 0.5); axr.scatter(xs, ys, s=2, color=COLOR[alias])
+            axr.set_ylabel('neurone hidden'); axr.set_xlabel('tick interno')
+            axr.set_title('%s — RASTER spike (sparsità %.1f%%, %d/%d neuroni attivi)' % (alias, spr, nact, H))
+            a1 = fig.add_subplot(gs[1, 0])
+            if raster.size: a1.plot(np.arange(raster.shape[0]), raster.sum(1), color=COLOR[alias])
+            a1.set_ylabel('spike/tick'); a1.set_title('Attività totale (sparsità reale)')
             a2 = fig.add_subplot(gs[1, 1]); a2.plot(tt, traj['s'], label='gap [m]'); a2.plot(tt, traj['a_ego'], label='a_ego')
-            a2.legend(fontsize=7); a2.set_title('Scenario: gap + accel')
+            a2.legend(fontsize=7); a2.set_title('Scenario cut-in: gap + accel')
             if cut: a2.axvline(cut[0] * 0.1, color='r', ls='--', alpha=0.6)
             a3 = fig.add_subplot(gs[2, 0]); a3.plot(tt, traj['v'], label='v ego'); a3.plot(tt, traj['vl'], label='v leader')
             a3.legend(fontsize=7); a3.set_xlabel('t [s]'); a3.set_title('Velocità ego vs leader')
