@@ -21,10 +21,16 @@ il **notebook champion `Eval_v3_TURTLE_POWER`** (4 champion + oracolo) — in at
 
 **Per continuare (dal più fresco):**
 1. `git pull origin EventProp_Study`.
-2. **Evaluate v3** — se `results/evaluate/v3_TURTLE_POWER!!!/` è vuoto, lanciarlo su Azure:
-   `jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=-1 Eval_v3_TURTLE_POWER.ipynb`
-   (multi-ora, resiliente, auto-push). Se ci sono i risultati → leggere `.../v3_TURTLE_POWER!!!/README.md` +
-   `00_Scorecard/` e dare il **verdetto cross-champion** (vedi §9.4).
+2. **Evaluate v3 — GIRATO (2026-07-01), 13/15 sezioni complete** in `results/evaluate/v3_TURTLE_POWER!!!/`.
+   **Verdetto cross-champion**: fixed-point output trascurabile fino a 2 bit; QAT funziona (pesi po2 ≤ float su 3/4 champion,
+   `delta_qat_absorbed` negativo); energia 22–30×; **ρ(U@V): EventProp contrattivo (Donatello 0.05, Michelangelo 0.39) vs BPTT
+   >1 (Raffaello 2.99, Leonardo 1.16) → EventProp più FPGA-friendly** (corregge la stima preliminare ρ≈0.16 del framework);
+   V2X **blind = 0.67 collisione** (hold-last maschera moltissimo; la rete da sola è insicura); ghiaccio ~60% coll. anche per
+   l'oracolo (limite fisico del plant). **Candidato deploy FPGA: Donatello** (contrattivo + best accuracy).
+   **⚠️ meso(12)/macro(13)/showcase(14) + diagnostica-energia eventprop erano falliti** (la variante `eventprop_alif_full` non
+   fa `forward_step` per-step) → **FIX pushed (`e42af18`)**: RI-LANCIARE il notebook su Azure (rigenera 08/12/13/14, le altre
+   saltano) poi `python scripts/verify_eval_v3.py`. Lancio:
+   `jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=-1 Eval_v3_TURTLE_POWER.ipynb`.
 3. **Caveat aperto (§9.4)**: i risultati closed-loop della famiglia **BPTT_champion** nello Stadio-2 combinato
    (figure F24/F38) sono **sospetti** — il loader del ckpt-pass caricava i baseline come `eventprop_alif_full`
    → readout random silenzioso. Fix (schema-detection) già nel notebook v3; da riportare nel ckpt-pass e
