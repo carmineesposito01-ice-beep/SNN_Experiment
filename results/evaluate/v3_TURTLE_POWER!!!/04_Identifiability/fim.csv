@@ -1,0 +1,8 @@
+metric,value
+cond_mean,1626612178.9166594
+cond_p95,554273074.7666578
+rank_FIM,5
+least_identifiable,s0
+most_identifiable,T
+under_excited,(nessuno)
+n_equivalent,29

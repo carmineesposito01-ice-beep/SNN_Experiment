@@ -1,0 +1,17 @@
+champion,dv0,min_safe_gap_snn,min_safe_gap_oracle,worst_decel
+Raffaello,0.0,5.0,5.0,9.0
+Raffaello,5.0,5.3,5.0,9.0
+Raffaello,10.0,8.0,8.0,9.0
+Raffaello,15.0,18.0,16.7,9.0
+Leonardo,0.0,5.0,5.0,9.0
+Leonardo,5.0,5.0,5.0,9.0
+Leonardo,10.0,8.0,8.0,9.0
+Leonardo,15.0,17.4,16.7,9.0
+Donatello,0.0,5.0,5.0,9.0
+Donatello,5.0,5.0,5.0,9.0
+Donatello,10.0,8.0,8.0,9.0
+Donatello,15.0,18.0,16.7,9.0
+Michelangelo,0.0,5.0,5.0,9.0
+Michelangelo,5.0,5.0,5.0,9.0
+Michelangelo,10.0,8.0,8.0,9.0
+Michelangelo,15.0,17.4,16.7,9.0

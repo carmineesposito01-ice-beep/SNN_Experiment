@@ -1,0 +1,22 @@
+Traceback (most recent call last):
+  File "/tmp/ipykernel_3486/3745883455.py", line 17, in <module>
+    rec = sim_plat_meso(mdl, PGT0, N_PLAT, v_leader); mt = platoon_metrics(rec); mt['source'] = src
+  File "/mnt/batch/tasks/shared/LS_root/mounts/clusters/sandokan/code/SNN_Experiment/utils/platoon_eval.py", line 77, in simulate_platoon
+    params = _params_for(model, gap, v, dv, vlead, pgt_t, n, device)
+  File "/mnt/batch/tasks/shared/LS_root/mounts/clusters/sandokan/code/SNN_Experiment/utils/platoon_eval.py", line 44, in _params_for
+    return model.forward_step(_norm_obs_batch(gap, v, dv, vl).to(device))
+  File "/mnt/batch/tasks/shared/LS_root/mounts/clusters/sandokan/code/SNN_Experiment/core/network.py", line 505, in forward_step
+    spikes_h = self.layer_hidden(x_norm)
+  File "/anaconda/envs/azureml_py38/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1775, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/anaconda/envs/azureml_py38/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1786, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/mnt/batch/tasks/shared/LS_root/mounts/clusters/sandokan/code/SNN_Experiment/core/eventprop.py", line 611, in forward
+    return _EventPropWrapperFull.apply(
+  File "/anaconda/envs/azureml_py38/lib/python3.10/site-packages/torch/autograd/function.py", line 581, in apply
+    return super().apply(*args, **kwargs)  # type: ignore[misc]
+  File "/mnt/batch/tasks/shared/LS_root/mounts/clusters/sandokan/code/SNN_Experiment/core/eventprop.py", line 256, in forward
+    saved, output = forward_fn(input, fc_weight, rec_U, rec_V, base_th, thresh_jump)
+  File "/mnt/batch/tasks/shared/LS_root/mounts/clusters/sandokan/code/SNN_Experiment/core/eventprop.py", line 380, in _manual_forward
+    B, T_seq, in_dim = x_seq.shape
+ValueError: not enough values to unpack (expected 3, got 2)
