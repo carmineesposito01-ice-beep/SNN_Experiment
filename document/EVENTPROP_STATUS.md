@@ -1,4 +1,4 @@
-# EventProp — Stato attuale + punto di ripresa (2026-06-30)
+# EventProp — Stato attuale + punto di ripresa (2026-07-02)
 
 Branch `EventProp_Study`. **Documento-master di ripresa dello studio EventProp**: dove siamo, cosa funziona,
 cosa è escluso e perché, le pratiche, e come continuare. Dettagli complementari: **`document/EVALUATE_UPGRADE.md`**
@@ -14,11 +14,13 @@ l'aggiornamento post-BigSweep3 (studio combinato + evaluate v3).
 **Progetto CF_FSNN**: una SNN (ALIF + EventProp) che, osservata una traiettoria di car-following,
 **identifica i 5 parametri ACC-IIDM** `[v0, T, s0, a, b]`. Target finale: deploy FPGA PYNQ-Z1 (pesi po2).
 
-**Stato in una riga (2026-06-30)**: studio EventProp **mappato e chiuso** (BigSweep1→3 + **studio combinato**
+**Stato in una riga (2026-07-02)**: studio EventProp **mappato e chiuso** (BigSweep1→3 + **studio combinato**
 su 102 arm). EventProp è su un **fronte di Pareto** col BPTT champion: il champion vince la fisica di ~5.5%,
 EventProp vince NRMSE + stabilità (raggio spettrale 0.5 vs 22) + FPGA-friendliness (rank8), e **entrambi
-guidano in SICUREZZA** (0 collisioni, min-gap preservato). Costruito un **evaluate v3 esaustivo (6-tier)** e
-il **notebook champion `Eval_v3_TURTLE_POWER`** (4 champion + oracolo) — in attesa di girare su Azure.
+guidano in SICUREZZA** (0 collisioni, min-gap preservato). **Evaluate v3 esaustivo (6-tier) COMPLETO su Azure**
+(15/15 sezioni; report di chiusura `VALIDATION_REPORT_v3.md/.pdf`). **FPGA-evaluate Fase A costruita, restyled
+e corretta** (bug n_ticks, punto 7) — **PROSSIMA AZIONE: re-run Azure del notebook `Eval_FPGA.ipynb`** (punto 5),
+poi report FPGA finale. Nulla di pesante in locale: l'utente lancia su Azure.
 
 **Per continuare (dal più fresco):**
 1. `git pull origin EventProp_Study`.
@@ -39,18 +41,37 @@ il **notebook champion `Eval_v3_TURTLE_POWER`** (4 champion + oracolo) — in at
    → readout random silenzioso. Fix (schema-detection) già nel notebook v3; da riportare nel ckpt-pass e
    ri-lanciare i soli arm baseline.
 4. Post-eval: quantizzazione/deploy FPGA, multi-seed esteso → `document/FUTURE_WORK.md`.
-5. **FPGA-evaluate Fase A — BUILD FATTO (2026-07-02)**: design in `document/FPGA_EVALUATE_DESIGN.md` +
-   `document/FPGA_EVALUATION_FRAMEWORK.md`. **5 librerie software_now scritte+testate** (`utils/weight_profiler.py`,
-   `state_profiler.py`, `latency_model.py`, `seu_inject.py`, `io_hil.py`; 17 check verdi in `tests/test_fpga_*.py`),
-   verificate su checkpoint REALI (ρ/‖·‖₂ confermano il framework). **46 figure a dati reali** in
-   `scripts/fpga_figures.py` (render locale 46/46 OK, 0 placeholder). **Notebook `Eval_FPGA.ipynb`**
-   (builder `scripts/_build_fpga_eval_notebook.py`, verify `scripts/verify_fpga_eval.py`) **pronto per Azure**
-   (integration key-check locale OK). **DA FARE**: lanciarlo su Azure (`jupyter nbconvert --to notebook --execute
-   --inplace --ExecutePreprocessor.timeout=-1 Eval_FPGA.ipynb`), poi il **report FPGA finale** (come
-   `VALIDATION_REPORT_v3`). **Fase B/C (HDL/board) rinviate** — nodo aperto: import Simulink → HDL Coder per una SNN
-   ALIF custom (nessun convertitore push-button; FINN/hls4ml non la gestiscono). Prossimo build:
-   `scripts/_build_fpga_eval_notebook.py` (Fase A sui tensori reali, come v3.1) + librerie `weight_profiler`/
-   `state_profiler`/`latency_model`/`seu_inject`.
+5. **FPGA-evaluate Fase A — COSTRUITA + restyled + corretta, IN ATTESA DI RE-RUN AZURE (2026-07-02)**.
+   Design in `document/FPGA_EVALUATE_DESIGN.md` + `document/FPGA_EVALUATION_FRAMEWORK.md`.
+   - **5 librerie software_now** scritte+testate (`utils/weight_profiler.py`, `state_profiler.py`,
+     `latency_model.py`, `seu_inject.py`, `io_hil.py`; 17 check verdi in `tests/test_fpga_*.py`), verificate su
+     checkpoint REALI (ρ(U·V)=0.162 / ‖·‖₂=0.843 confermano il framework).
+   - **46 figure a dati reali** in `scripts/fpga_figures.py` (10 sezioni + scorecard + 7 CSV; render locale 46/46
+     OK, 0 placeholder). **Restyle allineato ai report** (commit `cedfceb`, `6f76b38`): palette champion dei report
+     (Raffaello #d1495b · Leonardo #2a7fb8 · Donatello #7b3fa0 · Michelangelo #e8871e · oracolo #7f7f7f), titolo
+     attaccato al grafico **senza sottotitolo galleggiante**, rcParams matplotlib-default,
+     `tight_layout(rect=[0,0.02,1,0.96])`. **Leggibilità** (commit `63f399c`): `fig_readiness_radar` →
+     small-multiples 2×2 (erano 4 serie sovrapposte illeggibili); `fig_energy_vs_ann` → barre raggruppate con
+     etichette valore.
+   - **Notebook `Eval_FPGA.ipynb`** (builder `scripts/_build_fpga_eval_notebook.py`, verify
+     `scripts/verify_fpga_eval.py`): **committato con la palette corretta (`c40ff82`)** — il rebuild post-restyle
+     era rimasto non committato (su origin c'erano ancora i colori vecchi nella cella ENV). Integration key-check
+     locale OK. I test locali girano su **4 checkpoint stand-in** (i champion veri sono solo su Azure) → le figure
+     locali servono a validare stile/leggibilità/pipeline, NON i numeri finali.
+   - ⚠️ **Bug n_ticks corretto anche nelle figure FPGA** (dettagli al punto 7, commit `1f66796`):
+     `fig_energy_vs_rate` (range asse), `fig_dead_sat` (moltiplicatore H), readiness `Spike`/`Energia` ricalibrate.
+     Nota: `fpga_figures._mean_spike_rate` **non** aveva la doppia divisione → la **scorecard FPGA (~15%) era già
+     corretta**; era il v3 sbagliato.
+   - **➡️ PROSSIMA AZIONE — re-run su Azure (lo lancia l'utente):** `git pull origin EventProp_Study` →
+     **`rm -rf results/evaluate/FPGA`** (indispensabile: il done-skip salterebbe le sezioni vecchie) →
+     `jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=-1 Eval_FPGA.ipynb` →
+     `python scripts/verify_fpga_eval.py`. **Tutto ciò che serve al re-run è già su origin** (branch 0/0).
+     **Poi (io):** `git pull`, verifica che lo spike-rate dei 4 champion veri sia **~13-19%** (coerente col v3
+     corretto) e che le figure escano con stile+leggibilità+numeri giusti, quindi costruisci il **report FPGA
+     finale** (stessa qualità/struttura di `VALIDATION_REPORT_v3`, builder riproducibile).
+   - **Fase B/C (HDL/board) rinviate** — nodo aperto: import Simulink → HDL Coder per una SNN ALIF custom (nessun
+     convertitore push-button; FINN/hls4ml non la gestiscono). Decisioni delle fasi future → punto 6 +
+     `document/POST_FPGA_ROADMAP.md`.
 6. **Fasi POST-FPGA — decise (2026-07-02, ragionamento)**: 3 fasi future — **①** simulatore plug&play desktop
    (reti che identificano param, interattivo, astrazioni riusabili) · **②** convertitore HDL via **Simulink+HDL Coder**
    (famiglia parametrizzata; decode IIDM **in PL** con CORDIC/LUT min-DSP + fallback PS; 1 core + testbench esterni) ·

@@ -170,17 +170,28 @@ bar/gbar=bar (raggruppato) · wf=waterfall · cont=contour · rad=radar · rast=
 
 ## 6. Prossimi passi (build reale — Fase A)
 
-> **✅ BUILD FATTO (2026-07-02).** Le 5 librerie software_now sono scritte, testate (17 check verdi:
-> `tests/test_fpga_profilers.py` 8, `test_fpga_seu.py` 6, `test_fpga_io.py` 3) e verificate su **checkpoint
-> REALI** (baseline+eventprop): ρ(U·V)=0.162 / ‖·‖₂=0.843 confermano il framework. Le **46 figure a dati reali**
-> sono in `scripts/fpga_figures.py` (render locale 46/46 OK, 0 placeholder); il notebook `Eval_FPGA.ipynb`
-> (builder `scripts/_build_fpga_eval_notebook.py`) le orchestra nelle 10 sezioni + 7 CSV deliverable, resiliente
-> come il v3, **pronto per Azure** (integration key-check locale 46/46 figure + CSV OK). Verifica post-run:
-> `scripts/verify_fpga_eval.py`. Lancio: `jupyter nbconvert --to notebook --execute --inplace
-> --ExecutePreprocessor.timeout=-1 Eval_FPGA.ipynb` → poi `python scripts/verify_fpga_eval.py`.
-> Bug catturato dal gate pre-notebook e corretto: `aoi_max_surface` era family-agnostic-non-safe (forward_step
-> eventprop). Le figure 🟡/🔴 (HDL/board) restano stime marcate. **Restano da fare**: il report FPGA finale
-> (dai risultati Azure, come `VALIDATION_REPORT_v3`), e le Fasi B/C.
+> **✅ BUILD FATTO + restyled + corretto (2026-07-02) — IN ATTESA DI RE-RUN AZURE.** Le 5 librerie software_now
+> sono scritte, testate (17 check verdi: `tests/test_fpga_profilers.py` 8, `test_fpga_seu.py` 6, `test_fpga_io.py`
+> 3) e verificate su **checkpoint REALI** (baseline+eventprop): ρ(U·V)=0.162 / ‖·‖₂=0.843 confermano il framework.
+> Le **46 figure a dati reali** sono in `scripts/fpga_figures.py` (render locale 46/46 OK, 0 placeholder); il
+> notebook `Eval_FPGA.ipynb` (builder `scripts/_build_fpga_eval_notebook.py`) le orchestra nelle 10 sezioni + 7 CSV
+> deliverable, resiliente come il v3. Verifica post-run: `scripts/verify_fpga_eval.py`.
+>
+> **Restyle + leggibilità + fix bug (commit `cedfceb`→`c40ff82`):** figure allineate allo stile dei report —
+> palette champion (Raffaello #d1495b · Leonardo #2a7fb8 · Donatello #7b3fa0 · Michelangelo #e8871e · oracolo
+> #7f7f7f), titolo attaccato al grafico **senza sottotitolo galleggiante**, rcParams matplotlib-default;
+> `readiness_radar` → small-multiples 2×2 e `energy_vs_ann` → barre annotate (leggibilità); ricalibrate
+> `energy_vs_rate`/`dead_sat`/readiness `Spike`/`Energia` dopo il bug n_ticks del v3 (la metrica spike-rate delle
+> figure FPGA — `_mean_spike_rate` — era **già** corretta, quindi la scorecard ~15% non è stata toccata). Il
+> notebook è stato **ri-committato con la palette giusta (`c40ff82`)**; i test locali girano su 4 checkpoint
+> **stand-in** (i champion veri sono solo su Azure), quindi validano stile/pipeline, non i numeri finali.
+>
+> **➡️ Re-run (lo lancia l'utente su Azure):** `git pull origin EventProp_Study` →
+> **`rm -rf results/evaluate/FPGA`** (indispensabile: senza, il done-skip salta le sezioni vecchie) →
+> `jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=-1 Eval_FPGA.ipynb` →
+> `python scripts/verify_fpga_eval.py`. Bug già catturato dal gate pre-notebook e corretto: `aoi_max_surface` era
+> family-agnostic-non-safe (forward_step eventprop). Le figure 🟡/🔴 (HDL/board) restano stime marcate.
+> **Restano da fare**: il **report FPGA finale** (dai risultati Azure, come `VALIDATION_REPORT_v3`), e le Fasi B/C.
 
 Storico del piano (ora realizzato):
 
