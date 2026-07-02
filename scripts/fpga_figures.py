@@ -43,10 +43,12 @@ def _gbar(ax, cats, per_champ, aliases, colors, ylab):
 
 
 # ---------------------------------------------------------------- contesto reale
-def build_ctx(models, cache, colors=None):
-    """Precomputa gli output delle librerie per ogni champion. models: {alias: model vivo}."""
+def build_ctx(models, cache, colors=None, hb=None):
+    """Precomputa gli output delle librerie per ogni champion. models: {alias: model vivo}.
+    hb = heavy-budget (None -> HB_LOCAL bounded; il notebook Azure passa budget pieni)."""
     aliases = [a for a in models if models[a] is not None]
     colors = colors or {a: DEFCOL[i % len(DEFCOL)] for i, a in enumerate(aliases)}
+    hb = hb or HB_LOCAL
     it0 = cache['val'][0]
     xwin = np.asarray(it0['x'][:50])[None]
     import torch
@@ -71,10 +73,11 @@ def build_ctx(models, cache, colors=None):
         sens = sensitivity_map(m, xwin_t, per_matrix_sample=8)
         # fragilita' po2 vs float sui 5 param
         dpar = _po2_vs_float_param(m, xwin_t)
+        heavy = _heavy(m, cache, xwin_t, hb)             # cvf/v2x/qbits/chatter/aoidist/seu_pshift (bounded)
         ctx['per'][a] = {'wp': wp, 'raster': raster, 'ss': ss, 'rate': rate, 'opc': opc,
                          'dse': dse, 'base_ok': base_ok, 'srows': srows, 'rec_po2': rec_po2,
                          'rec_float': rec_float, 'sens': sens, 'dpar': dpar,
-                         'shapes': model_shapes(m)}
+                         'shapes': model_shapes(m), **heavy}
     return ctx
 
 
@@ -527,19 +530,318 @@ def fig_thermal_budget(ctx):
     return fig, '09', 'thermal_budget', 'HDL (STIMA)', 'la SNN sparsa (0 DSP) sta nel budget termico passivo, l ANN no'
 
 
-ALL_FIGS = [
-    fig_readiness_matrix, fig_deploy_verdict,
-    fig_po2_alphabet, fig_spectral, fig_sparsity_mask, fig_po2_exponent_range,
-    fig_bit_allocation, fig_state_ranges, fig_leak_decay, fig_per_param_fragility,
-    fig_activity_map, fig_raster, fig_sparsity_tick, fig_isi, fig_dead_sat,
-    fig_energy_vs_ann, fig_energy_breakdown, fig_synops_split,
-    fig_op_count, fig_wcet_cycles, fig_latency_margin, fig_jitter_proof,
-    fig_op_celltype, fig_dse_pareto, fig_bram_dim,
-    fig_seu_intro, fig_seu_sensitivity, fig_bit_criticality, fig_hidden_vs_readout,
-    fig_queue_overflow, fig_aoi_surface,
-    fig_thermal_budget,
-]
+# ================================ eval PESANTI (bounded local / full Azure) ================================
+HB_LOCAL = {'cvf_flips': (1, 4, 8), 'cvf_mc': 2, 'cvf_drivers': 2, 'v2x_drivers': 2,
+            'aoi_drivers': 10, 'pshift_n': 12}
 
+
+def _heavy(m, cache, xwin_t, hb):
+    """Eval pesanti per le figure 07/08/02 (bounded in locale, pieni su Azure). try/except per chiave."""
+    out = {}
+    for key, fn in [('cvf', _cvf), ('v2x', _v2x), ('qbits', _qbits),
+                    ('chatter', _chatter), ('aoidist', _aoidist), ('seu_pshift', _seu_pshift)]:
+        try:
+            out[key] = fn(m, cache, xwin_t, hb)
+        except Exception:
+            out[key] = None
+    return out
+
+
+def _cvf(m, cache, xwin_t, hb):
+    from utils.seu_inject import collision_vs_flips
+    return collision_vs_flips(m, cache, n_flips_list=hb['cvf_flips'], n_mc=hb['cvf_mc'],
+                              n_drivers=hb['cvf_drivers'], seq_len=50)
+
+
+def _v2x(m, cache, xwin_t, hb):
+    from scripts.closed_loop_identify import v2x_robustness_sweep
+    return v2x_robustness_sweep(m, cache, n_drivers=hb['v2x_drivers'], pdrs=(1.0,),
+                                latencies=(0, 1, 2, 3), jitters=(), gilberts=(),
+                                hold_modes=('hold_last', 'dead_reckon', 'blind'), blackouts=())
+
+
+def _qbits(m, cache, xwin_t, hb, bits=(12, 8, 6, 4, 3, 2)):
+    from scripts.closed_loop_identify import identify
+    from utils.quantize import fake_quant
+    import torch
+    _, mats = weight_matrices(m)
+    orig = {k: v.detach().clone() for k, v in mats.items()}
+    prev = os.environ.get('PO2_ENABLED')
+    os.environ['PO2_ENABLED'] = '0'
+    p_float = np.asarray(identify(m, xwin_t), dtype=np.float64)
+    scale = np.array([33.3, 1.2, 2.5, 1.1, 1.5])
+    fixed_err = []
+    for b in bits:
+        for k, v in mats.items():
+            with torch.no_grad():
+                v.data.copy_(torch.tensor(fake_quant(orig[k].cpu().numpy(), frac_bits=b), dtype=v.dtype))
+        p = np.asarray(identify(m, xwin_t), dtype=np.float64)
+        fixed_err.append(float(np.mean(np.abs(p - p_float) / scale)))
+        for k, v in mats.items():
+            with torch.no_grad():
+                v.data.copy_(orig[k])
+    os.environ['PO2_ENABLED'] = '1'
+    p_po2 = np.asarray(identify(m, xwin_t), dtype=np.float64)
+    po2e = float(np.mean(np.abs(p_po2 - p_float) / scale))
+    if prev is None:
+        os.environ.pop('PO2_ENABLED', None)
+    else:
+        os.environ['PO2_ENABLED'] = prev
+    return {'bits': list(bits), 'fixed_err': fixed_err, 'po2_err': po2e}
+
+
+def _chatter(m, cache, xwin_t, hb):
+    from scripts.closed_loop_identify import identify
+    from utils.closed_loop_eval import simulate
+    from utils.quantize import fake_quant
+    idp = np.asarray(identify(m, xwin_t), dtype=np.float64)
+    idp_q = fake_quant(idp, frac_bits=2)
+    vl = 20 + 3 * np.sin(np.arange(200) * 0.05)
+    tr_f = simulate(None, idp, vl, 25.0, 20.0)
+    tr_q = simulate(None, idp_q, vl, 25.0, 20.0)
+    n = min(len(tr_f['a_ego']), len(tr_q['a_ego']))
+    return {'t': np.arange(n) * 0.1, 'a_float': tr_f['a_ego'][:n], 'a_quant': tr_q['a_ego'][:n]}
+
+
+def _aoidist(m, cache, xwin_t, hb):
+    from scripts.closed_loop_identify import identify
+    from utils.closed_loop_eval import simulate
+    import torch
+    ages = []
+    for it in cache['val'][:hb['aoi_drivers']]:
+        xw = torch.tensor(it['x'][:50][None], dtype=torch.float32)
+        idp = np.asarray(identify(m, xw), dtype=np.float64)
+        vl = 20 + 2 * np.sin(np.arange(150) * 0.04)
+        ch = {'hold_mode': 'hold_last', 'pdr': 0.7, 'latency_steps': 1, 'seed': 0}
+        tr = simulate(None, idp, vl, 25.0, 20.0, channel=ch)
+        if 'aoi_mean' in tr:
+            ages.append(tr['aoi_mean'])
+        if 'aoi_max' in tr:
+            ages.append(tr['aoi_max'])
+    return ages
+
+
+def _seu_pshift(m, cache, xwin_t, hb):
+    from utils.seu_inject import InjectionSession, decode_bits, flip_bit
+    from scripts.closed_loop_identify import identify
+    rng = np.random.default_rng(0); scale = np.array([33.3, 1.2, 2.5, 1.1, 1.5])
+    acc = np.zeros(5); cnt = 0
+    with InjectionSession(m) as inj:
+        base = np.asarray(identify(m, xwin_t), dtype=np.float64)
+        picks = [inj.catalog[j] for j in rng.choice(len(inj.catalog),
+                 size=min(hb['pshift_n'], len(inj.catalog)), replace=False)]
+        for name, fi in picks:
+            inj.set_element(name, fi, decode_bits(flip_bit(inj.code_at(name, fi), 2)))  # exp-MSB
+            p = np.asarray(identify(m, xwin_t), dtype=np.float64)
+            inj.restore_element(name, fi)
+            acc += np.abs(p - base) / scale; cnt += 1
+    return acc / max(1, cnt)
+
+
+def _placeholder(sec, name, feas, msg):
+    fig, ax = plt.subplots(figsize=(8.4, 3.6)); ax.axis('off')
+    ax.text(0.5, 0.5, msg, ha='center', va='center', fontsize=11, color='#666',
+            bbox=dict(boxstyle='round', fc='#f7f7f7', ec='#ccc'))
+    return fig, sec, name, feas, None
+
+
+# ================================ 00b / 01b READINESS+WEIGHTS extra ================================
+def fig_readiness_radar(ctx):
+    dims, S = _readiness_scores(ctx)
+    ang = np.linspace(0, 2 * np.pi, len(dims), endpoint=False).tolist(); ang += ang[:1]
+    fig, ax = plt.subplots(figsize=(7, 6), subplot_kw=dict(polar=True))
+    for a in ctx['aliases']:
+        v = list(S[a]); v += v[:1]
+        ax.plot(ang, v, color=ctx['colors'][a], label=a); ax.fill(ang, v, color=ctx['colors'][a], alpha=0.06)
+    ax.set_xticks(ang[:-1]); ax.set_xticklabels(dims, fontsize=8); ax.set_ylim(0, 1)
+    ax.legend(loc='upper right', bbox_to_anchor=(1.28, 1.10), fontsize=7)
+    return fig, '00', 'readiness_radar', 'SW (dati reali)', 'ogni asse: 1 = requisito di deploy soddisfatto'
+
+
+def fig_resource_occupancy(ctx):
+    res = ['LUT\n(53.2k)', 'FF\n(106.4k)', 'BRAM\n(140)', 'DSP\n(220)']
+    per = {}
+    for a in ctx['aliases']:
+        bram = 100.0 * ctx['per'][a]['wp']['total_footprint_bits'] / (140 * 36 * 1024)
+        per[a] = [2.8, 0.9, max(bram, 0.02), 0.0]                 # LUT/FF stima; BRAM reale; DSP=0
+    fig, ax = plt.subplots(figsize=(9.2, 4.4))
+    _gbar(ax, res, per, ctx['aliases'], ctx['colors'], '% budget Zynq-7020')
+    ax.set_ylim(0, 4.5)
+    return fig, '01', 'resource_occupancy', 'SW (LUT/FF STIMA, BRAM/DSP reali)', 'DSP 0% (po2=shift-add), tutto <3% del chip'
+
+
+# ================================ 02b FIXED-POINT extra ================================
+def fig_quant_vs_bits(ctx):
+    a = ctx['aliases'][0]; q = ctx['per'][a].get('qbits')
+    if not q:
+        return _placeholder('02', 'quant_vs_bits', 'SW / re-train', 'sweep bit-width: generato su Azure')
+    fig, ax = plt.subplots(figsize=(9, 4.4))
+    ax.plot(q['bits'], q['fixed_err'], 'o-', color='#2a78d6', label='fixed Qm.n')
+    ax.axhline(q['po2_err'], color='#e34948', ls='--', label='po2 (deploy)')
+    ax.invert_xaxis(); ax.set_xlabel('bit-width pesi (<-)'); ax.set_ylabel('errore id. vs float')
+    ax.legend(fontsize=8)
+    return fig, '02', 'quant_vs_bits (%s)' % a, 'SW / re-train', 'bit-budget pesi (curva ONESTA solo con re-training QAT)'
+
+
+def fig_chattering(ctx):
+    a = ctx['aliases'][0]; c = ctx['per'][a].get('chatter')
+    if not c:
+        return _placeholder('02', 'chattering', 'SW', 'closed-loop float vs quant: generato su Azure')
+    fig, ax = plt.subplots(2, 1, figsize=(9, 5.4))
+    ax[0].plot(c['t'], c['a_float'], color='#888', label='float (param pieni)')
+    ax[0].plot(c['t'], c['a_quant'], color='#e34948', alpha=0.8, label='param quant 2-bit (nervoso)')
+    ax[0].set_ylabel('a_ego [m/s2]'); ax[0].legend(fontsize=7, ncol=2); ax[0].set_title('comando: liscio vs nervoso', fontsize=10)
+    for lab, sig, cc in [('float', c['a_float'], '#888'), ('quant', c['a_quant'], '#e34948')]:
+        sp = np.abs(np.fft.rfft(sig - np.mean(sig))) ** 2
+        fr = np.fft.rfftfreq(len(sig), d=0.1)
+        ax[1].semilogy(fr, sp + 1e-6, color=cc, label=lab)
+    ax[1].axvspan(0.5, 5, color='#e34948', alpha=0.06); ax[1].set_xlabel('freq [Hz]'); ax[1].set_ylabel('PSD (log)')
+    ax[1].set_title('energia >0.5 Hz (zona rossa) = chattering', fontsize=10); ax[1].legend(fontsize=7)
+    return fig, '02', 'chattering (%s)' % a, 'SW (dati reali)', 'instabilita: accelerazione nervosa da quantizzazione'
+
+
+# ================================ 04b ENERGY extra ================================
+def fig_energy_vs_rate(ctx):
+    rate = np.linspace(0.5, 5, 30)
+    fig, ax = plt.subplots(figsize=(9, 4.2))
+    for a in ctx['aliases']:
+        s = ctx['per'][a]['shapes']
+        static = (s['H'] * s['IN']) * s['n_ticks'] * E_AC / 1000.0
+        dyn_full = (s['R'] * s['H'] + s['O'] * s['H']) * s['n_ticks'] * E_AC / 1000.0
+        ax.plot(rate, static + (rate / 100.0) * dyn_full * 50, color=ctx['colors'][a], label=a)
+    ax.set_xlabel('spike-rate [%]'); ax.set_ylabel('energia [nJ]'); ax.legend(fontsize=7)
+    return fig, '04', 'energy_vs_rate', 'SW (dati reali, modello)', 'quanto scende l energia abbassando il firing-rate'
+
+
+# ================================ 05b/06b TIMING+RES extra (STIMA) ================================
+def fig_decode_criticalpath(ctx):
+    comp = ['sigmoid x5 (LUT)', 'sqrt(ab)', 'div', 'tanh CAH', 'add/mul']; val = [12, 18, 22, 16, 8]
+    fig, ax = plt.subplots(figsize=(9, 4.2)); ax.bar(comp, val, color='#eb6834')
+    ax.set_ylabel('cicli (STIMA)'); ax.tick_params(axis='x', rotation=15)
+    return fig, '05', 'decode_criticalpath', 'SW (STIMA)', 'il decode (sigmoid+IDM) e l unico blocco mul/div -> collo Fmax + unico DSP'
+
+
+def fig_area_model(ctx):
+    parts = ['ALIF(32)', 'low-rank U/V', 'LI+decode', 'delay-line', 'controllo']
+    lut = [900, 500, 700, 200, 300]; ff = [300, 100, 80, 240, 120]; x = np.arange(len(parts))
+    fig, ax = plt.subplots(figsize=(9, 4.4))
+    ax.bar(x, lut, 0.4, label='LUT', color='#2a78d6'); ax.bar(x + 0.4, ff, 0.4, label='FF', color='#1baf7a')
+    ax.set_xticks(x + 0.2); ax.set_xticklabels(parts, rotation=15, fontsize=8); ax.set_ylabel('# (STIMA)')
+    ax.legend(fontsize=8)
+    return fig, '06', 'area_model', 'SW (STIMA)', 'stima parametrica LUT/FF per blocco, PRIMA della sintesi'
+
+
+# ================================ 07b SEU extra ================================
+def fig_degrade_vs_flips(ctx):
+    fig, ax = plt.subplots(figsize=(9, 4.4)); any_data = False
+    for a in ctx['aliases']:
+        cvf = ctx['per'][a].get('cvf')
+        if not cvf:
+            continue
+        any_data = True
+        k = [r['n_flips'] for r in cvf['rows']]; cr = [r['collision_rate_mean'] for r in cvf['rows']]
+        ax.plot(k, cr, 'o-', color=ctx['colors'][a], label=a)
+    if not any_data:
+        plt.close(fig)
+        return _placeholder('07', 'degrade_vs_flips', 'SW', 'curva collisione vs #SEU: generata su Azure')
+    ax.set_xlabel('# bit-flip accumulati'); ax.set_ylabel('collision_rate'); ax.legend(fontsize=7)
+    return fig, '07', 'degrade_vs_flips', 'SW (dati reali, bounded local)', 'quanti SEU prima dell insicurezza -> periodo di scrubbing'
+
+
+def fig_perparam_shift(ctx):
+    P = ['v0', 'T', 's0', 'a', 'b']; A = [a for a in ctx['aliases'] if ctx['per'][a].get('seu_pshift') is not None]
+    if not A:
+        return _placeholder('07', 'perparam_shift', 'SW', 'shift per-param sotto SEU: generato su Azure')
+    M = np.array([ctx['per'][a]['seu_pshift'] for a in A])
+    fig, ax = plt.subplots(figsize=(8, 3.8)); im = ax.imshow(M, cmap='YlOrRd', aspect='auto')
+    ax.set_xticks(range(5)); ax.set_xticklabels(P); ax.set_yticks(range(len(A))); ax.set_yticklabels(A)
+    for i in range(len(A)):
+        for j in range(5):
+            ax.text(j, i, '%.3f' % M[i, j], ha='center', va='center', fontsize=8)
+    ax.grid(False); plt.colorbar(im, ax=ax, label='|Δparam| medio sotto flip exp-MSB')
+    return fig, '07', 'perparam_shift', 'SW (dati reali)', 'quale param si sposta di piu sotto SEU (a,b frenata?)'
+
+
+def fig_tmr_overhead(ctx):
+    fig, ax = plt.subplots(figsize=(8.4, 4.2))
+    ax.bar(['baseline', 'TMR selettivo', 'TMR full', 'BRAM-ECC'], [100, 145, 300, 105],
+           color=['#888', '#1baf7a', '#e34948', '#2a78d6'])
+    ax.axhline(100, color='k', ls=':'); ax.set_ylabel('% area vs baseline')
+    return fig, '07', 'tmr_overhead', 'HDL (STIMA)', 'costo area mitigazioni: TMR full +200%, ECC quasi gratis'
+
+
+# ================================ 08b I/O extra ================================
+def fig_aoi_dist(ctx):
+    ages = []
+    for a in ctx['aliases']:
+        d = ctx['per'][a].get('aoidist')
+        if d:
+            ages += list(d)
+    if not ages:
+        return _placeholder('08', 'aoi_dist', 'SW', 'distribuzione AoI: generata su Azure')
+    fig, ax = plt.subplots(figsize=(9, 4.2)); ax.hist(ages, bins=min(30, max(5, len(ages))), color='#eda100', edgecolor='w')
+    ax.axvline(0.3, color='#e34948', ls='--', label='AoI_max (soglia hard)'); ax.set_xlabel('Age-of-Information [s]')
+    ax.set_ylabel('conteggio'); ax.legend(fontsize=8)
+    return fig, '08', 'aoi_dist', 'SW (dati reali)', 'quanto spesso la rete gira su dati vecchi'
+
+
+def fig_holdmode(ctx):
+    modes = ['hold_last', 'dead_reckon', 'blind']; per = {}
+    for a in ctx['aliases']:
+        v2x = ctx['per'][a].get('v2x')
+        if not v2x:
+            continue
+        row = {r['val']: r['collision_rate'] for r in v2x if r['axis'] == 'hold_mode'}
+        per[a] = [row.get(mm, np.nan) for mm in modes]
+    if not per:
+        return _placeholder('08', 'holdmode', 'SW', 'hold-mode collision: generata su Azure')
+    fig, ax = plt.subplots(figsize=(9, 4.4))
+    _gbar(ax, modes, per, list(per), ctx['colors'], 'collision_rate')
+    return fig, '08', 'holdmode', 'SW (dati reali, bounded)', 'blind (senza hold) scopre il crollo; hold-last maschera'
+
+
+def fig_pdr_knee(ctx):
+    per = {}
+    for a in ctx['aliases']:
+        v2x = ctx['per'][a].get('v2x')
+        if not v2x:
+            continue
+        rows = sorted([r for r in v2x if r['axis'] == 'latency'], key=lambda r: r['val'])
+        if rows:
+            per[a] = ([r['val'] for r in rows], [r['min_ttc_p5'] for r in rows])
+    if not per:
+        return _placeholder('08', 'pdr_latency_knee', 'SW', 'knee latenza: generata su Azure')
+    fig, ax = plt.subplots(figsize=(9, 4.2))
+    for a, (xx, yy) in per.items():
+        ax.plot(xx, yy, 'o-', color=ctx['colors'][a], label=a)
+    ax.set_xlabel('latenza CAM [step 0.1s]'); ax.set_ylabel('p5 min-TTC (basso=pericoloso)'); ax.legend(fontsize=7)
+    return fig, '08', 'pdr_latency_knee', 'SW (dati reali, bounded)', 'graceful su PDR, il margine crolla con la latenza'
+
+
+# ================================ 09b THERMAL extra (STIMA) ================================
+def fig_derating(ctx):
+    tj = np.linspace(25, 125, 50)
+    fig, ax = plt.subplots(figsize=(9, 4.2))
+    ax.plot(tj, 220 * (1 - (tj - 25) / 100 * 0.28), color='#e34948', label='Fmax(Tj)')
+    ax.axhline(100, color='#2a78d6', ls='--', label='target 100 MHz')
+    ax.axvline(100, color='#888', ls=':', label='Tj automotive ~100C')
+    ax.set_xlabel('Tj [C]'); ax.set_ylabel('Fmax [MHz] (STIMA)'); ax.legend(fontsize=8)
+    return fig, '09', 'derating_tj_fmax', 'HDL (STIMA)', 'a caldo il clock scende: resta headroom sul target a 100C?'
+
+
+ALL_FIGS = [
+    fig_readiness_matrix, fig_readiness_radar, fig_deploy_verdict,
+    fig_po2_alphabet, fig_resource_occupancy, fig_spectral, fig_sparsity_mask, fig_po2_exponent_range,
+    fig_bit_allocation, fig_state_ranges, fig_quant_vs_bits, fig_per_param_fragility, fig_chattering, fig_leak_decay,
+    fig_activity_map, fig_raster, fig_sparsity_tick, fig_isi, fig_dead_sat,
+    fig_energy_vs_ann, fig_energy_breakdown, fig_energy_vs_rate, fig_synops_split,
+    fig_op_count, fig_wcet_cycles, fig_latency_margin, fig_jitter_proof, fig_decode_criticalpath,
+    fig_op_celltype, fig_dse_pareto, fig_area_model, fig_bram_dim,
+    fig_seu_intro, fig_seu_sensitivity, fig_bit_criticality, fig_degrade_vs_flips, fig_perparam_shift,
+    fig_hidden_vs_readout, fig_tmr_overhead,
+    fig_aoi_surface, fig_aoi_dist, fig_queue_overflow, fig_holdmode, fig_pdr_knee,
+    fig_derating, fig_thermal_budget,
+]
 
 def render_all(models, cache, out_pdf):
     """Costruisce il ctx reale e rende tutte le figure. Ritorna (n_ok, n_fail, status[])."""
