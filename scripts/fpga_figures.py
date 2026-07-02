@@ -872,3 +872,128 @@ def render_all(models, cache, out_pdf):
     n_ok = sum(1 for _, s in status if s == 'OK')
     n_fail = sum(1 for _, s in status if s.startswith('FAIL'))
     return n_ok, n_fail, status
+
+
+# ================================ integrazione notebook ================================
+# budget pieno per la run Azure (il locale usa HB_LOCAL bounded)
+HB_AZURE = {'cvf_flips': (1, 2, 4, 8, 16), 'cvf_mc': 8, 'cvf_drivers': 10, 'v2x_drivers': 15,
+            'aoi_drivers': 40, 'pshift_n': 40}
+
+SECTIONS = {
+    '00_Readiness': [fig_readiness_matrix, fig_readiness_radar, fig_deploy_verdict],
+    '01_Weights_po2': [fig_po2_alphabet, fig_resource_occupancy, fig_spectral, fig_sparsity_mask,
+                       fig_po2_exponent_range],
+    '02_FixedPoint': [fig_bit_allocation, fig_state_ranges, fig_quant_vs_bits, fig_per_param_fragility,
+                      fig_chattering, fig_leak_decay],
+    '03_Spiking': [fig_activity_map, fig_raster, fig_sparsity_tick, fig_isi, fig_dead_sat],
+    '04_Energy': [fig_energy_vs_ann, fig_energy_breakdown, fig_energy_vs_rate, fig_synops_split],
+    '05_Timing_WCET': [fig_op_count, fig_wcet_cycles, fig_latency_margin, fig_jitter_proof,
+                       fig_decode_criticalpath],
+    '06_Resources_DSE': [fig_op_celltype, fig_dse_pareto, fig_area_model, fig_bram_dim],
+    '07_SEU_ISO26262': [fig_seu_intro, fig_seu_sensitivity, fig_bit_criticality, fig_degrade_vs_flips,
+                        fig_perparam_shift, fig_hidden_vs_readout, fig_tmr_overhead],
+    '08_IO_HIL': [fig_aoi_surface, fig_aoi_dist, fig_queue_overflow, fig_holdmode, fig_pdr_knee],
+    '09_Thermal': [fig_derating, fig_thermal_budget],
+}
+
+
+def _clean(name):
+    return name.split('(')[0].strip().replace(' ', '_').replace('/', '_').replace('—', '-')
+
+
+def save_section(ctx, folder, savefig_fn):
+    """Rende le figure di una sezione e le salva via savefig_fn(folder, filename, fig). Ritorna #salvate."""
+    n = 0
+    for fn in SECTIONS[folder]:
+        res = fn(ctx)
+        if res is None:
+            continue
+        fig, sec, name, feas, note = res
+        fig.suptitle('%s · %s  [%s]' % (sec, name, feas), fontsize=12, fontweight='bold')
+        if note:
+            fig.text(0.5, 0.93, note, ha='center', fontsize=8, color='#444')
+        try:
+            fig.tight_layout(rect=[0, 0.02, 1, 0.90 if note else 0.94])
+        except Exception:
+            pass
+        savefig_fn(folder, _clean(name) + '.png', fig)
+        n += 1
+    return n
+
+
+# ---- CSV deliverable (§4.3) da ctx ----
+def weight_stats_csv(ctx):
+    rows = []
+    for a in ctx['aliases']:
+        for s in ctx['per'][a]['wp']['matrices']:
+            rows.append({'champion': a, 'matrix': s['matrix'], 'n_weights': s['n_weights'],
+                         'frac_zero': round(s['frac_zero'], 4), 'entropy_bits': round(s['entropy_bits'], 3),
+                         'footprint_bits': s['footprint_bits'], 'qerr_mean': round(s['qerr_mean'], 5),
+                         **{f'exp_{e}': s['exp_hist'][e] for e in range(PO2_EXP_MIN, PO2_EXP_MAX + 1)}})
+    return rows
+
+
+def state_ranges_csv(ctx):
+    rows = []
+    for a in ctx['aliases']:
+        if not ctx['per'][a]['base_ok']:
+            continue
+        for r in ctx['per'][a]['srows']:
+            rows.append({'champion': a, **{k: (round(v, 5) if isinstance(v, float) else v) for k, v in r.items()}})
+    return rows
+
+
+def scorecard_csv(ctx):
+    dims, S = _readiness_scores(ctx)
+    return [{'champion': a, **{d: round(S[a][i], 3) for i, d in enumerate(dims)},
+             'rho_po2': round(ctx['per'][a]['rec_po2'].get('spectral_radius', float('nan')), 4),
+             'spike_rate_pct': round(ctx['per'][a]['rate'] * 100, 3),
+             'footprint_B': ctx['per'][a]['wp']['total_footprint_bytes']} for a in ctx['aliases']]
+
+
+def latency_csv(ctx):
+    return [{'champion': a, **p} for a in ctx['aliases'] for p in ctx['per'][a]['dse']['profiles']]
+
+
+def energy_csv(ctx):
+    rows = []
+    for a in ctx['aliases']:
+        opc = ctx['per'][a]['opc']; s = opc['shapes']
+        e_snn = opc['synaptic_ac_per_step_worstcase'] * E_AC / 1000.0
+        e_ann = (s['H'] * s['IN'] + s['H'] * s['H'] + s['O'] * s['H']) * s['n_ticks'] * E_MAC / 1000.0
+        rows.append({'champion': a, 'E_snn_nJ': round(e_snn, 3), 'E_ann_nJ': round(e_ann, 3),
+                     'advantage_x': round(e_ann / max(e_snn, 1e-9), 2),
+                     'spike_rate_pct': round(ctx['per'][a]['rate'] * 100, 3), 'dsp_snn': 0})
+    return rows
+
+
+def seu_csv(ctx):
+    rows = []
+    for a in ctx['aliases']:
+        bc = bit_criticality(ctx['per'][a]['sens']); hr = hidden_vs_readout(ctx['per'][a]['sens'])
+        rows.append({'champion': a, **{k: round(v, 4) for k, v in bc.items()},
+                     'hidden_mean': round(hr['hidden_mean'], 4), 'readout_mean': round(hr['readout_mean'], 4)})
+    return rows
+
+
+def io_csv(ctx):
+    rows = []
+    for a in ctx['aliases']:
+        v2x = ctx['per'][a].get('v2x') or []
+        hold = {r['val']: r['collision_rate'] for r in v2x if r['axis'] == 'hold_mode'}
+        aoid = ctx['per'][a].get('aoidist') or [float('nan')]
+        rows.append({'champion': a, 'coll_hold_last': round(hold.get('hold_last', float('nan')), 4),
+                     'coll_dead_reckon': round(hold.get('dead_reckon', float('nan')), 4),
+                     'coll_blind': round(hold.get('blind', float('nan')), 4),
+                     'aoi_mean_s': round(float(np.nanmean(aoid)), 4)})
+    return rows
+
+
+def save_all_csvs(ctx, savecsv_fn):
+    savecsv_fn('00_Readiness', 'scorecard.csv', scorecard_csv(ctx))
+    savecsv_fn('01_Weights_po2', 'weight_stats.csv', weight_stats_csv(ctx))
+    savecsv_fn('02_FixedPoint', 'state_ranges.csv', state_ranges_csv(ctx))
+    savecsv_fn('04_Energy', 'energy_power.csv', energy_csv(ctx))
+    savecsv_fn('05_Timing_WCET', 'latency_dse.csv', latency_csv(ctx))
+    savecsv_fn('07_SEU_ISO26262', 'seu_sensitivity.csv', seu_csv(ctx))
+    savecsv_fn('08_IO_HIL', 'io_hil.csv', io_csv(ctx))
