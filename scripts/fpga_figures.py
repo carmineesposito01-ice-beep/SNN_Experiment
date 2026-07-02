@@ -129,15 +129,21 @@ def _readiness_scores(ctx):
     S = {}
     for a in ctx['aliases']:
         p = ctx['per'][a]
-        sparsity = 1.0 - min(1.0, p['rate'] / 0.10)                    # ~1-2% spike = ottimo; 0 a >=10%
-        footprint = 1.0                                               # 400B << BRAM -> pieno
+        # sparsita': iper-sparso (~1-5%)=1, ~30%+=0. NB questi champion sparano ~13-19% -> NON iper-sparsi.
+        sparsity = float(np.clip(1.0 - p['rate'] / 0.30, 0, 1))
+        footprint = 1.0                                               # 400-656B << BRAM -> pieno
         dsp_free = 1.0                                                # 0 DSP sempre
         rho = p['rec_po2'].get('spectral_radius', 1.0)
         pesi = float(np.clip(1.0 - rho, 0, 1))                        # contrattivo = buono
         timing = float(np.clip(1.0 - p['dse']['profiles'][0]['utilization_pct'] / 100.0, 0, 1))
         risorse = 1.0
         seu = float(np.clip(1.0 - 20 * max(bit_criticality(p['sens']).values()), 0, 1))
-        energia = float(np.clip((p['opc']['shapes']['H'] * 0) + 0.8, 0, 1))
+        # Energia: dal VANTAGGIO reale (tipico sparso) vs ANN, normalizzato (15x -> pieno). Era 0.8 fisso.
+        opc = p['opc']; s = opc['shapes']
+        ann_ops = (s['H'] * s['IN'] + s['H'] * s['H'] + s['O'] * s['H']) * s['n_ticks']
+        snn_ac = opc.get('synaptic_ac_per_step_typical', opc['synaptic_ac_per_step_worstcase'])
+        adv = (ann_ops * E_MAC) / (max(snn_ac, 1e-9) * E_AC)
+        energia = float(np.clip(adv / 15.0, 0, 1))
         io = float(np.clip(1.0 - p['dpar'].mean() * 5, 0, 1))
         S[a] = [pesi, footprint, sparsity, energia, timing, risorse, seu, io]
     return dims, S
@@ -357,9 +363,11 @@ def fig_isi(ctx):
 
 def fig_dead_sat(ctx):
     A = ctx['aliases']
-    per = {a: [ctx['per'][a]['ss']['dead_frac'] * 32, ctx['per'][a]['ss']['sat_frac'] * 32] for a in A}
+    # FIX: usa l'H reale per champion (era 32 hardcoded -> rompeva hidden!=32)
+    per = {a: [ctx['per'][a]['ss']['dead_frac'] * ctx['per'][a]['shapes']['H'],
+               ctx['per'][a]['ss']['sat_frac'] * ctx['per'][a]['shapes']['H']] for a in A}
     fig, ax = plt.subplots(figsize=(9, 4.4))
-    _gbar(ax, ['morti (rate=0)', 'saturi (rate~1)'], per, A, ctx['colors'], '# neuroni (di ~32)')
+    _gbar(ax, ['morti (rate=0)', 'saturi (rate~1)'], per, A, ctx['colors'], '# neuroni hidden')
     ax.text(0.02, 0.92, 'morti -> PRUNING · saturi -> costante hardwired', transform=ax.transAxes,
             fontsize=9, va='top', bbox=dict(boxstyle='round', fc='#f4f4f4', ec='#ccc'))
     return fig, '03', 'dead_saturated', 'SW (dati reali)', 'entrambe le categorie sono semplificabili in hardware'
@@ -746,15 +754,20 @@ def fig_chattering(ctx):
 
 # ================================ 04b ENERGY extra ================================
 def fig_energy_vs_rate(ctx):
-    rate = np.linspace(0.5, 5, 30)
-    fig, ax = plt.subplots(figsize=(9, 4.2))
+    # FIX: asse esteso a 0.5-25% (il rate reale ~13-19% era fuori dal vecchio 0.5-5%) + tolto il *50
+    # spurio; i pallini marcano il rate OPERATIVO reale di ogni champion.
+    rate = np.linspace(0.5, 25, 40)
+    fig, ax = plt.subplots(figsize=(9.2, 4.4))
     for a in ctx['aliases']:
         s = ctx['per'][a]['shapes']
         static = (s['H'] * s['IN']) * s['n_ticks'] * E_AC / 1000.0
         dyn_full = (s['R'] * s['H'] + s['O'] * s['H']) * s['n_ticks'] * E_AC / 1000.0
-        ax.plot(rate, static + (rate / 100.0) * dyn_full * 50, color=ctx['colors'][a], label=a)
+        ax.plot(rate, static + (rate / 100.0) * dyn_full, color=ctx['colors'][a], label=a)
+        r0 = ctx['per'][a]['rate'] * 100.0
+        ax.plot(r0, static + (r0 / 100.0) * dyn_full, 'o', color=ctx['colors'][a], ms=7, zorder=3)
     ax.set_xlabel('spike-rate [%]'); ax.set_ylabel('energia [nJ]'); ax.legend(fontsize=7)
-    return fig, '04', 'energy_vs_rate', 'SW (dati reali, modello)', 'quanto scende l energia abbassando il firing-rate'
+    return fig, '04', 'energy_vs_rate', 'SW (dati reali, modello)', \
+        'i pallini = rate operativo reale (~13-19%): i champion NON sono nel regime sparso'
 
 
 # ================================ 05b/06b TIMING+RES extra (STIMA) ================================
