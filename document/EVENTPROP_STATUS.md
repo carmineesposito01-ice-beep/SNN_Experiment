@@ -57,6 +57,16 @@ il **notebook champion `Eval_v3_TURTLE_POWER`** (4 champion + oracolo) — in at
    **③** FPGA-in-the-Loop **host-in-the-loop** con **harness PYNQ** custom (FpgaBackend Python in ①). Tutto in
    **`document/POST_FPGA_ROADMAP.md`** (decisioni + ricognizione Spiker+/hls4ml/FINN/HDL Coder + sinergie).
    **Non implementate** — partire da ① con una sessione di design.
+7. **⚠️ CORREZIONE BUG spike-rate/energia (2026-07-02, audit multi-agente)**: il calcolo energia del v3 aveva una
+   **DOPPIA divisione per n_ticks**: `forward_sequence_with_stats()[1]` restituisce gia' una frazione per-tick
+   [0,1] (network.py:673), ma la cella ENERGY la passava a `energy_estimate` che vuole CONTEGGI e ridivide per
+   n_ticks (snn_showcase.py:92) → `mean_spike_rate_pct` **10× troppo basso**, `advantage_x` **~4.4× troppo alto**.
+   **VERITA'**: gli EventProp **NON sono sparsi** — sparano **~13-19%** (non ~1.5%), vantaggio energetico **~5-6×**
+   (non 22-30×). La **scorecard FPGA (~15%) era GIA' corretta**; era il v3 sbagliato. Il loro edge FPGA e' **ρ<1
+   + 0 morti**, NON sparsita'/energia. **FIX applicati**: `_build_eval_v3_notebook.py` (cella ENERGY, *n_ticks +
+   assert), `energy.csv`/`energy.png` v3 ricalcolati, `VALIDATION_REPORT_v3` corretto, magagne fpga_figures
+   (dead_sat H, energy_vs_rate range, readiness Spike/Energia). Le altre metriche (ρ, DSP, timing, SEU, quant,
+   V2X, accuracy, safety) NON erano toccate.
 
 **Workflow operativo**: training/eval pesanti su **Azure** (sandokan, `azureml_py38`, Python 3.10), **lanciati
 dall'utente**; in locale pull/analisi/build-notebook. L'assistente NON ha accesso diretto ad Azure. Checkpoint
