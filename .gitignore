@@ -18,6 +18,10 @@ checkpoints/
 *.pt
 *.pth
 
+# ECCEZIONE: i 4 champion frozen sono versionati (tiny ~30KB l'uno) per girare in
+# locale senza Azure (simulatore ①, figure FPGA). Vedi champions/README.md.
+!champions/**
+
 # Dataset (generated synthetically at runtime)
 dataset/
 
