@@ -367,22 +367,28 @@ def fig_dead_sat(ctx):
 
 # ================================ 04 ENERGY ================================
 def fig_energy_vs_ann(ctx):
-    A = ctx['aliases']; x = np.arange(len(A)); w = 0.35
-    fig, ax = plt.subplots(figsize=(9, 4.6))
+    # barre raggruppate con VALORI annotati (lo stack su scala log rendeva le barre SNN illeggibili).
+    A = ctx['aliases']; x = np.arange(len(A)); w = 0.26
+    fig, ax = plt.subplots(figsize=(9.8, 4.9))
+    e_ann_max = 1.0
     for i, a in enumerate(A):
         opc = ctx['per'][a]['opc']; s = opc['shapes']
-        shift = (opc['per_step_worstcase']['input_syn'] + opc['per_step_worstcase']['rec_U']) * E_AC / 1000.0
-        typ = opc.get('per_step_typical', opc['per_step_worstcase'])
-        ac = (typ['rec_V'] + typ['out_syn']) * E_AC / 1000.0
-        wc = opc['synaptic_ac_per_step_worstcase'] * E_AC / 1000.0
-        ann_mac = (s['H'] * s['IN'] + s['H'] * s['H'] + s['O'] * s['H']) * s['n_ticks'] * E_MAC / 1000.0
-        ax.bar(i - w / 2, shift, w, color='#2a78d6', label='SNN shift-add' if i == 0 else '')
-        ax.bar(i - w / 2, ac, w, bottom=shift, color='#1baf7a', label='SNN AC (sparso)' if i == 0 else '')
-        ax.plot([i - w, i], [wc, wc], color='#e34948', lw=1.6, label='SNN worst-case (denso)' if i == 0 else '')
-        ax.bar(i + w / 2, ann_mac, w, color='#888', label='ANN MAC' if i == 0 else '')
-    ax.set_yscale('log'); ax.set_xticks(x); ax.set_xticklabels(A); ax.set_ylabel('energia/inferenza [nJ] (log)')
-    ax.legend(fontsize=7, ncol=2)
-    return fig, '04', 'energy_vs_ann', 'SW (dati reali, stima pJ)', 'barre = tipico sparso · linea rossa = worst-case denso · ANN = tutto MAC · SNN 0 DSP'
+        e_typ = opc.get('synaptic_ac_per_step_typical', opc['synaptic_ac_per_step_worstcase']) * E_AC / 1000.0
+        e_wc = opc['synaptic_ac_per_step_worstcase'] * E_AC / 1000.0
+        e_ann = (s['H'] * s['IN'] + s['H'] * s['H'] + s['O'] * s['H']) * s['n_ticks'] * E_MAC / 1000.0
+        e_ann_max = max(e_ann_max, e_ann)
+        for xx, val, col, lab in [(x[i] - w, e_typ, '#1baf7a', 'SNN tipico (sparso)'),
+                                  (x[i], e_wc, '#d62728', 'SNN worst-case (denso)'),
+                                  (x[i] + w, e_ann, '#8c8c8c', 'ANN densa (MAC)')]:
+            ax.bar(xx, val, w, color=col, label=lab if i == 0 else '')
+            ax.text(xx, val * 1.06, '%.1f' % val, ha='center', va='bottom', fontsize=7)
+        ax.text(x[i], e_ann * 1.9, '%.0f× / %.0f×' % (e_ann / max(e_typ, 1e-9), e_ann / max(e_wc, 1e-9)),
+                ha='center', fontsize=8.5, color='#1baf7a', fontweight='bold')
+    ax.set_yscale('log'); ax.set_ylim(1, e_ann_max * 5)
+    ax.set_xticks(x); ax.set_xticklabels(A); ax.set_ylabel('energia / inferenza [nJ]  (log)')
+    ax.legend(fontsize=7, ncol=3, loc='upper center')
+    return fig, '04', 'energy_vs_ann', 'SW (dati reali, stima pJ)', \
+        'vantaggio annotato: tipico× / worst-case× · SNN 0 DSP (l\'ANN userebbe i DSP)'
 
 
 def fig_energy_breakdown(ctx):
@@ -673,15 +679,27 @@ def _placeholder(sec, name, feas, msg):
 
 # ================================ 00b / 01b READINESS+WEIGHTS extra ================================
 def fig_readiness_radar(ctx):
+    # small-multiples: un radar per champion (le 4 serie sovrapposte erano illeggibili).
     dims, S = _readiness_scores(ctx)
+    A = ctx['aliases']
     ang = np.linspace(0, 2 * np.pi, len(dims), endpoint=False).tolist(); ang += ang[:1]
-    fig, ax = plt.subplots(figsize=(7, 6), subplot_kw=dict(polar=True))
-    for a in ctx['aliases']:
+    ncol = 2 if len(A) > 1 else 1
+    nrow = int(np.ceil(len(A) / ncol))
+    fig, axes = plt.subplots(nrow, ncol, figsize=(4.7 * ncol, 4.3 * nrow),
+                             subplot_kw=dict(polar=True))
+    axes = np.atleast_1d(axes).reshape(-1)
+    for i, a in enumerate(A):
+        ax = axes[i]
         v = list(S[a]); v += v[:1]
-        ax.plot(ang, v, color=ctx['colors'][a], label=a); ax.fill(ang, v, color=ctx['colors'][a], alpha=0.06)
-    ax.set_xticks(ang[:-1]); ax.set_xticklabels(dims, fontsize=8); ax.set_ylim(0, 1)
-    ax.legend(loc='upper right', bbox_to_anchor=(1.28, 1.10), fontsize=7)
-    return fig, '00', 'readiness_radar', 'SW (dati reali)', 'ogni asse: 1 = requisito di deploy soddisfatto'
+        ax.plot(ang, v, color=ctx['colors'][a], lw=2)
+        ax.fill(ang, v, color=ctx['colors'][a], alpha=0.25)
+        ax.set_xticks(ang[:-1]); ax.set_xticklabels(dims, fontsize=7.5)
+        ax.set_ylim(0, 1); ax.set_yticks([0.5, 1.0]); ax.set_yticklabels(['.5', '1'], fontsize=6)
+        ax.set_title(a, color=ctx['colors'][a], fontsize=11, pad=12)
+    for j in range(len(A), len(axes)):
+        axes[j].axis('off')
+    return fig, '00', 'readiness_radar', 'SW (dati reali)', \
+        'un profilo per champion (ogni asse: 1 = requisito di deploy soddisfatto)'
 
 
 def fig_resource_occupancy(ctx):
