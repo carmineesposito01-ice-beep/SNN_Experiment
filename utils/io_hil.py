@@ -30,16 +30,27 @@ def _brake_profile(vl0, t_brake, brake_accel, horizon):
 
 def aoi_max_surface(model, cache, gaps=(8.0, 15.0, 25.0, 40.0), dvs=(0.0, 5.0, 10.0, 15.0),
                     driver_idx=0, v_ego=20.0, brake_accel=-6.0, t_brake=40, horizon=200,
-                    max_stale_steps=40, device='cpu'):
+                    max_stale_steps=40, seq_len=50, device='cpu'):
     """Griglia AoI_max(gap, Delta-v): max staleness del CAM (in step e in s) prima della collisione.
 
     Per ogni cella si costruisce un hard-brake del leader a t_brake e si cerca (ricerca binaria)
-    la lunghezza massima di blackout a partire da t_brake che NON causa collisione: quello e'
-    l'AoI massimo tollerabile. Delta-v > 0 = ego piu' veloce (chiusura). Riusa simulate().
+    la lunghezza massima di blackout da t_brake che NON causa collisione: quello e' l'AoI massimo
+    tollerabile. Delta-v > 0 = ego piu' veloce (chiusura).
+
+    Family-agnostic: i param di guida si IDENTIFICANO UNA VOLTA dal champion (forward_sequence,
+    ok per baseline ed eventprop), poi si guida l'IDM con simulate(model=None) -> la staleness
+    degrada la PERCEZIONE (s_obs/vl_obs), non serve il forward_step per-step (che eventprop non fa).
+    model=None -> usa i param VERI del driver (superficie AoI dell'oracolo).
     """
     from utils.closed_loop_eval import simulate
+    from scripts.closed_loop_identify import identify
     it = cache['val'][driver_idx]
     pg = np.array([it['params'][k] for k in _PN], dtype=np.float32)
+    if model is None:
+        drive_params = pg
+    else:
+        xwin = torch.tensor(it['x'][:seq_len][None], dtype=torch.float32).to(device)
+        drive_params = np.asarray(identify(model, xwin), dtype=np.float32)
     grid = np.full((len(dvs), len(gaps)), np.nan)
 
     for i, dv in enumerate(dvs):
@@ -48,7 +59,7 @@ def aoi_max_surface(model, cache, gaps=(8.0, 15.0, 25.0, 40.0), dvs=(0.0, 5.0, 1
         for j, gap in enumerate(gaps):
             def collides(L):
                 ch = {'hold_mode': 'hold_last', 'blackout_steps': (t_brake, t_brake + int(L))}
-                tr = simulate(model, pg, vl, float(gap), float(v_ego), channel=ch, device=device)
+                tr = simulate(None, drive_params, vl, float(gap), float(v_ego), channel=ch, device=device)
                 col = tr.get('collided')
                 return bool(col) if col is not None else bool(np.min(tr['s']) <= 0.05)
             if collides(0):                       # collide anche senza staleness

@@ -64,5 +64,18 @@ def _io_realcache():
 
 check('aoi_max_surface + cold_start (cache reale)', _io_realcache)
 
+
+def _io_eventprop_no_crash():
+    # regressione: aoi_max_surface NON deve chiamare forward_step (eventprop lo rompe)
+    assert os.path.isfile(CACHE)
+    cache = torch.load(CACHE, map_location='cpu', weights_only=False)
+    me = build_model('eventprop_alif_full', hidden_size=32, rank=8, max_delay=6, bit_shift=3).eval()
+    surf = aoi_max_surface(me, cache, gaps=(10.0, 30.0), dvs=(0.0,), max_stale_steps=12,
+                           horizon=100, t_brake=25)
+    assert surf['aoi_max_steps'].shape == (1, 2) and np.all(np.isfinite(surf['aoi_max_steps']))
+
+
+check('aoi_max_surface su eventprop (regressione forward_step)', _io_eventprop_no_crash)
+
 print('\n==== fpga-io test: PASS=%d FAIL=%d ====' % (ok, fail))
 sys.exit(1 if fail else 0)
