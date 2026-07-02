@@ -664,8 +664,15 @@ else:
             with torch.no_grad():
                 rate = m.forward_sequence_with_stats(xb)[1].detach().cpu().numpy()   # (B,T) spike-rate
             H = int(getattr(m, 'hidden_size', 32)); Tt = rate.shape[1]
-            spikes_TH = np.tile(rate.mean(0).reshape(-1, 1), (1, H))
+            n_ticks = int(getattr(m, 'n_ticks', 10))
+            # FIX (2026-07-02): rate da forward_sequence_with_stats e' GIA' una frazione per-tick
+            # [0,1] (network.py:673 divide per n_ticks); energy_estimate vuole CONTEGGI e ridivide
+            # per n_ticks (snn_showcase.py:92). Senza il *n_ticks lo spike-rate usciva 10x troppo
+            # basso e advantage_x 10x troppo alto (bug doppia divisione).
+            spikes_TH = np.tile((rate.mean(0) * n_ticks).reshape(-1, 1), (1, H))
             en = energy_estimate(spikes_TH, m)
+            assert abs(en['mean_spike_rate_pct'] - 100.0 * float(rate.mean())) < 0.5, \
+                'regressione n_ticks double-divide: %.2f vs %.2f' % (en['mean_spike_rate_pct'], 100 * float(rate.mean()))
             diag, raster = net_diagnostics(m, xr, max_steps=60)   # raster reale per-neurone
             rows.append({'champion': alias, 'E_snn_nJ': en['E_snn_nJ'], 'E_ann_nJ': en['E_ann_nJ'],
                          'advantage_x': en['energy_advantage_x'], 'mean_spike_rate_pct': en['mean_spike_rate_pct'],
