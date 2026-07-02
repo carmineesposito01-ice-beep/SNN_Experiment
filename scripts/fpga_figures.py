@@ -26,12 +26,14 @@ from utils.seu_inject import sensitivity_map, bit_criticality, hidden_vs_readout
 from utils.io_hil import queue_overflow, aoi_max_surface
 from utils.net_diagnostics import spike_raster, spike_stats, recurrence_spectral
 
-plt.rcParams.update({'figure.dpi': 110, 'savefig.dpi': 110, 'font.size': 10, 'axes.titlesize': 12,
-                     'axes.titleweight': 'bold', 'axes.grid': True, 'grid.alpha': 0.25,
-                     'axes.axisbelow': True, 'legend.frameon': False,
-                     'axes.spines.top': False, 'axes.spines.right': False})
+# stile coerente coi report degli altri studi (build_validation_report_v3): default matplotlib,
+# griglia leggera, dpi 130, titoli non-grassetto, spine complete.
+plt.rcParams.update({'figure.dpi': 110, 'savefig.dpi': 130, 'font.size': 10,
+                     'axes.grid': True, 'grid.alpha': 0.3, 'axes.axisbelow': True,
+                     'legend.frameon': False})
 E_MAC, E_AC = 4.6, 0.9              # pJ (Horowitz 45nm, da snn_showcase)
-DEFCOL = ['#e34948', '#2a78d6', '#4a3aa7', '#eb6834', '#1baf7a']
+# palette champion IDENTICA ai report (Raffaello/Leonardo/Donatello/Michelangelo/oracolo)
+DEFCOL = ['#d1495b', '#2a7fb8', '#7b3fa0', '#e8871e', '#7f7f7f']
 
 
 def _gbar(ax, cats, per_champ, aliases, colors, ylab):
@@ -881,11 +883,8 @@ def render_all(models, cache, out_pdf):
                 status.append((fn.__name__, 'SKIP (dato assente)')); continue
             fig, sec, name, feas, note = res
             pg += 1
-            fig.suptitle('%s · %s  [%s]' % (sec, name, feas), fontsize=12, fontweight='bold')
-            if note:
-                fig.text(0.5, 0.93, note, ha='center', fontsize=8, color='#444')
-            fig.text(0.99, 0.01, 'dati reali (locale) · pag %d' % pg, ha='right', fontsize=7, color='#999')
-            fig.tight_layout(rect=[0, 0.02, 1, 0.90 if note else 0.94])
+            _titolo(fig, name, note)
+            fig.text(0.99, 0.01, 'pag %d' % pg, ha='right', fontsize=7, color='#bbb')
             pdf.savefig(fig); plt.close(fig)
             status.append((fn.__name__, 'OK'))
         except Exception as e:
@@ -925,6 +924,19 @@ def _clean(name):
     return name.split('(')[0].strip().replace(' ', '_').replace('/', '_').replace('—', '-')
 
 
+def _titolo(fig, name, note):
+    """Titolo pulito coerente coi report degli altri studi (niente banner 'SEZ [feas]' del mockup):
+    titolo non-grassetto + eventuale sottotitolo-caption in corsivo. Il tag di fattibilita' e la
+    caption estesa vivono nel documento (pdf/md), non incisi nella figura."""
+    fig.suptitle(name.replace('_', ' '), fontsize=12.5, fontweight='normal', y=0.99)
+    if note:
+        fig.text(0.5, 0.945, note, ha='center', fontsize=8.5, color='#555', style='italic')
+    try:
+        fig.tight_layout(rect=[0, 0.02, 1, 0.905 if note else 0.95])
+    except Exception:
+        pass
+
+
 def save_section(ctx, folder, savefig_fn):
     """Rende le figure di una sezione e le salva via savefig_fn(folder, filename, fig). Ritorna #salvate."""
     n = 0
@@ -933,13 +945,7 @@ def save_section(ctx, folder, savefig_fn):
         if res is None:
             continue
         fig, sec, name, feas, note = res
-        fig.suptitle('%s · %s  [%s]' % (sec, name, feas), fontsize=12, fontweight='bold')
-        if note:
-            fig.text(0.5, 0.93, note, ha='center', fontsize=8, color='#444')
-        try:
-            fig.tight_layout(rect=[0, 0.02, 1, 0.90 if note else 0.94])
-        except Exception:
-            pass
+        _titolo(fig, name, note)
         savefig_fn(folder, _clean(name) + '.png', fig)
         n += 1
     return n

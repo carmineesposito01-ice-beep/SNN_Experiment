@@ -57,10 +57,10 @@ CACHE_DATA = torch.load(CACHE, map_location='cpu', weights_only=False)
 
 # 4 champion (2 BPTT + 2 EventProp). L'oracolo non serve al profilo FPGA.
 CHAMPIONS = [
-    ('Raffaello',    'R33_C2_A1_T12_fix',      '#e34948', 'baseline'),
-    ('Leonardo',     'LS3_PEAK_R0_launch_d03', '#2a78d6', 'baseline'),
-    ('Donatello',    'PE_t05_gp0002',          '#4a3aa7', 'eventprop_alif_full'),
-    ('Michelangelo', 'A_lr1e2_t06_r16',        '#eb6834', 'eventprop_alif_full'),
+    ('Raffaello',    'R33_C2_A1_T12_fix',      '#d1495b', 'baseline'),
+    ('Leonardo',     'LS3_PEAK_R0_launch_d03', '#2a7fb8', 'baseline'),
+    ('Donatello',    'PE_t05_gp0002',          '#7b3fa0', 'eventprop_alif_full'),
+    ('Michelangelo', 'A_lr1e2_t06_r16',        '#e8871e', 'eventprop_alif_full'),
 ]
 COLORS = {a: c for a, _, c, _ in CHAMPIONS}
 
