@@ -1,5 +1,10 @@
 # CF_FSNN — Come Funziona
 
+> ⚠️ **SUPERATO da `HOW_IT_WORKS_v3.md` / `.pdf` (2026-07-01).** Questa versione v1 è storica e contiene
+> dettagli ORMAI OBSOLETI rispetto al codice attuale (es. F5 pre-scaling nel decode — rimosso; `s_safe=0.5`
+> — ora 2.0; L_data SRMSE su energia — ora RMSE/N_valid; equazioni IIDM/CAH §11.2–11.3 diverse dal codice).
+> Per la descrizione aggiornata e completa (incl. EventProp, ρ spettrale, i 4 champion) usa **v3**.
+
 > **Versione**: 2026-05-29 (post commit `534c2af`)
 > **Lettore atteso**: ingegnere/ricercatore che non conosce il progetto, vuole capire architettura, training e pipeline in mezz'ora.
 > **Scope**: descrizione del codice attuale. Niente storia dei tentativi, niente decisioni passate (per quelle vedi `TIMELINE.md`, `P_S.md`, `GLOSSARY.md`).

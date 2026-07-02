@@ -2,8 +2,9 @@
 
 Branch `EventProp_Study`. **Documento-master di ripresa dello studio EventProp**: dove siamo, cosa funziona,
 cosa è escluso e perché, le pratiche, e come continuare. Dettagli complementari: **`document/EVALUATE_UPGRADE.md`**
-(upgrade evaluate 6-tier), **`results/EventProp_Study/combined/INDEX.md`** (studio combinato), `HOW_IT_WORKS_v2.md`
-+ `GLOSSARY.md` (architettura/fisica). Le §1-§8 sono il record storico dello studio EventProp; la **§9** è
+(upgrade evaluate 6-tier), **`results/EventProp_Study/combined/INDEX.md`** (studio combinato),
+**`document/HOW_IT_WORKS_v3.md`/.pdf** (come funziona la rete — tecnico e aggiornato, gemello di
+`VALIDATION_REPORT_v3`; supersede HOW_IT_WORKS.md v1/v2) + `GLOSSARY.md` (architettura/fisica). Le §1-§8 sono il record storico dello studio EventProp; la **§9** è
 l'aggiornamento post-BigSweep3 (studio combinato + evaluate v3).
 
 ---

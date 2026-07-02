@@ -1,5 +1,10 @@
 # CF_FSNN — Come Funziona (versione divulgativa)
 
+> ⚠️ **SUPERATO da `HOW_IT_WORKS_v3.md` / `.pdf` (2026-07-01)**, che è tecnico ma ad apice di
+> comprensibilità e aggiornato allo stato attuale (EventProp, ρ spettrale, PINN, po2, i 4 champion).
+> Questa v2 divulgativa resta come lettura leggera introduttiva ma contiene dati datati (val≈0.28,
+> sweep di dimensione pre-EventProp).
+
 > **Versione**: 2026-05-29 (v2 — linguaggio semplificato)
 > **Lettore atteso**: chiunque voglia capire il progetto senza essere un esperto di SNN o di traffic flow.
 > **Scope**: spiegare cosa fa la rete, come è costruita e perché, con analogie e esempi.
