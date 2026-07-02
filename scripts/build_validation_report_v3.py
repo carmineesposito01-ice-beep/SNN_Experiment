@@ -127,7 +127,7 @@ def fig_fpga():
         rho = EN.loc[ch, 'spectral_radius']; acc = ACC.loc[ch, 'accuracy_pct']
         adv = EN.loc[ch, 'advantage_x']; dead = EN.loc[ch, 'dead_frac'] * 100
         mk = 'o' if METHOD[ch] == 'EventProp' else 's'
-        ax.scatter(rho, acc, s=adv * 22, c=COLOR[ch], marker=mk,
+        ax.scatter(rho, acc, s=adv * 70, c=COLOR[ch], marker=mk,
                    edgecolor='k', linewidth=1.1, zorder=3, alpha=0.9)
         dx = 0.06 if rho < 1.5 else -0.06
         ha = 'left' if rho < 1.5 else 'right'
@@ -369,7 +369,7 @@ def build_doc():
              'fixed-point trascurabile fino a 2 bit; po2 assorbito dal QAT (delta<=0 su 3/4)',
              'pronto per pesi potenze-di-due'],
             ['Energia',
-             f'{f2(EN.loc["Raffaello","advantage_x"])}x - {f2(EN.loc["Michelangelo","advantage_x"])}x vs ANN densa; spike rate {f2(SPK_MIN)}-{f2(SPK_MAX)}%',
+             f'{f2(min(EN.loc[c,"advantage_x"] for c in CHAMP))}x-{f2(max(EN.loc[c,"advantage_x"] for c in CHAMP))}x vs ANN densa; spike rate {f2(SPK_MIN)}-{f2(SPK_MAX)}% (NON sparso)',
              'da costo AC (accumulo) < MAC (molt.-accum.), non da sparsita\''],
             ['V2X (perdita pacchetti)',
              f'blind = {f2(_v2x("Donatello","hold_mode","blind")*100)}% collisione; con hold-last ~{f2(_v2x("Donatello","hold_mode","hold_last")*100)}%',
@@ -688,17 +688,21 @@ def build_doc():
                         'le x segnano la variante po2. Destra: il QAT assorbe i pesi po2 (barre verdi '
                         '= po2 non peggiora l\'errore).')))
     A(('h2', '9.2 Energia'))
-    A(('p', f'Il vantaggio energetico stimato per inferenza va da {f2(EN.loc["Raffaello","advantage_x"])}x '
-           f'a {f2(EN.loc["Michelangelo","advantage_x"])}x rispetto a una ANN densa equivalente, con '
-           f'uno spike rate bassissimo ({f2(SPK_MIN)}-{f2(SPK_MAX)}%). NOTA ONESTA (come nel report '
-           f'precedente): il vantaggio NON deriva dalla sparsita\' in se\'. Le operazioni sinaptiche '
-           f'della SNN (SynOps) eguagliano o SUPERANO i MAC dell\'ANN equivalente: a parita\' di costo '
-           f'per operazione la SNN sarebbe anzi peggiore. Il guadagno viene dal minor costo unitario '
-           f'di un accumulo (AC) rispetto a una moltiplicazione-accumulo (MAC); ne segue che piu\' '
-           f'sparsita\' = piu\' vantaggio. Su FPGA con pesi po2 il margine cresce perche\' l\'AC '
-           f'diventa un semplice shift+add. I champion EventProp '
-           f'mostrano un vantaggio maggiore perche\' hanno una matrice ricorrente a rango effettivo '
-           f'piu\' alto, che alza il termine ANN di riferimento.'))
+    A(('p', f'Il vantaggio energetico per inferenza e\' MODESTO: da '
+           f'{f2(min(EN.loc[c,"advantage_x"] for c in CHAMP))}x a '
+           f'{f2(max(EN.loc[c,"advantage_x"] for c in CHAMP))}x vs una ANN densa equivalente. '
+           f'CORREZIONE (rispetto a una versione precedente di questo report): lo spike rate NON e\' '
+           f'iper-sparso ma ~{f2(SPK_MIN)}-{f2(SPK_MAX)}% e il vantaggio e\' ~5-6x, non 22-30x -- i numeri '
+           f'precedenti erano affetti da un bug di DOPPIA normalizzazione (divisione due volte per i tick '
+           f'interni, n_ticks) nel calcolo energia, ora corretto (le altre metriche del report non erano '
+           f'toccate). NOTA ONESTA: il vantaggio NON deriva dalla sparsita\' -- queste reti sparano ~15%, '
+           f'NON ~1-2%. Le operazioni sinaptiche (SynOps) SUPERANO i MAC dell\'ANN, quindi a parita\' di '
+           f'costo/operazione la SNN sarebbe peggiore; il guadagno viene solo dal minor costo unitario di '
+           f'un accumulo (AC) rispetto a un MAC, amplificato su FPGA dai pesi po2 (AC = shift+add) e dallo '
+           f'0 DSP. Importante: gli EventProp NON vincono sull\'energia -- Donatello (il piu\' contrattivo) '
+           f'ha anzi il vantaggio piu\' BASSO ({f2(EN.loc["Donatello","advantage_x"])}x) perche\' spara di '
+           f'piu\' ({f2(EN.loc["Donatello","mean_spike_rate_pct"])}%). Il loro vantaggio FPGA sta altrove: '
+           f'ρ<1 (contrattivo) e 0 neuroni morti (sezione 9.3).'))
     A(('img', (R['energy.png'], 'Figura 9.2 - Energia per inferenza e conteggio operazioni per champion.')))
     A(('h2', '9.3 Salute della rete e il discriminante di stabilita\''))
     A(('p', f'Qui si consuma la differenza hardware tra le due famiglie. I champion EventProp hanno '
@@ -718,9 +722,11 @@ def build_doc():
                        'e\' quella sicura in fixed-point; Donatello e Michelangelo (cerchi) ci stanno, i '
                        'BPTT (quadrati) no.')))
     A(('img', (R['raster_Donatello.png'], 'Figura 9.4a - Raster/attivita\' di Donatello (EventProp): '
-                                          'attivita\' sparsa e distribuita, nessun neurone spento.')))
-    A(('img', (R['raster_Raffaello.png'], 'Figura 9.4b - Raster di Raffaello (BPTT): stessa sparsita\' '
-                                          'ma con ~31% di neuroni mai attivi (capacita\' sprecata).')))
+                                          'attivita\' distribuita su tutti i neuroni, NESSUN neurone spento '
+                                          '(0 morti) -- nota: non e\' iper-sparsa, spara ~19%.')))
+    A(('img', (R['raster_Raffaello.png'], 'Figura 9.4b - Raster di Raffaello (BPTT): ~31% di neuroni MAI '
+                                          'attivi (capacita\' sprecata) -- la differenza con EventProp e\' '
+                                          'l\'utilizzo dei neuroni, non il tasso di spike.')))
     A(('img', (R['showcase_Donatello.png'], 'Figura 9.5 - Vetrina di Donatello: identificazione, guida '
                                             'closed-loop e spiking su un episodio reale. La run contiene '
                                             'la vetrina per tutti e 4 i champion piu\' una GIF "in diretta" '

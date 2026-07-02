@@ -25,7 +25,7 @@ Verdetto. Tutti e 4 i champion GUIDANO IN SICUREZZA: in anello chiuso il loro ta
 | Traffico (meso plotone) | string-stable: gain testa->coda 0.11-0.15 (<1) | plotone di 12 stabile |
 | Stabilita' FPGA (discriminante) | rho EventProp 0.05/0.39 (<1) vs BPTT 1.16/2.99 (>1) | EventProp contrattivo -> fixed-point sicuro |
 | Quantizzazione | fixed-point trascurabile fino a 2 bit; po2 assorbito dal QAT (delta<=0 su 3/4) | pronto per pesi potenze-di-due |
-| Energia | 22.07x - 29.58x vs ANN densa; spike rate 1.33-1.90% | da costo AC (accumulo) < MAC (molt.-accum.), non da sparsita' |
+| Energia | 4.77x-6.01x vs ANN densa; spike rate 13.31-19.00% (NON sparso) | da costo AC (accumulo) < MAC (molt.-accum.), non da sparsita' |
 | V2X (perdita pacchetti) | blind = 66.67% collisione; con hold-last ~8.15% | robustezza data dall'handler, non dalla rete |
 | Candidato deploy | Donatello (contrattivo + best accuracy + 0 morti) | runner-up Michelangelo |
 
@@ -261,7 +261,7 @@ La rete tollera una quantizzazione aggressiva. In virgola fissa l'errore di iden
 
 ### 9.2 Energia
 
-Il vantaggio energetico stimato per inferenza va da 22.07x a 29.58x rispetto a una ANN densa equivalente, con uno spike rate bassissimo (1.33-1.90%). NOTA ONESTA (come nel report precedente): il vantaggio NON deriva dalla sparsita' in se'. Le operazioni sinaptiche della SNN (SynOps) eguagliano o SUPERANO i MAC dell'ANN equivalente: a parita' di costo per operazione la SNN sarebbe anzi peggiore. Il guadagno viene dal minor costo unitario di un accumulo (AC) rispetto a una moltiplicazione-accumulo (MAC); ne segue che piu' sparsita' = piu' vantaggio. Su FPGA con pesi po2 il margine cresce perche' l'AC diventa un semplice shift+add. I champion EventProp mostrano un vantaggio maggiore perche' hanno una matrice ricorrente a rango effettivo piu' alto, che alza il termine ANN di riferimento.
+Il vantaggio energetico per inferenza e' MODESTO: da 4.77x a 6.01x vs una ANN densa equivalente. CORREZIONE (rispetto a una versione precedente di questo report): lo spike rate NON e' iper-sparso ma ~13.31-19.00% e il vantaggio e' ~5-6x, non 22-30x -- i numeri precedenti erano affetti da un bug di DOPPIA normalizzazione (divisione due volte per i tick interni, n_ticks) nel calcolo energia, ora corretto (le altre metriche del report non erano toccate). NOTA ONESTA: il vantaggio NON deriva dalla sparsita' -- queste reti sparano ~15%, NON ~1-2%. Le operazioni sinaptiche (SynOps) SUPERANO i MAC dell'ANN, quindi a parita' di costo/operazione la SNN sarebbe peggiore; il guadagno viene solo dal minor costo unitario di un accumulo (AC) rispetto a un MAC, amplificato su FPGA dai pesi po2 (AC = shift+add) e dallo 0 DSP. Importante: gli EventProp NON vincono sull'energia -- Donatello (il piu' contrattivo) ha anzi il vantaggio piu' BASSO (4.77x) perche' spara di piu' (19.00%). Il loro vantaggio FPGA sta altrove: ρ<1 (contrattivo) e 0 neuroni morti (sezione 9.3).
 
 ![Figura 9.2 - Energia per inferenza e conteggio operazioni per champion.](figures_validation_v3/energy.png)
 *Figura 9.2 - Energia per inferenza e conteggio operazioni per champion.*
@@ -274,11 +274,11 @@ Qui si consuma la differenza hardware tra le due famiglie. I champion EventProp 
 ![Figura 9.3 - Il discriminante FPGA in un solo grafico: raggio spettrale (x) vs accuratezza (y), area del marker ~ vantaggio energetico. La zona verde (rho<1) e' quella sicura in fixed-point; Donatello e Michelangelo (cerchi) ci stanno, i BPTT (quadrati) no.](figures_validation_v3/val_fpga_discriminant.png)
 *Figura 9.3 - Il discriminante FPGA in un solo grafico: raggio spettrale (x) vs accuratezza (y), area del marker ~ vantaggio energetico. La zona verde (rho<1) e' quella sicura in fixed-point; Donatello e Michelangelo (cerchi) ci stanno, i BPTT (quadrati) no.*
 
-![Figura 9.4a - Raster/attivita' di Donatello (EventProp): attivita' sparsa e distribuita, nessun neurone spento.](figures_validation_v3/raster_Donatello.png)
-*Figura 9.4a - Raster/attivita' di Donatello (EventProp): attivita' sparsa e distribuita, nessun neurone spento.*
+![Figura 9.4a - Raster/attivita' di Donatello (EventProp): attivita' distribuita su tutti i neuroni, NESSUN neurone spento (0 morti) -- nota: non e' iper-sparsa, spara ~19%.](figures_validation_v3/raster_Donatello.png)
+*Figura 9.4a - Raster/attivita' di Donatello (EventProp): attivita' distribuita su tutti i neuroni, NESSUN neurone spento (0 morti) -- nota: non e' iper-sparsa, spara ~19%.*
 
-![Figura 9.4b - Raster di Raffaello (BPTT): stessa sparsita' ma con ~31% di neuroni mai attivi (capacita' sprecata).](figures_validation_v3/raster_Raffaello.png)
-*Figura 9.4b - Raster di Raffaello (BPTT): stessa sparsita' ma con ~31% di neuroni mai attivi (capacita' sprecata).*
+![Figura 9.4b - Raster di Raffaello (BPTT): ~31% di neuroni MAI attivi (capacita' sprecata) -- la differenza con EventProp e' l'utilizzo dei neuroni, non il tasso di spike.](figures_validation_v3/raster_Raffaello.png)
+*Figura 9.4b - Raster di Raffaello (BPTT): ~31% di neuroni MAI attivi (capacita' sprecata) -- la differenza con EventProp e' l'utilizzo dei neuroni, non il tasso di spike.*
 
 ![Figura 9.5 - Vetrina di Donatello: identificazione, guida closed-loop e spiking su un episodio reale. La run contiene la vetrina per tutti e 4 i champion piu' una GIF "in diretta" (14_Showcase/showcase_*.png e showcase_live_Raffaello.gif).](figures_validation_v3/showcase_Donatello.png)
 *Figura 9.5 - Vetrina di Donatello: identificazione, guida closed-loop e spiking su un episodio reale. La run contiene la vetrina per tutti e 4 i champion piu' una GIF "in diretta" (14_Showcase/showcase_*.png e showcase_live_Raffaello.gif).*
