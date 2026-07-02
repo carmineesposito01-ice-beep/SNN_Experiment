@@ -1,0 +1,5 @@
+champion,exp_LSB,exp_mid,exp_MSB,segno,hidden_mean,readout_mean
+Raffaello,0.003,0.0051,0.0068,0.0065,0.0065,0.002
+Leonardo,0.0113,0.0214,0.0419,0.0211,0.0311,0.0025
+Donatello,0.0043,0.008,0.0102,0.0077,0.0069,0.0094
+Michelangelo,0.0048,0.011,0.0179,0.0101,0.0112,0.0103
