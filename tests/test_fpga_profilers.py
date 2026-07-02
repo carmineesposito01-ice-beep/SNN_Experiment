@@ -13,9 +13,13 @@ os.chdir(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.getcwd())
 
 import numpy as np
+import torch
 from core.network import build_model
 from utils.weight_profiler import profile_weights, weight_stats_rows, PO2_EXP_MIN, PO2_EXP_MAX
 from utils.latency_model import op_count, wcet_cycles, dse_profiles, model_shapes
+from utils.state_profiler import (profile_states, state_ranges_rows, leak_underflow_curve,
+                                  isi_stats)
+from utils.net_diagnostics import spike_raster
 
 ok = fail = 0
 
@@ -82,9 +86,34 @@ for variant in ['baseline', 'eventprop_alif_full']:
         assert len(dse['profiles']) == 4
         assert all(_finite(p['us_per_step']) for p in dse['profiles'])
 
+    def _state(m=m, variant=variant):
+        xb = torch.randn(3, 12, 4) * 0.5
+        prof = profile_states(m, xb)
+        assert 'raw_out' in prof['states'], (variant, list(prof['states']))
+        assert np.isfinite(prof['states']['raw_out']['absmax'])
+        base_ok, rows = state_ranges_rows(m, xb)
+        assert base_ok == prof['baseline']
+        if variant == 'baseline':
+            assert prof['baseline'] is True
+            for k in ('potential', 'fatigue', 'eff_thresh', 'current', 'rec_curr', 'rec_int'):
+                assert k in prof['states'], (variant, k, list(prof['states']))
+            for r in rows:
+                assert {'state', 'int_bits', 'frac_bits', 'total_bits'} <= set(r), list(r)
+        else:
+            assert prof['baseline'] is False           # eventprop: solo readout/spike
+        # leak-underflow: il float decade sotto il valore iniziale; il fixed 4b si "incastra"
+        lk = leak_underflow_curve(v0=2.0, bit_shift=3, frac_bits_list=(4, 8))
+        assert lk['float'][-1] < lk['float'][0]
+        assert lk['fixed_4b'][-1] >= lk['fixed_8b'][-1]   # meno frac_bits -> si ferma piu' in alto
+        # ISI dal raster reale
+        rr = spike_raster(m, xb[0], max_steps=12)
+        isi = isi_stats(rr)
+        assert 'min_isi' in isi
+
     check('%s: profile_weights' % variant, _weights)
     check('%s: weight_stats_rows' % variant, _weight_rows)
     check('%s: latency op_count/wcet/dse' % variant, _latency)
+    check('%s: state_profiler ranges/leak/isi' % variant, _state)
 
 # stampa un esempio leggibile per ispezione manuale
 print('\n--- esempio (baseline) ---')
