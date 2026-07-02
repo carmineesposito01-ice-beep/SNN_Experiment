@@ -57,9 +57,13 @@ def build_ctx(models, cache, colors=None, hb=None):
     for a in aliases:
         m = models[a]
         wp = profile_weights(m)
-        raster = spike_raster(m, xwin_t[0], max_steps=50)
+        raster = spike_raster(m, xwin_t[0], max_steps=50)   # raster illustrativo (1 episodio)
         ss = spike_stats(raster)
-        rate = ss['mean_rate'] if np.isfinite(ss['mean_rate']) else 0.02
+        # FIX: spike-rate MEDIATO su N driver (come il v3), non 1 singola finestra (che su cache
+        # "launch" sovrastima ~10x). Family-agnostic via forward_sequence_with_stats.
+        rate = _mean_spike_rate(m, cache, n=hb.get('rate_drivers', 15))
+        if not np.isfinite(rate):
+            rate = ss['mean_rate'] if np.isfinite(ss['mean_rate']) else 0.02
         opc = op_count(m, spike_rate=rate)
         dse = dse_profiles(m, spike_rate=rate)
         base_ok, srows = state_ranges_rows(m, xwin_t)
@@ -79,6 +83,24 @@ def build_ctx(models, cache, colors=None, hb=None):
                          'rec_float': rec_float, 'sens': sens, 'dpar': dpar,
                          'shapes': model_shapes(m), **heavy}
     return ctx
+
+
+def _mean_spike_rate(m, cache, n=15):
+    """Spike-rate medio su n driver (frazione neuroni-tick attivi), come nel v3.
+    Usa forward_sequence_with_stats (ok per baseline ed eventprop)."""
+    import torch
+    rates = []
+    for it in cache['val'][:n]:
+        x = torch.tensor(it['x'][:50][None], dtype=torch.float32)
+        try:
+            with torch.no_grad():
+                out = m.forward_sequence_with_stats(x)
+            sr = out[1] if isinstance(out, (tuple, list)) else None
+            if sr is not None:
+                rates.append(float(sr.mean()))
+        except Exception:
+            pass
+    return float(np.mean(rates)) if rates else float('nan')
 
 
 def _po2_vs_float_param(m, xwin_t):
@@ -105,7 +127,7 @@ def _readiness_scores(ctx):
     S = {}
     for a in ctx['aliases']:
         p = ctx['per'][a]
-        sparsity = 1.0 - min(1.0, p['rate'] / 0.05)                    # <5% spike -> buono
+        sparsity = 1.0 - min(1.0, p['rate'] / 0.10)                    # ~1-2% spike = ottimo; 0 a >=10%
         footprint = 1.0                                               # 400B << BRAM -> pieno
         dsp_free = 1.0                                                # 0 DSP sempre
         rho = p['rec_po2'].get('spectral_radius', 1.0)
@@ -348,15 +370,17 @@ def fig_energy_vs_ann(ctx):
     for i, a in enumerate(A):
         opc = ctx['per'][a]['opc']; s = opc['shapes']
         shift = (opc['per_step_worstcase']['input_syn'] + opc['per_step_worstcase']['rec_U']) * E_AC / 1000.0
-        ac = (opc.get('per_step_typical', opc['per_step_worstcase'])['rec_V'] +
-              opc.get('per_step_typical', opc['per_step_worstcase'])['out_syn']) * E_AC / 1000.0
+        typ = opc.get('per_step_typical', opc['per_step_worstcase'])
+        ac = (typ['rec_V'] + typ['out_syn']) * E_AC / 1000.0
+        wc = opc['synaptic_ac_per_step_worstcase'] * E_AC / 1000.0
         ann_mac = (s['H'] * s['IN'] + s['H'] * s['H'] + s['O'] * s['H']) * s['n_ticks'] * E_MAC / 1000.0
         ax.bar(i - w / 2, shift, w, color='#2a78d6', label='SNN shift-add' if i == 0 else '')
-        ax.bar(i - w / 2, ac, w, bottom=shift, color='#1baf7a', label='SNN AC' if i == 0 else '')
+        ax.bar(i - w / 2, ac, w, bottom=shift, color='#1baf7a', label='SNN AC (sparso)' if i == 0 else '')
+        ax.plot([i - w, i], [wc, wc], color='#e34948', lw=1.6, label='SNN worst-case (denso)' if i == 0 else '')
         ax.bar(i + w / 2, ann_mac, w, color='#888', label='ANN MAC' if i == 0 else '')
     ax.set_yscale('log'); ax.set_xticks(x); ax.set_xticklabels(A); ax.set_ylabel('energia/inferenza [nJ] (log)')
-    ax.legend(fontsize=7, ncol=3)
-    return fig, '04', 'energy_vs_ann', 'SW (dati reali, stima pJ Horowitz)', 'SNN = 0 MAC (solo AC+shift), ANN = tutto MAC'
+    ax.legend(fontsize=7, ncol=2)
+    return fig, '04', 'energy_vs_ann', 'SW (dati reali, stima pJ)', 'barre = tipico sparso · linea rossa = worst-case denso · ANN = tutto MAC · SNN 0 DSP'
 
 
 def fig_energy_breakdown(ctx):
@@ -532,7 +556,7 @@ def fig_thermal_budget(ctx):
 
 # ================================ eval PESANTI (bounded local / full Azure) ================================
 HB_LOCAL = {'cvf_flips': (1, 4, 8), 'cvf_mc': 2, 'cvf_drivers': 2, 'v2x_drivers': 2,
-            'aoi_drivers': 10, 'pshift_n': 12}
+            'aoi_drivers': 10, 'pshift_n': 12, 'rate_drivers': 8}
 
 
 def _heavy(m, cache, xwin_t, hb):
@@ -877,7 +901,7 @@ def render_all(models, cache, out_pdf):
 # ================================ integrazione notebook ================================
 # budget pieno per la run Azure (il locale usa HB_LOCAL bounded)
 HB_AZURE = {'cvf_flips': (1, 2, 4, 8, 16), 'cvf_mc': 8, 'cvf_drivers': 10, 'v2x_drivers': 15,
-            'aoi_drivers': 40, 'pshift_n': 40}
+            'aoi_drivers': 40, 'pshift_n': 40, 'rate_drivers': 20}
 
 SECTIONS = {
     '00_Readiness': [fig_readiness_matrix, fig_readiness_radar, fig_deploy_verdict],
@@ -959,10 +983,15 @@ def energy_csv(ctx):
     rows = []
     for a in ctx['aliases']:
         opc = ctx['per'][a]['opc']; s = opc['shapes']
-        e_snn = opc['synaptic_ac_per_step_worstcase'] * E_AC / 1000.0
+        e_wc = opc['synaptic_ac_per_step_worstcase'] * E_AC / 1000.0               # denso (bound HW)
+        e_typ = opc.get('synaptic_ac_per_step_typical',
+                        opc['synaptic_ac_per_step_worstcase']) * E_AC / 1000.0      # sparso (operativo)
         e_ann = (s['H'] * s['IN'] + s['H'] * s['H'] + s['O'] * s['H']) * s['n_ticks'] * E_MAC / 1000.0
-        rows.append({'champion': a, 'E_snn_nJ': round(e_snn, 3), 'E_ann_nJ': round(e_ann, 3),
-                     'advantage_x': round(e_ann / max(e_snn, 1e-9), 2),
+        rows.append({'champion': a,
+                     'E_snn_worstcase_nJ': round(e_wc, 3), 'E_snn_typical_nJ': round(e_typ, 3),
+                     'E_ann_nJ': round(e_ann, 3),
+                     'advantage_worstcase_x': round(e_ann / max(e_wc, 1e-9), 2),
+                     'advantage_typical_x': round(e_ann / max(e_typ, 1e-9), 2),
                      'spike_rate_pct': round(ctx['per'][a]['rate'] * 100, 3), 'dsp_snn': 0})
     return rows
 
