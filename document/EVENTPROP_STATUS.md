@@ -39,10 +39,15 @@ il **notebook champion `Eval_v3_TURTLE_POWER`** (4 champion + oracolo) — in at
    → readout random silenzioso. Fix (schema-detection) già nel notebook v3; da riportare nel ckpt-pass e
    ri-lanciare i soli arm baseline.
 4. Post-eval: quantizzazione/deploy FPGA, multi-seed esteso → `document/FUTURE_WORK.md`.
-5. **FPGA-evaluate — design fatto (2026-07-01)**: la *presentazione* della valutazione FPGA è progettata e **bloccata
-   per la Fase A software_now** → **`document/FPGA_EVALUATE_DESIGN.md`** (struttura 10 sezioni + catalogo 46 figure +
-   principi + prototipo `scripts/_fpga_eval_mockup.py` a dati fittizi) e **`document/FPGA_EVALUATION_FRAMEWORK.md`**
-   (analisi + catalogo dati). **Fase B/C (HDL/board) rinviate** — nodo aperto: import Simulink → HDL Coder per una SNN
+5. **FPGA-evaluate Fase A — BUILD FATTO (2026-07-02)**: design in `document/FPGA_EVALUATE_DESIGN.md` +
+   `document/FPGA_EVALUATION_FRAMEWORK.md`. **5 librerie software_now scritte+testate** (`utils/weight_profiler.py`,
+   `state_profiler.py`, `latency_model.py`, `seu_inject.py`, `io_hil.py`; 17 check verdi in `tests/test_fpga_*.py`),
+   verificate su checkpoint REALI (ρ/‖·‖₂ confermano il framework). **46 figure a dati reali** in
+   `scripts/fpga_figures.py` (render locale 46/46 OK, 0 placeholder). **Notebook `Eval_FPGA.ipynb`**
+   (builder `scripts/_build_fpga_eval_notebook.py`, verify `scripts/verify_fpga_eval.py`) **pronto per Azure**
+   (integration key-check locale OK). **DA FARE**: lanciarlo su Azure (`jupyter nbconvert --to notebook --execute
+   --inplace --ExecutePreprocessor.timeout=-1 Eval_FPGA.ipynb`), poi il **report FPGA finale** (come
+   `VALIDATION_REPORT_v3`). **Fase B/C (HDL/board) rinviate** — nodo aperto: import Simulink → HDL Coder per una SNN
    ALIF custom (nessun convertitore push-button; FINN/hls4ml non la gestiscono). Prossimo build:
    `scripts/_build_fpga_eval_notebook.py` (Fase A sui tensori reali, come v3.1) + librerie `weight_profiler`/
    `state_profiler`/`latency_model`/`seu_inject`.

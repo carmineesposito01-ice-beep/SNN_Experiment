@@ -170,6 +170,20 @@ bar/gbar=bar (raggruppato) · wf=waterfall · cont=contour · rad=radar · rast=
 
 ## 6. Prossimi passi (build reale — Fase A)
 
+> **✅ BUILD FATTO (2026-07-02).** Le 5 librerie software_now sono scritte, testate (17 check verdi:
+> `tests/test_fpga_profilers.py` 8, `test_fpga_seu.py` 6, `test_fpga_io.py` 3) e verificate su **checkpoint
+> REALI** (baseline+eventprop): ρ(U·V)=0.162 / ‖·‖₂=0.843 confermano il framework. Le **46 figure a dati reali**
+> sono in `scripts/fpga_figures.py` (render locale 46/46 OK, 0 placeholder); il notebook `Eval_FPGA.ipynb`
+> (builder `scripts/_build_fpga_eval_notebook.py`) le orchestra nelle 10 sezioni + 7 CSV deliverable, resiliente
+> come il v3, **pronto per Azure** (integration key-check locale 46/46 figure + CSV OK). Verifica post-run:
+> `scripts/verify_fpga_eval.py`. Lancio: `jupyter nbconvert --to notebook --execute --inplace
+> --ExecutePreprocessor.timeout=-1 Eval_FPGA.ipynb` → poi `python scripts/verify_fpga_eval.py`.
+> Bug catturato dal gate pre-notebook e corretto: `aoi_max_surface` era family-agnostic-non-safe (forward_step
+> eventprop). Le figure 🟡/🔴 (HDL/board) restano stime marcate. **Restano da fare**: il report FPGA finale
+> (dai risultati Azure, come `VALIDATION_REPORT_v3`), e le Fasi B/C.
+
+Storico del piano (ora realizzato):
+
 1. **Builder** `scripts/_build_fpga_eval_notebook.py` (analogo a `_build_eval_v3_notebook.py`): carica i champion `.pt`,
    calcola le figure **Fase A sui tensori/forward REALI**, salva PNG/CSV in `results/evaluate/FPGA/`. Gira su Azure.
    Resiliente (skip-se-esiste, ERROR_<sez>.txt), oracolo dove sensato, stile uniforme. + `scripts/verify_fpga_eval.py`.
