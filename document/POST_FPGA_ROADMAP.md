@@ -88,9 +88,11 @@ Il loop di simulazione dipende **solo** dalle astrazioni. Conseguenze:
 forward SNN per step è velocissimo → il collo è solo il rendering (banale per pochi veicoli). **Indipendente**
 dalle altre due fasi. **Valore immediato altissimo** (usabile subito per demo/debug/tesi; è il driver di ③).
 
-**Decisioni aperte (da chiudere in fase di design):**
-- Stack tecnico desktop: `matplotlib`-FuncAnimation (prototipo rapido) · `pygame` (fluido, game-like) · `PyQt`/
-  `Dear PyGui` (GUI vera con controlli). Da valutare in base a fluidità viz + comodità dei controlli interattivi.
+**Decisioni aperte (CHIUSE 2026-07-02 → vedi `document/SIMULATOR_DESIGN.md`):**
+- Stack desktop: **DECISO = PySide6 + pyqtgraph** (scartati matplotlib/pygame/Dear PyGui — motivazioni nel design).
+- Scope v1 = **MVP snello**; loop = **single-thread** (Fix-Your-Timestep); v_mem via attributi ALIF diretti.
+  Il **design MVP v1 è approvato** (interfacce, `SimStepper`, seam `NetworkBackend`, pannello rete, replay) — manca
+  solo l'implementazione (writing-plans).
 
 ---
 
@@ -222,7 +224,7 @@ fedeltà di deployment finale — non è la scelta per la validazione, ma è l'e
 
 ## 5. Domande ancora aperte (da chiudere in fase di design, non ora)
 
-- **①:** stack desktop (matplotlib / pygame / PyQt / Dear PyGui)?
+- ~~**①:** stack desktop~~ → **CHIUSA**: PySide6 + pyqtgraph (design MVP v1 approvato in `document/SIMULATOR_DESIGN.md`).
 - **②:** struttura interna del generatore; per ogni transcendentale del decode CORDIC vs LUT vs DSP; harness di
   verifica bit-true SW↔HDL.
 - **③:** protocollo host↔board (Ethernet vs UART vs JTAG); dettagli dell'overlay PYNQ + interfaccia AXI/DMA.

@@ -77,7 +77,9 @@ poi report FPGA finale. Nulla di pesante in locale: l'utente lancia su Azure.
    (famiglia parametrizzata; decode IIDM **in PL** con CORDIC/LUT min-DSP + fallback PS; 1 core + testbench esterni) ·
    **③** FPGA-in-the-Loop **host-in-the-loop** con **harness PYNQ** custom (FpgaBackend Python in ①). Tutto in
    **`document/POST_FPGA_ROADMAP.md`** (decisioni + ricognizione Spiker+/hls4ml/FINN/HDL Coder + sinergie).
-   **Non implementate** — partire da ① con una sessione di design.
+   **Non implementate.** ✅ **① ha ora un design MVP v1 APPROVATO** (2026-07-02) in `document/SIMULATOR_DESIGN.md`
+   (stack PySide6+pyqtgraph, seam `NetworkBackend`, `SimStepper`, pannello rete live, replay + piano di adozione
+   dalla ricerca web); prossimo passo = sessione di implementazione. ②/③ ancora da progettare.
 7. **⚠️ CORREZIONE BUG spike-rate/energia (2026-07-02, audit multi-agente)**: il calcolo energia del v3 aveva una
    **DOPPIA divisione per n_ticks**: `forward_sequence_with_stats()[1]` restituisce gia' una frazione per-tick
    [0,1] (network.py:673), ma la cella ENERGY la passava a `energy_estimate` che vuole CONTEGGI e ridivide per
