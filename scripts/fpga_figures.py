@@ -924,15 +924,13 @@ def _clean(name):
     return name.split('(')[0].strip().replace(' ', '_').replace('/', '_').replace('—', '-')
 
 
-def _titolo(fig, name, note):
-    """Titolo pulito coerente coi report degli altri studi (niente banner 'SEZ [feas]' del mockup):
-    titolo non-grassetto + eventuale sottotitolo-caption in corsivo. Il tag di fattibilita' e la
-    caption estesa vivono nel documento (pdf/md), non incisi nella figura."""
-    fig.suptitle(name.replace('_', ' '), fontsize=12.5, fontweight='normal', y=0.99)
-    if note:
-        fig.text(0.5, 0.945, note, ha='center', fontsize=8.5, color='#555', style='italic')
+def _titolo(fig, name, note=None):
+    """Titolo pulito e ATTACCATO al grafico, come negli altri studi. NIENTE sottotitolo/caption
+    sulla figura: la descrizione (`note`) e il tag di fattibilita' vivono nel documento pdf/md,
+    sotto il grafico. `note` resta nella firma solo per compatibilita' (ignorata qui)."""
+    fig.suptitle(name.replace('_', ' '), fontsize=12.5, fontweight='normal')
     try:
-        fig.tight_layout(rect=[0, 0.02, 1, 0.905 if note else 0.95])
+        fig.tight_layout(rect=[0, 0.02, 1, 0.96])
     except Exception:
         pass
 
