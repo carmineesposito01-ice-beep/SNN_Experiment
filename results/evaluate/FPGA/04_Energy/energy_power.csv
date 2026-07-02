@@ -1,5 +1,5 @@
-champion,E_snn_nJ,E_ann_nJ,advantage_x,spike_rate_pct,dsp_snn
-Raffaello,7.2,60.352,8.38,14.312,0
-Leonardo,7.2,60.352,8.38,17.731,0
-Donatello,11.808,60.352,5.11,17.763,0
-Michelangelo,11.808,60.352,5.11,14.537,0
+champion,E_snn_worstcase_nJ,E_snn_typical_nJ,E_ann_nJ,advantage_worstcase_x,advantage_typical_x,spike_rate_pct,dsp_snn
+Raffaello,7.2,3.978,60.352,8.38,15.17,13.934,0
+Leonardo,7.2,3.928,60.352,8.38,15.36,12.609,0
+Donatello,11.808,7.019,60.352,5.11,8.6,20.822,0
+Michelangelo,11.808,6.695,60.352,5.11,9.02,15.453,0
