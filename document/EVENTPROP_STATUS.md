@@ -51,6 +51,12 @@ il **notebook champion `Eval_v3_TURTLE_POWER`** (4 champion + oracolo) — in at
    ALIF custom (nessun convertitore push-button; FINN/hls4ml non la gestiscono). Prossimo build:
    `scripts/_build_fpga_eval_notebook.py` (Fase A sui tensori reali, come v3.1) + librerie `weight_profiler`/
    `state_profiler`/`latency_model`/`seu_inject`.
+6. **Fasi POST-FPGA — decise (2026-07-02, ragionamento)**: 3 fasi future — **①** simulatore plug&play desktop
+   (reti che identificano param, interattivo, astrazioni riusabili) · **②** convertitore HDL via **Simulink+HDL Coder**
+   (famiglia parametrizzata; decode IIDM **in PL** con CORDIC/LUT min-DSP + fallback PS; 1 core + testbench esterni) ·
+   **③** FPGA-in-the-Loop **host-in-the-loop** con **harness PYNQ** custom (FpgaBackend Python in ①). Tutto in
+   **`document/POST_FPGA_ROADMAP.md`** (decisioni + ricognizione Spiker+/hls4ml/FINN/HDL Coder + sinergie).
+   **Non implementate** — partire da ① con una sessione di design.
 
 **Workflow operativo**: training/eval pesanti su **Azure** (sandokan, `azureml_py38`, Python 3.10), **lanciati
 dall'utente**; in locale pull/analisi/build-notebook. L'assistente NON ha accesso diretto ad Azure. Checkpoint
