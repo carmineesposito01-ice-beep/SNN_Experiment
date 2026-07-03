@@ -405,15 +405,11 @@ def build_doc():
            'famiglie BPTT storiche scartate toccavano ~22) e '
            'su FPGA-friendliness; ed entrambi guidano in sicurezza. Il presente evaluate quantifica '
            'quel fronte su tutte le dimensioni che contano per un deploy neuromorfico.'))
-    A(('callout', 'La ricorrenza ALIF e\' fattorizzata a basso rango come prodotto di due matrici U e V; '
-                  'rho(U*V) e\' il raggio spettrale di quel prodotto - una misura di quanto la mappa '
-                  'ricorrente amplifica (>1) o smorza (<1) lo stato. '
-                  'Perche\' il raggio spettrale rho della ricorrenza e\' cosi\' importante per FPGA: '
-                  'in aritmetica a virgola fissa lo stato del neurone e\' rappresentato con pochi bit. '
-                  'Se la mappa ricorrente e\' espansiva (rho>1) piccoli errori di arrotondamento possono '
-                  'amplificarsi e mandare lo stato in saturazione/overflow; se e\' contrattiva (rho<1) '
-                  'lo stato resta limitato e l\'errore di quantizzazione si smorza. EventProp produce '
-                  'reti contrattive per costruzione - un vantaggio strutturale sul silicio.'))
+    A(('callout', 'rho(U*V) e\' il raggio spettrale della ricorrenza low-rank: rho<1 = mappa contrattiva '
+                  '(stato limitato, quantizzazione sicura in virgola fissa), rho>1 = espansiva (rischio '
+                  'saturazione/overflow). I FONDAMENTI teorici sono in HOW_IT_WORKS_v3 §11; qui il '
+                  'RISULTATO: EventProp produce reti contrattive per costruzione (confermato sui champion, '
+                  '§9.3) - un vantaggio strutturale sul silicio.'))
     A(('h2', '2.3 I 4 champion e l\'oracolo'))
     A(('p', 'Il confronto usa 4 champion piu\' l\'oracolo. Tutti i champion hanno la stessa '
            'architettura; differiscono per metodo e ricetta di training. L\'oracolo (nome in codice '

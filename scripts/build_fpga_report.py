@@ -123,7 +123,8 @@ CAP = {
     'aoi_dist': 'Distribuzione dell\'Age-of-Information sotto perdita/ritardo dei pacchetti V2X.',
     'queue_overflow': 'Probabilità di drop su burst vs profondità della coda RX (M/M/1/K, STIMA): buffer minimo anti-burst dei messaggi CAM.',
     'holdmode': 'Confronto degli handler di pacchetti mancanti (hold-last / dead-reckon / blind): la robustezza V2X è dell\'HANDLER, non della rete.',
-    'pdr_knee': 'Curva collisione vs Packet Delivery Ratio: il "ginocchio" oltre cui la perdita pacchetti diventa pericolosa.',
+    'pdr_knee': 'Curva collisione vs Packet Delivery Ratio (PDR): il "ginocchio" oltre cui la perdita pacchetti diventa pericolosa.',
+    'pdr_latency_knee': 'Curva collisione vs Packet Delivery Ratio / latenza V2X: il "ginocchio" oltre cui perdita e ritardo dei pacchetti CAM diventano pericolosi per la guida.',
     'derating_tj_fmax': 'STIMA: Fmax vs temperatura di giunzione Tj — a caldo il clock scende, resta headroom sul target a 100 °C?',
     'thermal_budget': 'STIMA del budget termico (potenza vs dissipazione) sullo Zynq-7020.',
 }
@@ -158,15 +159,15 @@ SEC_PROSE = {
         f'sparsità o l\'energia.',
     ],
     '01_Weights_po2': [
-        'Il cuore del co-design: i pesi sono vincolati a potenze di due (13 valori sign·2^k, gli '
-        'inferiori a 2⁻⁵ azzerati). Su FPGA moltiplicare per 2^k è un semplice bit-shift → 0 DSP. '
-        'L\'istogramma po2_alphabet mostra anche la SPARSITÀ DEI PESI (sinapsi a valore 0 = '
-        'eliminabili dal connettoma) — da non confondere coi neuroni morti (attività, §3): sono '
-        'sinapsi che semplicemente non esistono in hardware.',
+        'Il cuore del co-design è la quantizzazione po2 (schema e razionale in HOW_IT_WORKS_v3 §15). '
+        'Qui il lato hardware misurato: il moltiplicatore diventa un bit-shift → **0 DSP**; e '
+        'l\'istogramma po2_alphabet mostra la SPARSITÀ DEI PESI (sinapsi a valore 0 = eliminabili dal '
+        'connettoma) — da non confondere coi neuroni morti (attività, §3): sono sinapsi che '
+        'semplicemente non esistono in hardware.',
         'Il footprint dei pesi è di 400-656 byte per champion (rank-8 vs rank-16): trascurabile vs '
-        'la BRAM (§6). Il raggio spettrale ρ(U·V) — misurato come norma spettrale, limite superiore — '
-        'separa nettamente EventProp (contrattivo, ρ<1) da BPTT (espansivo, ρ>1): è il discriminante '
-        'che rende gli EventProp sicuri in aritmetica a virgola fissa.',
+        'la BRAM (§6). Il raggio spettrale ρ(U·V) (definizione in HOW §11) separa nettamente EventProp '
+        '(contrattivo, ρ<1) da BPTT (espansivo, ρ>1): è il discriminante che rende gli EventProp sicuri '
+        'in aritmetica a virgola fissa.',
     ],
     '02_FixedPoint': [
         'Ogni registro interno (potenziale, fatica, corrente ricorrente, uscita LI) riceve un formato '
@@ -175,16 +176,18 @@ SEC_PROSE = {
         'punto fragile è la quantizzazione po2 di deploy: **Leonardo** ha l\'errore po2 più alto '
         '(quant-err ~15-16%), gli altri restano bassi (Donatello ~2%).',
         'Il caveat onesto: la curva quant_vs_bits è pienamente valida solo con re-training QAT; qui è '
-        'una stima post-hoc. Il leak di membrana è un bit-shift (V·7/8): con troppo pochi frac_bits il '
-        'potenziale va in sotto-flusso e si blocca — un vincolo reale sul numero minimo di bit '
-        'frazionari. Gli state-range sono catturati solo per i baseline (limite del profiler sulla '
-        'variante EventProp, che non fa un forward per-step).',
+        'una stima post-hoc. Il leak di membrana (bit-shift, cfr. HOW §15) con troppo pochi frac_bits '
+        'manda il potenziale in sotto-flusso e lo blocca — un vincolo reale sul numero minimo di bit '
+        'frazionari (figura leak_decay). Gli state-range sono catturati solo per i baseline (limite del '
+        'profiler sulla variante EventProp, che non fa un forward per-step).',
     ],
     '03_Spiking': [
         f'La dinamica spiking sfata un equivoco: i champion **sparano ~{SPK_LO}-{SPK_HI}%** dei '
         f'neuroni per tick, NON sono iper-sparsi (~1-2%). Il raster e la mappa di attività lo mostrano '
         f'cross-champion. Questo è il dato corretto dopo il fix del bug n_ticks: il valore ~1.5% era '
-        f'un artefatto di calcolo (doppia divisione per n_ticks).',
+        f'un artefatto di calcolo (doppia divisione per n_ticks). NB: questi spike-rate (profiler '
+        f'op-count, finestra launch) differiscono di ~1-2 punti da VALIDATION §9.2 (evaluate a 6-tier; '
+        f'es. Donatello {DON_SPK}% qui vs 19.0% là) — stessa realtà, finestre/metodo di misura diversi.',
         'Il picco di spike simultanei per tick dimensiona l\'albero di accumulo (AC) in hardware; '
         'l\'ISI minimo dà il worst-case back-to-back. La salute della rete è il vero discriminante: '
         'gli **EventProp hanno 0 neuroni morti**, i BPTT ~31% — la ricorrenza contrattiva e il '

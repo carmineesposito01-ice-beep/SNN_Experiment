@@ -40,9 +40,9 @@ Il candidato al deploy è **Donatello** (EventProp): ρ minimo (0.051), errore d
 
 ## 1. Pesi Power-of-Two: il moltiplicatore che sparisce
 
-Il cuore del co-design: i pesi sono vincolati a potenze di due (13 valori sign·2^k, gli inferiori a 2⁻⁵ azzerati). Su FPGA moltiplicare per 2^k è un semplice bit-shift → 0 DSP. L'istogramma po2_alphabet mostra anche la SPARSITÀ DEI PESI (sinapsi a valore 0 = eliminabili dal connettoma) — da non confondere coi neuroni morti (attività, §3): sono sinapsi che semplicemente non esistono in hardware.
+Il cuore del co-design è la quantizzazione po2 (schema e razionale in HOW_IT_WORKS_v3 §15). Qui il lato hardware misurato: il moltiplicatore diventa un bit-shift → **0 DSP**; e l'istogramma po2_alphabet mostra la SPARSITÀ DEI PESI (sinapsi a valore 0 = eliminabili dal connettoma) — da non confondere coi neuroni morti (attività, §3): sono sinapsi che semplicemente non esistono in hardware.
 
-Il footprint dei pesi è di 400-656 byte per champion (rank-8 vs rank-16): trascurabile vs la BRAM (§6). Il raggio spettrale ρ(U·V) — misurato come norma spettrale, limite superiore — separa nettamente EventProp (contrattivo, ρ<1) da BPTT (espansivo, ρ>1): è il discriminante che rende gli EventProp sicuri in aritmetica a virgola fissa.
+Il footprint dei pesi è di 400-656 byte per champion (rank-8 vs rank-16): trascurabile vs la BRAM (§6). Il raggio spettrale ρ(U·V) (definizione in HOW §11) separa nettamente EventProp (contrattivo, ρ<1) da BPTT (espansivo, ρ>1): è il discriminante che rende gli EventProp sicuri in aritmetica a virgola fissa.
 
 ![Alfabeto po2 dei pesi (13 valori sign·2^k) per champion. "pesi a 0 = sinapsi eliminabili" è la potatura strutturale del connettoma (sinapsi a peso 0), NON neuroni morti. Il moltiplicatore è UNO di 13 valori → barrel-shifter, 0 DSP.](figures_fpga/01_Weights_po2__po2_alphabet.png)
 *Alfabeto po2 dei pesi (13 valori sign·2^k) per champion. "pesi a 0 = sinapsi eliminabili" è la potatura strutturale del connettoma (sinapsi a peso 0), NON neuroni morti. Il moltiplicatore è UNO di 13 valori → barrel-shifter, 0 DSP.*
@@ -64,7 +64,7 @@ Il footprint dei pesi è di 400-656 byte per champion (rank-8 vs rank-16): trasc
 
 Ogni registro interno (potenziale, fatica, corrente ricorrente, uscita LI) riceve un formato Qm.n con gli interi dal RANGE MISURATO e i frazionari dal budget di bit. La rete tollera una quantizzazione aggressiva: l'errore di identificazione resta basso fino a pochi bit. Il punto fragile è la quantizzazione po2 di deploy: **Leonardo** ha l'errore po2 più alto (quant-err ~15-16%), gli altri restano bassi (Donatello ~2%).
 
-Il caveat onesto: la curva quant_vs_bits è pienamente valida solo con re-training QAT; qui è una stima post-hoc. Il leak di membrana è un bit-shift (V·7/8): con troppo pochi frac_bits il potenziale va in sotto-flusso e si blocca — un vincolo reale sul numero minimo di bit frazionari. Gli state-range sono catturati solo per i baseline (limite del profiler sulla variante EventProp, che non fa un forward per-step).
+Il caveat onesto: la curva quant_vs_bits è pienamente valida solo con re-training QAT; qui è una stima post-hoc. Il leak di membrana (bit-shift, cfr. HOW §15) con troppo pochi frac_bits manda il potenziale in sotto-flusso e lo blocca — un vincolo reale sul numero minimo di bit frazionari (figura leak_decay). Gli state-range sono catturati solo per i baseline (limite del profiler sulla variante EventProp, che non fa un forward per-step).
 
 ![Formato Qm.n per ogni stato interno (segno + interi dal RANGE MISURATO + frazionari). Solo baseline (gli stati non sono catturati per la variante EventProp — limite del profiler).](figures_fpga/02_FixedPoint__bit_allocation.png)
 *Formato Qm.n per ogni stato interno (segno + interi dal RANGE MISURATO + frazionari). Solo baseline (gli stati non sono catturati per la variante EventProp — limite del profiler).*
@@ -87,7 +87,7 @@ Il caveat onesto: la curva quant_vs_bits è pienamente valida solo con re-traini
 
 ## 3. Dinamica spiking: sparsità reale e salute della rete
 
-La dinamica spiking sfata un equivoco: i champion **sparano ~13-21%** dei neuroni per tick, NON sono iper-sparsi (~1-2%). Il raster e la mappa di attività lo mostrano cross-champion. Questo è il dato corretto dopo il fix del bug n_ticks: il valore ~1.5% era un artefatto di calcolo (doppia divisione per n_ticks).
+La dinamica spiking sfata un equivoco: i champion **sparano ~13-21%** dei neuroni per tick, NON sono iper-sparsi (~1-2%). Il raster e la mappa di attività lo mostrano cross-champion. Questo è il dato corretto dopo il fix del bug n_ticks: il valore ~1.5% era un artefatto di calcolo (doppia divisione per n_ticks). NB: questi spike-rate (profiler op-count, finestra launch) differiscono di ~1-2 punti da VALIDATION §9.2 (evaluate a 6-tier; es. Donatello 20.8% qui vs 19.0% là) — stessa realtà, finestre/metodo di misura diversi.
 
 Il picco di spike simultanei per tick dimensiona l'albero di accumulo (AC) in hardware; l'ISI minimo dà il worst-case back-to-back. La salute della rete è il vero discriminante: gli **EventProp hanno 0 neuroni morti**, i BPTT ~31% — la ricorrenza contrattiva e il gradiente esatto tengono viva l'intera popolazione.
 
@@ -212,8 +212,8 @@ Il dimensionamento della coda RX (M/M/1/K) dà il buffer minimo anti-burst dei m
 ![Confronto degli handler di pacchetti mancanti (hold-last / dead-reckon / blind): la robustezza V2X è dell'HANDLER, non della rete.](figures_fpga/08_IO_HIL__holdmode.png)
 *Confronto degli handler di pacchetti mancanti (hold-last / dead-reckon / blind): la robustezza V2X è dell'HANDLER, non della rete.*
 
-![pdr latency knee](figures_fpga/08_IO_HIL__pdr_latency_knee.png)
-*pdr latency knee*
+![Curva collisione vs Packet Delivery Ratio / latenza V2X: il "ginocchio" oltre cui perdita e ritardo dei pacchetti CAM diventano pericolosi per la guida.](figures_fpga/08_IO_HIL__pdr_latency_knee.png)
+*Curva collisione vs Packet Delivery Ratio / latenza V2X: il "ginocchio" oltre cui perdita e ritardo dei pacchetti CAM diventano pericolosi per la guida.*
 
 ![Probabilità di drop su burst vs profondità della coda RX (M/M/1/K, STIMA): buffer minimo anti-burst dei messaggi CAM.](figures_fpga/08_IO_HIL__queue_overflow.png)
 *Probabilità di drop su burst vs profondità della coda RX (M/M/1/K, STIMA): buffer minimo anti-burst dei messaggi CAM.*

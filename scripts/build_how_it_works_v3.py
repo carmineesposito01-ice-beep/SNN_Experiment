@@ -561,9 +561,8 @@ def build_doc():
            'costo per operazione la SNN sarebbe anzi peggiore. Il guadagno viene dal minor costo '
            'unitario di un ACCUMULO (AC) rispetto a una MOLTIPLICAZIONE-ACCUMULO (MAC) — e su FPGA '
            'con pesi potenze-di-due l\'AC diventa un semplice shift+add. Ne segue la regola: più '
-           'sparsità = più vantaggio. Il payoff energetico per champion è quantificato nel gemello '
-           'VALIDATION_REPORT_v3 §9.2 (dopo la correzione del bug n_ticks: ~5-6×, nel dettaglio '
-           '4.77-6.01×, non 22-30×).'))
+           'sparsità = più vantaggio. Il payoff energetico misurato per champion vive nel gemello '
+           'VALIDATION_REPORT_v3 §9.2, e il profilo hardware nel FPGA_REPORT.'))
     A(('img', (F['energy'], 'Figura 2.2 — Perché la SNN è più efficiente pur facendo lo stesso numero '
                             '(o più) di operazioni: il costo unitario AC < MAC. La sparsità amplifica '
                             'il margine, non lo crea.')))
@@ -876,8 +875,9 @@ def build_doc():
            'scritto a mano, o un percorso via Simulink + HDL Coder (nodo aperto, documentato in '
            'FPGA_EVALUATE_DESIGN.md). Le scelte hardware-aware (po2→shift, leak→shift, surrogata→LUT, '
            'delay→ring-buffer, reset sottrattivo) sono NECESSARIE ma non SUFFICIENTI: riducono '
-           'l\'attrito, non lo eliminano. Il vantaggio energetico (~4.77-6.01×, VALIDATION §9.2) è una STIMA da modello '
-           '(Horowitz 45 nm), non una misura su silicio; restano da validare l\'utilizzo dei DSP, la '
+           'l\'attrito, non lo eliminano. Il vantaggio energetico è una STIMA da modello '
+           '(Horowitz 45 nm), non una misura su silicio (i valori per champion sono in VALIDATION §9.2, '
+           'il profilo op-count nel FPGA_REPORT); restano da validare l\'utilizzo dei DSP, la '
            'banda di memoria e la quantizzazione dello STATO (V, fatica) oltre che dei pesi.'))
 
     A(('h2', '17. Il triangolo: rileggere tutte le scelte'))
