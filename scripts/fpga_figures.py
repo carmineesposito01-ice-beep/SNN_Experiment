@@ -124,28 +124,32 @@ def _po2_vs_float_param(m, xwin_t):
 
 # ================================ 00 READINESS ================================
 def _readiness_scores(ctx):
-    """Punteggi RAG [0,1] per champion x dimensione, da metriche reali."""
-    dims = ['Pesi', 'Fix-pt', 'Spike', 'Energia', 'Timing', 'Risorse', 'SEU', 'I/O']
+    """Punteggi RAG [0,1] per champion x dimensione, TUTTI da metriche reali — niente costanti
+    finte ne' etichette fuorvianti. 7 dimensioni: 6 discriminano, Timing e' un 'risolto' onesto."""
+    dims = ['ρ<1', 'Fix-pt', 'Sparsità', 'Energia', 'Timing', 'SEU']
     S = {}
     for a in ctx['aliases']:
         p = ctx['per'][a]
-        # sparsita': iper-sparso (~1-5%)=1, ~30%+=0. NB questi champion sparano ~13-19% -> NON iper-sparsi.
-        sparsity = float(np.clip(1.0 - p['rate'] / 0.30, 0, 1))
-        footprint = 1.0                                               # 400-656B << BRAM -> pieno
-        dsp_free = 1.0                                                # 0 DSP sempre
+        # rho<1 = ricorrenza contrattiva (fixed-point sicuro). rho=0->1, rho=1->0.5, rho=3->0.25.
         rho = p['rec_po2'].get('spectral_radius', 1.0)
-        pesi = float(np.clip(1.0 - rho, 0, 1))                        # contrattivo = buono
-        timing = float(np.clip(1.0 - p['dse']['profiles'][0]['utilization_pct'] / 100.0, 0, 1))
-        risorse = 1.0
-        seu = float(np.clip(1.0 - 20 * max(bit_criticality(p['sens']).values()), 0, 1))
-        # Energia: dal VANTAGGIO reale (tipico sparso) vs ANN, normalizzato (15x -> pieno). Era 0.8 fisso.
+        rho_s = float(np.clip(1.0 / (1.0 + max(rho, 0.0)), 0, 1))
+        # Fix-pt = robustezza alla quantizzazione po2 di deploy (errore id. vs float). 0.20 = inaccettabile.
+        po2e = (p.get('qbits') or {}).get('po2_err', 0.10)
+        fixpt = float(np.clip(1.0 - po2e / 0.20, 0, 1))
+        # Sparsita': ~1-5%=1, ~30%+=0 (questi champion sparano ~13-19% -> NON iper-sparsi).
+        sparsity = float(np.clip(1.0 - p['rate'] / 0.30, 0, 1))
+        # Energia: vantaggio AC-vs-MAC reale (tipico) vs ANN densa, normalizzato (15x -> pieno).
         opc = p['opc']; s = opc['shapes']
         ann_ops = (s['H'] * s['IN'] + s['H'] * s['H'] + s['O'] * s['H']) * s['n_ticks']
         snn_ac = opc.get('synaptic_ac_per_step_typical', opc['synaptic_ac_per_step_worstcase'])
-        adv = (ann_ops * E_MAC) / (max(snn_ac, 1e-9) * E_AC)
-        energia = float(np.clip(adv / 15.0, 0, 1))
-        io = float(np.clip(1.0 - p['dpar'].mean() * 5, 0, 1))
-        S[a] = [pesi, footprint, sparsity, energia, timing, risorse, seu, io]
+        energia = float(np.clip((ann_ops * E_MAC) / (max(snn_ac, 1e-9) * E_AC) / 15.0, 0, 1))
+        # Timing: margine sul deadline 100ms (util minuscola -> verde per tutti = 'risolto', onesto).
+        timing = float(np.clip(1.0 - p['dse']['profiles'][0]['utilization_pct'] / 100.0, 0, 1))
+        # SEU: robustezza al bit-flip (criticita' del bit peggiore).
+        seu = float(np.clip(1.0 - 20 * max(bit_criticality(p['sens']).values()), 0, 1))
+        # NB: la robustezza V2X e' proprieta' di SISTEMA (simile fra champion) -> NON e' una
+        # dimensione di readiness del champion; e' dettagliata nella sezione 08_IO_HIL.
+        S[a] = [rho_s, fixpt, sparsity, energia, timing, seu]
     return dims, S
 
 
@@ -164,43 +168,68 @@ def fig_readiness_matrix(ctx):
 
 
 def fig_deploy_verdict(ctx):
+    """Tabella dei NUMERI REALI dietro il radar (colonne = assi del radar) + footprint.
+    Colorazione per RANGO fra i 4 champion (verde = migliore su quella metrica, niente soglie arbitrarie)."""
     A = ctx['aliases']
-    rows = [['champion', 'sparsita', 'rho(U@V)', 'footprint', 'SEU top-bit', 'stato']]
+    hdr = ['champion', 'ρ(U·V)', 'spike %', 'quant-err %', 'energia ×', 'util %', 'SEU worst', 'footprint B']
+    lower_better = {'ρ(U·V)': 1, 'spike %': 1, 'quant-err %': 1, 'energia ×': 0,
+                    'util %': 1, 'SEU worst': 1, 'footprint B': 1}
+    vals = {k: [] for k in hdr[1:]}; disp = []
     for a in A:
         p = ctx['per'][a]
-        bc = bit_criticality(p['sens']); topb = max(bc, key=bc.get) if bc else '-'
-        rows.append([a, '%.1f%%' % (p['rate'] * 100), '%.3f' % p['rec_po2'].get('spectral_radius', float('nan')),
-                     '%.0f B' % p['wp']['total_footprint_bytes'], topb, 'valuta su 4 champ'])
-    fig, ax = plt.subplots(figsize=(9, 0.7 + 0.5 * len(rows))); ax.axis('off')
+        rho = p['rec_po2'].get('spectral_radius', float('nan'))
+        po2e = (p.get('qbits') or {}).get('po2_err', float('nan')) * 100
+        opc = p['opc']; s = opc['shapes']
+        ann = (s['H'] * s['IN'] + s['H'] * s['H'] + s['O'] * s['H']) * s['n_ticks']
+        ac = opc.get('synaptic_ac_per_step_typical', opc['synaptic_ac_per_step_worstcase'])
+        adv = (ann * E_MAC) / (max(ac, 1e-9) * E_AC)
+        util = p['dse']['profiles'][0]['utilization_pct']
+        seu = max(bit_criticality(p['sens']).values()); fp = p['wp']['total_footprint_bytes']
+        raw = {'ρ(U·V)': rho, 'spike %': p['rate'] * 100, 'quant-err %': po2e, 'energia ×': adv,
+               'util %': util, 'SEU worst': seu, 'footprint B': fp}
+        for k in vals:
+            vals[k].append(raw[k])
+        disp.append([a, '%.2f' % rho, '%.1f' % (p['rate'] * 100), '%.1f' % po2e, '%.1f×' % adv,
+                     '%.2f' % util, '%.3f' % seu, '%.0f' % fp])
+    rows = [hdr] + disp
+    fig, ax = plt.subplots(figsize=(11.5, 0.8 + 0.5 * len(rows))); ax.axis('off')
     t = ax.table(cellText=rows, loc='center', cellLoc='center')
-    t.auto_set_font_size(False); t.set_fontsize(9); t.scale(1, 1.6)
-    for j in range(len(rows[0])):
-        t[0, j].set_facecolor('#eee'); t[0, j].set_text_props(weight='bold')
-    return fig, '00', 'deploy_verdict', 'SW (dati reali)', 'sintesi per champion (verdetto finale coi 4 su Azure)'
+    t.auto_set_font_size(False); t.set_fontsize(9); t.scale(1, 1.7)
+    cmap = plt.get_cmap('RdYlGn')
+    for j, k in enumerate(hdr[1:], start=1):
+        col = np.array(vals[k], dtype=float); rng = float(col.max() - col.min())
+        for i, x in enumerate(col):
+            tn = 0.75 if rng < 1e-12 else (x - col.min()) / rng
+            if rng >= 1e-12 and lower_better[k]:
+                tn = 1 - tn
+            t[i + 1, j].set_facecolor(cmap(0.30 + 0.55 * tn))
+    for j in range(len(hdr)):
+        t[0, j].set_facecolor('#e8e8e8'); t[0, j].set_text_props(weight='bold')
+    return fig, '00', 'deploy_verdict', 'SW (dati reali)', \
+        'i NUMERI REALI dietro il radar (verde = migliore fra i 4 su quella metrica). Candidato deploy: Donatello (ρ minimo, quant robusto).'
 
 
 # ================================ 01 WEIGHTS ================================
 def fig_po2_alphabet(ctx):
-    a = ctx['aliases'][0]; wp = ctx['per'][a]['wp']
-    agg = {e: 0 for e in range(PO2_EXP_MIN, PO2_EXP_MAX + 1)}
-    zero = 0; tot = 0
-    for s in wp['matrices']:
-        for e in range(PO2_EXP_MIN, PO2_EXP_MAX + 1):
-            agg[e] += s['exp_hist'][e]
-        zero += int(round(s['frac_zero'] * s['n_weights'])); tot += s['n_weights']
-    exps = list(range(PO2_EXP_MIN, PO2_EXP_MAX + 1))
+    A = ctx['aliases']; exps = list(range(PO2_EXP_MIN, PO2_EXP_MAX + 1))
     lv = ['-%g' % (2.0 ** e) for e in exps[::-1]] + ['0'] + ['%g' % (2.0 ** e) for e in exps]
-    cnt = [agg[e] // 2 for e in exps[::-1]] + [zero] + [agg[e] - agg[e] // 2 for e in exps]
     x = np.arange(len(lv))
-    fig, ax = plt.subplots(figsize=(9, 4.4))
-    for i, cc in enumerate(cnt):
-        col = '#7f7f7f' if lv[i] == '0' else '#2a78d6'
-        ax.plot([x[i], x[i]], [0, cc], color=col, lw=2); ax.plot(x[i], cc, 'o', color=col, ms=6)
-    ax.set_xticks(x); ax.set_xticklabels(lv, fontsize=8); ax.set_ylabel('# pesi (di %d)' % tot)
-    ax.set_xlabel('valore sinaptico = sign*2^k, k in [%d,%d]' % (PO2_EXP_MIN, PO2_EXP_MAX))
-    ax.annotate('0: %.0f%% eliminabili' % (100 * zero / tot), (len(exps), zero),
-                textcoords='offset points', xytext=(6, 4), fontsize=8)
-    return fig, '01', 'po2_alphabet (%s)' % a, 'SW (dati reali)', 'il moltiplicatore e UNO di 13 valori -> barrel-shifter, 0 DSP'
+    fig, axes = _grid(A, (10, 3.3 * ((len(A) + 1) // 2)))
+    for ax, a in zip(axes, A):
+        wp = ctx['per'][a]['wp']; agg = {e: 0 for e in exps}; zero = 0; tot = 0
+        for s in wp['matrices']:
+            for e in exps:
+                agg[e] += s['exp_hist'][e]
+            zero += int(round(s['frac_zero'] * s['n_weights'])); tot += s['n_weights']
+        cnt = [agg[e] // 2 for e in exps[::-1]] + [zero] + [agg[e] - agg[e] // 2 for e in exps]
+        for i, cc in enumerate(cnt):
+            col = '#7f7f7f' if lv[i] == '0' else ctx['colors'][a]
+            ax.plot([x[i], x[i]], [0, cc], color=col, lw=2); ax.plot(x[i], cc, 'o', color=col, ms=4)
+        ax.set_xticks(x); ax.set_xticklabels(lv, fontsize=6, rotation=90)
+        ax.set_ylabel('# pesi (di %d)' % tot, fontsize=8)
+        ax.set_title('%s  —  0: %.0f%% eliminabili' % (a, 100 * zero / tot),
+                     color=ctx['colors'][a], fontsize=11, fontweight='bold')
+    return fig, '01', 'po2_alphabet', 'SW (dati reali)', 'alfabeto po2 (sign*2^k): il moltiplicatore e UNO di 13 valori -> barrel-shifter, 0 DSP'
 
 
 def fig_spectral(ctx):
@@ -227,17 +256,19 @@ def fig_sparsity_mask(ctx):
 
 
 def fig_po2_exponent_range(ctx):
-    a = ctx['aliases'][0]; wp = ctx['per'][a]['wp']; mats = wp['matrices']
-    fig, ax = plt.subplots(figsize=(9, 4.2)); y = np.arange(len(mats))
-    for i, s in enumerate(mats):
-        used = [e for e in range(PO2_EXP_MIN, PO2_EXP_MAX + 1) if s['exp_hist'][e] > 0]
-        lo, hi = (min(used), max(used)) if used else (0, 0)
-        ax.plot([lo, hi], [i, i], '-', color='#2a78d6', lw=6, solid_capstyle='round')
-        ax.text(hi + 0.2, i, '%d..%d -> %d bit esp' % (lo, hi, max(1, int(np.ceil(np.log2(hi - lo + 1))))),
-                va='center', fontsize=9)
-    ax.set_yticks(y); ax.set_yticklabels([s['matrix'] for s in mats]); ax.set_xlim(-5, 3)
-    ax.set_xlabel('esponente k usato (2^k)'); ax.axvline(PO2_EXP_MAX, color='#e34948', ls=':', lw=1)
-    return fig, '01', 'po2_exponent_range (%s)' % a, 'SW (dati reali)', 'bit di esponente per matrice'
+    A = ctx['aliases']
+    fig, axes = _grid(A, (10, 3.0 * ((len(A) + 1) // 2)))
+    for ax, a in zip(axes, A):
+        mats = ctx['per'][a]['wp']['matrices']; y = np.arange(len(mats))
+        for i, s in enumerate(mats):
+            used = [e for e in range(PO2_EXP_MIN, PO2_EXP_MAX + 1) if s['exp_hist'][e] > 0]
+            lo, hi = (min(used), max(used)) if used else (0, 0)
+            ax.plot([lo, hi], [i, i], '-', color=ctx['colors'][a], lw=6, solid_capstyle='round')
+            ax.text(hi + 0.2, i, '%d..%d' % (lo, hi), va='center', fontsize=8)
+        ax.set_yticks(y); ax.set_yticklabels([s['matrix'] for s in mats], fontsize=8); ax.set_xlim(-5, 4)
+        ax.set_xlabel('esponente k (2^k)'); ax.axvline(PO2_EXP_MAX, color='#e34948', ls=':', lw=1)
+        ax.set_title(a, color=ctx['colors'][a], fontsize=11, fontweight='bold')
+    return fig, '01', 'po2_exponent_range', 'SW (dati reali)', 'range di esponente po2 per matrice -> bit di esponente'
 
 
 # ================================ 02 FIXED-POINT ================================
@@ -318,47 +349,68 @@ def fig_activity_map(ctx):
     return fig, '03', 'activity_map', 'SW (dati reali)', 'hotspot vs neuroni morti (rate 0)'
 
 
+def _grid(aliases, figsize):
+    """Griglia di subplot per small-multiples (uno per champion). Nasconde le celle in eccesso."""
+    n = len(aliases); ncol = 2 if n > 1 else 1; nrow = (n + ncol - 1) // ncol
+    fig, axes = plt.subplots(nrow, ncol, figsize=figsize, squeeze=False)
+    flat = [axes[i // ncol][i % ncol] for i in range(nrow * ncol)]
+    for ax in flat[n:]:
+        ax.set_visible(False)
+    return fig, flat
+
+
+def _deploy(ctx):
+    """Champion candidato al deploy (Donatello) per le figure 'esemplari' (datapath/stima/3D)."""
+    for a in ctx['aliases']:
+        if 'Donatello' in a:
+            return a
+    return ctx['aliases'][0]
+
+
 def fig_raster(ctx):
-    a = ctx['aliases'][0]; R = ctx['per'][a]['raster']
-    if R.size == 0:
-        return None
-    R = R.T                                    # (hidden, tick)
-    order = np.argsort(-R.sum(1))
-    R = R[order]
-    fig = plt.figure(figsize=(10, 4.4))
-    gs = fig.add_gridspec(2, 2, width_ratios=[5, 1], height_ratios=[4, 1], hspace=0.06, wspace=0.03)
-    axr = fig.add_subplot(gs[0, 0]); axrr = fig.add_subplot(gs[0, 1], sharey=axr)
-    axb = fig.add_subplot(gs[1, 0], sharex=axr)
-    ys, xs = np.where(R > 0.5)
-    axr.scatter(xs, ys, s=3, color='#2a78d6'); axr.set_ylabel('neurone (ord. per rate)')
-    axr.grid(False); axr.tick_params(labelbottom=False)
-    axrr.barh(np.arange(R.shape[0]), R.sum(1), color='#9467bd'); axrr.grid(False)
-    axrr.tick_params(labelleft=False); axrr.set_xlabel('tot/neur')
-    axb.plot(np.arange(R.shape[1]), R.sum(0), color='#1baf7a'); axb.set_xlabel('tick')
-    axb.set_ylabel('att/tick'); axb.grid(False)
-    return fig, '03', 'raster (%s)' % a, 'SW (dati reali)', 'raster ordinato per rate + marginali per-neurone e per-tick'
+    A = ctx['aliases']
+    fig, axes = _grid(A, (10, 3.3 * ((len(A) + 1) // 2)))
+    for ax, a in zip(axes, A):
+        R = ctx['per'][a]['raster']
+        if R.size == 0:
+            ax.set_visible(False); continue
+        Rt = R.T; Rt = Rt[np.argsort(-Rt.sum(1))]           # (hidden, tick) ordinato per rate
+        ys, xs = np.where(Rt > 0.5)
+        ax.scatter(xs, ys, s=2, color=ctx['colors'][a])
+        ax.set_title('%s  (%.0f%% attivi/tick)' % (a, 100 * ctx['per'][a]['rate']),
+                     color=ctx['colors'][a], fontsize=11, fontweight='bold')
+        ax.set_xlabel('tick'); ax.set_ylabel('neurone (ord. rate)'); ax.grid(False)
+    return fig, '03', 'raster', 'SW (dati reali)', 'raster spike ordinato per firing-rate, tutti i champion (per-tick tra parentesi)'
 
 
 def fig_sparsity_tick(ctx):
-    a = ctx['aliases'][0]; R = ctx['per'][a]['raster']
-    if R.size == 0:
-        return None
-    conc = R.sum(1)                             # spike concorrenti per tick
-    fig, ax = plt.subplots(figsize=(9, 4.2)); ax.plot(np.arange(conc.size), conc, color='#9467bd')
-    ax.axhline(conc.max(), color='#e34948', ls='--', label='picco -> dimensiona albero AC')
-    ax.set_xlabel('tick'); ax.set_ylabel('# spike concorrenti/tick'); ax.legend(fontsize=8)
-    return fig, '03', 'sparsity_per_tick (%s)' % a, 'SW (dati reali)', 'il MAX di spike simultanei fissa la larghezza dell albero AC'
+    A = ctx['aliases']
+    fig, ax = plt.subplots(figsize=(9.5, 4.6)); peak = 0
+    for a in A:
+        R = ctx['per'][a]['raster']
+        if R.size == 0:
+            continue
+        conc = R.sum(1)
+        ax.plot(np.arange(conc.size), conc, color=ctx['colors'][a], lw=1.4, alpha=0.85, label=a)
+        peak = max(peak, conc.max())
+    ax.axhline(peak, color='#e34948', ls='--', lw=1, label='picco globale -> albero AC')
+    ax.set_xlabel('tick'); ax.set_ylabel('# spike concorrenti/tick'); ax.legend(fontsize=8, ncol=2)
+    return fig, '03', 'sparsity_per_tick', 'SW (dati reali)', 'spike simultanei/tick per champion: il MAX fissa la larghezza dell albero AC'
 
 
 def fig_isi(ctx):
-    a = ctx['aliases'][0]; isi = isi_stats(ctx['per'][a]['raster'])
-    if not isi['isi_all']:
-        return None
-    fig, ax = plt.subplots(figsize=(9, 4.2))
-    ax.hist(isi['isi_all'], bins=min(30, max(5, len(set(isi['isi_all'])))), color='#1baf7a', edgecolor='w')
-    ax.axvline(isi['min_isi'], color='#e34948', ls='--', label='ISI min=%d' % isi['min_isi'])
-    ax.set_xlabel('inter-spike interval [tick]'); ax.set_ylabel('conteggio'); ax.legend(fontsize=8)
-    return fig, '03', 'isi_dist (%s)' % a, 'SW (dati reali)', 'ISI minimo -> worst-case back-to-back'
+    A = ctx['aliases']
+    fig, axes = _grid(A, (10, 3.0 * ((len(A) + 1) // 2)))
+    for ax, a in zip(axes, A):
+        isi = isi_stats(ctx['per'][a]['raster'])
+        if not isi['isi_all']:
+            ax.set_visible(False); continue
+        ax.hist(isi['isi_all'], bins=min(30, max(5, len(set(isi['isi_all'])))),
+                color=ctx['colors'][a], edgecolor='w')
+        ax.axvline(isi['min_isi'], color='#e34948', ls='--', label='min=%d' % isi['min_isi'])
+        ax.set_xlabel('ISI [tick]'); ax.set_ylabel('conteggio'); ax.legend(fontsize=8)
+        ax.set_title(a, color=ctx['colors'][a], fontsize=11, fontweight='bold')
+    return fig, '03', 'isi_dist', 'SW (dati reali)', 'distribuzione inter-spike-interval per champion: ISI minimo = worst-case back-to-back'
 
 
 def fig_dead_sat(ctx):
@@ -400,13 +452,14 @@ def fig_energy_vs_ann(ctx):
 
 
 def fig_energy_breakdown(ctx):
-    a = ctx['aliases'][0]; opc = ctx['per'][a]['opc']['per_step_worstcase']
-    comp = ['fc shift', 'rec_V AC', 'rec_U shift', 'out AC', 'leak/fat/reset']
-    val = [opc['input_syn'] * E_AC, opc['rec_V'] * E_AC, opc['rec_U'] * E_AC,
-           opc['out_syn'] * E_AC, opc['nonsyn'] * E_AC]
-    fig, ax = plt.subplots(figsize=(9, 4.4)); c = plt.cm.Blues(np.linspace(0.4, 0.9, len(comp)))
-    ax.bar(comp, val, color=c); ax.set_ylabel('energia [pJ] (stima)'); ax.tick_params(axis='x', rotation=15)
-    return fig, '04', 'energy_breakdown (%s)' % a, 'SW (dati reali, stima pJ)', 'dove si spendono i pJ (incl. op non-sinaptiche)'
+    A = ctx['aliases']; comp = ['fc shift', 'rec_V AC', 'rec_U shift', 'out AC', 'leak/fat/reset']
+    per = {}
+    for a in A:
+        o = ctx['per'][a]['opc']['per_step_worstcase']
+        per[a] = [o['input_syn'] * E_AC, o['rec_V'] * E_AC, o['rec_U'] * E_AC, o['out_syn'] * E_AC, o['nonsyn'] * E_AC]
+    fig, ax = plt.subplots(figsize=(10, 4.4))
+    _gbar(ax, comp, per, A, ctx['colors'], 'energia [pJ] (stima)'); ax.tick_params(axis='x', rotation=12)
+    return fig, '04', 'energy_breakdown', 'SW (dati reali, stima pJ)', 'dove si spendono i pJ per champion (incl. op non-sinaptiche)'
 
 
 def fig_synops_split(ctx):
@@ -422,15 +475,18 @@ def fig_synops_split(ctx):
 
 # ================================ 05 TIMING ================================
 def fig_op_count(ctx):
-    a = ctx['aliases'][0]; pt = ctx['per'][a]['opc']['per_tick_worstcase']
-    comp = ['fc', 'rec_V (st.1)', 'rec_U (st.2)', 'out', 'leak/fat/reset']
-    val = [pt['input_syn'], pt['rec_V'], pt['rec_U'], pt['out_syn'], pt['nonsyn']]
-    fig, ax = plt.subplots(figsize=(9, 4.2)); ax.bar(comp, val, color='#2a78d6'); ax.set_ylabel('op / tick')
-    return fig, '05', 'op_count (%s)' % a, 'SW (dati reali)', 'il conteggio operazioni e l INPUT del WCET'
+    A = ctx['aliases']; comp = ['fc', 'rec_V (st.1)', 'rec_U (st.2)', 'out', 'leak/fat/reset']
+    per = {}
+    for a in A:
+        pt = ctx['per'][a]['opc']['per_tick_worstcase']
+        per[a] = [pt['input_syn'], pt['rec_V'], pt['rec_U'], pt['out_syn'], pt['nonsyn']]
+    fig, ax = plt.subplots(figsize=(10, 4.2))
+    _gbar(ax, comp, per, A, ctx['colors'], 'op / tick')
+    return fig, '05', 'op_count', 'SW (dati reali)', 'conteggio operazioni per tick (input del WCET), per champion'
 
 
 def fig_wcet_cycles(ctx):
-    a = ctx['aliases'][0]; profs = ctx['per'][a]['dse']['profiles']
+    a = _deploy(ctx); profs = ctx['per'][a]['dse']['profiles']
     fig, ax = plt.subplots(figsize=(9, 4.4)); y = np.arange(len(profs))
     cyc = [p['cycles_per_step'] for p in profs]
     ax.barh(y, cyc, color=plt.cm.viridis(np.linspace(0.2, 0.8, len(profs))))
@@ -439,63 +495,70 @@ def fig_wcet_cycles(ctx):
                 (p['cycles_per_step'], p['us_per_step']), va='center', fontsize=8)
     ax.set_yticks(y); ax.set_yticklabels([p['profile'] for p in profs]); ax.set_xscale('log')
     ax.set_xlabel('cicli / step (log)')
-    return fig, '05', 'wcet_cycles (%s)' % a, 'SW (dati reali)', 'cicli e us per inferenza secondo 4 architetture HW'
+    ax.annotate('esemplare: %s' % a, xy=(0.99, 0.03), xycoords='axes fraction', ha='right',
+                fontsize=8, style='italic', color=ctx['colors'][a])
+    return fig, '05', 'wcet_cycles', 'SW (dati reali)', 'cicli/us per 4 architetture HW (esemplare: %s; datapath simile fra champion)' % a
 
 
 def fig_latency_margin(ctx):
-    a = ctx['aliases'][0]; serial = ctx['per'][a]['dse']['profiles'][0]
-    deadline_us = DEADLINE_MS * 1000.0
-    fig, ax = plt.subplots(figsize=(9, 3.4))
-    ax.barh([0], [deadline_us], color='#f2f2f2', edgecolor='#888')
-    ax.barh([0], [serial['us_per_step']], color='#2a78d6')
-    ax.set_yticks([0]); ax.set_yticklabels(['budget']); ax.set_xscale('log'); ax.set_xlim(0.1, 2e5)
-    ax.set_xlabel('tempo [us] (log)')
-    ax.annotate('inferenza ~%.1f us' % serial['us_per_step'], (serial['us_per_step'], 0),
-                xytext=(20, 0.3), fontsize=9, color='#2a78d6', arrowprops=dict(arrowstyle='->', color='#2a78d6'))
-    ax.annotate('deadline 100 ms', (deadline_us, 0), xytext=(3000, -0.35), fontsize=9,
-                arrowprops=dict(arrowstyle='->'))
-    return fig, '05', 'latency_margin (%s)' % a, 'SW (dati reali)', 'margine ~%.0fx sulla deadline' % serial['margin_x']
+    A = ctx['aliases']; deadline_us = DEADLINE_MS * 1000.0
+    fig, ax = plt.subplots(figsize=(9, 3.8)); y = np.arange(len(A))
+    ax.axvline(deadline_us, color='#888', ls='--', lw=1.5, label='deadline 100 ms')
+    for i, a in enumerate(A):
+        serial = ctx['per'][a]['dse']['profiles'][0]
+        ax.barh(i, serial['us_per_step'], color=ctx['colors'][a])
+        ax.text(serial['us_per_step'] * 1.3, i, '~%.1f us (%.0f× margine)' % (serial['us_per_step'], serial['margin_x']),
+                va='center', fontsize=8)
+    ax.set_yticks(y); ax.set_yticklabels(A); ax.set_xscale('log'); ax.set_xlim(0.1, 3e5)
+    ax.set_xlabel('tempo inferenza [us] (log)'); ax.legend(fontsize=8, loc='lower right')
+    return fig, '05', 'latency_margin', 'SW (dati reali)', 'tempo di inferenza vs deadline 100ms, per champion (margine enorme)'
 
 
 def fig_jitter_proof(ctx):
-    a = ctx['aliases'][0]; n = ctx['per'][a]['opc']['synaptic_ac_per_step_worstcase']
-    fig, ax = plt.subplots(figsize=(9, 4.0)); ax.bar([0, 1, 2], [n, n, n], color='#2a78d6')
+    a = _deploy(ctx); n = ctx['per'][a]['opc']['synaptic_ac_per_step_worstcase']
+    fig, ax = plt.subplots(figsize=(9, 4.0)); ax.bar([0, 1, 2], [n, n, n], color=ctx['colors'][a])
     ax.set_xticks([0, 1, 2]); ax.set_xticklabels(['spike 1%', 'spike 15%', 'spike 30%'])
     ax.set_ylabel('# op worst-case / step'); ax.set_ylim(0, n * 1.15)
     ax.text(1, n * 1.05, 'IDENTICO', ha='center', fontsize=11, weight='bold', color='#0ca30c')
-    return fig, '05', 'jitter_proof (%s)' % a, 'SW (dati reali)', 'WCET==BCET: tempo costante -> jitter di calcolo = 0'
+    ax.annotate('esemplare: %s' % a, xy=(0.99, 0.03), xycoords='axes fraction', ha='right',
+                fontsize=8, style='italic', color=ctx['colors'][a])
+    return fig, '05', 'jitter_proof', 'SW (dati reali)', 'WCET==BCET: op costanti a ogni spike-rate -> jitter di calcolo = 0 (esemplare: %s)' % a
 
 
 # ================================ 06 RESOURCES ================================
 def fig_op_celltype(ctx):
-    a = ctx['aliases'][0]; pt = ctx['per'][a]['opc']['per_tick_worstcase']
-    ac = pt['rec_V'] + pt['out_syn']; shift = pt['input_syn'] + pt['rec_U']
-    fig, ax = plt.subplots(figsize=(8.4, 4.2))
-    ax.bar(['AC (spike-driven)', 'shift-add (po2)'], [ac, shift], color=['#1baf7a', '#2a78d6'])
-    ax.set_ylabel('celle / tick')
-    return fig, '06', 'op_by_celltype (%s)' % a, 'SW (dati reali)', 'nessun moltiplicatore -> 0 DSP'
+    A = ctx['aliases']; per = {}
+    for a in A:
+        pt = ctx['per'][a]['opc']['per_tick_worstcase']
+        per[a] = [pt['rec_V'] + pt['out_syn'], pt['input_syn'] + pt['rec_U']]
+    fig, ax = plt.subplots(figsize=(9, 4.2))
+    _gbar(ax, ['AC (spike-driven)', 'shift-add (po2)'], per, A, ctx['colors'], 'celle / tick')
+    return fig, '06', 'op_by_celltype', 'SW (dati reali)', 'AC vs shift-add per champion: nessun moltiplicatore -> 0 DSP'
 
 
 def fig_dse_pareto(ctx):
-    a = ctx['aliases'][0]; profs = ctx['per'][a]['dse']['profiles']
-    units = [p['n_units'] or 999 for p in profs]; lat = [p['cycles_per_step'] for p in profs]
-    area = [max(1, (u if u != 999 else 800)) * 30 for u in units]              # STIMA area ~ unita
-    fig, ax = plt.subplots(figsize=(9, 4.6)); ax.plot(area, lat, 'o-', color='#4a3aa7')
-    for p, ar, la in zip(profs, area, lat):
-        ax.annotate(p['profile'], (ar, la), textcoords='offset points', xytext=(6, 6), fontsize=8)
+    A = ctx['aliases']
+    fig, ax = plt.subplots(figsize=(9, 4.6))
+    for a in A:
+        profs = ctx['per'][a]['dse']['profiles']
+        units = [p['n_units'] or 999 for p in profs]; lat = [p['cycles_per_step'] for p in profs]
+        area = [max(1, (u if u != 999 else 800)) * 30 for u in units]          # STIMA area ~ unita
+        ax.plot(area, lat, 'o-', color=ctx['colors'][a], label=a, alpha=0.85)
     ax.set_xscale('log'); ax.set_yscale('log'); ax.set_xlabel('area (LUT stimati) ->')
-    ax.set_ylabel('latenza (cicli/step) <-')
-    return fig, '06', 'dse_pareto (%s)' % a, 'SW (latenza reale, area STIMA)', 'trade-off area<->latenza per parallelismo'
+    ax.set_ylabel('latenza (cicli/step) <-'); ax.legend(fontsize=8)
+    return fig, '06', 'dse_pareto', 'SW (latenza reale, area STIMA)', 'trade-off area<->latenza per parallelismo, per champion'
 
 
 def fig_bram_dim(ctx):
-    a = ctx['aliases'][0]; bits = ctx['per'][a]['wp']['total_footprint_bits']
-    bram = bits / (36 * 1024)
-    fig, ax = plt.subplots(figsize=(8.4, 4.2))
-    ax.bar(['pesi', 'BUDGET 140'], [max(bram, 0.02), 140], color=['#2a78d6', '#ddd'])
-    ax.set_yscale('log'); ax.set_ylabel('# BRAM (36Kb)')
-    ax.text(0, max(bram, 0.02) * 1.2, '%.2f BRAM (%d bit)' % (bram, bits), ha='center', fontsize=9)
-    return fig, '06', 'bram_dimensioning (%s)' % a, 'SW (dati reali)', 'memoria pesi: <1 BRAM su 140 (<1%)'
+    A = ctx['aliases']
+    vals = [max(ctx['per'][a]['wp']['total_footprint_bits'] / (36 * 1024), 0.02) for a in A]
+    fig, ax = plt.subplots(figsize=(9, 4.2))
+    ax.bar(A, vals, color=[ctx['colors'][a] for a in A])
+    ax.axhline(140, color='#888', ls='--', label='BUDGET 140 BRAM')
+    for i, v in enumerate(vals):
+        ax.text(i, v * 1.3, '%.2f' % v, ha='center', fontsize=8)
+    ax.set_yscale('log'); ax.set_ylabel('# BRAM (36Kb)'); ax.legend(fontsize=8)
+    return fig, '06', 'bram_dimensioning', 'SW (dati reali)', 'memoria pesi per champion: <1 BRAM su 140 (<1%)'
 
 
 # ================================ 07 SEU ================================
@@ -512,21 +575,27 @@ def fig_seu_intro(ctx):
 
 
 def fig_seu_sensitivity(ctx):
-    a = ctx['aliases'][0]; hm = ctx['per'][a]['sens']['heatmap']
-    if hm.size == 0:
-        return None
-    fig, ax = plt.subplots(figsize=(7.6, 5)); im = ax.imshow(hm, cmap='inferno', aspect='auto')
-    ax.set_xticks(range(4)); ax.set_xticklabels(['exp-LSB', 'exp-mid', 'exp-MSB', 'segno'])
-    ax.set_ylabel('peso (campione)'); ax.grid(False)
-    plt.colorbar(im, ax=ax, label='Δ id-error se quel bit si inverte')
-    return fig, '07', 'sensitivity_map (%s)' % a, 'SW (dati reali)', 'quanto sale il rischio invertendo 1 bit di un peso'
+    A = ctx['aliases']
+    fig, axes = _grid(A, (10, 3.7 * ((len(A) + 1) // 2)))
+    for ax, a in zip(axes, A):
+        hm = ctx['per'][a]['sens']['heatmap']
+        if hm.size == 0:
+            ax.set_visible(False); continue
+        im = ax.imshow(hm, cmap='inferno', aspect='auto')
+        ax.set_xticks(range(4)); ax.set_xticklabels(['exp-LSB', 'exp-mid', 'exp-MSB', 'segno'], fontsize=7)
+        ax.set_ylabel('peso (camp.)', fontsize=8); ax.grid(False)
+        ax.set_title(a, color=ctx['colors'][a], fontsize=11, fontweight='bold')
+        plt.colorbar(im, ax=ax, fraction=0.046)
+    return fig, '07', 'sensitivity_map', 'SW (dati reali)', 'Δ id-error invertendo 1 bit di un peso, per champion'
 
 
 def fig_bit_criticality(ctx):
-    a = ctx['aliases'][0]; bc = bit_criticality(ctx['per'][a]['sens'])
-    fig, ax = plt.subplots(figsize=(8.4, 4.2))
-    ax.bar(list(bc), list(bc.values()), color='#d03b3b'); ax.set_ylabel('sensibilita media')
-    return fig, '07', 'bit_criticality (%s)' % a, 'SW (dati reali)', 'quali bit dominano il rischio -> ECC mirata'
+    A = ctx['aliases']; bcs = {a: bit_criticality(ctx['per'][a]['sens']) for a in A}
+    cats = list(next(iter(bcs.values())))
+    per = {a: [bcs[a].get(c, 0.0) for c in cats] for a in A}
+    fig, ax = plt.subplots(figsize=(9, 4.2))
+    _gbar(ax, cats, per, A, ctx['colors'], 'sensibilita media')
+    return fig, '07', 'bit_criticality', 'SW (dati reali)', 'quali bit dominano il rischio per champion -> ECC mirata'
 
 
 def fig_hidden_vs_readout(ctx):
@@ -549,7 +618,7 @@ def fig_queue_overflow(ctx):
 
 
 def fig_aoi_surface(ctx):
-    a = ctx['aliases'][0]
+    a = _deploy(ctx)
     surf = aoi_max_surface(ctx['models_ref'][a], ctx['cache'], gaps=(8.0, 20.0, 40.0),
                            dvs=(0.0, 7.0, 14.0), max_stale_steps=20, horizon=140, t_brake=30)
     g = surf['aoi_max_s']
@@ -558,7 +627,9 @@ def fig_aoi_surface(ctx):
                    extent=[min(surf['gaps']), max(surf['gaps']), min(surf['dvs']), max(surf['dvs'])])
     ax.set_xlabel('gap s [m] (piccolo=pericoloso)'); ax.set_ylabel('Δv chiusura [m/s]')
     plt.colorbar(im, ax=ax, label='AoI_max tollerabile [s]'); ax.grid(False)
-    return fig, '08', 'aoi_max_surface (%s)' % a, 'SW (dati reali)', 'eta MAX del CAM oltre cui e insicuro (verde=tollera di piu)'
+    ax.annotate('esemplare: %s' % a, xy=(0.99, 0.03), xycoords='axes fraction', ha='right',
+                fontsize=8, style='italic', color=ctx['colors'][a])
+    return fig, '08', 'aoi_max_surface', 'SW (dati reali)', 'eta MAX del CAM oltre cui e insicuro (verde=tollera di piu; esemplare: %s)' % a
 
 
 # ================================ 09 THERMAL (STIMA/HDL) ================================
@@ -686,14 +757,21 @@ def _placeholder(sec, name, feas, msg):
 
 
 # ================================ 00b / 01b READINESS+WEIGHTS extra ================================
+# ancora esplicita di ogni asse: cosa vuol dire "1" (ideale FPGA). I NUMERI REALI: deploy_verdict.
+_RADAR_ANCHOR = {'ρ<1': 'ρ<1\n(1:ρ→0)', 'Fix-pt': 'Fix-pt\n(1:0% err)', 'Sparsità': 'Sparsità\n(1:0% fire)',
+                 'Energia': 'Energia\n(1:≥15×)', 'Timing': 'Timing\n(1:0% util)', 'SEU': 'SEU\n(1:0 crit)'}
+
+
 def fig_readiness_radar(ctx):
-    # small-multiples: un radar per champion (le 4 serie sovrapposte erano illeggibili).
+    # small-multiples: un radar per champion (le 4 serie sovrapposte erano illeggibili). DETERMINISTICO
+    # (sorgenti seedate). Ogni asse [0,1] con ancora esplicita; numeri esatti nella tabella deploy_verdict.
     dims, S = _readiness_scores(ctx)
+    labels = [_RADAR_ANCHOR.get(d, d) for d in dims]
     A = ctx['aliases']
     ang = np.linspace(0, 2 * np.pi, len(dims), endpoint=False).tolist(); ang += ang[:1]
     ncol = 2 if len(A) > 1 else 1
     nrow = int(np.ceil(len(A) / ncol))
-    fig, axes = plt.subplots(nrow, ncol, figsize=(4.7 * ncol, 4.3 * nrow),
+    fig, axes = plt.subplots(nrow, ncol, figsize=(5.0 * ncol, 4.7 * nrow),
                              subplot_kw=dict(polar=True))
     axes = np.atleast_1d(axes).reshape(-1)
     for i, a in enumerate(A):
@@ -701,13 +779,13 @@ def fig_readiness_radar(ctx):
         v = list(S[a]); v += v[:1]
         ax.plot(ang, v, color=ctx['colors'][a], lw=2)
         ax.fill(ang, v, color=ctx['colors'][a], alpha=0.25)
-        ax.set_xticks(ang[:-1]); ax.set_xticklabels(dims, fontsize=7.5)
-        ax.set_ylim(0, 1); ax.set_yticks([0.5, 1.0]); ax.set_yticklabels(['.5', '1'], fontsize=6)
-        ax.set_title(a, color=ctx['colors'][a], fontsize=11, pad=12)
+        ax.set_xticks(ang[:-1]); ax.set_xticklabels(labels, fontsize=7.5)
+        ax.set_ylim(0, 1); ax.set_yticks([0.5, 1.0]); ax.set_yticklabels(['0.5', '1'], fontsize=6.5)
+        ax.set_title(a, color=ctx['colors'][a], fontsize=12, fontweight='bold', pad=16)
     for j in range(len(A), len(axes)):
         axes[j].axis('off')
     return fig, '00', 'readiness_radar', 'SW (dati reali)', \
-        'un profilo per champion (ogni asse: 1 = requisito di deploy soddisfatto)'
+        'profilo FPGA-readiness per champion. Ogni asse 0-1, 1=ideale (ancora fra parentesi). I valori reali sono in deploy_verdict.'
 
 
 def fig_resource_occupancy(ctx):
@@ -724,32 +802,31 @@ def fig_resource_occupancy(ctx):
 
 # ================================ 02b FIXED-POINT extra ================================
 def fig_quant_vs_bits(ctx):
-    a = ctx['aliases'][0]; q = ctx['per'][a].get('qbits')
-    if not q:
+    A = [a for a in ctx['aliases'] if ctx['per'][a].get('qbits')]
+    if not A:
         return _placeholder('02', 'quant_vs_bits', 'SW / re-train', 'sweep bit-width: generato su Azure')
-    fig, ax = plt.subplots(figsize=(9, 4.4))
-    ax.plot(q['bits'], q['fixed_err'], 'o-', color='#2a78d6', label='fixed Qm.n')
-    ax.axhline(q['po2_err'], color='#e34948', ls='--', label='po2 (deploy)')
+    fig, ax = plt.subplots(figsize=(9.2, 4.6))
+    for a in A:
+        q = ctx['per'][a]['qbits']
+        ax.plot(q['bits'], q['fixed_err'], 'o-', color=ctx['colors'][a], label=a)
+        ax.axhline(q['po2_err'], color=ctx['colors'][a], ls='--', lw=1, alpha=0.6)
     ax.invert_xaxis(); ax.set_xlabel('bit-width pesi (<-)'); ax.set_ylabel('errore id. vs float')
-    ax.legend(fontsize=8)
-    return fig, '02', 'quant_vs_bits (%s)' % a, 'SW / re-train', 'bit-budget pesi (curva ONESTA solo con re-training QAT)'
+    ax.legend(fontsize=7, ncol=2, title='linea piena=fixed · tratteggio=po2 (deploy)')
+    return fig, '02', 'quant_vs_bits', 'SW / re-train', 'bit-budget pesi per champion (tratteggio=po2 deploy; curva ONESTA solo con re-training QAT)'
 
 
 def fig_chattering(ctx):
-    a = ctx['aliases'][0]; c = ctx['per'][a].get('chatter')
-    if not c:
+    A = [a for a in ctx['aliases'] if ctx['per'][a].get('chatter')]
+    if not A:
         return _placeholder('02', 'chattering', 'SW', 'closed-loop float vs quant: generato su Azure')
-    fig, ax = plt.subplots(2, 1, figsize=(9, 5.4))
-    ax[0].plot(c['t'], c['a_float'], color='#888', label='float (param pieni)')
-    ax[0].plot(c['t'], c['a_quant'], color='#e34948', alpha=0.8, label='param quant 2-bit (nervoso)')
-    ax[0].set_ylabel('a_ego [m/s2]'); ax[0].legend(fontsize=7, ncol=2); ax[0].set_title('comando: liscio vs nervoso', fontsize=10)
-    for lab, sig, cc in [('float', c['a_float'], '#888'), ('quant', c['a_quant'], '#e34948')]:
-        sp = np.abs(np.fft.rfft(sig - np.mean(sig))) ** 2
-        fr = np.fft.rfftfreq(len(sig), d=0.1)
-        ax[1].semilogy(fr, sp + 1e-6, color=cc, label=lab)
-    ax[1].axvspan(0.5, 5, color='#e34948', alpha=0.06); ax[1].set_xlabel('freq [Hz]'); ax[1].set_ylabel('PSD (log)')
-    ax[1].set_title('energia >0.5 Hz (zona rossa) = chattering', fontsize=10); ax[1].legend(fontsize=7)
-    return fig, '02', 'chattering (%s)' % a, 'SW (dati reali)', 'instabilita: accelerazione nervosa da quantizzazione'
+    fig, axes = _grid(A, (10, 3.0 * ((len(A) + 1) // 2)))
+    for ax, a in zip(axes, A):
+        c = ctx['per'][a]['chatter']
+        ax.plot(c['t'], c['a_float'], color='#888', lw=1.2, label='float')
+        ax.plot(c['t'], c['a_quant'], color=ctx['colors'][a], lw=1.0, alpha=0.85, label='quant 2-bit')
+        ax.set_xlabel('t [s]'); ax.set_ylabel('a_ego [m/s²]'); ax.legend(fontsize=7)
+        ax.set_title(a, color=ctx['colors'][a], fontsize=11, fontweight='bold')
+    return fig, '02', 'chattering', 'SW (dati reali)', 'accelerazione: float (liscia) vs param quant 2-bit (nervosa), per champion'
 
 
 # ================================ 04b ENERGY extra ================================
@@ -887,7 +964,7 @@ def fig_derating(ctx):
 
 
 ALL_FIGS = [
-    fig_readiness_matrix, fig_readiness_radar, fig_deploy_verdict,
+    fig_readiness_radar, fig_deploy_verdict,
     fig_po2_alphabet, fig_resource_occupancy, fig_spectral, fig_sparsity_mask, fig_po2_exponent_range,
     fig_bit_allocation, fig_state_ranges, fig_quant_vs_bits, fig_per_param_fragility, fig_chattering, fig_leak_decay,
     fig_activity_map, fig_raster, fig_sparsity_tick, fig_isi, fig_dead_sat,
@@ -934,7 +1011,7 @@ HB_AZURE = {'cvf_flips': (1, 2, 4, 8, 16), 'cvf_mc': 8, 'cvf_drivers': 10, 'v2x_
             'aoi_drivers': 40, 'pshift_n': 40, 'rate_drivers': 20}
 
 SECTIONS = {
-    '00_Readiness': [fig_readiness_matrix, fig_readiness_radar, fig_deploy_verdict],
+    '00_Readiness': [fig_readiness_radar, fig_deploy_verdict],
     '01_Weights_po2': [fig_po2_alphabet, fig_resource_occupancy, fig_spectral, fig_sparsity_mask,
                        fig_po2_exponent_range],
     '02_FixedPoint': [fig_bit_allocation, fig_state_ranges, fig_quant_vs_bits, fig_per_param_fragility,
@@ -955,13 +1032,23 @@ def _clean(name):
     return name.split('(')[0].strip().replace(' ', '_').replace('/', '_').replace('—', '-')
 
 
+_ACR = {'po2': 'PO2', 'ann': 'ANN', 'seu': 'SEU', 'wcet': 'WCET', 'isi': 'ISI', 'aoi': 'AoI',
+        'dse': 'DSE', 'v2x': 'V2X', 'hil': 'HIL', 'io': 'I/O', 'vs': 'vs', 'tj': 'Tj',
+        'fmax': 'Fmax', 'rho': 'ρ', 'pdr': 'PDR', 'iidm': 'IIDM', 'tmr': 'TMR'}
+
+
+def _pretty(name):
+    """nome_figura -> Titolo Leggibile (acronimi preservati)."""
+    base = name.split('(')[0].strip()
+    return ' '.join(_ACR.get(w.lower(), w[:1].upper() + w[1:]) for w in base.replace('_', ' ').split())
+
+
 def _titolo(fig, name, note=None):
-    """Titolo pulito e ATTACCATO al grafico, come negli altri studi. NIENTE sottotitolo/caption
-    sulla figura: la descrizione (`note`) e il tag di fattibilita' vivono nel documento pdf/md,
-    sotto il grafico. `note` resta nella firma solo per compatibilita' (ignorata qui)."""
-    fig.suptitle(name.replace('_', ' '), fontsize=12.5, fontweight='normal')
+    """Titolo GRANDE, in grassetto, Title-Case (acronimi preservati), attaccato al grafico —
+    allineato ai report degli altri studi. La descrizione (`note`) vive nel pdf/md sotto la figura."""
+    fig.suptitle(_pretty(name), fontsize=15, fontweight='bold')
     try:
-        fig.tight_layout(rect=[0, 0.02, 1, 0.96])
+        fig.tight_layout(rect=[0, 0.02, 1, 0.95])
     except Exception:
         pass
 
