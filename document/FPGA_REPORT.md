@@ -100,8 +100,8 @@ Il picco di spike simultanei per tick dimensiona l'albero di accumulo (AC) in ha
 ![Distribuzione degli inter-spike-interval, per champion: l'ISI minimo dà il worst-case back-to-back.](figures_fpga/03_Spiking__isi_dist.png)
 *Distribuzione degli inter-spike-interval, per champion: l'ISI minimo dà il worst-case back-to-back.*
 
-![Raster degli spike ordinato per firing-rate, tutti i champion (% attivi/tick fra parentesi). I champion sparano ~13-19% — NON sono iper-sparsi.](figures_fpga/03_Spiking__raster.png)
-*Raster degli spike ordinato per firing-rate, tutti i champion (% attivi/tick fra parentesi). I champion sparano ~13-19% — NON sono iper-sparsi.*
+![Raster degli spike ordinato per firing-rate, tutti i champion (% attivi/tick fra parentesi). I champion sparano ~13-21% — NON sono iper-sparsi.](figures_fpga/03_Spiking__raster.png)
+*Raster degli spike ordinato per firing-rate, tutti i champion (% attivi/tick fra parentesi). I champion sparano ~13-21% — NON sono iper-sparsi.*
 
 ![Spike concorrenti per tick, per champion: il MAX simultaneo fissa la larghezza dell'albero di accumulo (AC).](figures_fpga/03_Spiking__sparsity_per_tick.png)
 *Spike concorrenti per tick, per champion: il MAX simultaneo fissa la larghezza dell'albero di accumulo (AC).*
@@ -121,8 +121,8 @@ Coerenza col gemello: VALIDATION_REPORT_v3 §9.2 riporta una stima più grossola
 ![Energia per inferenza: SNN tipico (sparso) vs SNN worst-case (denso) vs ANN densa (MAC), per champion, con il vantaggio ×. Il guadagno viene dal costo AC<MAC (0 DSP), NON dalla sparsità.](figures_fpga/04_Energy__energy_vs_ann.png)
 *Energia per inferenza: SNN tipico (sparso) vs SNN worst-case (denso) vs ANN densa (MAC), per champion, con il vantaggio ×. Il guadagno viene dal costo AC<MAC (0 DSP), NON dalla sparsità.*
 
-![Energia vs spike-rate: i pallini marcano il rate operativo reale (~13-19%) — i champion NON sono nel regime iper-sparso.](figures_fpga/04_Energy__energy_vs_rate.png)
-*Energia vs spike-rate: i pallini marcano il rate operativo reale (~13-19%) — i champion NON sono nel regime iper-sparso.*
+![Energia vs spike-rate: i pallini marcano il rate operativo reale (~13-21%) — i champion NON sono nel regime iper-sparso.](figures_fpga/04_Energy__energy_vs_rate.png)
+*Energia vs spike-rate: i pallini marcano il rate operativo reale (~13-21%) — i champion NON sono nel regime iper-sparso.*
 
 ![Parte statica (input, sempre-on) vs dinamica (spike-driven) delle SynOps per champion → dove conviene il clock-gating.](figures_fpga/04_Energy__synops_split.png)
 *Parte statica (input, sempre-on) vs dinamica (spike-driven) delle SynOps per champion → dove conviene il clock-gating.*

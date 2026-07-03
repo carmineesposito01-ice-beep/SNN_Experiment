@@ -1,9 +1,10 @@
 # POST_FPGA_ROADMAP — Le 3 fasi oltre l'FPGA-evaluate (decisioni di progetto)
 
-> **Data:** 2026-07-02 · **Branch:** `EventProp_Study` · **Stato:** **fase di RAGIONAMENTO — decisioni bloccate, NON ancora implementate.**
+> **Data:** 2026-07-02 (agg. 2026-07-03) · **Branch:** `EventProp_Study` · **Stato:** decisioni bloccate; **① ha un
+> design MVP v1 APPROVATO** (`SIMULATOR_DESIGN.md`), ②/③ ancora da progettare. **Nessuna delle tre IMPLEMENTATA.**
 >
 > Questo documento registra le decisioni prese in una sessione di ragionamento sulle **tre fasi successive**
-> all'FPGA-evaluate (che è la Fase A "software_now", già costruita e pronta per Azure — vedi
+> all'FPGA-evaluate (la Fase A "software_now" — ora **COMPLETATA**: report in `document/FPGA_REPORT.md`, design in
 > `document/FPGA_EVALUATE_DESIGN.md`). Serve a **riprendere il discorso in modo agile e completo** in futuro.
 > Le decisioni sono bloccate salvo revisione esplicita. **Prima di scrivere codice** per una qualunque delle tre,
 > aprire una vera sessione di design (brainstorming) su quella fase.

@@ -1,11 +1,16 @@
-# EventProp — Stato attuale + punto di ripresa (2026-07-02)
+# EventProp — Stato attuale + punto di ripresa (2026-07-03)
 
-Branch `EventProp_Study`. **Documento-master di ripresa dello studio EventProp**: dove siamo, cosa funziona,
-cosa è escluso e perché, le pratiche, e come continuare. Dettagli complementari: **`document/EVALUATE_UPGRADE.md`**
-(upgrade evaluate 6-tier), **`results/EventProp_Study/combined/INDEX.md`** (studio combinato),
-**`document/HOW_IT_WORKS_v3.md`/.pdf** (come funziona la rete — tecnico e aggiornato, gemello di
-`VALIDATION_REPORT_v3`; supersede HOW_IT_WORKS.md v1/v2) + `GLOSSARY.md` (architettura/fisica). Le §1-§8 sono il record storico dello studio EventProp; la **§9** è
-l'aggiornamento post-BigSweep3 (studio combinato + evaluate v3).
+Branch `EventProp_Study`. **Documento-master di ripresa**: dove siamo, cosa funziona, cosa è escluso e perché,
+le pratiche, come continuare. **MAPPA DEI DOCUMENTI** (leggerli in quest'ordine per riprendere):
+- **Trio v3** (allineati e complementari — nessuna duplicazione, si rimandano a vicenda): `HOW_IT_WORKS_v3.md/.pdf`
+  (COME funziona — teoria) · `VALIDATION_REPORT_v3.md/.pdf` (i RISULTATI dell'evaluate a 6-tier, verdetto deploy) ·
+  `FPGA_REPORT.md/.pdf` (il profilo HARDWARE Fase A pre-silicio, 45 figure/10 sezioni).
+- **Fasi future (post-FPGA)**: `POST_FPGA_ROADMAP.md` (① simulatore · ② HDL · ③ FPGA-in-the-Loop — decise) +
+  `SIMULATOR_DESIGN.md` (design MVP v1 del simulatore ①, APPROVATO, non implementato).
+- **Design/framework FPGA**: `FPGA_EVALUATE_DESIGN.md` + `FPGA_EVALUATION_FRAMEWORK.md`. **Fisica/glossario**:
+  `GLOSSARY.md`. **Upgrade evaluate + studio combinato**: `EVALUATE_UPGRADE.md`, `results/EventProp_Study/combined/INDEX.md`.
+- **Come ri-allineare i documenti e ripartire in modo deterministico**: `RESUME_PROCEDURE.md`.
+Le §1-§8 di questo doc sono il record storico dello studio EventProp; la **§9** l'aggiornamento post-BigSweep3.
 
 ---
 
@@ -14,13 +19,15 @@ l'aggiornamento post-BigSweep3 (studio combinato + evaluate v3).
 **Progetto CF_FSNN**: una SNN (ALIF + EventProp) che, osservata una traiettoria di car-following,
 **identifica i 5 parametri ACC-IIDM** `[v0, T, s0, a, b]`. Target finale: deploy FPGA PYNQ-Z1 (pesi po2).
 
-**Stato in una riga (2026-07-02)**: studio EventProp **mappato e chiuso** (BigSweep1→3 + **studio combinato**
-su 102 arm). EventProp è su un **fronte di Pareto** col BPTT champion: il champion vince la fisica di ~5.5%,
-EventProp vince NRMSE + stabilità (raggio spettrale 0.5 vs 22) + FPGA-friendliness (rank8), e **entrambi
-guidano in SICUREZZA** (0 collisioni, min-gap preservato). **Evaluate v3 esaustivo (6-tier) COMPLETO su Azure**
-(15/15 sezioni; report di chiusura `VALIDATION_REPORT_v3.md/.pdf`). **FPGA-evaluate Fase A costruita, restyled
-e corretta** (bug n_ticks, punto 7) — **PROSSIMA AZIONE: re-run Azure del notebook `Eval_FPGA.ipynb`** (punto 5),
-poi report FPGA finale. Nulla di pesante in locale: l'utente lancia su Azure.
+**Stato in una riga (2026-07-03)**: studio EventProp **mappato e chiuso** (BigSweep1→3 + **studio combinato** su
+102 arm). EventProp è su un **fronte di Pareto** col BPTT champion: il champion vince la fisica di ~5.5%, EventProp
+vince NRMSE + stabilità (ρ **0.05-0.39** vs **1.16-2.99** dei BPTT champion) + FPGA-friendliness, e **entrambi
+guidano in SICUREZZA**. **Evaluate v3 (6-tier) COMPLETO** → `VALIDATION_REPORT_v3`. **FPGA-evaluate Fase A COMPLETA**
+(45 figure/10 sezioni, render **HB_AZURE in locale** sui champion versionati) → `FPGA_REPORT`. **Trio v3 allineato**
+(teoria/risultati/hardware, senza duplicazioni). **Simulatore ① PROGETTATO** (MVP v1 approvato, `SIMULATOR_DESIGN.md`).
+Bug n_ticks corretto (punto 7). **➡️ PROSSIMA AZIONE: implementare il simulatore ①** (sessione writing-plans su
+`SIMULATOR_DESIGN.md`) — in alternativa ② convertitore HDL o ③ FPGA-in-the-Loop (`POST_FPGA_ROADMAP.md`). I job
+pesanti girano su Azure **o in locale** (i 4 champion sono versionati in `champions/`).
 
 **Per continuare (dal più fresco):**
 1. `git pull origin EventProp_Study`.

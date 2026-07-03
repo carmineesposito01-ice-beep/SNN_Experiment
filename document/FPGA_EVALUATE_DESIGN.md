@@ -170,7 +170,9 @@ bar/gbar=bar (raggruppato) · wf=waterfall · cont=contour · rad=radar · rast=
 
 ## 6. Prossimi passi (build reale — Fase A)
 
-> **✅ BUILD FATTO + restyled + corretto (2026-07-02) — IN ATTESA DI RE-RUN AZURE.** Le 5 librerie software_now
+> **✅ FASE A COMPLETATA (2026-07-03) — deliverable `document/FPGA_REPORT.md/.pdf` (45 figure/10 sezioni). Render
+> finale HB_AZURE eseguito IN LOCALE sui champion versionati in `champions/` (niente Azure). Overhaul figure fatto
+> (readiness onesto radar+tabella, tutti-e-4, titoli).** Le 5 librerie software_now
 > sono scritte, testate (17 check verdi: `tests/test_fpga_profilers.py` 8, `test_fpga_seu.py` 6, `test_fpga_io.py`
 > 3) e verificate su **checkpoint REALI** (baseline+eventprop): ρ(U·V)=0.162 / ‖·‖₂=0.843 confermano il framework.
 > Le **46 figure a dati reali** sono in `scripts/fpga_figures.py` (render locale 46/46 OK, 0 placeholder); il
