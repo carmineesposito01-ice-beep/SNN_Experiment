@@ -430,9 +430,9 @@ def fig_energy():
     a1.set_ylabel('operazioni / inferenza (×1000, indicativo)')
     a1.set_title('Le SynOps NON sono meno dei MAC', fontsize=9.5, color=BLUE)
     a1.grid(alpha=0.25, axis='y')
-    a2.bar(['SNN (AC)\n~11 nJ', 'ANN (MAC)\n~302 nJ'], [11, 302], color=[GREEN, GRAY], alpha=0.85)
+    a2.bar(['SNN (AC)\n~55 nJ', 'ANN (MAC)\n~302 nJ'], [55, 302], color=[GREEN, GRAY], alpha=0.85)
     a2.set_ylabel('energia / inferenza [nJ] (stima Horowitz 45nm)')
-    a2.set_title('Il vantaggio (≈22–30×) viene dal COSTO UNITARIO AC<MAC', fontsize=9, color=BLUE)
+    a2.set_title('Il vantaggio (≈5-6×) viene dal COSTO UNITARIO AC<MAC', fontsize=9, color=BLUE)
     a2.grid(alpha=0.25, axis='y')
     fig.suptitle('Nota onesta: a parità di costo per operazione la SNN sarebbe peggiore → più sparsità = più vantaggio',
                  fontsize=9.5, color=RED)
@@ -546,7 +546,7 @@ def build_doc():
         [
             ['Unità di comunicazione', 'valore reale per layer', 'treno di spike 0/1 nel tempo', 'output leggibile solo integrando i spike'],
             ['Stato / memoria', 'stateless per campione', 'potenziale di membrana persistente', 'nativamente adatta a serie temporali (traiettorie)'],
-            ['Computazione', 'MAC densi sincroni', 'accumulo + confronto soglia, event-driven', 'energia ∝ spike; sparsità ~1–2%'],
+            ['Computazione', 'MAC densi sincroni', 'accumulo + confronto soglia, event-driven', 'energia ∝ spike; sparsità ~13-19%'],
             ['Differenziabilità', 'end-to-end', 'gradino di Heaviside (non diff.)', 'serve surrogate / EventProp (§6–8)'],
             ['Hardware ideale', 'GPU / TPU (matmul densa)', 'neuromorfico / FPGA (memoria-vicino-calcolo)', 'target PYNQ-Z1; pesi po2 → shift'],
             ['Dati nativi', 'tensori densi', 'eventi / serie temporali', 'input V2X sequenziale'],
@@ -561,7 +561,9 @@ def build_doc():
            'costo per operazione la SNN sarebbe anzi peggiore. Il guadagno viene dal minor costo '
            'unitario di un ACCUMULO (AC) rispetto a una MOLTIPLICAZIONE-ACCUMULO (MAC) — e su FPGA '
            'con pesi potenze-di-due l\'AC diventa un semplice shift+add. Ne segue la regola: più '
-           'sparsità = più vantaggio. Il payoff energetico stimato è ~22-30x rispetto a una ANN equivalente (quantificato in §16).'))
+           'sparsità = più vantaggio. Il payoff energetico per champion è quantificato nel gemello '
+           'VALIDATION_REPORT_v3 §9.2 (dopo la correzione del bug n_ticks: ~5-6×, nel dettaglio '
+           '4.77-6.01×, non 22-30×).'))
     A(('img', (F['energy'], 'Figura 2.2 — Perché la SNN è più efficiente pur facendo lo stesso numero '
                             '(o più) di operazioni: il costo unitario AC < MAC. La sparsità amplifica '
                             'il margine, non lo crea.')))
@@ -776,12 +778,12 @@ def build_doc():
     A(('img', (F['spectral'], 'Figura 11.1 — A sinistra: con ρ<1 lo stato si smorza, con ρ>1 diverge. '
                               'A destra: i 4 champion (i quattro modelli migliori selezionati nel report '
                               'gemello: 2 BPTT, 2 EventProp) — i due EventProp (○) sono contrattivi '
-                              '(ρ 0.05 e 0.39), i due BPTT (□) espansivi (ρ 1.16 e 2.99). Donatello '
-                              '(ρ=0.05 + migliore accuratezza) è il candidato al deploy.')))
+                              '(ρ<1), i due BPTT (□) espansivi (ρ>1). I valori di ρ misurati sui champion '
+                              'e il verdetto di deploy sono in VALIDATION_REPORT_v3 §9.3 e §10.')))
     A(('callout', 'Doppio ruolo di ρ. La stessa grandezza governa (a) la stabilità in hardware e '
                   '(b) la convergenza dell\'adjoint di EventProp (ρ che cresce fa divergere λ, §8). Il '
-                  'vincolo spettrale C11 rende EventProp contrattivo per costruzione: non è un caso che '
-                  'i champion EventProp abbiano ρ<1.'))
+                  'vincolo spettrale C11 rende EventProp contrattivo per costruzione (confermato sui '
+                  'champion in VALIDATION §9.3).'))
 
     A(('h2', '12. L\'approccio PINN: la loss a 5 componenti'))
     A(('p', 'PINN (Physics-Informed Neural Network) significa: la rete non fa un fitting cieco dei '
@@ -809,9 +811,9 @@ def build_doc():
            'T con salti di Markov, non con un vero processo OU continuo. L\'accelerazione del leader '
            'a_l non è un input: è ri-stimata da differenze finite filtrate. Esistono anche termini '
            'ausiliari di supervisione DIRETTA sui parametri (aggiunti negli studi R25/R30) ma sono '
-           'disattivati di default. Diagnosi importante: azzerare phys/ou/bc sposta la val di appena '
-           '~0.007 → il PINN non è il collo di bottiglia; la quantizzazione po2 pesa ~0.2%; il grosso '
-           'del plateau (~78%) è architettura/gradiente.'))
+           'disattivati di default. Diagnosi importante: azzerare phys/ou/bc sposta la val in modo '
+           'trascurabile → il PINN non è il collo di bottiglia; il grosso del plateau è architettura/'
+           'gradiente (ablazioni quantitative in EVENTPROP_STATUS/VALIDATION).'))
 
     A(('h2', '13. Il modello fisico ACC-IIDM (il bersaglio del PINN)'))
     A(('p', 'La rete identifica i parametri di un controllore ACC basato su IIDM (Improved Intelligent '
@@ -874,7 +876,7 @@ def build_doc():
            'scritto a mano, o un percorso via Simulink + HDL Coder (nodo aperto, documentato in '
            'FPGA_EVALUATE_DESIGN.md). Le scelte hardware-aware (po2→shift, leak→shift, surrogata→LUT, '
            'delay→ring-buffer, reset sottrattivo) sono NECESSARIE ma non SUFFICIENTI: riducono '
-           'l\'attrito, non lo eliminano. Il vantaggio energetico di 22–30× è una STIMA da modello '
+           'l\'attrito, non lo eliminano. Il vantaggio energetico (~4.77-6.01×, VALIDATION §9.2) è una STIMA da modello '
            '(Horowitz 45 nm), non una misura su silicio; restano da validare l\'utilizzo dei DSP, la '
            'banda di memoria e la quantizzazione dello STATO (V, fatica) oltre che dei pesi.'))
 
@@ -896,25 +898,25 @@ def build_doc():
             ['PINN', 'usa la fisica per compensare la capacità ridotta', 'non risolve l\'identificabilità sloppy'],
         ],
     )))
-    A(('callout', 'Tre note oneste che il report enuncia e che qui abbiamo fondato: (1) il vantaggio '
-                  'energetico viene dal costo AC<MAC, NON dalla sparsità; (2) la robustezza alla perdita '
-                  'di pacchetti V2X è dell\'handler "hold-last", NON della rete (senza handler la '
-                  'collisione esplode); (3) una NRMSE bassa non implica una guida sicura. Inoltre i '
-                  'champion BPTT hanno ~31% di neuroni morti e ρ>1, gli EventProp 0 morti e ρ<1: la '
-                  'salute della rete è un vantaggio concreto del gradiente esatto.'))
+    A(('callout', 'Queste distinzioni teoriche (il costo AC<MAC vs la sparsità, il ruolo dell\'handler '
+                  'V2X "hold-last", NRMSE≠sicurezza, la salute della rete) diventano findings misurati '
+                  'sui 4 champion nel report gemello — vedi VALIDATION_REPORT_v3 §9.2 (energia), §8.1 '
+                  '(V2X hold-last), §1 e §9.3 (neuroni morti e ρ per champion).'))
 
     A(('h2', '18. Sintesi end-to-end e rimando ai risultati'))
     A(('p', 'Un episodio completo: l\'input V2X normalizzato entra come corrente; per 10 tick lo strato '
-           'ALIF integra, spara sparsamente e si retroalimenta via U·V; lo strato LI accumula i spike; '
+           'ALIF integra, emette spike e si retroalimenta via U·V; lo strato LI accumula i spike; '
            'il potenziale finale viene decodificato (sigmoid + bound) nei 5 parametri; questi, dati al '
            'controllore ACC-IIDM, guidano un\'auto in anello chiuso confrontata con l\'oracolo. La mappa '
            'teoria → codice: ALIF (§4) → ALIFCell; codifica (§5) → corrente diretta + LI + 10 tick; '
            'surrogate (§7) → SurrogateSpike_Hardware; EventProp (§8) → ALIFLayer_EventProp_Full; po2 '
            '(§15) → PowerOf2Quantize; PINN (§12) → pinn_loss.'))
-    A(('p', 'Stato reale, onesto: il plateau di validazione è ~0.28 (l\'obiettivo di riferimento di '
-           'Treiber è ~0.20), con due cause diagnosticate — l\'identificabilità sloppy di a/b e la '
-           'qualità del gradiente SNN — e un fronte di Pareto tra BPTT (vince di poco sulla fisica) ed '
-           'EventProp (vince su NRMSE, stabilità e idoneità FPGA); entrambi guidano in SICUREZZA. '
+    A(('p', 'Stato reale, onesto: il plateau di validazione (val_data/fisica) è ~0.19-0.20, allineato al '
+           'riferimento di Treiber (~0.20), con record a 0.1926 (il vecchio plateau highway ~0.28 è stato '
+           'superato; valori esatti per-champion in VALIDATION_REPORT_v3 §4.1). Due cause strutturali '
+           'diagnosticate — l\'identificabilità sloppy di a/b e la qualità del gradiente SNN; l\'esito del '
+           'confronto BPTT vs EventProp (fronte di Pareto) e il verdetto di sicurezza sono nel report '
+           'gemello (VALIDATION §1, §5, §10). '
            'Distinguere sempre ciò che è VALIDATO IN PRODUZIONE (BPTT+surrogate, checkpoint della '
            'famiglia Loss_Study) da ciò che è STUDIATO/roadmap (EventProp, deploy HDL).'))
     A(('callout', 'Hai capito COME funziona la rete. Per i RISULTATI — i 4 champion, il verdetto di '

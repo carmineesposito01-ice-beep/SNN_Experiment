@@ -321,7 +321,7 @@ def build_doc():
             'Riferimento: Master Splinter (oracolo = ACC-IIDM coi parametri veri)',
             'Analisi sorgente: results/evaluate/v3_TURTLE_POWER!!!  (15 dimensioni)',
             'Lettore atteso: ingegnere che non conosce il progetto e vuole piena',
-            'coscienza dello stato in ~35 minuti (i 4 champion + validazione + profilo FPGA).',
+            'coscienza dello stato in ~35 minuti (i 4 champion + validazione a 6-tier + sommario del profilo FPGA; il dettaglio hardware e\' nel FPGA_REPORT).',
         ],
     }))
 
@@ -394,14 +394,15 @@ def build_doc():
            'termine dati (l\'accelerazione ricostruita dai parametri predetti deve combaciare con '
            'quella ACC-IIDM vera) piu\' termini di coerenza fisica. La rete non predice una '
            'traiettoria ma i 5 NUMERI che caratterizzano lo stile di guida. Dettagli completi di '
-           'architettura, neurone ALIF e loss in document/HOW_IT_WORKS_v2.md e GLOSSARY.md.'))
+           'architettura, neurone ALIF e loss in document/HOW_IT_WORKS_v3.md e GLOSSARY.md.'))
     A(('h2', '2.2 EventProp vs BPTT: un fronte di Pareto'))
     A(('p', 'Lo studio ha mappato e chiuso il confronto tra due modi di calcolare il gradiente '
            'attraverso i tick della SNN: BPTT con surrogate gradient (si "ammorbidisce" la soglia '
            'non-differenziabile dello spike) contro EventProp (adjoint esatto sugli istanti di '
            'spike). Il risultato e\' un fronte di Pareto, non un vincitore secco: il champion BPTT '
            'vince di poco sulla fisica pura (~5.5%), ma EventProp vince su NRMSE, su STABILITA\' '
-           '(raggio spettrale della ricorrenza ~0.5 contro ~22 delle famiglie BPTT piu\' spinte) e '
+           '(raggio spettrale ρ 0.05-0.39 negli EventProp contro 1.16-2.99 nei BPTT champion — le '
+           'famiglie BPTT storiche scartate toccavano ~22) e '
            'su FPGA-friendliness; ed entrambi guidano in sicurezza. Il presente evaluate quantifica '
            'quel fronte su tutte le dimensioni che contano per un deploy neuromorfico.'))
     A(('callout', 'La ricorrenza ALIF e\' fattorizzata a basso rango come prodotto di due matrici U e V; '
@@ -673,6 +674,11 @@ def build_doc():
 
     # ---- 9. PROFILO FPGA ----
     A(('h1', '9. Profilo FPGA: quantizzazione, energia, salute della rete (Tier 5)'))
+    A(('callout', 'Questa sezione e\' il SOMMARIO del profilo FPGA nel contesto dell\'evaluate a 6-tier: '
+                  'i tre findings chiave (quantizzazione fixed-point, energia, discriminante di stabilita\'). '
+                  'Il profilo hardware COMPLETO — readiness/scorecard, pesi po2, fixed-point, spiking, energia, '
+                  'timing/WCET, risorse/DSE, SEU, I/O-HIL, thermal (45 figure su 10 sezioni) — e\' nel documento '
+                  'dedicato FPGA_REPORT (Fase A pre-silicio).'))
     A(('h2', '9.1 Quantizzazione: fixed-point e potenze-di-due'))
     A(('p', f'La rete tollera una quantizzazione aggressiva. In virgola fissa l\'errore di '
            f'identificazione resta praticamente invariato fino a 2 bit di parte frazionaria '
@@ -770,8 +776,9 @@ def build_doc():
            'Raffaello.'))
     A(('p', 'Prossimi passi (fase FPGA). La presentazione della valutazione hardware e\' gia\' '
            'progettata e bloccata per la Fase A "software_now" (pre-silicio) in '
-           'document/FPGA_EVALUATE_DESIGN.md, con il quadro tecnico in '
-           'document/FPGA_EVALUATION_FRAMEWORK.md. Restano aperte la Fase B (HDL) e la Fase C '
+           'document/FPGA_EVALUATE_DESIGN.md (il progetto) e il quadro tecnico in '
+           'document/FPGA_EVALUATION_FRAMEWORK.md; il deliverable ESEGUITO di quella Fase A — la '
+           'FPGA-evaluate profonda (45 figure su 10 sezioni) — e\' il FPGA_REPORT. Restano aperte la Fase B (HDL) e la Fase C '
            '(board): la conversione della SNN in HDL non e\' immediata (i tool tipo FINN non '
            'supportano il neurone ALIF-PINN; la strada probabile e\' import in Simulink + HDL Coder), '
            'ed e\' documentata come problema aperto. Su questo evaluate, il candidato Donatello e\' il '
@@ -793,8 +800,9 @@ def build_doc():
             ['Quantizzazione (Qm.n/po2)', 'utils/quantize.py'],
             ['Diagnostica rete (dead/rho/raster)', 'utils/net_diagnostics.py'],
             ['Documento-master dello studio', 'document/EVENTPROP_STATUS.md'],
-            ['Design valutazione FPGA', 'document/FPGA_EVALUATE_DESIGN.md / FPGA_EVALUATION_FRAMEWORK.md'],
-            ['Architettura/fisica', 'document/HOW_IT_WORKS_v2.md / GLOSSARY.md'],
+            ['Design valutazione FPGA (progetto)', 'document/FPGA_EVALUATE_DESIGN.md / FPGA_EVALUATION_FRAMEWORK.md'],
+            ['Profilo FPGA profondo — Fase A (45 figure, 10 sez.)', 'document/FPGA_REPORT.md / .pdf'],
+            ['Architettura/fisica (come funziona)', 'document/HOW_IT_WORKS_v3.md / GLOSSARY.md'],
         ],
     )))
     A(('p', 'Le figure-chiave di questo report (accuratezza, discriminante FPGA, sicurezza, '

@@ -27,7 +27,7 @@ poi report FPGA finale. Nulla di pesante in locale: l'utente lancia su Azure.
 2. **Evaluate v3 — COMPLETO (2026-07-01), 15/15 sezioni** in `results/evaluate/v3_TURTLE_POWER!!!/`
    (re-run post-fix eseguito su Azure; `python scripts/verify_eval_v3.py` OK).
    **Verdetto cross-champion**: fixed-point output trascurabile fino a 2 bit; QAT funziona (pesi po2 ≤ float su 3/4 champion,
-   `delta_qat_absorbed` negativo); energia 22–30×; **ρ(U@V): EventProp contrattivo (Donatello 0.05, Michelangelo 0.39) vs BPTT
+   `delta_qat_absorbed` negativo); energia ~4.77-6.01× (post-fix n_ticks, vedi punto 7); **ρ(U@V): EventProp contrattivo (Donatello 0.05, Michelangelo 0.39) vs BPTT
    >1 (Raffaello 2.99, Leonardo 1.16) → EventProp più FPGA-friendly** (corregge la stima preliminare ρ≈0.16 del framework);
    V2X **blind = 0.67 collisione** (hold-last maschera moltissimo; la rete da sola è insicura); ghiaccio ~60% coll. anche per
    l'oracolo (limite fisico del plant). **Candidato deploy FPGA: Donatello** (contrattivo + best accuracy).
