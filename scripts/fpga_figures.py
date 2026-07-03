@@ -227,9 +227,9 @@ def fig_po2_alphabet(ctx):
             ax.plot([x[i], x[i]], [0, cc], color=col, lw=2); ax.plot(x[i], cc, 'o', color=col, ms=4)
         ax.set_xticks(x); ax.set_xticklabels(lv, fontsize=6, rotation=90)
         ax.set_ylabel('# pesi (di %d)' % tot, fontsize=8)
-        ax.set_title('%s  —  0: %.0f%% eliminabili' % (a, 100 * zero / tot),
+        ax.set_title('%s  —  %.0f%% pesi a 0 (sinapsi eliminabili)' % (a, 100 * zero / tot),
                      color=ctx['colors'][a], fontsize=11, fontweight='bold')
-    return fig, '01', 'po2_alphabet', 'SW (dati reali)', 'alfabeto po2 (sign*2^k): il moltiplicatore e UNO di 13 valori -> barrel-shifter, 0 DSP'
+    return fig, '01', 'po2_alphabet', 'SW (dati reali)', 'alfabeto po2 (sign*2^k): moltiplicatore = UNO di 13 valori -> barrel-shifter, 0 DSP. "eliminabili" = SINAPSI a peso 0 (potatura del connettoma), NON neuroni morti.'
 
 
 def fig_spectral(ctx):
@@ -867,19 +867,28 @@ def fig_area_model(ctx):
 
 # ================================ 07b SEU extra ================================
 def fig_degrade_vs_flips(ctx):
-    fig, ax = plt.subplots(figsize=(9, 4.4)); any_data = False
-    for a in ctx['aliases']:
-        cvf = ctx['per'][a].get('cvf')
-        if not cvf:
-            continue
-        any_data = True
-        k = [r['n_flips'] for r in cvf['rows']]; cr = [r['collision_rate_mean'] for r in cvf['rows']]
-        ax.plot(k, cr, 'o-', color=ctx['colors'][a], label=a)
-    if not any_data:
-        plt.close(fig)
+    A = [a for a in ctx['aliases'] if ctx['per'][a].get('cvf')]
+    if not A:
         return _placeholder('07', 'degrade_vs_flips', 'SW', 'curva collisione vs #SEU: generata su Azure')
+    fig, ax = plt.subplots(figsize=(9.2, 4.6)); marks = ['o', 's', '^', 'D', 'v']
+    allzero = True; kmax = 0
+    for i, a in enumerate(A):
+        cvf = ctx['per'][a]['cvf']
+        k = np.array([r['n_flips'] for r in cvf['rows']], dtype=float)
+        cr = [r['collision_rate_mean'] for r in cvf['rows']]
+        if any(v > 1e-9 for v in cr):
+            allzero = False
+        kmax = max(kmax, k.max() if k.size else 0)
+        dodge = (i - (len(A) - 1) / 2) * 0.08                 # micro-sfalsamento: marker sovrapposti visibili
+        ax.plot(k + dodge, cr, marker=marks[i % len(marks)], ls='-', ms=6, alpha=0.85,
+                color=ctx['colors'][a], label=a)
     ax.set_xlabel('# bit-flip accumulati'); ax.set_ylabel('collision_rate'); ax.legend(fontsize=7)
-    return fig, '07', 'degrade_vs_flips', 'SW (dati reali, bounded local)', 'quanti SEU prima dell insicurezza -> periodo di scrubbing'
+    ax.margins(y=0.18)
+    if allzero:
+        ax.text(0.5, 0.55, '0 collisioni per TUTTI e 4 i champion\n(sovrapposti) fino a %d bit-flip accumulati' % int(kmax),
+                transform=ax.transAxes, ha='center', va='center', fontsize=10, color='#0ca30c',
+                bbox=dict(boxstyle='round', fc='#eafaf0', ec='#0ca30c'))
+    return fig, '07', 'degrade_vs_flips', 'SW (dati reali, bounded local)', 'collisione vs #SEU accumulati (marker sfalsati per leggibilita); quanti SEU prima dell insicurezza -> periodo di scrubbing'
 
 
 def fig_perparam_shift(ctx):
