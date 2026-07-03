@@ -41,7 +41,7 @@ poi report FPGA finale. Nulla di pesante in locale: l'utente lancia su Azure.
    → readout random silenzioso. Fix (schema-detection) già nel notebook v3; da riportare nel ckpt-pass e
    ri-lanciare i soli arm baseline.
 4. Post-eval: quantizzazione/deploy FPGA, multi-seed esteso → `document/FUTURE_WORK.md`.
-5. **FPGA-evaluate Fase A — COSTRUITA + restyled + corretta, IN ATTESA DI RE-RUN AZURE (2026-07-02)**.
+5. **FPGA-evaluate Fase A — COMPLETA (render finale HB_AZURE in locale) + REPORT, trio v3 allineato (2026-07-03)**.
    Design in `document/FPGA_EVALUATE_DESIGN.md` + `document/FPGA_EVALUATION_FRAMEWORK.md`.
    - **5 librerie software_now** scritte+testate (`utils/weight_profiler.py`, `state_profiler.py`,
      `latency_model.py`, `seu_inject.py`, `io_hil.py`; 17 check verdi in `tests/test_fpga_*.py`), verificate su
@@ -62,13 +62,20 @@ poi report FPGA finale. Nulla di pesante in locale: l'utente lancia su Azure.
      `fig_energy_vs_rate` (range asse), `fig_dead_sat` (moltiplicatore H), readiness `Spike`/`Energia` ricalibrate.
      Nota: `fpga_figures._mean_spike_rate` **non** aveva la doppia divisione → la **scorecard FPGA (~15%) era già
      corretta**; era il v3 sbagliato.
-   - **➡️ PROSSIMA AZIONE — re-run su Azure (lo lancia l'utente):** `git pull origin EventProp_Study` →
-     **`rm -rf results/evaluate/FPGA`** (indispensabile: il done-skip salterebbe le sezioni vecchie) →
-     `jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=-1 Eval_FPGA.ipynb` →
-     `python scripts/verify_fpga_eval.py`. **Tutto ciò che serve al re-run è già su origin** (branch 0/0).
-     **Poi (io):** `git pull`, verifica che lo spike-rate dei 4 champion veri sia **~13-19%** (coerente col v3
-     corretto) e che le figure escano con stile+leggibilità+numeri giusti, quindi costruisci il **report FPGA
-     finale** (stessa qualità/struttura di `VALIDATION_REPORT_v3`, builder riproducibile).
+   - **✅ COMPLETATO (2026-07-03):** overhaul figure (readiness ONESTO — via la matrix astratta → **radar con
+     ancore per asse + tabella `deploy_verdict` di numeri reali**, 6 dim discriminanti; figure mono-champion →
+     **tutti-e-4** small-multiples/overlay o "esemplare: Donatello"; titoli grandi/bold; sorgenti seedate =
+     deterministico). **Champion versionati in `champions/`** ([[cf-fsnn-champions-local-checkpoints]]) → il
+     **render finale HB_AZURE gira IN LOCALE** (ricostruibile: `FF.build_ctx(models, cache, hb=FF.HB_AZURE)` +
+     `FF.save_section`/`FF.save_all_csvs`, coi champion in `champions/` copiati in `checkpoints/`), **niente più
+     dipendenza da Azure per le figure** → **45 figure + CSV** in `results/evaluate/FPGA/` (`verify_fpga_eval.py` OK). **Report
+     `document/FPGA_REPORT.md/.pdf`** costruito (builder riproducibile `scripts/build_fpga_report.py`).
+     Numeri HB_AZURE: spike 12.6-20.8%, energia worst 5.11-8.38× / tipico 9-15×, ρ 0.05-2.99, 0 DSP, <1 BRAM.
+     Candidato deploy: **Donatello**.
+   - **➡️ TRIO v3 COMPLETO E ALLINEATO (2026-07-03):** `HOW_IT_WORKS_v3` (teoria) + `VALIDATION_REPORT_v3`
+     (risultati) + `FPGA_REPORT` (profilo hardware). Corretti: plateau val 0.28→**~0.19-0.20** (Treiber ~0.20,
+     record 0.1926); energia 22-30×→**~4.77-6.01×**; ridondanze → rimandi reciproci; VALIDATION §9 = sommario che
+     rimanda al FPGA_REPORT. Editati i **builder** (non i .md generati) e rigenerati md+pdf.
    - **Fase B/C (HDL/board) rinviate** — nodo aperto: import Simulink → HDL Coder per una SNN ALIF custom (nessun
      convertitore push-button; FINN/hls4ml non la gestiscono). Decisioni delle fasi future → punto 6 +
      `document/POST_FPGA_ROADMAP.md`.
