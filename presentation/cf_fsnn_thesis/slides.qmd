@@ -491,3 +491,119 @@ resta un problema difficile — non è qualcosa che si risolve con un piccolo ag
 futuro genuino, non un quick-win.
 :::
 :::
+
+# 3B — Idoneità FPGA
+
+## Idoneità FPGA a colpo d'occhio (1 = ideale)
+
+![](figures/readiness_radar.png)
+
+::: {.notes}
+Sei dimensioni di readiness, ciascuna 0-1 con 1 = ideale FPGA: ρ<1 (ricorrenza contrattiva), fixed-point
+(errore di quantizzazione po2), sparsità (poco firing), energia (vantaggio vs ANN densa), timing
+(margine sul deadline), SEU (robustezza ai bit-flip). Sul timing: l'inferenza impiega pochi microsecondi
+contro un deadline di controllo di 100 millisecondi — utilizzo intorno allo 0.1%. E una proprietà rara
+per un sistema di sicurezza: il WCET (worst-case execution time) coincide col BCET (best-case), quindi
+il jitter di calcolo è zero, puro determinismo. Onestà da mantenere: il deploy FPGA è un obiettivo di
+design verificato pre-silicio, non ancora un risultato misurato su silicio; e la cifra energetica è una
+stima basata sul modello di Horowitz a 45 nanometri, non una misura di laboratorio.
+:::
+
+## Sull'FPGA: 0 DSP, <1% BRAM, footprint di poche centinaia di byte
+
+![](figures/resources.png)
+
+::: {.notes}
+Il conto delle risorse è netto. Zero DSP: ogni operazione della rete è un accumulo semplice o uno
+shift-add per i pesi po2 — nessun moltiplicatore vero serve mai. E meno di una BRAM su 140 disponibili,
+quindi meno dell'1% del budget di memoria — per un footprint dei pesi di 400-656 byte a seconda del
+champion. Lo "zero DSP" è un dato reale, verificato per costruzione dell'architettura; il "meno
+dell'1% di BRAM" è la cifra di apertura del report FPGA, il numero da ricordare se ne resta uno solo.
+:::
+
+## La quantizzazione po2 è FPGA-ready: perdita trascurabile (QAT ≤ float su 3/4)
+
+![](figures/quant.png)
+
+::: {.notes}
+In virgola fissa l'errore di identificazione resta piatto fino a circa 2 bit di quantizzazione — la
+rete tollera un troncamento aggressivo prima di degradare. I pesi po2 stessi non sono un ripiego
+post-hoc: sono allenati direttamente con quello schema fin dall'inizio (quantization-aware, via
+straight-through estimator), quindi per 3 champion su 4 il passaggio a po2 costa zero o addirittura
+migliora leggermente rispetto al peso in virgola mobile. Leonardo è l'eccezione: ha l'errore po2 più
+alto, circa il 15%. Donatello, il candidato al deploy, resta contenuto, circa il 2%.
+:::
+
+::: {.content-visible when-profile="full"}
+## Il vantaggio energetico viene da AC<MAC + 0 DSP (non dalla sparsità)
+
+![](figures/energy_ann.png)
+
+::: {.notes}
+Il vantaggio energetico rispetto a una ANN densa equivalente è circa 5-8 volte nel caso peggiore, fino
+a 9-15 volte nel caso tipico. Da dove viene: NON dalla sparsità — le reti sparano il 13-21% delle
+volte, quindi non sono affatto iper-sparse. Viene dal minor costo intrinseco di un accumulo (AC) rispetto
+a una moltiplicazione-accumulo (MAC) tipica delle ANN, amplificato dallo zero DSP visto nella slide
+precedente. C'è un paradosso da segnalare: Donatello, la rete più contrattiva (ρ più basso) e quindi il
+candidato al deploy, è anche quella che spara di più fra i quattro champion — e ha di conseguenza il
+vantaggio energetico più basso, circa 5.1 volte.
+:::
+:::
+
+::: {.content-visible when-profile="full"}
+## Robustezza ai bit-flip (SEU / ISO 26262): ECC/TMR mirati sui bit critici
+
+![](figures/seu.png)
+
+::: {.notes}
+Un Single Event Upset (SEU) è un bit-flip nella memoria dei pesi, causato tipicamente da un neutrone
+atmosferico — un evento raro ma non trascurabile per un sistema safety-critical. Risultato misurato via
+fault-injection: zero collisioni aggiuntive fino a 8 bit-flip accumulati, per tutti e quattro i champion.
+Leonardo è il più fragile del gruppo. Il confronto fra strati nascosti e readout indica dove concentrare
+la protezione: il readout è più critico, quindi la scelta di design è un TMR (Triple Modular Redundancy)
+mirato lì, non una protezione totale e costosa su tutta la rete.
+:::
+:::
+
+# Chiusura
+
+## {.center}
+
+::: {.assertion}
+Sì: una rete «cerebrale» gira su una board da ~200 € — verso un'intelligenza al bordo sicura ed efficiente.
+:::
+
+::: {.notes}
+Torniamo esattamente alla domanda d'apertura: può una rete spiking «cerebrale» girare su una board
+minuscola? Sì — eccola, sul PYNQ-Z1. Chiusura simmetrica rispetto al cold-open: stesso linguaggio,
+stessa promessa, ora sostenuta dai dati appena visti. Il filo conduttore (throughline) da ripetere a
+voce: verso un'intelligenza al bordo (edge) che sia sicura, efficiente e distribuibile su hardware da
+poche centinaia di euro, non su un datacenter.
+:::
+
+## In una frase: cosa portiamo a casa
+
+::: {.assertion}
+Una SNN fisica-informata, allenata con EventProp, identifica un controllore car-following in modo
+stabile per costruzione — e passa una validazione a 6 livelli restando FPGA-friendly.
+:::
+
+1. Una rete spiking fisica-informata (PINN), allenata con EventProp, identifica i 5 parametri di un
+   controllore ACC a partire dalla sola traiettoria osservata.
+2. EventProp dà stabilità (ρ<1) e zero neuroni morti per costruzione dell'allenamento — non come
+   aggiustamento successivo: è la ragione per cui il risultato è FPGA-friendly fin dall'inizio.
+3. La validazione a 6 livelli mostra reti sicure quanto l'oracolo fisico, con un profilo hardware di
+   0 DSP e meno dell'1% di BRAM.
+
+::: {.notes}
+Slide di riepilogo strategico, pensata per restare a schermo durante le domande. L'unico numero da
+portare a casa se ne resta uno solo: Donatello — raggio spettrale ρ 0.05, accuratezza 84.75%, il
+candidato al deploy. I tre contributi in una frase ciascuno: primo, una SNN fisica-informata (physics-
+informed, PINN) addestrata con EventProp identifica i 5 parametri di un controllore car-following
+osservando solo la traiettoria, un problema inverso. Secondo, EventProp dà stabilità (raggio spettrale
+ρ<1) e zero neuroni morti per costruzione — non è un aggiustamento fatto a posteriori, è una proprietà
+dell'allenamento stesso, ed è la ragione per cui il risultato è FPGA-friendly fin dall'inizio, non per
+fortuna. Terzo, la validazione attraversa 6 livelli, dall'errore numerico al comportamento in closed-
+loop: le reti sono sicure quanto l'oracolo fisico (zero collisioni evitabili aggiuntive) e il profilo
+hardware resta magro — zero DSP, meno dell'1% di BRAM.
+:::
