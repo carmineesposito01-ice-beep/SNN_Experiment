@@ -1,0 +1,13 @@
+---
+title: "CF_FSNN — smoke test"
+---
+
+## Prima slide
+
+Funziona.
+
+::: {.content-visible when-profile="full"}
+## Slide solo-full
+
+Compare solo nel profilo full.
+:::

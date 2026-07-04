@@ -1,0 +1,14 @@
+/*-- scss:defaults --*/
+$font-size-root: 30px;
+$presentation-font-size-root: 30px;
+$presentation-heading-font-weight: 600;
+$body-color: #111111;
+$link-color: #0072B2;
+
+/*-- scss:rules --*/
+.reveal .slides section { text-align: left; }
+.reveal h2 { font-size: 1.25em; line-height: 1.2; margin-bottom: 0.4em; }
+.reveal .assertion { font-size: 1.15em; font-weight: 600; }
+.reveal figure img { max-height: 70vh; width: auto; display: block; margin: 0 auto; }
+.reveal .progress-dots { position: fixed; top: 12px; right: 16px; font-size: 0.5em; color: #888; }
+.reveal .accent { color: #009E73; font-weight: 600; }

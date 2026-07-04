@@ -1,0 +1,18 @@
+project:
+  title: "CF_FSNN"
+  output-dir: _output
+
+format:
+  revealjs:
+    theme: [default, ../_shared/theme/cf_theme.scss]
+    slide-number: c/t
+    incremental: false
+    transition: none
+    html-math-method: mathjax
+    fig-align: center
+    embed-resources: false
+
+profile:
+  default: reduced
+  group:
+    - [reduced, full]
