@@ -239,8 +239,144 @@ def fig_v2x():
               title="colore = champion; bordo rosso = 'blind'", title_fontsize=11)
     fig.savefig(OUT / "v2x.png"); plt.close(fig)
 
+def fig_readiness_radar():
+    """Small-multiples radar (2x2, uno per champion): 6 assi di idoneita FPGA su scala 0-1 (1=ideale).
+    scorecard.csv ha le 6 colonne gia normalizzate 0-1 -> poligono riempito colore-champion, nessuna
+    trasformazione necessaria oltre a chiudere il poligono (ripetere il primo valore in coda)."""
+    import numpy as np
+    df = fc.load_csv(REPO, "results/evaluate/FPGA/00_Readiness/scorecard.csv")
+    axes_cols = ["ρ<1", "Fix-pt", "Sparsità", "Energia", "Timing", "SEU"]
+    n = len(axes_cols)
+    angles = [i / n * 2 * 3.141592653589793 for i in range(n)] + [0]
+    fc.apply_stage_style()
+    fig, subplots = plt.subplots(2, 2, subplot_kw=dict(polar=True), figsize=(11, 11))
+    for ax, (_, r) in zip(subplots.flat, df.iterrows()):
+        st = fc.champion_style(r["champion"])
+        vals = [r[c] for c in axes_cols] + [r[axes_cols[0]]]
+        ax.plot(angles, vals, color=st["color"], linewidth=2.5)
+        ax.fill(angles, vals, color=st["color"], alpha=0.35)
+        ax.set_xticks(angles[:-1])
+        ax.set_xticklabels(axes_cols, fontsize=12)
+        ax.set_ylim(0, 1)
+        ax.set_yticks([0.25, 0.5, 0.75, 1.0])
+        ax.set_yticklabels(["0.25", "0.5", "0.75", "1"], fontsize=9)
+        ax.set_title(st["label"], fontsize=15, pad=18)
+    fig.suptitle("Idoneita FPGA a colpo d'occhio (1 = ideale)", fontsize=20)
+    fig.savefig(OUT / "readiness_radar.png"); plt.close(fig)
+
+def fig_resources():
+    """Bar footprint_B (byte) per champion + annotazione headline: 0 DSP, <1% BRAM su 140.
+    scorecard.csv ha footprint_B (400-656 B); dsp_snn=0 e confermato in energy_power.csv per tutti
+    i 4 champion -> l'annotazione '0 DSP' e dato reale, non inventato."""
+    df = fc.load_csv(REPO, "results/evaluate/FPGA/00_Readiness/scorecard.csv")
+    fc.apply_stage_style()
+    fig, ax = plt.subplots()
+    for i, (_, r) in enumerate(df.iterrows()):
+        st = fc.champion_style(r["champion"])
+        ax.bar(i, r["footprint_B"], color=st["color"], label=st["label"],
+               edgecolor="black", linewidth=0.5, width=0.6)
+        ax.annotate(f"{r['footprint_B']:.0f} B", xy=(i, r["footprint_B"]), xytext=(0, 6),
+                    textcoords="offset points", ha="center", va="bottom", fontsize=13)
+    ax.set_xticks(range(len(df)))
+    ax.set_xticklabels([fc.champion_style(c)["label"] for c in df["champion"]], rotation=15, ha="right")
+    ax.set_ylabel("footprint di memoria (byte)")
+    ax.set_ylim(0, df["footprint_B"].max() * 1.35)
+    ax.text(0.5, 0.92, "0 DSP · <1 BRAM su 140", transform=ax.transAxes,
+            ha="center", va="top", fontsize=19, fontweight="bold", color=fc.ACCENT,
+            bbox=dict(boxstyle="round,pad=0.4", facecolor="white", edgecolor=fc.ACCENT, linewidth=1.5))
+    ax.set_title("Sull'FPGA: 0 DSP, <1% BRAM, footprint di poche centinaia di byte")
+    fig.savefig(OUT / "resources.png"); plt.close(fig)
+
+def fig_quant():
+    """Due pannelli: (sx) id_err_mean vs frac_bits in modalita fixed-point, per champion — errore piatto
+    fino a poche bit; (dx) delta_qat_absorbed dell'ablation po2 per champion, linea a 0 (<=0 = QAT assorbe
+    il rumore po2). frac_bits e stringa con valore 'float' non ordinabile numericamente -> ordine esplicito."""
+    q = fc.load_csv(REPO, "results/evaluate/v3_TURTLE_POWER!!!/05_Quantization/quantization.csv")
+    ab = fc.load_csv(REPO, "results/evaluate/v3_TURTLE_POWER!!!/05_Quantization/quant_weight_ablation.csv")
+    bit_order = ["float", "12", "8", "6", "4", "3", "2"]
+    fixed = q[q["mode"] == "fixed"]
+    fc.apply_stage_style()
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 5.6), layout="constrained")
+    for champ in fixed["champion"].unique():
+        st = fc.champion_style(champ)
+        sub = fixed[fixed["champion"] == champ].set_index("frac_bits").reindex(bit_order)
+        ax1.plot(range(len(bit_order)), sub["id_err_mean"], color=st["color"],
+                 linestyle=st["linestyle"], marker=st["marker"], label=st["label"])
+    ax1.set_xticks(range(len(bit_order)))
+    ax1.set_xticklabels(bit_order)
+    ax1.set_xlabel("bit di frazione (fixed-point)")
+    ax1.set_ylabel("errore medio di identificazione")
+    ax1.set_title("errore piatto fino a poche bit", fontsize=16)
+    ax1.legend(loc="upper left", frameon=False, fontsize=11)
+
+    for i, (_, r) in enumerate(ab.iterrows()):
+        st = fc.champion_style(r["champion"])
+        color = st["color"] if r["delta_qat_absorbed"] <= 0 else fc.OKABE_ITO["vermillion"]
+        ax2.bar(i, r["delta_qat_absorbed"], color=color, edgecolor="black", linewidth=0.5, width=0.6)
+    ax2.axhline(0, color="#888", linestyle="--", linewidth=1.5)
+    ax2.set_xticks(range(len(ab)))
+    ax2.set_xticklabels([fc.champion_style(c)["label"] for c in ab["champion"]], rotation=15, ha="right")
+    ax2.set_ylabel("delta ablation po2")
+    ax2.set_title("QAT assorbe il rumore po2 (3 su 4, <=0 = assorbito)", fontsize=15)
+
+    fig.suptitle("La quantizzazione po2 e FPGA-ready: perdita trascurabile", fontsize=19)
+    fig.savefig(OUT / "quant.png"); plt.close(fig)
+
+def fig_energy_ann():
+    """Grouped bars: energia SNN (worst-case) vs ANN densa per champion, annotato con fattore di vantaggio.
+    energy_power.csv ha gia advantage_worstcase_x pre-calcolato -> uso quello per l'annotazione invece di
+    ricalcolarlo, evitando arrotondamenti incoerenti col dato sorgente."""
+    df = fc.load_csv(REPO, "results/evaluate/FPGA/04_Energy/energy_power.csv")
+    fc.apply_stage_style()
+    fig, ax = plt.subplots()
+    width = 0.35
+    x = range(len(df))
+    for i, (_, r) in enumerate(df.iterrows()):
+        st = fc.champion_style(r["champion"])
+        ax.bar(i - width / 2, r["E_snn_worstcase_nJ"], width=width * 0.95,
+               color=st["color"], edgecolor="black", linewidth=0.5)
+        ax.bar(i + width / 2, r["E_ann_nJ"], width=width * 0.95,
+               color=st["color"], alpha=0.4, edgecolor="black", linewidth=0.5, hatch="//")
+        ax.annotate(f"{r['advantage_worstcase_x']:.1f}x", xy=(i, r["E_ann_nJ"]), xytext=(0, 6),
+                    textcoords="offset points", ha="center", va="bottom", fontsize=13, fontweight="bold")
+    ax.set_xticks(list(x))
+    ax.set_xticklabels([fc.champion_style(c)["label"] for c in df["champion"]], rotation=15, ha="right")
+    ax.set_ylabel("energia per inferenza (nJ)")
+    from matplotlib.patches import Patch
+    handles = [Patch(facecolor="white", edgecolor="black", label="SNN (worst-case)"),
+               Patch(facecolor="white", edgecolor="black", alpha=0.4, hatch="//", label="ANN densa")]
+    ax.legend(handles=handles, loc="upper right", frameon=False, fontsize=13)
+    ax.set_title("Il vantaggio energetico viene da AC<MAC + 0 DSP (non dalla sparsita)")
+    fig.savefig(OUT / "energy_ann.png"); plt.close(fig)
+
+def fig_seu():
+    """Grouped bars: sensibilita al bit-flip (SEU) per posizione di bit (exp_LSB..readout_mean), raggruppate
+    per champion. Il CSV e wide (1 riga/champion, colonne=posizioni di bit) -> nessun merge necessario,
+    solo iterazione diretta sulle colonne per costruire le barre raggruppate."""
+    df = fc.load_csv(REPO, "results/evaluate/FPGA/07_SEU_ISO26262/seu_sensitivity.csv")
+    bit_cols = ["exp_LSB", "exp_mid", "exp_MSB", "segno", "hidden_mean", "readout_mean"]
+    bit_labels = ["exp LSB", "exp mid", "exp MSB", "segno", "hidden", "readout"]
+    fc.apply_stage_style()
+    fig, ax = plt.subplots()
+    n_champ = len(df)
+    width = 0.8 / n_champ
+    x = range(len(bit_cols))
+    for i, (_, r) in enumerate(df.iterrows()):
+        st = fc.champion_style(r["champion"])
+        offsets = [xi + (i - (n_champ - 1) / 2) * width for xi in x]
+        ax.bar(offsets, [r[c] for c in bit_cols], width=width * 0.95,
+               color=st["color"], label=st["label"], edgecolor="black", linewidth=0.5)
+    ax.set_xticks(list(x))
+    ax.set_xticklabels(bit_labels, rotation=15, ha="right")
+    ax.set_xlabel("posizione del bit / gruppo di neuroni")
+    ax.set_ylabel("sensibilita al bit-flip (SEU)")
+    ax.set_title("Robustezza ai bit-flip (SEU): ECC/TMR mirati sui bit critici")
+    ax.legend(loc="upper left", frameon=False, ncol=2, fontsize=13)
+    fig.savefig(OUT / "seu.png"); plt.close(fig)
+
 FIGURES = [fig_discriminant, fig_accuracy_perparam, fig_safety, fig_spike_dead, fig_fim,
-           fig_plant, fig_string_meso, fig_macro_fd, fig_v2x]
+           fig_plant, fig_string_meso, fig_macro_fd, fig_v2x,
+           fig_readiness_radar, fig_resources, fig_quant, fig_energy_ann, fig_seu]
 
 def main():
     for f in FIGURES:
