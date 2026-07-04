@@ -178,3 +178,154 @@ diretta da usare per problemi di regressione supervisionata come il nostro.
 ::: {.assertion}
 Le SNN sono efficienti **ma** difficili da addestrare — la nostra rete affronta proprio questo.
 :::
+
+# Atto 2 — La nostra rete
+
+## Il nostro è un problema inverso: osservo la traiettoria, deduco i 5 parametri
+
+![](assets/img/inverse_problem.png)
+
+::: {.notes}
+Attenzione a un equivoco frequente: la nostra rete NON prevede la traiettoria futura — non è una rete
+"forward" che risolve un'equazione differenziale come farebbe una PINN classica per la fisica. Il nostro
+è il problema INVERSO: osserviamo la traiettoria già avvenuta (gap, velocità, delta-v, velocità del
+leader — raccolti ad esempio via V2X) e da essa DEDUCIAMO i 5 parametri del cruise-control che l'hanno
+generata. Osservare per dedurre, non calcolare per prevedere. Questo è il filo conduttore di tutto
+l'Atto 2.
+:::
+
+## La nostra rete: spiking ricorrente, fisica-informata (PINN), addestrata con EventProp, che identifica i 5 parametri ACC
+
+![](assets/img/architecture.png)
+
+::: {.notes}
+Mettiamo insieme tutti i pezzi dell'Atto 1 nella nostra architettura. È una rete SPIKING (i neuroni
+scattano a eventi, non sono sempre accesi) RICORRENTE (ha una memoria interna, l'eco calibrata attorno
+al raggio spettrale ~1) e FISICA-INFORMATA, cioè una PINN (Physics-Informed Neural Network): non impara
+solo dai dati, ma è vincolata a rispettare un modello fisico noto. È addestrata con EventProp, il metodo
+a gradiente esatto visto nell'Atto 1 — la scelta giusta per noi perché il nostro è un compito
+supervisionato con una loss globale da propagare, non un apprendimento locale non supervisionato come
+STDP (che non saprebbe come propagare "l'accelerazione stimata è sbagliata di X" fino ai pesi — è un
+limite di identificabilità, non di preferenza). L'uscita sono i 5 parametri che descrivono lo stile di
+guida del veicolo osservato.
+:::
+
+## La loss PINN sono due allenatori (dati + fisica): una penalità soft, non una regola rigida
+
+![](assets/img/pinn.png)
+
+::: {.notes}
+La loss totale ha due "allenatori" che correggono la rete in parallelo. Il data-coach guarda
+l'accelerazione ricostruita a partire dai 5 parametri stimati e la confronta con quella osservata
+davvero: se sono diverse, corregge. Il physics-coach guarda se quei 5 parametri, messi dentro
+l'equazione del modello ACC-IIDM, restituiscono un comportamento fisicamente plausibile: se la
+violano, corregge anche lui. Punto chiave da non fraintendere: è una penalità SOFT, aggiunta alla loss
+come termine di regolarizzazione — non è una regola hard-coded che impedisce alla rete di violare la
+fisica. La rete PUÒ violarla, ma viene penalizzata quando lo fa. In totale la loss ha 5 componenti con
+pesi diversi: dati (1.0), fisica (0.1), un termine di tipo Ornstein-Uhlenbeck sul rumore (0.05),
+condizioni al contorno (1.0) e vincolo sul raggio spettrale (0.5) — l'eco dell'Atto 1 che torna qui
+come termine di loss vero e proprio.
+:::
+
+::: {.content-visible when-profile="full"}
+## Il bersaglio fisico è il modello di car-following ACC-IIDM
+
+$$s^* = s_0 + \max\!\left(0,\; v\,T + \frac{v\,\Delta v}{2\sqrt{a\,b}}\right)$$
+
+Il gap desiderato $s^*$ combina un modello IIDM (con esponente $\delta=4$) e un blend CAH; la rete
+predice **5 dei 7** parametri del controllore — coolness ($c=0.99$) e $\delta$ restano fissi.
+
+::: {.notes}
+Questo è il "physics-coach" reso esplicito: il gap desiderato s* è la distanza di sicurezza che un ACC
+dovrebbe mantenere, funzione della velocità v, del time-gap T, della differenza di velocità col leader
+Δv, e di due parametri di comfort a (accelerazione) e b (decelerazione). Il modello completo è
+IIDM (Improved Intelligent Driver Model, con esponente δ=4) mescolato con un blend CAH (Constant
+Acceleration Heuristic) per gestire meglio i transitori. La rete non stima tutti e 7 i parametri del
+controllore: ne stima 5, perché 2 — il fattore di "coolness" del blend CAH (fissato a 0.99) e
+l'esponente δ (fissato a 4) — sono tenuti costanti per limitare la dimensionalità del problema di
+identificazione (è lo stesso tema di identificabilità già incontrato nell'Atto 1 con l'analogia
+sloppy/stiff).
+:::
+:::
+
+## La ricorrenza a basso rango (low-rank) dà memoria potente ma economica
+
+![](assets/img/architecture.png)
+
+::: {.notes}
+La matrice ricorrente che dà alla rete la sua memoria a breve termine è 32×32, cioè 1024 pesi — se
+fosse piena. Noi la fattorizziamo come prodotto di due matrici più piccole, U (32×8) per V (8×32): il
+risultato ha lo stesso "posto" nella rete (una connessione ricorrente 32×32) ma internamente ne bastano
+512 pesi, la metà. È come comprimere un'immagine grande in una versione a bassa risoluzione che, una
+volta riportata alla dimensione originale, cattura comunque l'essenziale: si perde un po' di
+espressività teorica ma si guadagna moltissimo in memoria — cruciale per un FPGA economico. Il vincolo
+sul raggio spettrale dell'Atto 1 si applica proprio al prodotto U·V.
+:::
+
+## I pesi potenza-di-due rendono la rete FPGA-economica: «moltiplicare è caro, scorrere è gratis»
+
+![](assets/img/po2.png)
+
+::: {.notes}
+Ogni peso della rete non è un numero qualsiasi in virgola mobile, ma è vincolato a essere una potenza di
+due (power-of-two, po2) — scelto tra 13 livelli possibili. Il perché è tutto hardware: moltiplicare un
+segnale per una potenza di due si riduce a uno SHIFT di bit — un'operazione che su un FPGA costa 1 ciclo
+di clock e circa 10 LUT (Look-Up Table, le celle logiche configurabili del chip). Moltiplicare per un
+numero qualsiasi, invece, richiede un vero moltiplicatore: circa 4 cicli di clock e 100 LUT. Rottura
+dell'analogia: non è "moltiplicare più lentamente", è un'operazione strutturalmente diversa e quasi
+gratuita — uno spostamento di bit invece che un vero calcolo. Su una rete con migliaia di pesi, questa
+differenza si somma in un risparmio enorme di area e potenza sul chip.
+:::
+
+::: {.content-visible when-profile="full"}
+## Si quantizza senza rompere il training con lo Straight-Through Estimator (STE)
+
+![](assets/img/surrogate.png)
+
+::: {.notes}
+Vincolare i pesi a potenze di due durante il forward pass crea lo stesso problema del gradino di spike
+visto nell'Atto 1: la funzione di quantizzazione è a gradini, con derivata zero quasi ovunque — il
+gradiente vero non direbbe alla rete come aggiustare i pesi. La soluzione è lo Straight-Through
+Estimator: nel forward pass si usano i pesi REALMENTE quantizzati (potenza di due, come saranno sul
+FPGA), ma nel backward pass il gradiente passa come se la quantizzazione fosse un'identità — cioè la
+attraversa senza essere alterato, esattamente come un surrogate gradient fa con lo spike. È lo stesso
+principio del Metodo 1 dell'Atto 1, applicato qui ai pesi anziché agli spike. Il costo in accuratezza è
+sorprendentemente basso: circa lo 0.2% di errore in più, a fronte di un risparmio hardware enorme.
+:::
+:::
+
+## Un vincolo sul raggio spettrale tiene l'«eco appena viva» → stabile per costruzione
+
+![](assets/img/spectral_radius.png)
+
+::: {.notes}
+Torniamo all'eco nel canyon dell'Atto 1. Invece di sperare che il raggio spettrale ρ della matrice
+ricorrente U·V resti vicino a 1 per fortuna, lo mettiamo esplicitamente in un termine della loss (C11):
+durante l'allenamento la rete viene penalizzata se ρ si allontana dalla zona sicura. Risultato: la rete
+non è stabile per caso, è stabile per costruzione — un vincolo attivo, non una speranza. Questo chiude
+il cerchio con l'Atto 1: la stessa metafora dell'eco che spiegava il problema, qui diventa la soluzione
+matematica concreta che lo previene.
+:::
+
+::: {.content-visible when-profile="full"}
+## Il triangolo: ogni scelta rilegge le altre (bio-realismo ↔ addestrabilità ↔ hardware)
+
+![](assets/img/triangle.png)
+
+::: {.notes}
+Ogni scelta di design che abbiamo visto in questo atto è un compromesso tra tre vertici di un triangolo:
+bio-realismo (quanto la rete assomiglia a un cervello reale — spike, ricorrenza, soglie adattive),
+addestrabilità (quanto è facile allenarla col gradiente — EventProp, STE, surrogate gradient) ed
+efficienza hardware (quanto costa in area, potenza e cicli su un FPGA — low-rank, potenza di due,
+raggio spettrale). Nessuna scelta è gratis: il low-rank guadagna in memoria ma perde un po' di
+espressività; il po2 guadagna in hardware ma richiede lo STE per restare addestrabile; il vincolo
+spettrale guadagna in stabilità ma limita lo spazio dei pesi esplorabili. La nostra rete non è
+"ottimale" su nessun singolo vertice — è un punto di equilibrio scelto con cura tra tutti e tre.
+:::
+:::
+
+## {.center}
+
+::: {.assertion}
+Abbiamo una rete accurata, stabile e FPGA-frugale. **Funziona davvero?** →
+:::
