@@ -329,3 +329,165 @@ spettrale guadagna in stabilità ma limita lo spazio dei pesi esplorabili. La no
 ::: {.assertion}
 Abbiamo una rete accurata, stabile e FPGA-frugale. **Funziona davvero?** →
 :::
+
+# Atto 3 — I risultati
+
+## Funziona ed è distribuibile — ecco come lo misuriamo
+
+::: {.assertion}
+4 reti campione contro un oracolo, valutate su 6 livelli: dall'errore numerico alla guida reale.
+:::
+
+::: {.notes}
+Per rispondere "funziona davvero?" mettiamo a confronto 4 reti campione (champion): Raffaello e
+Leonardo, allenate con BPTT, contro Donatello e Michelangelo, allenate con EventProp. Il termine di
+paragone è un oracolo — "Master Splinter" — cioè il modello ACC-IIDM alimentato con i parametri VERI
+del veicolo simulato: è il miglior comportamento possibile, il tetto teorico contro cui misurarsi, non
+un concorrente da battere. La valutazione (evaluate) copre 6 livelli e 15 dimensioni, dall'errore
+numerico puro (NRMSE) fino al comportamento in closed-loop su strada: giudichiamo il COMPORTAMENTO
+della rete, non solo quanto bene ha imparato i numeri.
+:::
+
+## Non «vinciamo»: siamo su un fronte di Pareto
+
+![](figures/discriminant.png)
+
+::: {.notes}
+Non c'è un vincitore assoluto. Il champion BPTT (Raffaello) vince sulla fisica di circa il 5.5% in più
+(val_data 0.1926 contro 0.2031 di Donatello) — leggermente più fedele al modello fisico. Ma EventProp
+vince su NRMSE, su STABILITÀ (raggio spettrale ρ 0.05–0.39 contro 1.16–2.99 di BPTT) e su
+FPGA-friendliness. Sono su un fronte di Pareto: nessuno domina l'altro su tutte le dimensioni,
+entrambi guidano in sicurezza. Il candidato per il deploy è Donatello (EventProp): ρ 0.05, accuratezza
+84.75%, zero neuroni morti. La figura mostra ρ contro accuratezza, con la dimensione del marker
+proporzionale al vantaggio energetico — il dettaglio del "-5.5% sulla fisica" va detto a voce, non è
+nel grafico.
+:::
+
+# 3A — Il comportamento fisico
+
+## Identifichiamo bene i 5 parametri (NRMSE per canale)
+
+![](figures/accuracy_perparam.png)
+
+::: {.notes}
+Donatello ha l'NRMSE per-canale più bassa e più uniforme fra i 5 parametri. Raffaello invece crolla
+proprio sul canale v0 (velocità di free-flow). Guardando la difficoltà relativa: s0 (distanza minima)
+è il canale più facile da identificare; v0 e b (decelerazione di comfort) sono i più ostici per tutte
+le reti.
+:::
+
+::: {.content-visible when-profile="full"}
+## L'identificazione è mal-condizionata: 29 combinazioni spiegano ugualmente i dati
+
+![](figures/fim.png)
+
+::: {.notes}
+La matrice di Fisher (FIM, Fisher Information Matrix) ha rango pieno — 5 su 5, nessuna direzione
+completamente cieca — ma un numero di condizionamento enorme, circa 1.6 miliardi. In pratica, circa 29
+combinazioni diverse dei 5 parametri spiegano ugualmente bene gli stessi dati osservati: il problema è
+identificabile in linea di principio ma mal-condizionato nella pratica. La causa specifica: a
+(accelerazione di comfort) e b (decelerazione) entrano nel modello fisico solo attraverso il prodotto
+√(a·b) — il loro RAPPORTO individuale non è osservabile dai dati di traiettoria. Corollario da
+ricordare per le prossime slide: NRMSE bassa non equivale a guida sicura, perché una rete può avere
+trovato UNA delle 29 combinazioni equifinali, non necessariamente quella vera.
+:::
+:::
+
+## In closed-loop siamo sicuri come l'oracolo: 0 collisioni evitabili
+
+![](figures/safety.png)
+
+::: {.notes}
+Il tasso di collisione delle reti (6.67–7.56%) è sostanzialmente uguale a quello dell'oracolo
+(7.56%) — zero collisioni evitabili aggiuntive rispetto al riferimento fisico ideale. Il Time-To-
+Collision (TTC) delle reti è anzi maggiore o uguale a quello dell'oracolo: sono leggermente più caute.
+Il residuo di collisioni che rimane è dovuto alla FISICA dello scenario (cut-in geometricamente
+impossibili da evitare in tempo), non a un limite della rete.
+:::
+
+::: {.content-visible when-profile="full"}
+## La collisione sale con la strada, non con la rete (il ghiaccio è un limite fisico)
+
+![](figures/plant.png)
+
+::: {.notes}
+Il tasso di collisione cresce nettamente con le condizioni del fondo stradale: 8.15% su asciutto,
+26.67% su bagnato, 59.26% su ghiaccio. Ma lo stesso identico pattern di degradazione si osserva anche
+sull'oracolo (63.70% su ghiaccio) — è l'attrito del plant fisico a guidare la curva, in modo
+sostanzialmente identico per rete e oracolo. Non è la rete a peggiorare sul ghiaccio: è la fisica del
+problema a diventare più difficile per chiunque, oracolo incluso.
+:::
+:::
+
+::: {.content-visible when-profile="full"}
+## Nel plotone le perturbazioni si smorzano (gain testa→coda < 1)
+
+![](figures/string_meso.png)
+
+::: {.notes}
+Il "gain" testa-coda (head-to-tail), cioè quanto si amplifica o smorza una perturbazione lungo la
+catena di veicoli, è 0.13–0.21 — ben sotto 1. In un plotone (platoon) più esteso, di 12 veicoli, il
+gain resta 0.11–0.15, ancora sotto 1. In entrambi i casi l'onda di perturbazione si SMORZA muovendosi
+lungo la catena, non si amplifica: è la proprietà di string stability, cruciale per la sicurezza del
+plotone su strada.
+:::
+:::
+
+::: {.content-visible when-profile="full"}
+## Il diagramma fondamentale: solo Raffaello lo distorce (v0 sovrastimato)
+
+![](figures/macro_fd.png)
+
+::: {.notes}
+Guardando il diagramma fondamentale macroscopico (fundamental diagram) — la relazione fra densità e
+flusso di traffico — Raffaello gonfia la velocità di free-flow a 106.7 km/h, contro i 74.3 km/h reali
+dell'oracolo, distorcendo così anche la capacità stimata del tratto stradale. Le altre tre reti seguono
+fedelmente l'oracolo. È lo stesso difetto già visto nella slide sull'NRMSE per canale (Raffaello crolla
+su v0): qui se ne vede la conseguenza a livello macroscopico, di traffico.
+:::
+:::
+
+::: {.content-visible when-profile="full"}
+## V2X: la robustezza è dell'handler «hold-last», non della rete (blind → ~67%)
+
+![](figures/v2x.png)
+
+::: {.notes}
+Quando il segnale V2X (Vehicle-to-Everything, la comunicazione diretta col leader) si interrompe,
+il tasso di collisione con l'handler "hold-last" (che mantiene l'ultimo valore noto) resta contenuto,
+circa l'8%. Ma se si toglie l'handler e si lascia la rete "cieca" (blind, senza alcuna gestione del
+segnale mancante), il tasso di collisione sale a circa il 67%. La conclusione onesta: la robustezza
+osservata non è una proprietà della rete in sé, ma dell'handler esterno che gestisce il dato mancante.
+:::
+:::
+
+## Salute della rete: EventProp = 0 neuroni morti (BPTT ~31%) e ρ<1
+
+![](figures/spike_dead.png)
+
+::: {.notes}
+Le reti EventProp hanno zero neuroni morti (dead neurons), mentre BPTT ne ha circa il 31% — capacità
+di calcolo sprecata, neuroni che non contribuiscono più. Il tasso di spike è 13–19%, quindi NON
+iper-sparso come si potrebbe pensare per una SNN. Il raggio spettrale ρ è 0.05–0.39 per EventProp
+contro 1.16–2.99 per BPTT: le reti EventProp sono nella zona stabile, BPTT no. E zero gradienti
+infiniti (Inf) durante l'allenamento EventProp, un altro segnale di salute numerica.
+:::
+
+::: {.content-visible when-profile="full"}
+## Solidità dello studio: multi-seed (std 0.0011) e copertura del dataset
+
+::: {.assertion}
+Ripetendo l'allenamento su semi (seed) diversi la variabilità è minima (std 0.0011): il caveat
+single-seed è chiuso. Sul range più ampio del dataset l'identificazione resta difficile — non è un
+quick-win, è lavoro futuro.
+:::
+
+::: {.notes}
+Due punti di solidità metodologica, da presentare con onestà. Primo: ripetendo l'allenamento con seed
+casuali diversi, la deviazione standard dei risultati è 0.0011 — molto piccola, il che chiude un
+possibile dubbio "è stato solo un colpo di fortuna con quel seed?". Secondo, più onesto: sul range
+pieno del dataset (le varianti wide e widebig, che coprono condizioni più estreme) l'identificazione
+resta un problema difficile — non è qualcosa che si risolve con un piccolo aggiustamento, è lavoro
+futuro genuino, non un quick-win.
+:::
+:::
