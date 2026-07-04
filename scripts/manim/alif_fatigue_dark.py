@@ -4,7 +4,7 @@ import matplotlib; matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation, PillowWriter
 
-OUT = pathlib.Path(__file__).resolve().parents[2] / "presentation/cf_fsnn_thesis/_proto/assets"
+OUT = pathlib.Path(__file__).resolve().parents[2] / "presentation/cf_fsnn_thesis/assets/manim"
 OUT.mkdir(parents=True, exist_ok=True)
 
 BG = "#15181D"; MEM = "#56B4E9"; SPK = "#2ECC71"; THR = "#F0B429"; TXT = "#8A939D"

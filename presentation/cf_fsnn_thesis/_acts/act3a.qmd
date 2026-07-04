@@ -1,0 +1,304 @@
+# Atto 3 — I risultati {.divider .act3}
+
+## Quattro campioni, un oracolo, nessun "migliore" assoluto {.act3}
+
+::: {.twocol}
+::: {.vis}
+![](figures/champions_roster.png)
+:::
+::: {.side}
+::: {.explain}
+Quattro reti addestrate, [caratterizzate per-metrica](/){.accent} e non con un generico "best": due con
+back-propagation-through-time (BPTT) e due con EventProp, misurate contro un *oracolo* — il modello
+ACC-IIDM con i parametri veri (`Master Splinter`), che fissa il limite superiore.
+
+`Donatello` (EventProp) tiene la NRMSE minima 0.152 e l'accuratezza 84.75%, ρ 0.05, candidato al deploy;
+`Michelangelo` (EventProp) è il runner-up equilibrato, ρ 0.39; `Leonardo` (BPTT) è il più *umano*
+(physics-loss val_data 0.1926), ρ 1.16; `Raffaello` (BPTT) è la baseline aggressiva, debole sui parametri
+e ρ 2.99.
+:::
+::: {.eq}
+BPTT: Leonardo · Raffaello
+EventProp: Donatello · Michelangelo
+oracolo: Master Splinter (ACC-IIDM, param veri)
+:::
+:::
+:::
+
+::: {.footerbar}
+Atto 3 · i quattro campioni
+<span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
+:::
+
+## Come li valutiamo: sei livelli, metrica primaria il comportamento {.act3}
+
+::: {.explain}
+La NRMSE nuda sui parametri non basta: una identificazione numericamente buona può guidare male. La metrica
+primaria è quindi il [comportamento in anello chiuso](/){.accent} (`val_data`), verificato su una gerarchia a
+sei livelli — dal reporting fino all'idoneità FPGA.
+:::
+
+::: {.threecol}
+::: {.card}
+**T0 · reporting**
+Accuratezza e NRMSE per-parametro, riferite all'oracolo (=0). Il punto di partenza, non il verdetto.
+:::
+::: {.card}
+**T1 · sicurezza + coda**
+Collisioni, gap minimo, margine di frenata, misure surrogate (TTC/TET/DRAC); string stability della coda.
+:::
+::: {.card}
+**T2 · plant + canale**
+Robustezza al plant fisico (asciutto/bagnato/ghiaccio) e al canale V2X (perdita pacchetti, blackout).
+:::
+:::
+
+::: {.threecol}
+::: {.card}
+**T3 · traffico**
+Micro → meso → macro: onde stop-and-go, diagramma fondamentale, propagazione testa→coda.
+:::
+::: {.card}
+**T4 · identificabilità**
+Fisher Information Matrix: rango, condizionamento, quali parametri sono realmente osservabili.
+:::
+::: {.card}
+**T5 · FPGA**
+Fixed-point, po2, ρ<1, timing WCET, risorse, SEU/ISO-26262: il go/no-go hardware.
+:::
+:::
+
+::: {.footerbar}
+Atto 3 · gerarchia di valutazione a 6 livelli
+<span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
+:::
+
+# 3A — Il comportamento fisico {.divider .act3}
+
+## Identificazione dei cinque parametri: mappa di accuratezza {.act3}
+
+::: {.twocol}
+::: {.vis}
+![](figures/accuracy_heatmap.png)
+:::
+::: {.side}
+::: {.explain}
+NRMSE per-canale (`v0, T, s0, a, b`) su ogni campione, con l'oracolo a zero come riferimento. `Donatello` è
+il [più basso e uniforme](/){.accent} (spread 0.093–0.215), mentre `Raffaello` crolla su `v0` (0.499): è la
+mis-identificazione della velocità desiderata che poi distorce il diagramma fondamentale a valle.
+
+Il gap di standstill `s0` è il parametro più facile (entra direttamente nel gap statico); `v0` e `b` sono i
+più ostici — `v0` si osserva solo dove il veicolo va davvero libero, `b` solo nelle frenate.
+:::
+::: {.eq}
+oracolo → NRMSE = 0 (riferimento)
+facile: s0 · ostici: v0, b
+Donatello 0.093–0.215 · Raffaello v0 = 0.499
+:::
+:::
+:::
+
+::: {.footerbar}
+Atto 3A · accuratezza per-parametro
+<span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
+:::
+
+::: {.content-visible when-profile="full"}
+## Dove ogni parametro diventa osservabile {.act3}
+
+::: {.twocol}
+::: {.vis}
+![](figures/nrmse_stratified.png)
+:::
+::: {.side}
+::: {.explain}
+Stratificando la NRMSE per famiglia di scenario emerge che [ogni parametro ha il suo regime](/){.accent} in cui
+è identificabile — e fuori da quello resta indeterminato.
+
+`v0` si osserva nei tratti free-flow e in autostrada, dove la velocità satura verso quella desiderata;
+`a` (accelerazione massima) emerge nei *launch*, quando l'ego riparte da fermo e spinge al limite; `b`
+(decelerazione confortevole) si rivela solo nelle frenate. Una cella scura = quel parametro in quello scenario
+non lascia traccia nei dati.
+:::
+::: {.eq}
+v0 → free-flow / highway
+a  → launch (ripartenze)
+b  → frenate
+cella scura = non osservabile lì
+:::
+:::
+:::
+
+::: {.footerbar}
+Atto 3A · osservabilità stratificata [+]
+<span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
+:::
+:::
+
+## Identificabilità sloppy: rango pieno ma condizionamento enorme {.act3}
+
+::: {.twocol}
+::: {.vis}
+![](figures/fim.png)
+:::
+::: {.side}
+::: {.explain}
+La Fisher Information Matrix ha [rango pieno 5/5](/){.accent} — in linea di principio tutti e cinque i
+parametri sono identificabili — ma numero di condizionamento ~1.6·10⁹: circa 29 combinazioni di parametri sono
+di fatto equifinali (danno la stessa traiettoria).
+
+La causa è strutturale: nel gap desiderato `a` e `b` entrano quasi solo attraverso √(a·b), quindi il rapporto
+a/b non è osservabile dai dati di car-following. È una proprietà del *problema*, non della rete: per questo una
+NRMSE bassa non garantisce di per sé una guida sicura.
+:::
+::: {.eq .math}
+$$s^{*}=s_0+\max\!\Big(0,\,vT+\tfrac{v\,\Delta v}{2\sqrt{a\,b}}\Big)$$
+rango 5/5 · cond ≈ 1.6·10⁹ · ~29 equifinali
+a/b non osservabile · NRMSE bassa ≠ guida sicura
+:::
+:::
+:::
+
+::: {.footerbar}
+Atto 3A · identificabilità (sloppy models)
+<span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
+:::
+
+## Sicurezza in anello chiuso: il residuo è fisica, non la rete {.act3}
+
+::: {.twocol}
+::: {.vis}
+![](figures/safety_delta.png)
+:::
+::: {.side}
+::: {.explain}
+Chiudendo l'anello e confrontando ogni campione con l'oracolo, il tasso di collisione della rete è
+[≈ quello dell'oracolo](/){.accent} (7.56%) e il TTC risulta ≥ oracolo: le reti sono se mai *più caute*, non
+più rischiose.
+
+Il residuo di collisioni non è un difetto di identificazione ma il limite fisico dello scenario stesso — le
+stesse collisioni le fa anche l'oracolo con i parametri veri. La sicurezza si legge quindi come Δ rispetto
+all'oracolo, non in valore assoluto.
+:::
+::: {.eq}
+collisione rete ≈ oracolo (7.56%)
+TTC rete ≥ TTC oracolo → più cauti
+residuo = fisica dello scenario, non la rete
+:::
+:::
+:::
+
+::: {.footerbar}
+Atto 3A · sicurezza closed-loop (Δ vs oracolo)
+<span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
+:::
+
+::: {.content-visible when-profile="full"}
+## Traiettorie closed-loop: cut-in e hard-brake senza collisione {.act3}
+
+::: {.twocol}
+::: {.vis style="background:#FFFFFF"}
+![](../../results/evaluate/v3_TURTLE_POWER!!!/09_Trajectories/traj_cut_in.png)
+:::
+::: {.vis style="background:#FFFFFF"}
+![](../../results/evaluate/v3_TURTLE_POWER!!!/09_Trajectories/traj_hard_brake.png)
+:::
+:::
+
+::: {.explain}
+Le tracce gap/velocità/accelerazione confermano il verdetto di sicurezza sui due scenari critici. Nel
+[cut-in](/){.accent} il gap crolla quando un veicolo si inserisce, ma viene recuperato senza collisione: l'ego
+allarga la distanza in modo controllato. Nell'[hard-brake](/){.accent} l'ego insegue la frenata del leader
+mantenendo il margine, senza mai chiudere il gap oltre la soglia di sicurezza. In entrambi i casi la
+traiettoria della rete resta aderente a quella dell'oracolo.
+:::
+
+::: {.footerbar}
+Atto 3A · traiettorie closed-loop (cut-in · hard-brake) [+]
+<span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
+:::
+:::
+
+::: {.content-visible when-profile="full"}
+## Robustezza fisica: il ghiaccio è un limite del plant, non della rete {.act3}
+
+::: {.twocol}
+::: {.vis}
+![](figures/plant.png)
+:::
+::: {.side}
+::: {.explain}
+Cambiando il *plant* fisico — attrito asciutto, bagnato, ghiaccio — il tasso di collisione sale
+(≈8% → 27% → 59%), ma [sale identico anche per l'oracolo](/){.accent} con i parametri veri: sul ghiaccio è la
+fisica del veicolo a non lasciare margine di frenata, non l'identificazione.
+
+Le frontiere di raggiungibilità e le curve di breakdown confermano lo stesso confine: rete e oracolo cedono
+insieme, allo stesso punto operativo.
+:::
+::: {.eq}
+asciutto ≈ 8% · bagnato ≈ 27% · ghiaccio ≈ 59%
+oracolo = stessa curva
+→ limite del plant, non della rete
+:::
+:::
+:::
+
+::: {.footerbar}
+Atto 3A · robustezza fisica (plant dry/wet/ice) [+]
+<span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
+:::
+:::
+
+## Nel traffico: micro → meso → macro, l'onda stop-and-go si smorza {.act3}
+
+::: {.twocol}
+::: {.vis}
+![](figures/string.png)
+:::
+::: {.vis style="background:#FFFFFF"}
+![](../../results/evaluate/v3_TURTLE_POWER!!!/12_Mesoscopic/meso_spacetime.png)
+:::
+:::
+
+::: {.explain}
+Salendo di scala il plotone resta stabile: il gain testa→coda è [< 1](/){.accent}, quindi una perturbazione si
+attenua propagandosi indietro invece di amplificarsi. Lo space-time mesoscopico su 12 veicoli mostra l'onda
+stop-and-go che si smorza lungo la coda. `Raffaello` fa eccezione: gonfiando `v0` distorce il diagramma
+fondamentale a livello macro, spostando in alto la curva flusso-densità.
+:::
+
+::: {.footerbar}
+Atto 3A · traffico micro→meso→macro (stop-and-go)
+<span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
+:::
+
+::: {.content-visible when-profile="full"}
+## Robustezza V2X: la robustezza è dell'handler, non della rete {.act3}
+
+::: {.twocol}
+::: {.vis}
+![](figures/v2x.png)
+:::
+::: {.side}
+::: {.explain}
+Sotto perdita di pacchetti V2X, la strategia di *hold* del canale conta più della rete. Con
+[hold-last](/){.accent} (mantieni l'ultimo stato ricevuto) la collisione resta ≈8%; in modalità *blind*
+(nessun recupero) sale a ≈67%.
+
+È una precisazione di onestà: la robustezza al canale la fornisce l'handler I/O che gestisce la perdita, non
+la SNN in sé. La rete riceve comunque un input plausibile finché l'handler tiene; è quel meccanismo, non il
+modello appreso, a evitare le collisioni quando il V2X cade.
+:::
+::: {.eq}
+hold-last → collisione ≈ 8%
+blind → collisione ≈ 67%
+robustezza = handler I/O, non la rete
+:::
+:::
+:::
+
+::: {.footerbar}
+Atto 3A · robustezza V2X (hold-last vs blind) [+]
+<span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
+:::
+:::

@@ -1,13 +1,10 @@
 project:
-  title: "CF_FSNN"
   output-dir: _output
 
 format:
   revealjs:
-    theme: [default, ../_shared/theme/cf_theme.scss]
+    theme: ../_shared/theme/cf_dark.scss
     slide-number: c/t
-    incremental: false
-    transition: none
     html-math-method: mathjax
     fig-align: center
     embed-resources: false

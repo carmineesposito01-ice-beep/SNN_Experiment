@@ -1,0 +1,346 @@
+---
+title: ""
+---
+
+# Atto 2 — La nostra rete {.divider .act2}
+
+## Non prevediamo la traiettoria: identifichiamo i 5 parametri che la generano {.act2}
+
+::: {.progress-dots}
+[]{.dot .filled} []{.dot} []{.dot}
+:::
+
+::: {.threecol}
+::: {.card}
+**Il problema è inverso.** Osservo la traiettoria (gap, velocità, Δv, velocità del leader) e ne
+[deduco]{.accent} i 5 parametri del controllore ACC-IIDM `[v0, T, s0, a, b]`. Non stimo il prossimo
+punto: risalgo alla *causa* del comportamento (system identification).
+:::
+::: {.card}
+**La fisica è il ponte.** I 5 numeri prodotti dalla rete non sono osservabili direttamente: diventano
+misurabili solo passandoli nel modello ACC-IIDM, che ricostruisce l'accelerazione â. Il confronto â vs
+a osservata è ciò che alleniamo.
+:::
+::: {.card}
+**Penalità soft, non hard-code.** La coerenza fisica è [incoraggiata]{.accent} da termini di loss
+pesati, mai imposta nell'architettura. Questo lascia i parametri liberi di adattarsi ai dati e rende
+esplicito il compromesso identificabilità ↔ fedeltà.
+:::
+:::
+
+::: {.eq .math}
+$$ \text{traiettoria} \xrightarrow{\ \text{SNN}\ } [v_0,\,T,\,s_0,\,a,\,b] \xrightarrow{\ \text{ACC-IIDM}\ } \hat a(t) \;\overset{?}{\approx}\; a_\text{obs}(t) $$
+:::
+
+::: {.footerbar}
+Atto 2 · La nostra rete
+<span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
+:::
+
+## L'architettura è ibrida: continuo → spiking → continuo, in 864 parametri {.act2}
+
+::: {.progress-dots}
+[]{.dot .filled} []{.dot} []{.dot}
+:::
+
+::: {.twocol}
+::: {.vis}
+[▶ animato nel deck]{.pill}
+![](assets/manim/architecture_flow.gif)
+:::
+::: {.side}
+::: {.explain}
+Tre tipi di strato. **INPUT** (4): i segnali V2X normalizzati entrano come [corrente continua]{.accent}
+$I = W x$, non come treni di spike. **HIDDEN** (32): neuroni ALIF *spiking* con loop ricorrente a basso
+rango — l'unico strato che spara. **OUTPUT** (5): integratori a perdita (LI) *continui*, senza soglia; il
+readout è la tensione di membrana. Poi un decode σ mappa ogni tensione nel suo range fisico. Ogni passo
+fisico Δt = 0.1 s è elaborato con **10 tick interni** a input costante (tempo di assestamento, non nuova
+informazione): 50 passi → 500 tick.
+:::
+::: {.eq}
+fc &nbsp;&nbsp;&nbsp;(input→hidden) &nbsp;32×4 &nbsp;→ 128<br>
+rec_U (low-rank U) &nbsp;&nbsp;&nbsp;&nbsp;32×8 &nbsp;→ 256<br>
+rec_V (low-rank V) &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;8×32 &nbsp;→ 256<br>
+base_threshold (ALIF) &nbsp;&nbsp;&nbsp;32 &nbsp;→ &nbsp;32<br>
+thresh_jump &nbsp;&nbsp;(ALIF) &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;32 &nbsp;→ &nbsp;32<br>
+out_fc (hidden→output) &nbsp;&nbsp;5×32 &nbsp;→ 160<br>
+─────────────────────── TOT = 864
+:::
+:::
+:::
+
+::: {.footerbar}
+Atto 2 · Architettura
+<span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
+:::
+
+## Il neurone ALIF: leak a bit-shift, soglia che si affatica, reset sottrattivo {.act2}
+
+::: {.progress-dots}
+[]{.dot .filled} []{.dot} []{.dot}
+:::
+
+::: {.twocol}
+::: {.vis}
+[▶ animato nel deck]{.pill}
+![](assets/manim/alif_fatigue_dark.gif)
+:::
+::: {.side}
+::: {.explain}
+Per ogni tick, il neurone [adaptive-LIF]{.accent} integra la corrente, perde carica per leak, spara se
+supera la soglia effettiva, e *affatica* la propria soglia a ogni spike. `base_threshold` init 1.5,
+`thresh_jump` init 0.5: sono **apprendibili, per-neurone (32 + 32), NON quantizzati po2**. Il reset è
+sottrattivo (nessun azzeramento forzato, nessun divisore) — hardware-friendly. Il canale-soglia è
+l'unica via con cui base e jump imparano, quindi il reset non va staccato dal grafo.
+:::
+::: {.eq .math}
+$$ V \leftarrow V - \tfrac{V}{8} + I_\text{in} + I_\text{rec} $$
+$$ \theta_\text{eff} = \text{base} + \max(0,\ \text{fatica}) $$
+$$ S = \mathbb{1}[\,V \ge \theta_\text{eff}\,] $$
+$$ \text{fatica} \leftarrow \text{fatica} - \tfrac{\text{fatica}}{8} + S\cdot\text{jump} $$
+$$ V \leftarrow V - S\cdot\theta_\text{eff} \quad(\text{reset sottrattivo}) $$
+:::
+:::
+:::
+
+::: {.footerbar}
+Atto 2 · Il neurone ALIF
+<span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
+:::
+
+## La ricorrenza a basso rango (low-rank): un collo di bottiglia a rango 8 {.act2}
+
+::: {.progress-dots}
+[]{.dot .filled} []{.dot} []{.dot}
+:::
+
+::: {.twocol}
+::: {.vis}
+[▶ animato nel deck]{.pill}
+![](assets/manim/low_rank.gif)
+:::
+::: {.side}
+::: {.explain}
+Invece di una matrice ricorrente piena 32×32 (1024 pesi), fattorizziamo $W_\text{rec} = U V$ con U 32×8 e
+V 8×32: **512 pesi contro 1024**, metà memoria. Il feedback dei 32 neuroni è forzato attraverso un
+[bottleneck a 8 modi]{.accent}: si proietta lo stato su 8 modi (V), poi lo si rilegge (U). È una
+*capacità usata come regolarizzatore* — vieta gli accoppiamenti ricchi e difficili da stabilizzare che
+fanno esplodere l'addestramento SNN. Calcolo come due matmul, senza mai formare U·V. È qui che vive il
+raggio spettrale ρ(U·V).
+:::
+::: {.eq .math}
+$$ W_\text{rec} \approx U\,V,\quad U\in\mathbb{R}^{32\times8},\ V\in\mathbb{R}^{8\times32} $$
+$$ I_\text{rec} = U\,(V\,S_\text{prev}) $$
+$$ 256 + 256 = 512 \ \text{pesi} \ \ \text{vs} \ \ 1024 $$
+$$ \text{init ortogonale, gain } 0.2,\quad \text{rango} = 8 $$
+:::
+:::
+:::
+
+::: {.footerbar}
+Atto 2 · Ricorrenza low-rank
+<span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
+:::
+
+## Il raggio spettrale ρ(U·V): una manopola, due garanzie {.act2}
+
+::: {.progress-dots}
+[]{.dot .filled} []{.dot} []{.dot}
+:::
+
+::: {.twocol}
+::: {.vis}
+[▶ animato nel deck]{.pill}
+![](assets/manim/spectral_echo.gif)
+:::
+::: {.side}
+::: {.explain}
+Il [raggio spettrale]{.accent} misura se applicare ripetutamente la mappa ricorrente *amplifica*
+(ρ > 1, espansivo) o *smorza* (ρ < 1, contrattivo) lo stato tick-dopo-tick. Nel codice è misurato come
+norma spettrale σ_max (limite superiore) della ricorrenza quantizzata. Un vincolo soft (C11) penalizza
+solo il superamento del target. Doppio ruolo: **(1)** su FPGA il fixed-point resta limitato solo se
+contrattivo; **(2)** l'adjoint di EventProp propaga attraverso Rᵀ e diverge se ρ cresce — vincolare
+σ_max rende EventProp contrattivo per costruzione. Stabilità e addestrabilità dallo stesso termine.
+:::
+::: {.eq .math}
+$$ \rho \triangleq \sigma_\text{max}\big(\text{po2}(U)\cdot\text{po2}(V)\big) $$
+$$ \mathcal{L}_\text{spec} = \lambda\,\big[\max(0,\ \sigma_\text{max} - \sigma_\text{target})\big]^2 $$
+$$ \rho<1 \ \text{contrattivo (sicuro)} \quad \rho>1 \ \text{espansivo} $$
+:::
+:::
+:::
+
+::: {.footerbar}
+Atto 2 · Raggio spettrale
+<span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
+:::
+
+## Il modello fisico ACC-IIDM: il gap desiderato e il termine di flusso libero {.act2}
+
+::: {.progress-dots}
+[]{.dot .filled} []{.dot} []{.dot}
+:::
+
+::: {.twocol}
+::: {.vis}
+[▶ animato nel deck]{.pill}
+![](assets/manim/acc_iidm.gif)
+:::
+::: {.side}
+::: {.explain}
+Il controllore fisico i cui 5 parametri la rete stima: un ACC sull'IIDM con blend CAH. La rete predice
+**5 dei 7** parametri; coolness $c=0.99$ e $\delta=4$ sono [fissi]{.accent}. Il gap desiderato $s^*$ è
+l'origine della sloppy identifiability: $a$ e $b$ entrano quasi solo via il prodotto $\sqrt{a\,b}$, quindi
+il *rapporto* $a/b$ è strutturalmente non osservabile — proprietà del problema, non della rete. Il floor
+$s_\text{safe} = \text{clamp(gap, 2.0)}$ è una scelta di controllo del gradiente (con 0.5 la grad-norm
+saliva a ~8000).
+:::
+::: {.eq .math}
+$$ s^{*} = s_0 + \max\!\Big(0,\ vT + \frac{v\,\Delta v}{2\sqrt{a\,b}}\Big),\quad \Delta v = v - v_\text{lead} $$
+$$ s_\text{safe} = \text{clamp}(\text{gap},\ \min = 2.0),\qquad z = \frac{s^{*}}{s_\text{safe}}\ (\le 20) $$
+$$ v_\text{free} = a\Big(1 - \big(\tfrac{v}{v_0}\big)^{4}\Big) $$
+:::
+:::
+:::
+
+::: {.footerbar}
+Atto 2 · ACC-IIDM (1/2)
+<span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
+:::
+
+## ACC-IIDM: due regimi (z<1 / z≥1), il blend CAH e il clamp finale {.act2}
+
+::: {.progress-dots}
+[]{.dot .filled} []{.dot} []{.dot}
+:::
+
+::: {.twocol}
+::: {.vis}
+[▶ animato nel deck]{.pill}
+![](assets/manim/acc_iidm.gif)
+:::
+::: {.side}
+::: {.explain}
+L'IIDM separa il regime di flusso libero ($z<1$) da quello di car-following ($z\ge1$), ciascuno diviso in
+$v\le v_0$ / $v>v_0$. Il CAH anticipa la frenata del leader ($a_l$ non è input: è ri-stimato da differenze
+finite filtrate di $v_\text{lead}$). Il blend è **99% ACC + 1% floor IIDM**; il tanh satura la correzione
+entro ±$b$. Clamp finale in $[-9,\,a]$.
+[**Onestà:**]{.accent} il ramo di flusso libero da libro sarebbe $a_\text{free}(1 - z^{2a/a_\text{free}})$;
+il codice usa un [esponente fisso 2]{.accent}, $v_\text{free}(1-z^2)$ — semplificazione deliberata, non è
+textbook-exact.
+:::
+::: {.eq .math}
+$$ a_\text{IIDM} = \begin{cases} z<1: & \begin{cases} v_\text{free}(1-z^2) & v\le v_0\\ v_\text{free} & v>v_0 \end{cases}\\[10pt] z\ge1: & \begin{cases} a(1-z^2) & v\le v_0\\ v_\text{free}+a(1-z^2) & v>v_0 \end{cases} \end{cases} $$
+$$ \bar a_l = \min(a_l, a),\quad a_\text{CAH} = \bar a_l - \frac{[\max(0,\Delta v)]^2}{2\,s_\text{safe}} $$
+$$ a_\text{ACC} = (1-c)\,a_\text{IIDM} + c\big[a_\text{CAH} + b\tanh\!\big(\tfrac{a_\text{IIDM}-a_\text{CAH}}{b}\big)\big] $$
+$$ a_\text{ACC} \leftarrow \min\!\big(\text{clamp}(a_\text{ACC}, \ge -9),\ a\big) \in [-9,\ a] $$
+:::
+:::
+:::
+
+::: {.footerbar}
+Atto 2 · ACC-IIDM (2/2)
+<span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
+:::
+
+## L'approccio PINN: cinque penalità pesate chiudono l'anello identificazione ↔ fisica {.act2}
+
+::: {.progress-dots}
+[]{.dot .filled} []{.dot} []{.dot}
+:::
+
+::: {.twocol}
+::: {.vis style="background:#15181D"}
+::: {.eq .math}
+$$ \text{traiettoria} \xrightarrow{\text{SNN}} [v_0,T,s_0,a,b] $$
+$$ \xrightarrow{\text{ACC-IIDM}} \hat a \;\overset{?}{\approx}\; a_\text{obs} \xrightarrow{} \mathcal{L} \xrightarrow{\nabla} \text{rete} $$
+$$ \mathcal{L} = \lambda_\text{data}\mathcal{L}_\text{data} + \lambda_\text{phys}\mathcal{L}_\text{phys} + \lambda_\text{OU}\mathcal{L}_\text{OU} + \lambda_\text{bc}\mathcal{L}_\text{bc} + \lambda_\text{sr}\mathcal{L}_\text{sr} $$
+:::
+:::
+::: {.side}
+::: {.explain}
+La rete non fitta i parametri direttamente (non osservabili): il loop chiude
+traiettoria → SNN → 5 param → ACC-IIDM → â → confronto con a osservata → loss → gradiente. Nota:
+[azzerare]{.accent} phys/ou/bc muove la validazione di poco → il PINN non è il collo di bottiglia; il
+plateau è architettura/gradiente.
+:::
+::: {.eq}
+L_data (1.0) &nbsp;RMSE mascherato / N_valid<br>
+L_phys (0.1) &nbsp;mean((â − a)²), tutti i passi<br>
+L_OU &nbsp;&nbsp;(0.05) residuo OU su T (floor ~1.8e-4)<br>
+L_bc &nbsp;&nbsp;(1.0) &nbsp;mean(relu(s0 − s + 0.1)²)<br>
+L_sr &nbsp;&nbsp;(0.5) &nbsp;(spike_rate − 0.15)²
+:::
+:::
+:::
+
+::: {.footerbar}
+Atto 2 · La loss PINN
+<span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
+:::
+
+## Quantizzazione a potenze di due + STE: moltiplicare diventa uno shift {.act2}
+
+::: {.progress-dots}
+[]{.dot .filled} []{.dot} []{.dot}
+:::
+
+::: {.twocol}
+::: {.vis}
+[▶ animato nel deck]{.pill}
+![](assets/manim/ste_po2.gif)
+:::
+::: {.side}
+::: {.explain}
+I pesi sinaptici sono vincolati a [potenze di due]{.accent}: esponente in $[-4, 1]$, azzerati se
+$|w| < 2^{-5}$ (dead-band), **13 livelli** $\{\pm\tfrac1{16}\dots\pm2,\,0\}$. Su FPGA moltiplicare per
+$2^k$ è un bit-shift. Le operazioni round/clamp/mask non sono derivabili: lo **Straight-Through
+Estimator** risolve — forward col peso quantizzato, backward come identità, aggiornando il peso fp32
+grezzo. Stesso trucco del gradiente surrogato. Costo misurato sul plateau: solo ~0.2%.
+:::
+::: {.eq .math}
+$$ w_q = \text{sign}(w)\cdot 2^{\text{clamp}(\text{round}(\log_2|w|),\,-4,\,1)}\cdot\mathbb{1}[\,|w|>2^{-5}\,] $$
+$$ \text{forward: } y = f(w_q) \qquad \text{backward: } \tfrac{\partial\mathcal{L}}{\partial w} \leftarrow \tfrac{\partial\mathcal{L}}{\partial w_q} $$
+$$ \{\pm\tfrac1{16},\pm\tfrac18,\pm\tfrac14,\pm\tfrac12,\pm1,\pm2,\,0\}\ \Rightarrow\ 13\ \text{livelli} $$
+:::
+:::
+:::
+
+::: {.footerbar}
+Atto 2 · po2 + STE
+<span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
+:::
+
+## Come la addestriamo: EventProp, gradiente esatto — e perché NON STDP {.act2}
+
+::: {.progress-dots}
+[]{.dot .filled} []{.dot} []{.dot}
+:::
+
+::: {.twocol}
+::: {.vis}
+[▶ animato nel deck]{.pill}
+![](assets/manim/training.gif)
+:::
+::: {.side}
+::: {.explain}
+Perché [EventProp]{.accent} per noi: dà il gradiente *esatto* dell'SNN a spike, ed è contrattivo per
+costruzione grazie al vincolo spettrale — l'adjoint converge quando ρ < 1. Perché **NON STDP**: la STDP è
+non supervisionata e locale, non propaga «l'accelerazione è sbagliata di X» fino ai pesi → non risolve un
+problema di identificazione supervisionato, resta fuori scopo. Nota storica: la produzione è **BPTT +
+surrogate**; EventProp è lo *studio* in corso su questo branch.
+:::
+::: {.eq}
+EventProp &nbsp;→ gradiente esatto, memoria O(#spike)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; contrattivo se ρ &lt; 1 (adjoint converge)<br>
+STDP &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;→ non supervisionato, locale → fuori scopo<br>
+produzione → BPTT + surrogate (storico)<br>
+studio &nbsp;&nbsp;&nbsp;&nbsp;→ EventProp (branch EventProp_Study)
+:::
+:::
+:::
+
+::: {.footerbar}
+Atto 2 · Addestramento: EventProp
+<span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
+:::
