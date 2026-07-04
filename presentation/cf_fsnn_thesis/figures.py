@@ -25,7 +25,9 @@ def fig_discriminant():
     ax.set_xscale("log")
     ax.set_xlabel("raggio spettrale rho(U.V)  —  <1 = contrattivo (sicuro in fixed-point)")
     ax.set_ylabel("accuratezza identificazione (%)")
-    ax.set_title("EventProp e contrattivo (rho<1); i BPTT no")
+    ax.text(0.98, 0.97, "zona verde: EventProp e contrattivo (rho<1); i BPTT no",
+            transform=ax.transAxes, ha="right", va="top", fontsize=12,
+            color=fc.OKABE_ITO["green"], fontweight="bold")
     ax.legend(loc="lower left", frameon=False)
     fig.savefig(OUT / "discriminant.png"); plt.close(fig)
 
@@ -48,7 +50,6 @@ def fig_accuracy_perparam():
     ax.set_xticklabels(param_labels)
     ax.set_xlabel("parametro identificato")
     ax.set_ylabel("NRMSE (piu basso = meglio)")
-    ax.set_title("Identifichiamo bene i 5 parametri (NRMSE per canale)")
     ax.legend(loc="upper right", frameon=False, ncol=2)
     fig.savefig(OUT / "accuracy_perparam.png"); plt.close(fig)
 
@@ -68,7 +69,6 @@ def fig_safety():
     ax.set_xticks(range(len(champs)))
     ax.set_xticklabels([fc.champion_style(c)["label"] for c in champs["champion"]], rotation=15, ha="right")
     ax.set_ylabel("tasso di collisione (%)")
-    ax.set_title("In closed-loop: sicuri come l'oracolo (0 collisioni evitabili)")
     ax.set_ylim(0, max(oracle_rate * 100, champs["collision_rate"].max() * 100) * 1.6)
     ax.legend(loc="upper center", ncol=2, frameon=False, fontsize=13)
     fig.savefig(OUT / "safety.png"); plt.close(fig)
@@ -89,7 +89,6 @@ def fig_spike_dead():
     ax.set_xticklabels([fc.champion_style(c)["label"] for c in df["champion"]], rotation=15, ha="right")
     ax.set_ylabel("tasso medio di spike (%)")
     ax.set_ylim(0, df["mean_spike_rate_pct"].max() * 1.35)
-    ax.set_title("Salute della rete: EventProp = 0 neuroni morti (BPTT ~31%)")
     fig.savefig(OUT / "spike_dead.png"); plt.close(fig)
 
 def fig_fim():
@@ -112,7 +111,6 @@ def fig_fim():
     ]
     ax.text(0.03, 0.5, "\n\n".join(lines), transform=ax.transAxes,
             ha="left", va="center", fontsize=17, family="monospace")
-    ax.set_title("Equifinalita: 29 combinazioni di parametri spiegano ugualmente bene i dati")
     fig.savefig(OUT / "fim.png"); plt.close(fig)
 
 def fig_plant():
@@ -137,7 +135,6 @@ def fig_plant():
     ax.set_xticklabels(surface_labels)
     ax.set_xlabel("condizione stradale")
     ax.set_ylabel("tasso di collisione (%)")
-    ax.set_title("La collisione sale con la STRADA, non con la rete (il ghiaccio e un limite fisico)")
     ax.legend(loc="upper left", frameon=False, ncol=2, fontsize=13)
     fig.savefig(OUT / "plant.png"); plt.close(fig)
 
@@ -164,7 +161,6 @@ def fig_string_meso():
     ax.set_xticks(list(x))
     ax.set_xticklabels([fc.champion_style(c)["label"] for c in df["champion"]], rotation=15, ha="right")
     ax.set_ylabel("gain testa -> coda")
-    ax.set_title("Nel plotone le perturbazioni si smorzano (gain testa->coda < 1)")
     ax.set_ylim(0, 1.15)
     from matplotlib.patches import Patch
     handles = [Patch(facecolor="white", edgecolor="black", label="string stability (teorico)"),
@@ -195,7 +191,6 @@ def fig_macro_fd():
     ax.set_xticks(range(len(df)))
     ax.set_xticklabels([fc.champion_style(c)["label"] for c in df["source"]], rotation=15, ha="right")
     ax.set_ylabel("velocita di free-flow v0 (km/h)")
-    ax.set_title("Diagramma fondamentale: solo Raffaello lo distorce (v0 sovrastimato)")
     ax.set_ylim(0, df["v_free_km_h"].max() * 1.3)
     ax.legend(loc="upper right", frameon=False, fontsize=13)
     fig.savefig(OUT / "macro_fd.png"); plt.close(fig)
@@ -233,7 +228,6 @@ def fig_v2x():
     ax.set_xticklabels(strategy_labels)
     ax.set_xlabel("strategia di gestione packet-loss")
     ax.set_ylabel("tasso di collisione (%)")
-    ax.set_title("V2X: la robustezza e dell'handler «hold-last», non della rete (blind -> ~67%)")
     ax.set_ylim(0, hold["collision_rate"].max() * 100 * 1.2)
     ax.legend(handles=handles, loc="upper left", frameon=False, fontsize=12,
               title="colore = champion; bordo rosso = 'blind'", title_fontsize=11)
@@ -261,7 +255,6 @@ def fig_readiness_radar():
         ax.set_yticks([0.25, 0.5, 0.75, 1.0])
         ax.set_yticklabels(["0.25", "0.5", "0.75", "1"], fontsize=9)
         ax.set_title(st["label"], fontsize=15, pad=18)
-    fig.suptitle("Idoneita FPGA a colpo d'occhio (1 = ideale)", fontsize=20)
     fig.savefig(OUT / "readiness_radar.png"); plt.close(fig)
 
 def fig_resources():
@@ -284,7 +277,6 @@ def fig_resources():
     ax.text(0.5, 0.92, "0 DSP · <1 BRAM su 140", transform=ax.transAxes,
             ha="center", va="top", fontsize=19, fontweight="bold", color=fc.ACCENT,
             bbox=dict(boxstyle="round,pad=0.4", facecolor="white", edgecolor=fc.ACCENT, linewidth=1.5))
-    ax.set_title("Sull'FPGA: 0 DSP, <1% BRAM, footprint di poche centinaia di byte")
     fig.savefig(OUT / "resources.png"); plt.close(fig)
 
 def fig_quant():
@@ -306,7 +298,6 @@ def fig_quant():
     ax1.set_xticklabels(bit_order)
     ax1.set_xlabel("bit di frazione (fixed-point)")
     ax1.set_ylabel("errore medio di identificazione")
-    ax1.set_title("errore piatto fino a poche bit", fontsize=16)
     ax1.legend(loc="upper left", frameon=False, fontsize=11)
 
     for i, (_, r) in enumerate(ab.iterrows()):
@@ -317,9 +308,7 @@ def fig_quant():
     ax2.set_xticks(range(len(ab)))
     ax2.set_xticklabels([fc.champion_style(c)["label"] for c in ab["champion"]], rotation=15, ha="right")
     ax2.set_ylabel("delta ablation po2")
-    ax2.set_title("QAT assorbe il rumore po2 (3 su 4, <=0 = assorbito)", fontsize=15)
 
-    fig.suptitle("La quantizzazione po2 e FPGA-ready: perdita trascurabile", fontsize=19)
     fig.savefig(OUT / "quant.png"); plt.close(fig)
 
 def fig_energy_ann():
@@ -346,7 +335,6 @@ def fig_energy_ann():
     handles = [Patch(facecolor="white", edgecolor="black", label="SNN (worst-case)"),
                Patch(facecolor="white", edgecolor="black", alpha=0.4, hatch="//", label="ANN densa")]
     ax.legend(handles=handles, loc="upper right", frameon=False, fontsize=13)
-    ax.set_title("Il vantaggio energetico viene da AC<MAC + 0 DSP (non dalla sparsita)")
     fig.savefig(OUT / "energy_ann.png"); plt.close(fig)
 
 def fig_seu():
@@ -370,7 +358,6 @@ def fig_seu():
     ax.set_xticklabels(bit_labels, rotation=15, ha="right")
     ax.set_xlabel("posizione del bit / gruppo di neuroni")
     ax.set_ylabel("sensibilita al bit-flip (SEU)")
-    ax.set_title("Robustezza ai bit-flip (SEU): ECC/TMR mirati sui bit critici")
     ax.legend(loc="upper left", frameon=False, ncol=2, fontsize=13)
     fig.savefig(OUT / "seu.png"); plt.close(fig)
 
