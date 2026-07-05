@@ -155,18 +155,18 @@ Parte 3A · osservabilità stratificata [+]
 ## Identificabilità sloppy: rango pieno ma condizionamento enorme {.act3}
 
 ::: {.twocol}
-::: {.vis}
-![](figures/fim.png)
+::: {.vis style="background:#FFFFFF"}
+![](assets/img/sloppy_identifiability.png)
 :::
 ::: {.side}
 ::: {.explain}
-La Fisher Information Matrix ha [rango pieno 5/5]{.accent}, ma condizionamento ~1.6·10⁹: circa 29
-combinazioni di parametri sono di fatto equifinali. La causa è strutturale — `a` e `b` entrano nel gap quasi
-solo via √(a·b), quindi il rapporto a/b non è osservabile.
+Nel piano (a, b) la loss ha una [valle piatta]{.accent} lungo √(a·b)=cost: la rete impara bene il *prodotto*
+ma non sa separare a da b, e scivola sul punto sbagliato (stessa √(a·b) del vero). La FIM ha rango pieno 5/5
+ma condizionamento ~1.6·10⁹ → ~29 parametrizzazioni equifinali.
 :::
 ::: {.eq .math}
 $$s^{*}=s_0+\max\!\Big(0,\,vT+\tfrac{v\,\Delta v}{2\sqrt{a\,b}}\Big)$$
-rango 5/5 · cond ≈ 1.6·10⁹ · ~29 equifinali
+rango 5/5 · cond ≈ 1.6·10⁹ · ~29 equifinali (s0 meno / T più ident.)
 a/b non osservabile · NRMSE bassa ≠ guida sicura
 :::
 :::
@@ -258,12 +258,13 @@ Parte 3A · traiettorie closed-loop (cut-in · hard-brake) [+]
 ::: {.side}
 ::: {.explain}
 Cambiando il *plant* fisico (asciutto → bagnato → ghiaccio) la collisione sale (≈8% → 27% → 59%), ma
-[sale identico anche per l'oracolo]{.accent}: sul ghiaccio è la fisica del veicolo a togliere il margine di
-frenata, non l'identificazione.
+[sale anche per l'oracolo]{.accent}, semmai di più (ghiaccio: champion ~59%, oracolo 63.70%): è la fisica del
+veicolo a togliere il margine di frenata, non l'identificazione — i champion tengono anzi un margine di
+frenata leggermente migliore dell'oracolo.
 :::
 ::: {.eq}
 asciutto ≈ 8% · bagnato ≈ 27% · ghiaccio ≈ 59%
-oracolo = stessa curva
+oracolo ghiaccio 63.70% (champion ~59%, margine migliore)
 → limite del plant, non della rete
 :::
 :::
@@ -271,9 +272,10 @@ oracolo = stessa curva
 
 ::: {.notes}
 Le frontiere di raggiungibilità e le curve di breakdown confermano lo stesso confine: rete e oracolo cedono
-insieme, esattamente allo stesso punto operativo. È un'altra applicazione della lettura differenziale — la
+insieme sul ghiaccio (champion ~59.26%, oracolo 63.70% — semmai leggermente peggio), con i champion che
+tengono un margine di frenata leggermente migliore. È un'altra applicazione della lettura differenziale — la
 degradazione sul ghiaccio non va imputata alla SNN ma al plant fisico, perché anche il modello con i parametri
-veri collassa allo stesso modo.
+veri collassa allo stesso modo (o peggio).
 :::
 
 ::: {.footerbar}
@@ -284,19 +286,22 @@ Parte 3A · robustezza fisica (plant dry/wet/ice) [+]
 
 ## Nel traffico: micro → meso → macro, l'onda stop-and-go si smorza {.act3}
 
-::: {.twocol}
+::: {.threecol}
 ::: {.vis}
 ![](figures/string.png)
 :::
 ::: {.vis style="background:#FFFFFF"}
 ![](assets/results/meso_spacetime.png)
 :::
+::: {.vis}
+![](figures/macro_fd.png)
+:::
 :::
 
 ::: {.explain}
-Salendo di scala il plotone resta stabile: il gain testa→coda è [< 1]{.accent}, quindi una perturbazione si
-attenua invece di amplificarsi, e lo space-time su 12 veicoli mostra l'onda stop-and-go che si smorza.
-`Raffaello` fa eccezione: gonfiando `v0` distorce il diagramma fondamentale a livello macro.
+Salendo di scala il plotone resta stabile: gain testa→coda [< 1]{.accent} (micro), l'onda stop-and-go si
+smorza (meso), il diagramma fondamentale segue l'oracolo (macro). Eccezione `Raffaello`: gonfia `v0` (≈107
+vs 74 km/h) e sposta in alto la curva flusso-densità.
 :::
 
 ::: {.notes}
