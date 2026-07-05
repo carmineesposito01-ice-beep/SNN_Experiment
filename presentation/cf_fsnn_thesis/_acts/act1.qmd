@@ -1,4 +1,4 @@
-# Atto 1 — Le reti spiking (SNN), da zero {.divider .act1}
+# Parte 1 — Le reti spiking (SNN), da zero {.divider .act1}
 
 ## Le tre generazioni di reti neurali vivono su assi diversi {.act1}
 
@@ -27,7 +27,7 @@ $$
 :::
 
 ::: {.footerbar}
-Atto 1 · Tre generazioni <span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
+Parte 1 · Tre generazioni <span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
 :::
 
 ## ANN e SNN si distinguono su sei assi, non solo sull'attivazione {.act1}
@@ -41,7 +41,7 @@ Atto 1 · Tre generazioni <span>champion:&nbsp;<span class="chip" style="backgro
 ::: {.explain}
 Un'ANN è come un [dimmer]{.accent}: ogni neurone emette in continuo un valore reale, un numero aggiornato a ogni passo di clock. Una SNN è come il codice Morse: tace, e comunica solo con impulsi puntuali (spike) — l'informazione sta nel *quando*, non nell'ampiezza.
 
-La conseguenza pratica è la regola che governa tutto l'Atto 3: l'energia è proporzionale agli eventi (spike), non al tempo. Un'ANN paga a ogni ciclo anche se nulla cambia; una SNN paga solo quando un neurone scatta. Se l'attività è sparsa, il costo crolla — ma il vantaggio nasce dall'evento, non dalla lentezza.
+La conseguenza pratica è la regola che governa tutto l'Parte 3: l'energia è proporzionale agli eventi (spike), non al tempo. Un'ANN paga a ogni ciclo anche se nulla cambia; una SNN paga solo quando un neurone scatta. Se l'attività è sparsa, il costo crolla — ma il vantaggio nasce dall'evento, non dalla lentezza.
 :::
 ::: {.eq}
 | asse | ANN | SNN |
@@ -57,7 +57,7 @@ La conseguenza pratica è la regola che governa tutto l'Atto 3: l'energia è pro
 :::
 
 ::: {.footerbar}
-Atto 1 · ANN vs SNN <span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
+Parte 1 · ANN vs SNN <span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
 :::
 
 ## Il neurone LIF è un secchio che perde: carica, trabocca, si svuota {.act1}
@@ -88,7 +88,7 @@ leak come bit-shift:  $V - \dfrac{V}{2^{3}}$
 :::
 
 ::: {.footerbar}
-Atto 1 · Neurone LIF <span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
+Parte 1 · Neurone LIF <span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
 :::
 
 ## La soglia adattiva (ALIF) dà al neurone una memoria breve {.act1}
@@ -117,7 +117,7 @@ $$
 :::
 
 ::: {.footerbar}
-Atto 1 · Soglia adattiva ALIF <span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
+Parte 1 · Soglia adattiva ALIF <span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
 :::
 
 ::: {.content-visible when-profile="full"}
@@ -139,7 +139,7 @@ L'informazione è [distribuita]{.accent} su un gruppo di neuroni (population) o 
 :::
 
 ::: {.footerbar}
-Atto 1 · Codifica neurale [+] <span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
+Parte 1 · Codifica neurale [+] <span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
 :::
 :::
 
@@ -174,7 +174,7 @@ Il backprop richiede pesi condivisi e segnali globali all'indietro — un cervel
 :::
 
 ::: {.footerbar}
-Atto 1 · Perché il backprop non basta <span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
+Parte 1 · Perché il backprop non basta <span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
 :::
 
 ## Tre famiglie di metodi addestrano una SNN {.act1}
@@ -207,7 +207,7 @@ La Spike-Timing-Dependent Plasticity è la regola con cui i neuroni biologici im
 :::
 
 ::: {.footerbar}
-Atto 1 · Tre metodi di addestramento <span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
+Parte 1 · Tre metodi di addestramento <span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
 :::
 
 ## Le SNN sono efficienti ma difficili da addestrare {.act1 .center}

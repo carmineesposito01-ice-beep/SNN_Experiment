@@ -1,21 +1,7 @@
 ---
-title: "CF_FSNN — identificare un controllore di car-following con una SNN fisica-informata"
+title: "CF_FSNN — una rete spiking fisica-informata per l'identificazione di parametri di controllo"
 subtitle: "SNN + PINN + EventProp, verso l'FPGA · aggiornamento sui lavori"
 ---
-
-## Di cosa parliamo {.center}
-
-::: {.explain}
-CF_FSNN è una rete **spiking** (SNN) che osserva una traiettoria di car-following (gap, velocità, Δv, velocità
-del leader, via V2X) e ne **identifica i 5 parametri** del controllore ACC-IIDM `[v0, T, s0, a, b]`, con l'obiettivo
-di girare su **FPGA** (PYNQ-Z1). Tre blocchi: **① cos'è una SNN** (in generale) · **② la nostra rete**
-(architettura, fisica, addestramento) · **③ i risultati** (comportamento e idoneità hardware).
-:::
-
-::: {.footerbar}
-Aggiornamento sui lavori · branch EventProp_Study
-<span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
-:::
 
 {{< include _acts/act1.qmd >}}
 

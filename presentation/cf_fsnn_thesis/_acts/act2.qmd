@@ -2,7 +2,7 @@
 title: ""
 ---
 
-# Atto 2 — La nostra rete {.divider .act2}
+# Parte 2 — La nostra rete {.divider .act2}
 
 ## Non prevediamo la traiettoria: identifichiamo i 5 parametri che la generano {.act2}
 
@@ -33,7 +33,7 @@ $$ \text{traiettoria} \xrightarrow{\ \text{SNN}\ } [v_0,\,T,\,s_0,\,a,\,b] \xrig
 :::
 
 ::: {.footerbar}
-Atto 2 · La nostra rete
+Parte 2 · La nostra rete
 <span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
 :::
 
@@ -70,7 +70,7 @@ out_fc (hidden→output) &nbsp;&nbsp;5×32 &nbsp;→ 160<br>
 :::
 
 ::: {.footerbar}
-Atto 2 · Architettura
+Parte 2 · Architettura
 <span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
 :::
 
@@ -104,7 +104,7 @@ $$ V \leftarrow V - S\cdot\theta_\text{eff} \quad(\text{reset sottrattivo}) $$
 :::
 
 ::: {.footerbar}
-Atto 2 · Il neurone ALIF
+Parte 2 · Il neurone ALIF
 <span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
 :::
 
@@ -138,7 +138,7 @@ $$ \text{init ortogonale, gain } 0.2,\quad \text{rango} = 8 $$
 :::
 
 ::: {.footerbar}
-Atto 2 · Ricorrenza low-rank
+Parte 2 · Ricorrenza low-rank
 <span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
 :::
 
@@ -171,7 +171,7 @@ $$ \rho<1 \ \text{contrattivo (sicuro)} \quad \rho>1 \ \text{espansivo} $$
 :::
 
 ::: {.footerbar}
-Atto 2 · Raggio spettrale
+Parte 2 · Raggio spettrale
 <span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
 :::
 
@@ -204,7 +204,7 @@ $$ v_\text{free} = a\Big(1 - \big(\tfrac{v}{v_0}\big)^{4}\Big) $$
 :::
 
 ::: {.footerbar}
-Atto 2 · ACC-IIDM (1/2)
+Parte 2 · ACC-IIDM (1/2)
 <span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
 :::
 
@@ -239,7 +239,7 @@ $$ a_\text{ACC} \leftarrow \min\!\big(\text{clamp}(a_\text{ACC}, \ge -9),\ a\big
 :::
 
 ::: {.footerbar}
-Atto 2 · ACC-IIDM (2/2)
+Parte 2 · ACC-IIDM (2/2)
 <span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
 :::
 
@@ -275,7 +275,7 @@ L_sr &nbsp;&nbsp;(0.5) &nbsp;(spike_rate − 0.15)²
 :::
 
 ::: {.footerbar}
-Atto 2 · La loss PINN
+Parte 2 · La loss PINN
 <span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
 :::
 
@@ -307,7 +307,7 @@ $$ \{\pm\tfrac1{16},\pm\tfrac18,\pm\tfrac14,\pm\tfrac12,\pm1,\pm2,\,0\}\ \Righta
 :::
 
 ::: {.footerbar}
-Atto 2 · po2 + STE
+Parte 2 · po2 + STE
 <span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
 :::
 
@@ -341,6 +341,6 @@ studio &nbsp;&nbsp;&nbsp;&nbsp;→ EventProp (branch EventProp_Study)
 :::
 
 ::: {.footerbar}
-Atto 2 · Addestramento: EventProp
+Parte 2 · Addestramento: EventProp
 <span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
 :::

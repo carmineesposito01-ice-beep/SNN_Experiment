@@ -26,7 +26,7 @@ La stessa soglia separa le reti anche in salute: gli EventProp non hanno neuroni
 :::
 
 ::: {.footerbar}
-Atto 3 · discriminante ρ<1 + 0 morti <span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
+Parte 3 · discriminante ρ<1 + 0 morti <span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
 :::
 
 ## Zero neuroni morti sono capacità che lavora davvero {.act3}
@@ -53,7 +53,7 @@ Il tasso di spike si assesta intorno al target di sparsità (15%): abbastanza at
 :::
 
 ::: {.footerbar}
-Atto 3 · salute della rete <span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
+Parte 3 · salute della rete <span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
 :::
 
 ## L'idoneità FPGA, a colpo d'occhio {.act3}
@@ -81,7 +81,7 @@ Onestà: il deploy è un [obiettivo di design]{.accent}, non silicio già valida
 :::
 
 ::: {.footerbar}
-Atto 3 · readiness · deploy = obiettivo di design <span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
+Parte 3 · readiness · deploy = obiettivo di design <span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
 :::
 
 ## Il vantaggio energetico viene dall'operazione, non dalla sparsità {.act3}
@@ -108,7 +108,7 @@ I numeri di energia sono [stime Horowitz]{.accent} (costo per operazione a 45 nm
 :::
 
 ::: {.footerbar}
-Atto 3 · energia vs ANN · AC<MAC, non sparsità <span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
+Parte 3 · energia vs ANN · AC<MAC, non sparsità <span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
 :::
 
 ## L'errore resta piatto fino a due bit {.act3}
@@ -135,7 +135,7 @@ I pesi in potenze-di-due (po2) sono già [assorbiti dal QAT]{.accent} (quantizat
 :::
 
 ::: {.footerbar}
-Atto 3 · quantizzazione FPGA-ready <span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
+Parte 3 · quantizzazione FPGA-ready <span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
 :::
 
 ::: {.content-visible when-profile="full"}
@@ -163,7 +163,7 @@ Non tutti i bit pesano uguale. Il [readout]{.accent} (l'ultimo layer LI che deco
 :::
 
 ::: {.footerbar}
-Atto 3 · SEU / ISO 26262 <span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
+Parte 3 · SEU / ISO 26262 <span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
 :::
 :::
 
@@ -194,7 +194,7 @@ Il fronte di Pareto è un [trade-off]{.accent}, non un "vinciamo": chi guida sul
 :::
 
 ::: {.footerbar}
-Atto 3 · verdetto di deploy · Pareto = trade-off <span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
+Parte 3 · verdetto di deploy · Pareto = trade-off <span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
 :::
 
 ## In una frase: cosa portiamo a casa {.act3}
@@ -230,5 +230,5 @@ FPGA-in-the-loop: chiudere l'anello con la rete su silicio reale e misurare ener
 :::
 
 ::: {.footerbar}
-Atto 3 · sintesi e prossimi passi <span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
+Parte 3 · sintesi e prossimi passi <span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
 :::

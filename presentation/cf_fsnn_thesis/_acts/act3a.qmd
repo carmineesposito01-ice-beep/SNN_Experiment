@@ -1,4 +1,4 @@
-# Atto 3 — I risultati {.divider .act3}
+# Parte 3 — I risultati {.divider .act3}
 
 ## Quattro campioni, un oracolo, nessun "migliore" assoluto {.act3}
 
@@ -26,7 +26,7 @@ oracolo: Master Splinter (ACC-IIDM, param veri)
 :::
 
 ::: {.footerbar}
-Atto 3 · i quattro campioni
+Parte 3 · i quattro campioni
 <span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
 :::
 
@@ -69,7 +69,7 @@ Fixed-point, po2, ρ<1, timing WCET, risorse, SEU/ISO-26262: il go/no-go hardwar
 :::
 
 ::: {.footerbar}
-Atto 3 · gerarchia di valutazione a 6 livelli
+Parte 3 · gerarchia di valutazione a 6 livelli
 <span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
 :::
 
@@ -99,7 +99,7 @@ Donatello 0.093–0.215 · Raffaello v0 = 0.499
 :::
 
 ::: {.footerbar}
-Atto 3A · accuratezza per-parametro
+Parte 3A · accuratezza per-parametro
 <span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
 :::
 
@@ -130,7 +130,7 @@ cella scura = non osservabile lì
 :::
 
 ::: {.footerbar}
-Atto 3A · osservabilità stratificata [+]
+Parte 3A · osservabilità stratificata [+]
 <span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
 :::
 :::
@@ -160,7 +160,7 @@ a/b non osservabile · NRMSE bassa ≠ guida sicura
 :::
 
 ::: {.footerbar}
-Atto 3A · identificabilità (sloppy models)
+Parte 3A · identificabilità (sloppy models)
 <span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
 :::
 
@@ -189,7 +189,7 @@ residuo = fisica dello scenario, non la rete
 :::
 
 ::: {.footerbar}
-Atto 3A · sicurezza closed-loop (Δ vs oracolo)
+Parte 3A · sicurezza closed-loop (Δ vs oracolo)
 <span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
 :::
 
@@ -214,7 +214,7 @@ traiettoria della rete resta aderente a quella dell'oracolo.
 :::
 
 ::: {.footerbar}
-Atto 3A · traiettorie closed-loop (cut-in · hard-brake) [+]
+Parte 3A · traiettorie closed-loop (cut-in · hard-brake) [+]
 <span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
 :::
 :::
@@ -244,7 +244,7 @@ oracolo = stessa curva
 :::
 
 ::: {.footerbar}
-Atto 3A · robustezza fisica (plant dry/wet/ice) [+]
+Parte 3A · robustezza fisica (plant dry/wet/ice) [+]
 <span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
 :::
 :::
@@ -268,7 +268,7 @@ fondamentale a livello macro, spostando in alto la curva flusso-densità.
 :::
 
 ::: {.footerbar}
-Atto 3A · traffico micro→meso→macro (stop-and-go)
+Parte 3A · traffico micro→meso→macro (stop-and-go)
 <span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
 :::
 
@@ -298,7 +298,7 @@ robustezza = handler I/O, non la rete
 :::
 
 ::: {.footerbar}
-Atto 3A · robustezza V2X (hold-last vs blind) [+]
+Parte 3A · robustezza V2X (hold-last vs blind) [+]
 <span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
 :::
 :::
