@@ -9,6 +9,7 @@ format:
     html-math-method: katex
     fig-align: center
     embed-resources: false
+    include-after-body: fit-equations.js   # auto-scale wide equations to fit their .eq box
 
 profile:
   default: reduced
