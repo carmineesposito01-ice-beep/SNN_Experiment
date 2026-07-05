@@ -46,7 +46,7 @@ Un neurone [morto]{.accent} non spara mai: su hardware è area che non calcola n
 `EventProp  →  0 / 32   (0%)`
 `BPTT       → 10 / 32  (31%)`
 
-`spike-rate ≈ 13–19%  (target 15%)`
+`spike-rate ≈ 13–21%  (target 15%)`
 :::
 ::: {.notes}
 Un dead neuron (neurone morto) non spara mai: è capacità sprecata, e su hardware è area occupata che non calcola nulla — un costo diretto di risorse. I due champion EventProp usano tutti e 32 i neuroni nascosti; i due BPTT ne lasciano spenti 10 su 32 (31%). Il tasso di spike si assesta intorno al target di sparsità del 15%: abbastanza attività per rappresentare la dinamica, abbastanza sparsità perché l'energia resti bassa. Va sottolineato che la salute della rete non è un dettaglio estetico — è ciò che rende sensato il conteggio energetico del passo successivo: contare l'energia di neuroni morti non avrebbe significato.
@@ -95,18 +95,18 @@ Parte 3 · readiness · deploy = obiettivo di design <span>champion:&nbsp;<span 
 :::
 ::: {.side}
 ::: {.explain}
-Contro una ANN densa di pari compito il vantaggio è di circa [5–8×]{.accent}. Non nasce dalla sparsità — la rete spara ancora il 13–19% dei tick, non l'1% — ma dall'hardware: l'accumulo (AC) costa meno del multiply-accumulate (MAC), e i pesi potenze-di-due azzerano i DSP (moltiplicazione → shift). I numeri sono [stime Horowitz]{.accent} (per-op, 45 nm), non consumo misurato.
+Contro una ANN densa di pari compito il vantaggio è di circa [5–8×]{.accent}. Non nasce dalla sparsità — la rete spara ancora il 13–21% dei tick, non l'1% — ma dall'hardware: l'accumulo (AC) costa meno del multiply-accumulate (MAC), e i pesi potenze-di-due azzerano i DSP (moltiplicazione → shift). I numeri sono [stime Horowitz]{.accent} (per-op, 45 nm), non consumo misurato.
 :::
 ::: {.eq}
 `vantaggio  ≈ 4.8× – 6.0×  vs ANN densa`
 
 `origine:  AC < MAC   +   0 DSP (shift)`
-`NON:      sparsità (spike-rate ~13–19%)`
+`NON:      sparsità (spike-rate ~13–21%)`
 
 `E = stima Horowitz (per-op, 45 nm)`
 :::
 ::: {.notes}
-Il confronto è contro una ANN densa di pari compito e il vantaggio energetico è di circa 5–8×. La sorgente del vantaggio va detta con precisione perché è controintuitiva: non nasce dalla sparsità — la rete spara ancora il 13–19% dei tick, non l'1%. Nasce da due fatti puramente hardware. Primo: l'accumulo (AC) di una SNN costa meno del multiply-accumulate (MAC) di una ANN. Secondo: i pesi in potenze-di-due azzerano l'uso dei DSP, perché la moltiplicazione diventa uno shift. I numeri di energia sono stime Horowitz (costo per operazione a 45 nm), non consumo misurato: vanno letti come un ordine di grandezza affidabile, non come una fattura elettrica.
+Il confronto è contro una ANN densa di pari compito e il vantaggio energetico è di circa 5–8×. La sorgente del vantaggio va detta con precisione perché è controintuitiva: non nasce dalla sparsità — la rete spara ancora il 13–21% dei tick, non l'1%. Nasce da due fatti puramente hardware. Primo: l'accumulo (AC) di una SNN costa meno del multiply-accumulate (MAC) di una ANN. Secondo: i pesi in potenze-di-due azzerano l'uso dei DSP, perché la moltiplicazione diventa uno shift. I numeri di energia sono stime Horowitz (costo per operazione a 45 nm), non consumo misurato: vanno letti come un ordine di grandezza affidabile, non come una fattura elettrica.
 :::
 :::
 :::
@@ -123,18 +123,17 @@ Parte 3 · energia vs ANN · AC<MAC, non sparsità <span>champion:&nbsp;<span cl
 :::
 ::: {.side}
 ::: {.explain}
-La rete è nata già [quantizzabile]{.accent}. L'errore di identificazione resta piatto riducendo i bit fino a circa 2 bit di parte frazionaria: nessun crollo di precisione da recuperare. I pesi potenze-di-due sono già assorbiti dal QAT: il passaggio float → 13 livelli po2 dà un delta $\le 0$ su 3 champion su 4. L'unica eccezione è Leonardo.
+La rete è nata già [quantizzabile]{.accent}. L'errore di identificazione resta piatto riducendo i bit fino a circa 2 bit di parte frazionaria (es. Donatello 1.480 float → 1.478 a 2 bit). Il passaggio float → 13 livelli po2 dà un delta $\le 0$ su 3 champion su 4 (l'unico con delta positivo è Raffaello, +0.16). Distinto è l'errore po2 *assoluto*: il più alto è di Leonardo (~15–16%, contro ~2% di Donatello).
 :::
 ::: {.eq}
-`id_err(frac_bits)  ≈  piatto fino a ~2 bit`
+`id_err(frac_bits)  ≈  piatto fino a ~2 bit  (Don. 1.480→1.478)`
 
-`Δ(po2 − float)  ≤ 0   su 3 / 4 champion`
+`Δ(po2 − float) ≤ 0 su 3/4 · eccezione: Raffaello +0.16`
+`errore po2 assoluto: Leonardo ~15–16% vs Donatello ~2%`
 `13 livelli:  {±1/16 … ±2, 0}`
-
-`Leonardo:  Δ po2 più alto`
 :::
 ::: {.notes}
-La rete è nata già quantizzabile. L'errore di identificazione resta sostanzialmente piatto man mano che si riduce la larghezza dei bit fino a circa 2 bit di parte frazionaria: non c'è alcun crollo di precisione da recuperare a valle. I pesi in potenze-di-due (po2) sono già assorbiti dal QAT, il quantization-aware training: passare dai pesi float ai 13 livelli po2 {±1/16 … ±2, 0} dà un delta di errore ≤ 0 su 3 champion su 4 — non peggiora, e in due casi migliora addirittura leggermente. L'unica eccezione è Leonardo, che paga l'errore po2 più alto del gruppo, coerente con il suo essere il champion più fragile anche sugli altri assi.
+La rete è nata già quantizzabile. L'errore di identificazione resta sostanzialmente piatto man mano che si riduce la larghezza dei bit fino a circa 2 bit di parte frazionaria: non c'è alcun crollo di precisione da recuperare a valle. I pesi in potenze-di-due (po2) sono già assorbiti dal QAT, il quantization-aware training: passare dai pesi float ai 13 livelli po2 {±1/16 … ±2, 0} dà un delta di errore ≤ 0 su 3 champion su 4 — non peggiora, e in due casi migliora addirittura leggermente. L'unico con delta positivo è Raffaello (+0.16). Cosa distinta è l'errore po2 *assoluto* di deploy: il più alto è di Leonardo (~15–16%), mentre gli altri restano bassi (Donatello ~2%), coerente con Leonardo come champion più fragile anche sugli altri assi.
 :::
 :::
 :::

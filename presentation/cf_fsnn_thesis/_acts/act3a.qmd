@@ -8,7 +8,7 @@
 :::
 ::: {.side}
 ::: {.explain}
-Quattro reti [caratterizzate per-metrica](/){.accent}, non con un generico "best": due BPTT, due EventProp,
+Quattro reti [caratterizzate per-metrica]{.accent}, non con un generico "best": due BPTT, due EventProp,
 misurate contro un oracolo (`Master Splinter`, ACC-IIDM con parametri veri). `Donatello` (EventProp) vince su
 NRMSE 0.152 / accuratezza 84.75% / ρ 0.05.
 :::
@@ -37,7 +37,7 @@ Parte 3 · i quattro campioni
 ## Come li valutiamo: sei livelli, metrica primaria il comportamento {.act3}
 
 ::: {.explain}
-La NRMSE nuda sui parametri non basta: la metrica primaria è il [comportamento in anello chiuso](/){.accent}
+La NRMSE nuda sui parametri non basta: la metrica primaria è il [comportamento in anello chiuso]{.accent}
 (`val_data`), verificato su una gerarchia a sei livelli — dal reporting all'idoneità FPGA.
 :::
 
@@ -93,7 +93,7 @@ Parte 3 · gerarchia di valutazione a 6 livelli
 :::
 ::: {.side}
 ::: {.explain}
-NRMSE per-canale (`v0, T, s0, a, b`), oracolo a zero. `Donatello` è il [più basso e uniforme](/){.accent}
+NRMSE per-canale (`v0, T, s0, a, b`), oracolo a zero. `Donatello` è il [più basso e uniforme]{.accent}
 (spread 0.093–0.215); `Raffaello` crolla su `v0` (0.499), e quella mis-identificazione della velocità
 desiderata distorce il diagramma fondamentale a valle.
 :::
@@ -126,7 +126,7 @@ Parte 3A · accuratezza per-parametro
 :::
 ::: {.side}
 ::: {.explain}
-Stratificando la NRMSE per famiglia di scenario, [ogni parametro ha il suo regime](/){.accent} in cui è
+Stratificando la NRMSE per famiglia di scenario, [ogni parametro ha il suo regime]{.accent} in cui è
 identificabile — e fuori da quello resta indeterminato. Una cella scura significa: quel parametro, in quello
 scenario, non lascia traccia nei dati.
 :::
@@ -160,7 +160,7 @@ Parte 3A · osservabilità stratificata [+]
 :::
 ::: {.side}
 ::: {.explain}
-La Fisher Information Matrix ha [rango pieno 5/5](/){.accent}, ma condizionamento ~1.6·10⁹: circa 29
+La Fisher Information Matrix ha [rango pieno 5/5]{.accent}, ma condizionamento ~1.6·10⁹: circa 29
 combinazioni di parametri sono di fatto equifinali. La causa è strutturale — `a` e `b` entrano nel gap quasi
 solo via √(a·b), quindi il rapporto a/b non è osservabile.
 :::
@@ -193,7 +193,7 @@ Parte 3A · identificabilità (sloppy models)
 :::
 ::: {.side}
 ::: {.explain}
-Chiudendo l'anello, il tasso di collisione della rete è [≈ quello dell'oracolo](/){.accent} (7.56%) e il TTC
+Chiudendo l'anello, il tasso di collisione della rete è [≈ quello dell'oracolo]{.accent} (7.56%) e il TTC
 è ≥ oracolo: le reti sono semmai più caute, non più rischiose. La sicurezza si legge come Δ rispetto
 all'oracolo, non in valore assoluto.
 :::
@@ -231,7 +231,7 @@ Parte 3A · sicurezza closed-loop (Δ vs oracolo)
 
 ::: {.explain}
 Le tracce gap/velocità/accelerazione confermano la sicurezza sui due scenari critici. Nel
-[cut-in](/){.accent} il gap crolla ma viene recuperato senza collisione; nell'hard-brake l'ego insegue la
+[cut-in]{.accent} il gap crolla ma viene recuperato senza collisione; nell'hard-brake l'ego insegue la
 frenata del leader mantenendo il margine. In entrambi i casi la traiettoria resta aderente all'oracolo.
 :::
 
@@ -258,7 +258,7 @@ Parte 3A · traiettorie closed-loop (cut-in · hard-brake) [+]
 ::: {.side}
 ::: {.explain}
 Cambiando il *plant* fisico (asciutto → bagnato → ghiaccio) la collisione sale (≈8% → 27% → 59%), ma
-[sale identico anche per l'oracolo](/){.accent}: sul ghiaccio è la fisica del veicolo a togliere il margine di
+[sale identico anche per l'oracolo]{.accent}: sul ghiaccio è la fisica del veicolo a togliere il margine di
 frenata, non l'identificazione.
 :::
 ::: {.eq}
@@ -294,7 +294,7 @@ Parte 3A · robustezza fisica (plant dry/wet/ice) [+]
 :::
 
 ::: {.explain}
-Salendo di scala il plotone resta stabile: il gain testa→coda è [< 1](/){.accent}, quindi una perturbazione si
+Salendo di scala il plotone resta stabile: il gain testa→coda è [< 1]{.accent}, quindi una perturbazione si
 attenua invece di amplificarsi, e lo space-time su 12 veicoli mostra l'onda stop-and-go che si smorza.
 `Raffaello` fa eccezione: gonfiando `v0` distorce il diagramma fondamentale a livello macro.
 :::
@@ -322,7 +322,7 @@ Parte 3A · traffico micro→meso→macro (stop-and-go)
 ::: {.side}
 ::: {.explain}
 Sotto perdita di pacchetti V2X conta la strategia di *hold* del canale più della rete: con
-[hold-last](/){.accent} la collisione resta ≈8%, in modalità blind (nessun recupero) sale a ≈67%. La
+[hold-last]{.accent} la collisione resta ≈8%, in modalità blind (nessun recupero) sale a ≈67%. La
 robustezza al canale la fornisce l'handler I/O, non la SNN in sé.
 :::
 ::: {.eq}
