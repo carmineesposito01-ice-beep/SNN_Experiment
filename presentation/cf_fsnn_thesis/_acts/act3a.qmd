@@ -222,10 +222,10 @@ Parte 3A · sicurezza closed-loop (Δ vs oracolo)
 
 ::: {.twocol}
 ::: {.vis style="background:#FFFFFF"}
-![](../../results/evaluate/v3_TURTLE_POWER!!!/09_Trajectories/traj_cut_in.png)
+![](assets/results/traj_cut_in.png)
 :::
 ::: {.vis style="background:#FFFFFF"}
-![](../../results/evaluate/v3_TURTLE_POWER!!!/09_Trajectories/traj_hard_brake.png)
+![](assets/results/traj_hard_brake.png)
 :::
 :::
 
@@ -289,7 +289,7 @@ Parte 3A · robustezza fisica (plant dry/wet/ice) [+]
 ![](figures/string.png)
 :::
 ::: {.vis style="background:#FFFFFF"}
-![](../../results/evaluate/v3_TURTLE_POWER!!!/12_Mesoscopic/meso_spacetime.png)
+![](assets/results/meso_spacetime.png)
 :::
 :::
 
