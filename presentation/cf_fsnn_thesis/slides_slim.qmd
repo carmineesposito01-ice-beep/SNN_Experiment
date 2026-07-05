@@ -1,0 +1,15 @@
+---
+title: "CF_FSNN — una rete spiking fisica-informata per l'identificazione di parametri di controllo"
+subtitle: "SNN + PINN + EventProp, verso l'FPGA · aggiornamento sui lavori"
+format:
+  revealjs:
+    theme: [../_shared/theme/cf_dark.scss, cf_slim.scss]
+---
+
+{{< include _acts_slim/act1.qmd >}}
+
+{{< include _acts_slim/act2.qmd >}}
+
+{{< include _acts_slim/act3a.qmd >}}
+
+{{< include _acts_slim/act3b.qmd >}}

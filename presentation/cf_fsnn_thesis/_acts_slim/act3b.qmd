@@ -1,0 +1,241 @@
+# 3B — Idoneità FPGA {.divider .act3}
+
+## La stessa quantità decide stabilità e salute della rete {.act3}
+
+::: {.twocol}
+::: {.vis}
+![](figures/discriminant.png)
+:::
+::: {.side}
+::: {.explain}
+Il discriminante di deploy è il [raggio spettrale]{.accent} $\rho(U\!\cdot\!V)$. Con EventProp il vincolo C11 lo tiene sotto 1 (stato fixed-point limitato); con BPTT $\rho>1$ e gli errori di arrotondamento saturano. La stessa soglia separa le reti anche in salute: EventProp 0 neuroni morti, BPTT circa un terzo.
+:::
+::: {.eq}
+`ρ ≜ σ_max( po2(U)·po2(V) )   (upper bound)`
+
+`EventProp  Donatello  ρ 0.05   dead   0%`
+`EventProp  Michelangelo ρ 0.39  dead   0%`
+`BPTT       Leonardo   ρ 1.16   dead  31%`
+`BPTT       Raffaello  ρ 2.99   dead  31%`
+
+`zona verde ρ<1  →  FPGA-safe`
+:::
+::: {.notes}
+ρ è il raggio spettrale (spectral radius) della ricorrenza a rango basso U·V. Con EventProp il vincolo C11 lo tiene sotto 1 (regime contrattivo): lo stato in virgola fissa resta limitato e l'adjoint converge in modo garantito. Con BPTT invece ρ>1 (regime espansivo): in fixed-point gli errori di arrotondamento si amplificano ciclo dopo ciclo fino a saturare il datapath. La cosa notevole è che la stessa soglia ρ<1 che governa la stabilità numerica separa le reti anche sul piano della salute: i due champion EventProp non hanno neuroni morti (dead), mentre i due BPTT ne perdono circa un terzo.
+:::
+:::
+:::
+
+::: {.footerbar}
+Parte 3 · discriminante ρ<1 + 0 morti <span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
+:::
+
+## Zero neuroni morti sono capacità che lavora davvero {.act3}
+
+::: {.twocol}
+::: {.vis}
+![](figures/spike_health.png)
+:::
+::: {.side}
+::: {.explain}
+Un neurone [morto]{.accent} non spara mai: su hardware è area che non calcola nulla. I due champion EventProp usano tutti e 32 i neuroni nascosti; i due BPTT ne lasciano spenti 10 su 32. Il tasso di spike resta intorno al target di sparsità (15%): abbastanza attività per la dinamica, abbastanza sparsità per l'energia bassa.
+:::
+::: {.eq}
+`dead(θ) = frazione neuroni con spike-rate = 0`
+
+`EventProp  →  0 / 32   (0%)`
+`BPTT       → 10 / 32  (31%)`
+
+`spike-rate ≈ 13–19%  (target 15%)`
+:::
+::: {.notes}
+Un dead neuron (neurone morto) non spara mai: è capacità sprecata, e su hardware è area occupata che non calcola nulla — un costo diretto di risorse. I due champion EventProp usano tutti e 32 i neuroni nascosti; i due BPTT ne lasciano spenti 10 su 32 (31%). Il tasso di spike si assesta intorno al target di sparsità del 15%: abbastanza attività per rappresentare la dinamica, abbastanza sparsità perché l'energia resti bassa. Va sottolineato che la salute della rete non è un dettaglio estetico — è ciò che rende sensato il conteggio energetico del passo successivo: contare l'energia di neuroni morti non avrebbe significato.
+:::
+:::
+:::
+
+::: {.footerbar}
+Parte 3 · salute della rete <span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
+:::
+
+## L'idoneità FPGA, a colpo d'occhio {.act3}
+
+::: {.twocol}
+::: {.vis}
+![](figures/readiness_radar.png)
+:::
+::: {.side}
+::: {.explain}
+Il radar riassume sei assi (ρ<1, virgola fissa, sparsità, energia, timing, SEU). La rete è [minuscola]{.accent} rispetto al PYNQ-Z1: 0 DSP, meno di 1 BRAM su 140, poche centinaia di byte di pesi. Sul tempo il margine è enorme: latenza in µs contro deadline 100 ms (budget ~0,1%). Nessun ramo dipendente dai dati, quindi `WCET == BCET`: jitter zero.
+:::
+::: {.eq}
+`DSP        0`
+`BRAM       < 1  /  140   (~0.7%)`
+`timing     ~µs  vs  deadline 100 ms`
+`util       ~0.1%   ·   jitter = 0`
+:::
+::: {.card}
+Onestà: il deploy è un [obiettivo di design]{.accent}, non silicio già validato. Queste sono stime da modello di risorse, non misure su FPGA fisica.
+:::
+::: {.notes}
+Il radar di readiness riassume sei assi: ρ<1, virgola fissa, sparsità, energia, timing e SEU. La rete è minuscola rispetto alla capacità del PYNQ-Z1: 0 DSP, meno di 1 BRAM su 140 disponibili, un footprint di poche centinaia di byte di pesi. Sul tempo il margine è enorme: latenza dell'ordine dei microsecondi contro una deadline di 100 ms, quindi utilizzo del budget temporale intorno allo 0,1%. E poiché non ci sono rami dipendenti dai dati, il caso peggiore coincide con il caso migliore (WCET == BCET): jitter zero, un requisito hard-real-time regalato dall'architettura invece di dover essere conquistato a fatica.
+:::
+:::
+:::
+
+::: {.footerbar}
+Parte 3 · readiness · deploy = obiettivo di design <span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
+:::
+
+## Il vantaggio energetico viene dall'operazione, non dalla sparsità {.act3}
+
+::: {.twocol}
+::: {.vis}
+![](figures/energy_ann.png)
+:::
+::: {.side}
+::: {.explain}
+Contro una ANN densa di pari compito il vantaggio è di circa [5–8×]{.accent}. Non nasce dalla sparsità — la rete spara ancora il 13–19% dei tick, non l'1% — ma dall'hardware: l'accumulo (AC) costa meno del multiply-accumulate (MAC), e i pesi potenze-di-due azzerano i DSP (moltiplicazione → shift). I numeri sono [stime Horowitz]{.accent} (per-op, 45 nm), non consumo misurato.
+:::
+::: {.eq}
+`vantaggio  ≈ 4.8× – 6.0×  vs ANN densa`
+
+`origine:  AC < MAC   +   0 DSP (shift)`
+`NON:      sparsità (spike-rate ~13–19%)`
+
+`E = stima Horowitz (per-op, 45 nm)`
+:::
+::: {.notes}
+Il confronto è contro una ANN densa di pari compito e il vantaggio energetico è di circa 5–8×. La sorgente del vantaggio va detta con precisione perché è controintuitiva: non nasce dalla sparsità — la rete spara ancora il 13–19% dei tick, non l'1%. Nasce da due fatti puramente hardware. Primo: l'accumulo (AC) di una SNN costa meno del multiply-accumulate (MAC) di una ANN. Secondo: i pesi in potenze-di-due azzerano l'uso dei DSP, perché la moltiplicazione diventa uno shift. I numeri di energia sono stime Horowitz (costo per operazione a 45 nm), non consumo misurato: vanno letti come un ordine di grandezza affidabile, non come una fattura elettrica.
+:::
+:::
+:::
+
+::: {.footerbar}
+Parte 3 · energia vs ANN · AC<MAC, non sparsità <span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
+:::
+
+## L'errore resta piatto fino a due bit {.act3}
+
+::: {.twocol}
+::: {.vis}
+![](figures/quant.png)
+:::
+::: {.side}
+::: {.explain}
+La rete è nata già [quantizzabile]{.accent}. L'errore di identificazione resta piatto riducendo i bit fino a circa 2 bit di parte frazionaria: nessun crollo di precisione da recuperare. I pesi potenze-di-due sono già assorbiti dal QAT: il passaggio float → 13 livelli po2 dà un delta $\le 0$ su 3 champion su 4. L'unica eccezione è Leonardo.
+:::
+::: {.eq}
+`id_err(frac_bits)  ≈  piatto fino a ~2 bit`
+
+`Δ(po2 − float)  ≤ 0   su 3 / 4 champion`
+`13 livelli:  {±1/16 … ±2, 0}`
+
+`Leonardo:  Δ po2 più alto`
+:::
+::: {.notes}
+La rete è nata già quantizzabile. L'errore di identificazione resta sostanzialmente piatto man mano che si riduce la larghezza dei bit fino a circa 2 bit di parte frazionaria: non c'è alcun crollo di precisione da recuperare a valle. I pesi in potenze-di-due (po2) sono già assorbiti dal QAT, il quantization-aware training: passare dai pesi float ai 13 livelli po2 {±1/16 … ±2, 0} dà un delta di errore ≤ 0 su 3 champion su 4 — non peggiora, e in due casi migliora addirittura leggermente. L'unica eccezione è Leonardo, che paga l'errore po2 più alto del gruppo, coerente con il suo essere il champion più fragile anche sugli altri assi.
+:::
+:::
+:::
+
+::: {.footerbar}
+Parte 3 · quantizzazione FPGA-ready <span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
+:::
+
+::: {.content-visible when-profile="full"}
+## Robustezza ai bit-flip: TMR mirato, non totale {.act3}
+
+::: {.twocol}
+::: {.vis}
+![](figures/seu.png)
+:::
+::: {.side}
+::: {.explain}
+Un [SEU]{.accent} (bit-flip da radiazione) è il guasto che la ISO 26262 impone per l'automotive. Iniettando flip nei pesi quantizzati, la rete non produce collisioni fino a 8 flip: la ridondanza dei 32 neuroni assorbe i guasti sparsi. Ma il [readout]{.accent} è critico — un flip lì sposta un parametro fisico — quindi basta un TMR mirato solo sul readout, non sull'intera rete. Il più fragile è Leonardo.
+:::
+::: {.eq}
+`0 collisioni  fino a  8 bit-flip`
+
+`criticità:  readout  ≫  hidden`
+`→ TMR mirato sul readout (non totale)`
+
+`più fragile:  Leonardo`
+:::
+::: {.notes}
+Un SEU (Single-Event Upset) è il classico bit-flip indotto da radiazione, ed è il guasto che la ISO 26262 impone di considerare per l'automotive. Iniettando flip nei bit dei pesi quantizzati, la rete non produce alcuna collisione fino a 8 flip: la ridondanza intrinseca dei 32 neuroni assorbe i guasti sparsi. Ma non tutti i bit pesano uguale. Il readout — l'ultimo layer LI che decodifica i 5 parametri fisici — è la parte più critica: un flip lì sposta direttamente un parametro fisico in uscita. La conseguenza progettuale è precisa e non banale: basta un TMR (Triple Modular Redundancy) mirato solo sul readout, non la triplicazione dell'intera rete, con un enorme risparmio di area. Tra i champion, Leonardo è il più fragile ai flip.
+:::
+:::
+:::
+
+::: {.footerbar}
+Parte 3 · SEU / ISO 26262 <span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
+:::
+:::
+
+# Verdetto e chiusura {.divider .act3}
+
+## Il candidato al deploy è Donatello {.act3}
+
+::: {.twocol}
+::: {.vis}
+![](figures/champions_roster.png)
+:::
+::: {.side}
+::: {.explain}
+Il verdetto pesa identificazione, sicurezza in anello chiuso e idoneità hardware. Il candidato è [Donatello]{.accent}: $\rho\,0.05$, NRMSE 0.152, 84.75%, 0 neuroni morti — in anello chiuso sicuro quanto l'oracolo. Gli altri tre restano sul fronte di Pareto: un [trade-off]{.accent}, non un dominatore su ogni asse.
+:::
+::: {.eq}
+`Donatello    ρ0.05  NRMSE 0.152  84.75%  0 dead  →  DEPLOY`
+`Michelangelo ρ0.39  NRMSE 0.208  79.18%  0 dead  →  runner-up`
+`Leonardo     ρ1.16  NRMSE 0.225  77.53% 31% dead →  best SW, espansivo`
+`Raffaello    ρ2.99  NRMSE 0.307  69.34% 31% dead →  sconsigliato`
+:::
+::: {.notes}
+Il verdetto pesa insieme tre dimensioni: qualità di identificazione, sicurezza in anello chiuso e idoneità hardware. Il candidato al deploy è Donatello: ρ 0.05 (il più contrattivo del gruppo), NRMSE minimo 0.152, accuratezza 84.75%, 0 neuroni morti — e in anello chiuso è sicuro quanto l'oracolo. Michelangelo è il runner-up EventProp: stabile e ben bilanciato, un secondo posto solido. Leonardo è il miglior software puro ed è il più umano nel comportamento, ma è espansivo (ρ 1.16, 31% neuroni morti) — quindi costoso da mettere in hardware. Raffaello è la baseline aggressiva: il suo v0 mal identificato distorce il diagramma fondamentale, per cui il deploy è sconsigliato.
+:::
+:::
+:::
+
+::: {.footerbar}
+Parte 3 · verdetto di deploy · Pareto = trade-off <span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
+:::
+
+## In una frase: cosa portiamo a casa {.act3}
+
+::: {.explain}
+Tre risultati e un numero.
+:::
+
+1. Una SNN [fisica-informata]{.accent} + EventProp identifica i **5 parametri** `[v0,T,s0,a,b]` di un ACC-IIDM dalla **sola traiettoria** — problema inverso, penalità soft, non supervisione diretta.
+2. EventProp dà [stabilità per costruzione]{.accent}: $\rho<1$ e 0 neuroni morti — una manopola, due garanzie (adjoint convergente + rete FPGA-friendly).
+3. Validazione a [6 tier]{.accent}: in anello chiuso sicuri quanto l'oracolo; in hardware 0 DSP, &lt;1% BRAM.
+
+::: {.eq}
+`L'UNICO NUMERO:   Donatello  →  ρ 0.05 ,  84.75%`
+:::
+
+::: {.footerbar}
+Parte 3 · sintesi <span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
+:::
+
+## Onestà e prossimi passi {.act3}
+
+::: {.threecol}
+::: {.card}
+[Onestà, sempre]{.card-title}
+FPGA = obiettivo di design (energia: stima Horowitz); robustezza V2X = del gestore, non della rete; free-flow ACC-IIDM con esponente fisso 2, semplificazione voluta.
+:::
+::: {.card}
+[Prossimo — HDL]{.card-title}
+Simulink + HDL Coder: dal modello contrattivo e quantizzato a VHDL/Verilog per il PYNQ-Z1.
+:::
+::: {.card}
+[Prossimo — HIL]{.card-title}
+FPGA-in-the-loop: rete su silicio reale, energia e timing misurati — non più stime.
+:::
+:::
+
+::: {.footerbar}
+Parte 3 · prossimi passi <span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
+:::
