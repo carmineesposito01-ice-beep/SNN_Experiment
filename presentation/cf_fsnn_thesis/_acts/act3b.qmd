@@ -8,9 +8,9 @@
 :::
 ::: {.side}
 ::: {.explain}
-Il discriminante di deploy è il [raggio spettrale]{.accent} (spectral radius) $\rho(U\!\cdot\!V)$ della ricorrenza a rango basso. Con `EventProp` il vincolo C11 lo tiene sotto 1 (contrattivo): lo stato in virgola fissa resta limitato e l'adjoint converge. Con `BPTT` $\rho>1$ (espansivo): in fixed-point gli errori di arrotondamento si amplificano fino a saturare.
+Il discriminante di deploy è il [raggio spettrale]{.accent} $\rho(U\!\cdot\!V)$. Con EventProp il vincolo C11 lo tiene sotto 1: lo stato in virgola fissa resta limitato. Con BPTT $\rho>1$ e in fixed-point gli errori di arrotondamento saturano.
 
-La stessa soglia separa le reti anche in salute: gli EventProp non hanno neuroni morti (dead), i BPTT ne perdono circa un terzo.
+La stessa soglia separa le reti anche in salute: EventProp 0 neuroni morti, BPTT circa un terzo.
 :::
 ::: {.eq}
 `ρ ≜ σ_max( po2(U)·po2(V) )   (upper bound)`
@@ -21,6 +21,9 @@ La stessa soglia separa le reti anche in salute: gli EventProp non hanno neuroni
 `BPTT       Raffaello  ρ 2.99   dead  31%`
 
 `zona verde ρ<1  →  FPGA-safe`
+:::
+::: {.notes}
+ρ è il raggio spettrale (spectral radius) della ricorrenza a rango basso U·V. Con EventProp il vincolo C11 lo tiene sotto 1 (regime contrattivo): lo stato in virgola fissa resta limitato e l'adjoint converge in modo garantito. Con BPTT invece ρ>1 (regime espansivo): in fixed-point gli errori di arrotondamento si amplificano ciclo dopo ciclo fino a saturare il datapath. La cosa notevole è che la stessa soglia ρ<1 che governa la stabilità numerica separa le reti anche sul piano della salute: i due champion EventProp non hanno neuroni morti (dead), mentre i due BPTT ne perdono circa un terzo.
 :::
 :::
 :::
@@ -37,9 +40,9 @@ Parte 3 · discriminante ρ<1 + 0 morti <span>champion:&nbsp;<span class="chip" 
 :::
 ::: {.side}
 ::: {.explain}
-Un neurone [morto]{.accent} (dead neuron) non spara mai: è capacità sprecata, e su hardware è area occupata che non calcola nulla. I due champion `EventProp` usano tutti e 32 i neuroni nascosti; i due `BPTT` ne lasciano spenti 10 su 32.
+Un neurone [morto]{.accent} non spara mai: su hardware è area che non calcola nulla. I due champion EventProp usano tutti e 32 i neuroni nascosti; i due BPTT ne lasciano spenti 10 su 32.
 
-Il tasso di spike si assesta intorno al target di sparsità (15%): abbastanza attività per rappresentare la dinamica, abbastanza sparsità perché l'energia resti bassa. La salute della rete non è un dettaglio estetico — è ciò che rende sensato il conteggio energetico del prossimo passo.
+Il tasso di spike resta intorno al target di sparsità (15%): abbastanza attività per la dinamica, abbastanza sparsità per l'energia bassa.
 :::
 ::: {.eq}
 `dead(θ) = frazione neuroni con spike-rate = 0`
@@ -48,6 +51,9 @@ Il tasso di spike si assesta intorno al target di sparsità (15%): abbastanza at
 `BPTT       → 10 / 32  (31%)`
 
 `spike-rate ≈ 13–19%  (target 15%)`
+:::
+::: {.notes}
+Un dead neuron (neurone morto) non spara mai: è capacità sprecata, e su hardware è area occupata che non calcola nulla — un costo diretto di risorse. I due champion EventProp usano tutti e 32 i neuroni nascosti; i due BPTT ne lasciano spenti 10 su 32 (31%). Il tasso di spike si assesta intorno al target di sparsità del 15%: abbastanza attività per rappresentare la dinamica, abbastanza sparsità perché l'energia resti bassa. Va sottolineato che la salute della rete non è un dettaglio estetico — è ciò che rende sensato il conteggio energetico del passo successivo: contare l'energia di neuroni morti non avrebbe significato.
 :::
 :::
 :::
@@ -64,9 +70,9 @@ Parte 3 · salute della rete <span>champion:&nbsp;<span class="chip" style="back
 :::
 ::: {.side}
 ::: {.explain}
-Il radar di readiness riassume sei assi (ρ<1, virgola fissa, sparsità, energia, timing, SEU). La rete è [minuscola]{.accent} rispetto al PYNQ-Z1: 0 DSP, meno di 1 BRAM su 140, un footprint di poche centinaia di byte di pesi.
+Il radar riassume sei assi (ρ<1, virgola fissa, sparsità, energia, timing, SEU). La rete è [minuscola]{.accent} rispetto al PYNQ-Z1: 0 DSP, meno di 1 BRAM su 140, poche centinaia di byte di pesi.
 
-Sul tempo, il margine è enorme: latenza dell'ordine dei microsecondi contro una deadline di 100 ms → utilizzo del budget temporale intorno allo 0,1%. E poiché non ci sono rami dipendenti dai dati, il caso peggiore coincide col caso migliore (`WCET == BCET`): jitter zero, un requisito hard-real-time regalato dall'architettura.
+Sul tempo il margine è enorme: latenza in microsecondi contro deadline 100 ms → budget usato ~0,1%. Nessun ramo dipendente dai dati, quindi `WCET == BCET`: jitter zero, hard-real-time regalato dall'architettura.
 :::
 ::: {.eq}
 `DSP        0`
@@ -76,6 +82,9 @@ Sul tempo, il margine è enorme: latenza dell'ordine dei microsecondi contro una
 :::
 ::: {.card}
 Onestà: il deploy è un [obiettivo di design]{.accent}, non silicio già validato. Queste sono stime da modello di risorse, non misure su FPGA fisica.
+:::
+::: {.notes}
+Il radar di readiness riassume sei assi: ρ<1, virgola fissa, sparsità, energia, timing e SEU. La rete è minuscola rispetto alla capacità del PYNQ-Z1: 0 DSP, meno di 1 BRAM su 140 disponibili, un footprint di poche centinaia di byte di pesi. Sul tempo il margine è enorme: latenza dell'ordine dei microsecondi contro una deadline di 100 ms, quindi utilizzo del budget temporale intorno allo 0,1%. E poiché non ci sono rami dipendenti dai dati, il caso peggiore coincide con il caso migliore (WCET == BCET): jitter zero, un requisito hard-real-time regalato dall'architettura invece di dover essere conquistato a fatica.
 :::
 :::
 :::
@@ -92,9 +101,9 @@ Parte 3 · readiness · deploy = obiettivo di design <span>champion:&nbsp;<span 
 :::
 ::: {.side}
 ::: {.explain}
-Confronto contro una ANN densa di pari compito: il vantaggio è di circa [5–8×]{.accent}. La sorgente è chiara e va detta con precisione. Non nasce dalla sparsità — la rete spara ancora il 13–19% dei tick, non l'1%. Nasce da due fatti hardware: l'accumulo (AC) di una SNN costa meno del multiply-accumulate (MAC) di una ANN, e i pesi in potenze-di-due azzerano i DSP (moltiplicazione → shift).
+Contro una ANN densa di pari compito il vantaggio è di circa [5–8×]{.accent}. Non nasce dalla sparsità — la rete spara ancora il 13–19% dei tick, non l'1%. Nasce dall'hardware: l'accumulo (AC) costa meno del multiply-accumulate (MAC), e i pesi potenze-di-due azzerano i DSP (moltiplicazione → shift).
 
-I numeri di energia sono [stime Horowitz]{.accent} (costo per operazione a 45 nm), non consumo misurato: un ordine di grandezza affidabile, non una fattura elettrica.
+I numeri sono [stime Horowitz]{.accent} (per-op, 45 nm), non consumo misurato.
 :::
 ::: {.eq}
 `vantaggio  ≈ 4.8× – 6.0×  vs ANN densa`
@@ -103,6 +112,9 @@ I numeri di energia sono [stime Horowitz]{.accent} (costo per operazione a 45 nm
 `NON:      sparsità (spike-rate ~13–19%)`
 
 `E = stima Horowitz (per-op, 45 nm)`
+:::
+::: {.notes}
+Il confronto è contro una ANN densa di pari compito e il vantaggio energetico è di circa 5–8×. La sorgente del vantaggio va detta con precisione perché è controintuitiva: non nasce dalla sparsità — la rete spara ancora il 13–19% dei tick, non l'1%. Nasce da due fatti puramente hardware. Primo: l'accumulo (AC) di una SNN costa meno del multiply-accumulate (MAC) di una ANN. Secondo: i pesi in potenze-di-due azzerano l'uso dei DSP, perché la moltiplicazione diventa uno shift. I numeri di energia sono stime Horowitz (costo per operazione a 45 nm), non consumo misurato: vanno letti come un ordine di grandezza affidabile, non come una fattura elettrica.
 :::
 :::
 :::
@@ -119,9 +131,9 @@ Parte 3 · energia vs ANN · AC<MAC, non sparsità <span>champion:&nbsp;<span cl
 :::
 ::: {.side}
 ::: {.explain}
-La rete è nata già [quantizzabile]{.accent}. L'errore di identificazione resta sostanzialmente piatto riducendo la larghezza dei bit fino a circa 2 bit di parte frazionaria: non c'è un crollo di precisione da recuperare.
+La rete è nata già [quantizzabile]{.accent}. L'errore di identificazione resta piatto riducendo i bit fino a circa 2 bit di parte frazionaria: nessun crollo di precisione da recuperare.
 
-I pesi in potenze-di-due (po2) sono già [assorbiti dal QAT]{.accent} (quantization-aware training): passare da pesi float ai 13 livelli po2 dà un delta di errore $\le 0$ su 3 champion su 4 — non peggiora, in due casi migliora leggermente. L'unica eccezione è Leonardo, che paga l'errore po2 più alto del gruppo.
+I pesi potenze-di-due sono già assorbiti dal QAT: il passaggio float → 13 livelli po2 dà un delta $\le 0$ su 3 champion su 4. L'unica eccezione è Leonardo.
 :::
 ::: {.eq}
 `id_err(frac_bits)  ≈  piatto fino a ~2 bit`
@@ -130,6 +142,9 @@ I pesi in potenze-di-due (po2) sono già [assorbiti dal QAT]{.accent} (quantizat
 `13 livelli:  {±1/16 … ±2, 0}`
 
 `Leonardo:  Δ po2 più alto`
+:::
+::: {.notes}
+La rete è nata già quantizzabile. L'errore di identificazione resta sostanzialmente piatto man mano che si riduce la larghezza dei bit fino a circa 2 bit di parte frazionaria: non c'è alcun crollo di precisione da recuperare a valle. I pesi in potenze-di-due (po2) sono già assorbiti dal QAT, il quantization-aware training: passare dai pesi float ai 13 livelli po2 {±1/16 … ±2, 0} dà un delta di errore ≤ 0 su 3 champion su 4 — non peggiora, e in due casi migliora addirittura leggermente. L'unica eccezione è Leonardo, che paga l'errore po2 più alto del gruppo, coerente con il suo essere il champion più fragile anche sugli altri assi.
 :::
 :::
 :::
@@ -147,9 +162,9 @@ Parte 3 · quantizzazione FPGA-ready <span>champion:&nbsp;<span class="chip" sty
 :::
 ::: {.side}
 ::: {.explain}
-Un [SEU]{.accent} (Single-Event Upset, il classico bit-flip da radiazione) è il guasto che la ISO 26262 impone di considerare per l'automotive. Iniettando flip nei bit dei pesi quantizzati, la rete non produce alcuna collisione fino a 8 flip: la ridondanza intrinseca dei 32 neuroni assorbe i guasti sparsi.
+Un [SEU]{.accent} (bit-flip da radiazione) è il guasto che la ISO 26262 impone per l'automotive. Iniettando flip nei pesi quantizzati, la rete non produce collisioni fino a 8 flip: la ridondanza dei 32 neuroni assorbe i guasti sparsi.
 
-Non tutti i bit pesano uguale. Il [readout]{.accent} (l'ultimo layer LI che decodifica i 5 parametri) è la parte più critica: un flip lì sposta direttamente un parametro fisico. La conseguenza progettuale è precisa — TMR (Triple Modular Redundancy) mirato solo sul readout, non triplicazione dell'intera rete. Tra i champion, Leonardo è il più fragile ai flip.
+Non tutti i bit pesano uguale. Il [readout]{.accent} è la parte critica: un flip lì sposta un parametro fisico. Conseguenza: TMR mirato solo sul readout, non sull'intera rete. Il più fragile è Leonardo.
 :::
 ::: {.eq}
 `0 collisioni  fino a  8 bit-flip`
@@ -158,6 +173,9 @@ Non tutti i bit pesano uguale. Il [readout]{.accent} (l'ultimo layer LI che deco
 `→ TMR mirato sul readout (non totale)`
 
 `più fragile:  Leonardo`
+:::
+::: {.notes}
+Un SEU (Single-Event Upset) è il classico bit-flip indotto da radiazione, ed è il guasto che la ISO 26262 impone di considerare per l'automotive. Iniettando flip nei bit dei pesi quantizzati, la rete non produce alcuna collisione fino a 8 flip: la ridondanza intrinseca dei 32 neuroni assorbe i guasti sparsi. Ma non tutti i bit pesano uguale. Il readout — l'ultimo layer LI che decodifica i 5 parametri fisici — è la parte più critica: un flip lì sposta direttamente un parametro fisico in uscita. La conseguenza progettuale è precisa e non banale: basta un TMR (Triple Modular Redundancy) mirato solo sul readout, non la triplicazione dell'intera rete, con un enorme risparmio di area. Tra i champion, Leonardo è il più fragile ai flip.
 :::
 :::
 :::
@@ -177,9 +195,9 @@ Parte 3 · SEU / ISO 26262 <span>champion:&nbsp;<span class="chip" style="backgr
 :::
 ::: {.side}
 ::: {.explain}
-Il verdetto pesa insieme identificazione, sicurezza in anello chiuso e idoneità hardware. Il candidato è [Donatello]{.accent}: $\rho\,0.05$ (il più contrattivo), NRMSE minimo 0.152, accuratezza 84.75%, 0 neuroni morti — e in anello chiuso è sicuro quanto l'oracolo.
+Il verdetto pesa insieme identificazione, sicurezza in anello chiuso e idoneità hardware. Il candidato è [Donatello]{.accent}: $\rho\,0.05$, NRMSE 0.152, accuratezza 84.75%, 0 neuroni morti — e in anello chiuso è sicuro quanto l'oracolo.
 
-Michelangelo è il [runner-up]{.accent} EventProp: stabile e ben bilanciato, un secondo posto solido. Leonardo è il miglior software puro e il più umano, ma è espansivo ($\rho\,1.16$, 31% morti) — costoso da mettere in hardware. Raffaello è la baseline aggressiva: $v_0$ mal identificato che distorce il diagramma fondamentale, deploy sconsigliato.
+Michelangelo è il runner-up EventProp, solido. Leonardo è il miglior software puro ma espansivo ($\rho\,1.16$, 31% morti). Raffaello è la baseline aggressiva, deploy sconsigliato.
 :::
 ::: {.eq}
 `Donatello    ρ0.05  NRMSE 0.152  84.75%  0 dead  →  DEPLOY`
@@ -189,6 +207,9 @@ Michelangelo è il [runner-up]{.accent} EventProp: stabile e ben bilanciato, un 
 :::
 ::: {.card}
 Il fronte di Pareto è un [trade-off]{.accent}, non un "vinciamo": chi guida sull'accuratezza cede su altro. Donatello è il miglior compromesso, non un dominatore su ogni asse.
+:::
+::: {.notes}
+Il verdetto pesa insieme tre dimensioni: qualità di identificazione, sicurezza in anello chiuso e idoneità hardware. Il candidato al deploy è Donatello: ρ 0.05 (il più contrattivo del gruppo), NRMSE minimo 0.152, accuratezza 84.75%, 0 neuroni morti — e in anello chiuso è sicuro quanto l'oracolo. Michelangelo è il runner-up EventProp: stabile e ben bilanciato, un secondo posto solido. Leonardo è il miglior software puro ed è il più umano nel comportamento, ma è espansivo (ρ 1.16, 31% neuroni morti) — quindi costoso da mettere in hardware. Raffaello è la baseline aggressiva: il suo v0 mal identificato distorce il diagramma fondamentale, per cui il deploy è sconsigliato.
 :::
 :::
 :::

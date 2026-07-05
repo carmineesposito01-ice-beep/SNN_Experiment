@@ -9,9 +9,7 @@
 :::
 ::: {.side}
 ::: {.explain}
-La storia delle reti neurali si legge come tre [generazioni]{.accent}, non come una scala di accuratezza crescente. Il percettrone (1ª gen) decide con una soglia netta: uscita binaria, nessuna sfumatura. La rete artificiale (ANN, 2ª gen) sostituisce il gradino con una funzione continua e derivabile — è ciò che ha reso possibile il backpropagation e il deep learning.
-
-La rete spiking (SNN, 3ª gen) torna a comunicare con impulsi discreti (spike), ma aggiunge una variabile di stato interna — il potenziale di membrana — che integra nel tempo. Il punto chiave: la 3ª generazione non è "più accurata", vive su un asse diverso — energia, latenza, silicio (hardware neuromorfico). Si sceglie una SNN quando contano i joule e i millisecondi, non i punti di accuratezza.
+Tre [generazioni]{.accent}, non una scala di accuratezza. Il percettrone decide con una soglia netta; l'ANN la sostituisce con una funzione derivabile (da qui backprop e deep learning); la SNN torna agli spike discreti ma aggiunge uno stato interno che integra nel tempo. Il punto: la 3ª gen non è "più accurata", vive su un altro asse — energia, latenza, silicio. Si sceglie quando contano joule e millisecondi.
 :::
 ::: {.eq .math}
 $$
@@ -23,6 +21,9 @@ $$
 \end{aligned}
 $$
 :::
+:::
+::: {.notes}
+Le tre generazioni si leggono su assi diversi, non come una scala di accuratezza crescente. Il percettrone (1ª gen) decide con una soglia netta: uscita binaria, nessuna sfumatura. La rete artificiale (ANN, 2ª gen) sostituisce il gradino con una funzione continua e derivabile — è proprio questo che ha reso possibile il backpropagation e il deep learning. La rete spiking (SNN, 3ª gen) torna a comunicare con impulsi discreti (spike), ma aggiunge una variabile di stato interna — il potenziale di membrana — che integra nel tempo. Il punto chiave da comunicare: la 3ª generazione non è "più accurata", vive su un asse diverso — energia, latenza, silicio (hardware neuromorfico). Si sceglie una SNN quando contano i joule e i millisecondi, non i punti di accuratezza.
 :::
 :::
 
@@ -39,9 +40,7 @@ Parte 1 · Tre generazioni <span>champion:&nbsp;<span class="chip" style="backgr
 :::
 ::: {.side}
 ::: {.explain}
-Un'ANN è come un [dimmer]{.accent}: ogni neurone emette in continuo un valore reale, un numero aggiornato a ogni passo di clock. Una SNN è come il codice Morse: tace, e comunica solo con impulsi puntuali (spike) — l'informazione sta nel *quando*, non nell'ampiezza.
-
-La conseguenza pratica è la regola che governa tutto l'Parte 3: l'energia è proporzionale agli eventi (spike), non al tempo. Un'ANN paga a ogni ciclo anche se nulla cambia; una SNN paga solo quando un neurone scatta. Se l'attività è sparsa, il costo crolla — ma il vantaggio nasce dall'evento, non dalla lentezza.
+Un'ANN è un [dimmer]{.accent}: ogni neurone emette in continuo un valore reale a ogni clock. Una SNN è codice Morse: tace, e comunica solo con spike puntuali — l'informazione sta nel *quando*. Ne segue la regola che governa la Parte 3: l'energia è proporzionale agli eventi, non al tempo. Se l'attività è sparsa, il costo crolla — ma il vantaggio nasce dall'evento, non dalla lentezza.
 :::
 ::: {.eq}
 | asse | ANN | SNN |
@@ -53,6 +52,9 @@ La conseguenza pratica è la regola che governa tutto l'Parte 3: l'energia è pr
 | hardware | GPU / TPU | neuromorfico / FPGA |
 | costo | $\propto$ tempo (ogni clock) | $\propto$ eventi (spike) |
 :::
+:::
+::: {.notes}
+Un'ANN è come un dimmer: ogni neurone emette in continuo un valore reale, un numero aggiornato a ogni passo di clock. Una SNN è come il codice Morse: tace, e comunica solo con impulsi puntuali (spike) — l'informazione sta nel quando, non nell'ampiezza. La conseguenza pratica è la regola che governa tutta la Parte 3: l'energia è proporzionale agli eventi (spike), non al tempo. Un'ANN paga a ogni ciclo anche se nulla cambia; una SNN paga solo quando un neurone scatta. Se l'attività è sparsa, il costo crolla — ma il vantaggio nasce dall'evento, non dalla lentezza. I sei assi della tabella (comunicazione, stato/memoria, calcolo, differenziabilità, hardware, costo) mostrano che la differenza non è solo l'attivazione ma un profilo completo diverso.
 :::
 :::
 
@@ -69,9 +71,7 @@ Parte 1 · ANN vs SNN <span>champion:&nbsp;<span class="chip" style="background:
 :::
 ::: {.side}
 ::: {.explain}
-Il Leaky Integrate-and-Fire (LIF) è il neurone spiking minimo. La metafora del [secchio bucato]{.accent} lo descrive per intero: la corrente in ingresso è l'acqua che entra, il *leak* è il buco che lo svuota lentamente, lo spike è l'overflow quando il livello supera il bordo, e il reset è il livello che cala di colpo dopo aver traboccato.
-
-Il dettaglio che lo rende adatto al silicio: il leak non è una moltiplicazione ma uno scorrimento di bit (bit-shift). Perdere un ottavo del livello ($V \cdot \tfrac{7}{8}$) equivale a $V - V/2^{3}$ — una sola operazione di shift, nessun moltiplicatore. Il reset è sottrattivo: si toglie la soglia, non si azzera forzatamente il potenziale.
+Il Leaky Integrate-and-Fire è il neurone spiking minimo. Il [secchio bucato]{.accent} lo descrive per intero: la corrente entra come acqua, il *leak* è il buco che svuota, lo spike è l'overflow oltre il bordo, il reset è il livello che cala. Dettaglio chiave per il silicio: il leak non è una moltiplicazione ma un bit-shift — perdere un ottavo ($V\cdot\tfrac{7}{8} = V - V/2^{3}$) è un solo shift, nessun moltiplicatore.
 :::
 ::: {.eq .math}
 $$
@@ -84,6 +84,9 @@ $$
 
 leak come bit-shift:  $V - \dfrac{V}{2^{3}}$
 :::
+:::
+::: {.notes}
+Il Leaky Integrate-and-Fire (LIF) è il neurone spiking minimo. La metafora del secchio bucato lo descrive per intero: la corrente in ingresso è l'acqua che entra, il leak è il buco che lo svuota lentamente, lo spike è l'overflow quando il livello supera il bordo, e il reset è il livello che cala di colpo dopo aver traboccato. Il dettaglio che lo rende adatto al silicio: il leak non è una moltiplicazione ma uno scorrimento di bit (bit-shift). Perdere un ottavo del livello (V·7/8) equivale a V − V/2³ — una sola operazione di shift, nessun moltiplicatore. Il reset è sottrattivo: si toglie la soglia, non si azzera forzatamente il potenziale — così l'eventuale eccesso oltre soglia non va perso.
 :::
 :::
 
@@ -100,9 +103,7 @@ Parte 1 · Neurone LIF <span>champion:&nbsp;<span class="chip" style="background
 :::
 ::: {.side}
 ::: {.explain}
-Il LIF adattivo (Adaptive-LIF, ALIF) aggiunge una sola variabile: una [fatica]{.accent} che alza la soglia a ogni spike. Un neurone che ha appena sparato diventa temporaneamente più difficile da eccitare; poi la fatica decade e la soglia torna verso il valore base.
-
-Questa piccola aggiunta fa tre cose. Regola la sparsità: senza adattamento un neurone eccitato spara a raffica, con l'ALIF si auto-limita. Dà una memoria breve: la soglia porta traccia del passato recente. E stabilizza: smorza l'attività a valanga che rende instabile l'addestramento delle SNN. La fatica decade anch'essa con lo stesso bit-shift ($\tfrac{7}{8}$) del potenziale.
+L'ALIF aggiunge una sola variabile: una [fatica]{.accent} che alza la soglia a ogni spike, poi decade tornando al valore base. Fa tre cose: regola la sparsità (il neurone si auto-limita invece di sparare a raffica), dà una memoria breve del passato recente, e stabilizza smorzando l'attività a valanga. La fatica decade con lo stesso bit-shift ($\tfrac{7}{8}$) del potenziale.
 :::
 ::: {.eq .math}
 $$
@@ -113,6 +114,9 @@ $$
 \end{aligned}
 $$
 :::
+:::
+::: {.notes}
+Il LIF adattivo (Adaptive-LIF, ALIF) aggiunge una sola variabile: una fatica che alza la soglia a ogni spike. Un neurone che ha appena sparato diventa temporaneamente più difficile da eccitare; poi la fatica decade e la soglia torna verso il valore base. Questa piccola aggiunta fa tre cose. Regola la sparsità: senza adattamento un neurone eccitato spara a raffica, con l'ALIF si auto-limita. Dà una memoria breve: la soglia porta traccia del passato recente. E stabilizza: smorza l'attività a valanga che rende instabile l'addestramento delle SNN. La fatica decade anch'essa con lo stesso bit-shift (7/8) del potenziale, quindi non introduce nuovi moltiplicatori sull'hardware.
 :::
 :::
 
@@ -126,16 +130,20 @@ Parte 1 · Soglia adattiva ALIF <span>champion:&nbsp;<span class="chip" style="b
 ::: {.threecol}
 ::: {.card}
 ### Rate coding
-L'informazione sta nella [frequenza]{.accent} media di spike su una finestra: più intenso lo stimolo, più fitti gli impulsi. È il codice più robusto al rumore e il più semplice da leggere (basta contare), ma il più lento — servono molti spike per stimare bene una frequenza, e ogni spike costa energia.
+Informazione nella [frequenza]{.accent} media di spike: più intenso lo stimolo, più fitti gli impulsi. Robusto e semplice da leggere, ma il più lento — servono molti spike, e ogni spike costa.
 :::
 ::: {.card}
 ### Temporal / TTFS
-Conta il [tempo del primo spike]{.accent} (Time-To-First-Spike): quanto prima scatta un neurone, tanto più forte è lo stimolo. Estremamente parsimonioso — un solo spike porta l'informazione — e a bassa latenza, ma fragile rispetto al rumore temporale e alla precisione del clock.
+Conta il [tempo del primo spike]{.accent}: prima scatta, più forte è lo stimolo. Parsimonioso (un solo spike) e a bassa latenza, ma fragile al rumore temporale.
 :::
 ::: {.card}
 ### Population / burst
-L'informazione è [distribuita]{.accent} su un gruppo di neuroni (population) o portata dalla struttura fine di una raffica (burst). Ridondante e resistente al guasto del singolo neurone, con alta capacità di rappresentazione, al prezzo di più neuroni attivi e quindi più energia.
+Informazione [distribuita]{.accent} su un gruppo di neuroni o nella struttura di una raffica. Ridondante e resistente al guasto, ma con più neuroni attivi e quindi più energia.
 :::
+:::
+
+::: {.notes}
+Tre schemi di codifica degli spike. Rate coding: l'informazione sta nella frequenza media di spike su una finestra temporale — più intenso lo stimolo, più fitti gli impulsi. È il codice più robusto al rumore e il più semplice da leggere (basta contare), ma il più lento, perché servono molti spike per stimare bene una frequenza e ogni spike costa energia. Temporal / TTFS (Time-To-First-Spike): conta il tempo del primo spike — quanto prima scatta un neurone, tanto più forte è lo stimolo. Estremamente parsimonioso (un solo spike porta l'informazione) e a bassa latenza, ma fragile rispetto al rumore temporale e alla precisione del clock. Population / burst: l'informazione è distribuita su un gruppo di neuroni (population) o portata dalla struttura fine di una raffica (burst). Ridondante e resistente al guasto del singolo neurone, con alta capacità di rappresentazione, al prezzo di più neuroni attivi e quindi più energia.
 :::
 
 ::: {.footerbar}
@@ -146,7 +154,7 @@ Parte 1 · Codifica neurale [+] <span>champion:&nbsp;<span class="chip" style="b
 ## Il backprop classico non basta: lo spike è un gradino, la sua derivata è quasi ovunque zero {.act1}
 
 ::: {.explain}
-Addestrare una rete significa spingere i pesi lungo il gradiente della perdita. Ma lo spike è la funzione gradino di Heaviside $S = H(V - \theta)$: la sua [derivata]{.accent} è zero ovunque tranne un punto, dove è infinita. Il gradiente che dovrebbe attraversare il neurone si annulla — il segnale di apprendimento non passa. A questo si sommano due difficoltà proprie del regime temporale, riassunte qui sotto.
+Addestrare significa spingere i pesi lungo il gradiente della perdita. Ma lo spike è un gradino di Heaviside: la sua [derivata]{.accent} è zero ovunque tranne un punto. Il gradiente che dovrebbe attraversare il neurone si annulla — il segnale di apprendimento non passa. A ciò si sommano due difficoltà del regime temporale, qui sotto.
 :::
 
 ::: {.eq .math}
@@ -173,6 +181,10 @@ Il backprop richiede pesi condivisi e segnali globali all'indietro — un cervel
 :::
 :::
 
+::: {.notes}
+Addestrare una rete significa spingere i pesi lungo il gradiente della perdita. Ma lo spike è la funzione gradino di Heaviside S = H(V − θ): la sua derivata è la delta di Dirac — zero ovunque tranne un punto, dove è infinita. Il gradiente che dovrebbe attraversare il neurone si annulla e il segnale di apprendimento non passa. A questo si sommano due difficoltà proprie del regime temporale. A · Non-differenziabilità: il gradino ha gradiente nullo, quindi il backprop muore al primo neurone spiking; la soluzione è il gradiente surrogato (forward binario, backward con una campana liscia che finge una derivata utilizzabile). B · Credit assignment temporale: uno spike ora dipende da input di molti passi prima, quindi il gradiente va propagato indietro nel tempo con BPTT (tempo srotolato) oppure EventProp (adjoint esatto sugli eventi). C · Implausibilità biologica: il backprop richiede pesi condivisi e segnali globali all'indietro, che un cervello non ha; la soluzione sono regole locali come lo STDP, che aggiornano ogni sinapsi con la sola informazione dei suoi due neuroni.
+:::
+
 ::: {.footerbar}
 Parte 1 · Perché il backprop non basta <span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
 :::
@@ -186,9 +198,7 @@ Parte 1 · Perché il backprop non basta <span>champion:&nbsp;<span class="chip"
 :::
 ::: {.side}
 ::: {.explain}
-Due famiglie risolvono il problema del gradiente per via [supervisionata]{.accent}, propagando l'errore all'indietro nel tempo. Il gradiente surrogato con BPTT srotola la rete tick per tick e sostituisce la derivata del gradino con una campana liscia: robusto e diffuso, ma con costo di memoria che cresce col numero di passi. EventProp calcola invece il gradiente *esatto* propagando una variabile aggiunta (adjoint) che salta solo agli istanti di spike: memoria proporzionale al numero di spike, non alla durata.
-
-Accanto a queste, una terza via — biologica e locale — descritta a fianco.
+Due famiglie risolvono il gradiente per via [supervisionata]{.accent}. Il surrogato con BPTT srotola la rete tick per tick e sostituisce la derivata del gradino con una campana liscia: robusto, ma con memoria che cresce coi passi. EventProp calcola il gradiente *esatto* con una variabile aggiunta (adjoint) che salta solo agli spike: memoria proporzionale agli spike, non alla durata. La terza via — biologica e locale — è descritta sotto.
 :::
 ::: {.eq .math}
 $$
@@ -203,7 +213,11 @@ $$
 
 ::: {.card}
 ### STDP — apprendimento biologico locale (non supervisionato)
-La Spike-Timing-Dependent Plasticity è la regola con cui i neuroni biologici imparano: [«chi scatta insieme si lega»]{.accent}. Se il neurone presinaptico spara appena prima del postsinaptico, la sinapsi si rafforza; se l'ordine è inverso, si indebolisce. Nessun errore globale, nessun bersaglio esterno: ogni sinapsi si aggiorna con la sola informazione temporale dei suoi due neuroni. È plausibile sul piano biologico e naturalmente adatta all'hardware locale — una famiglia di metodi diversa, non migliore o peggiore, con obiettivi diversi.
+La Spike-Timing-Dependent Plasticity è la regola biologica: [«chi scatta insieme si lega»]{.accent} — presinaptico prima del postsinaptico rafforza, ordine inverso indebolisce. Nessun errore globale: ogni sinapsi usa solo la temporizzazione dei suoi due neuroni. Famiglia diversa, con obiettivi diversi.
+:::
+
+::: {.notes}
+Due famiglie risolvono il problema del gradiente per via supervisionata, propagando l'errore all'indietro nel tempo. Il gradiente surrogato con BPTT srotola la rete tick per tick e sostituisce la derivata del gradino con una campana liscia: robusto e diffuso, ma con costo di memoria che cresce col numero di passi. EventProp calcola invece il gradiente esatto propagando una variabile aggiunta (adjoint) che salta solo agli istanti di spike: memoria proporzionale al numero di spike, non alla durata. Accanto a queste c'è una terza via, biologica e locale: lo STDP (Spike-Timing-Dependent Plasticity), la regola con cui i neuroni biologici imparano — «chi scatta insieme si lega». Se il neurone presinaptico spara appena prima del postsinaptico, la sinapsi si rafforza; se l'ordine è inverso, si indebolisce. Nessun errore globale, nessun bersaglio esterno: ogni sinapsi si aggiorna con la sola informazione temporale dei suoi due neuroni. È plausibile sul piano biologico e naturalmente adatta all'hardware locale — una famiglia di metodi diversa, non migliore o peggiore, con obiettivi diversi.
 :::
 
 ::: {.footerbar}

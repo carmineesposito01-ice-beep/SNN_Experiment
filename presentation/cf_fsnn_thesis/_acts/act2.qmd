@@ -50,12 +50,13 @@ Parte 2 · La nostra rete
 :::
 ::: {.side}
 ::: {.explain}
-Tre tipi di strato. **INPUT** (4): i segnali V2X normalizzati entrano come [corrente continua]{.accent}
-$I = W x$, non come treni di spike. **HIDDEN** (32): neuroni ALIF *spiking* con loop ricorrente a basso
-rango — l'unico strato che spara. **OUTPUT** (5): integratori a perdita (LI) *continui*, senza soglia; il
-readout è la tensione di membrana. Poi un decode σ mappa ogni tensione nel suo range fisico. Ogni passo
-fisico Δt = 0.1 s è elaborato con **10 tick interni** a input costante (tempo di assestamento, non nuova
-informazione): 50 passi → 500 tick.
+Tre tipi di strato. **INPUT** (4): i segnali V2X entrano come [corrente continua]{.accent} $I = Wx$, non
+come spike. **HIDDEN** (32): neuroni ALIF *spiking* — l'unico strato che spara. **OUTPUT** (5):
+integratori a perdita continui, senza soglia. Ogni passo fisico Δt = 0.1 s gira su **10 tick interni**:
+50 passi → 500 tick.
+:::
+::: {.notes}
+Dettaglio esteso sui tre strati. INPUT (4): i segnali V2X normalizzati entrano come corrente continua I = W x, non come treni di spike. HIDDEN (32): neuroni ALIF spiking con loop ricorrente a basso rango — è l'unico strato che effettivamente spara. OUTPUT (5): integratori a perdita (LI) continui, senza soglia; il readout è direttamente la tensione di membrana. Dopo l'output un decode σ mappa ogni tensione nel suo range fisico. Ogni passo fisico Δt = 0.1 s è elaborato con 10 tick interni a input costante: quei tick sono tempo di assestamento della dinamica, non nuova informazione. Quindi 50 passi fisici corrispondono a 500 tick interni.
 :::
 ::: {.eq}
 fc &nbsp;&nbsp;&nbsp;(input→hidden) &nbsp;32×4 &nbsp;→ 128<br>
@@ -87,11 +88,12 @@ Parte 2 · Architettura
 :::
 ::: {.side}
 ::: {.explain}
-Per ogni tick, il neurone [adaptive-LIF]{.accent} integra la corrente, perde carica per leak, spara se
-supera la soglia effettiva, e *affatica* la propria soglia a ogni spike. `base_threshold` init 1.5,
-`thresh_jump` init 0.5: sono **apprendibili, per-neurone (32 + 32), NON quantizzati po2**. Il reset è
-sottrattivo (nessun azzeramento forzato, nessun divisore) — hardware-friendly. Il canale-soglia è
-l'unica via con cui base e jump imparano, quindi il reset non va staccato dal grafo.
+A ogni tick il neurone [adaptive-LIF]{.accent} integra la corrente, perde carica per leak, spara sopra la
+soglia effettiva e *affatica* quella soglia a ogni spike. `base_threshold` (1.5) e `thresh_jump` (0.5)
+sono **apprendibili, per-neurone (32 + 32)**. Il reset è sottrattivo, hardware-friendly.
+:::
+::: {.notes}
+Approfondimento sul neurone e sul perché delle scelte. base_threshold init 1.5 e thresh_jump init 0.5 sono parametri apprendibili, per-neurone (32 + 32 valori), e NON sono quantizzati po2 — restano fp. Il reset sottrattivo significa nessun azzeramento forzato della membrana e nessun divisore, quindi resta amichevole verso l'hardware FPGA. Punto importante sul training: il canale-soglia è l'unica via attraverso cui base e jump ricevono gradiente e imparano, perciò il termine di reset NON va staccato dal grafo di autograd, altrimenti quei due parametri smettono di aggiornarsi.
 :::
 ::: {.eq .math}
 $$ V \leftarrow V - \tfrac{V}{8} + I_\text{in} + I_\text{rec} $$
@@ -121,12 +123,12 @@ Parte 2 · Il neurone ALIF
 :::
 ::: {.side}
 ::: {.explain}
-Invece di una matrice ricorrente piena 32×32 (1024 pesi), fattorizziamo $W_\text{rec} = U V$ con U 32×8 e
-V 8×32: **512 pesi contro 1024**, metà memoria. Il feedback dei 32 neuroni è forzato attraverso un
-[bottleneck a 8 modi]{.accent}: si proietta lo stato su 8 modi (V), poi lo si rilegge (U). È una
-*capacità usata come regolarizzatore* — vieta gli accoppiamenti ricchi e difficili da stabilizzare che
-fanno esplodere l'addestramento SNN. Calcolo come due matmul, senza mai formare U·V. È qui che vive il
-raggio spettrale ρ(U·V).
+Invece di una matrice ricorrente piena 32×32 (1024 pesi), fattorizziamo $W_\text{rec} = U V$: **512 pesi
+contro 1024**, metà memoria. Il feedback passa per un [bottleneck a 8 modi]{.accent} — una *capacità usata
+come regolarizzatore* che vieta gli accoppiamenti ricchi e instabili che fanno esplodere il training SNN.
+:::
+::: {.notes}
+Dettaglio sulla fattorizzazione. U è 32×8 e V è 8×32, quindi il feedback dei 32 neuroni è forzato attraverso un collo di bottiglia a soli 8 modi: prima si proietta lo stato sui 8 modi tramite V, poi lo si rilegge tramite U. Il calcolo avviene come due matmul in sequenza, senza mai formare esplicitamente il prodotto U·V (che vanificherebbe il risparmio). È esattamente qui, sul prodotto U·V, che vive il raggio spettrale ρ(U·V) discusso nella slide successiva.
 :::
 ::: {.eq .math}
 $$ W_\text{rec} \approx U\,V,\quad U\in\mathbb{R}^{32\times8},\ V\in\mathbb{R}^{8\times32} $$
@@ -155,12 +157,12 @@ Parte 2 · Ricorrenza low-rank
 :::
 ::: {.side}
 ::: {.explain}
-Il [raggio spettrale]{.accent} misura se applicare ripetutamente la mappa ricorrente *amplifica*
-(ρ > 1, espansivo) o *smorza* (ρ < 1, contrattivo) lo stato tick-dopo-tick. Nel codice è misurato come
-norma spettrale σ_max (limite superiore) della ricorrenza quantizzata. Un vincolo soft (C11) penalizza
-solo il superamento del target. Doppio ruolo: **(1)** su FPGA il fixed-point resta limitato solo se
-contrattivo; **(2)** l'adjoint di EventProp propaga attraverso Rᵀ e diverge se ρ cresce — vincolare
-σ_max rende EventProp contrattivo per costruzione. Stabilità e addestrabilità dallo stesso termine.
+Il [raggio spettrale]{.accent} dice se la mappa ricorrente *amplifica* (ρ > 1) o *smorza* (ρ < 1) lo stato
+tick-dopo-tick. Un vincolo soft su σ_max serve due scopi con un solo termine: **(1)** su FPGA il
+fixed-point resta limitato solo se contrattivo; **(2)** l'adjoint di EventProp converge solo se ρ < 1.
+:::
+::: {.notes}
+Dettaglio tecnico. Nel codice ρ è misurato come norma spettrale σ_max, che è un limite superiore del raggio spettrale, calcolata sulla ricorrenza quantizzata. Il vincolo è soft (constraint C11): penalizza solo il superamento del target, non forza un valore esatto. Sul doppio ruolo: (1) in fixed-point su FPGA lo stato resta limitato solo se la mappa è contrattiva; (2) l'adjoint di EventProp propaga all'indietro attraverso Rᵀ e diverge se ρ cresce, quindi vincolare σ_max rende EventProp contrattivo per costruzione. Il messaggio chiave è che stabilità hardware e addestrabilità arrivano dallo stesso identico termine di loss.
 :::
 ::: {.eq .math}
 $$ \rho \triangleq \sigma_\text{max}\big(\text{po2}(U)\cdot\text{po2}(V)\big) $$
@@ -188,12 +190,13 @@ Parte 2 · Raggio spettrale
 :::
 ::: {.side}
 ::: {.explain}
-Il controllore fisico i cui 5 parametri la rete stima: un ACC sull'IIDM con blend CAH. La rete predice
-**5 dei 7** parametri; coolness $c=0.99$ e $\delta=4$ sono [fissi]{.accent}. Il gap desiderato $s^*$ è
-l'origine della sloppy identifiability: $a$ e $b$ entrano quasi solo via il prodotto $\sqrt{a\,b}$, quindi
-il *rapporto* $a/b$ è strutturalmente non osservabile — proprietà del problema, non della rete. Il floor
-$s_\text{safe} = \text{clamp(gap, 2.0)}$ è una scelta di controllo del gradiente (con 0.5 la grad-norm
-saliva a ~8000).
+Il controllore fisico di cui la rete stima **5 dei 7** parametri ($c=0.99$ e $\delta=4$ sono fissi): un
+ACC sull'IIDM con blend CAH. Il gap desiderato $s^*$ è l'origine della [sloppy identifiability]{.accent}:
+$a$ e $b$ entrano quasi solo via $\sqrt{a\,b}$, quindi il *rapporto* $a/b$ è strutturalmente non
+osservabile — proprietà del problema, non della rete.
+:::
+::: {.notes}
+Dettagli. La rete predice 5 dei 7 parametri; coolness c = 0.99 e δ = 4 sono tenuti fissi. Sulla sloppy identifiability: siccome a e b compaiono quasi solo attraverso il prodotto √(a·b) nel gap desiderato, il loro rapporto a/b è strutturalmente non osservabile dai dati — è un limite intrinseco del problema, non un difetto del modello. Sul floor: s_safe = clamp(gap, 2.0) è una scelta deliberata di controllo del gradiente; con un floor a 0.5 invece che a 2.0 la grad-norm saliva fino a circa 8000, quindi 2.0 tiene i gradienti in un range gestibile.
 :::
 ::: {.eq .math}
 $$ s^{*} = s_0 + \max\!\Big(0,\ vT + \frac{v\,\Delta v}{2\sqrt{a\,b}}\Big),\quad \Delta v = v - v_\text{lead} $$
@@ -221,13 +224,13 @@ Parte 2 · ACC-IIDM (1/2)
 :::
 ::: {.side}
 ::: {.explain}
-L'IIDM separa il regime di flusso libero ($z<1$) da quello di car-following ($z\ge1$), ciascuno diviso in
-$v\le v_0$ / $v>v_0$. Il CAH anticipa la frenata del leader ($a_l$ non è input: è ri-stimato da differenze
-finite filtrate di $v_\text{lead}$). Il blend è **99% ACC + 1% floor IIDM**; il tanh satura la correzione
-entro ±$b$. Clamp finale in $[-9,\,a]$.
+L'IIDM separa flusso libero ($z<1$) e car-following ($z\ge1$), ciascuno diviso in $v\le v_0$ / $v>v_0$. Il
+blend è **99% ACC + 1% floor IIDM**, con clamp finale in $[-9,\,a]$.
 [**Onestà:**]{.accent} il ramo di flusso libero da libro sarebbe $a_\text{free}(1 - z^{2a/a_\text{free}})$;
-il codice usa un [esponente fisso 2]{.accent}, $v_\text{free}(1-z^2)$ — semplificazione deliberata, non è
-textbook-exact.
+il codice usa un esponente fisso 2 — semplificazione deliberata.
+:::
+::: {.notes}
+Dettagli sui due regimi e sul blend. Ognuno dei due regimi (z<1 e z≥1) è ulteriormente diviso nei casi v≤v0 e v>v0, come mostrato nel sistema di equazioni. Il termine CAH (Constant-Acceleration Heuristic) anticipa la frenata del leader; da notare che l'accelerazione del leader a_l NON è un input, ma viene ri-stimata da differenze finite filtrate di v_lead. Il tanh nel blend satura la correzione entro ±b, evitando accelerazioni fuori scala. Sull'onestà tecnica: il ramo di flusso libero da libro di testo sarebbe a_free(1 − z^(2a/a_free)); il nostro codice usa invece l'esponente fisso 2, cioè v_free(1 − z²). È una semplificazione deliberata e non è textbook-exact — vale la pena dirlo esplicitamente.
 :::
 ::: {.eq .math}
 $$ a_\text{IIDM} = \begin{cases} z<1: & \begin{cases} v_\text{free}(1-z^2) & v\le v_0\\ v_\text{free} & v>v_0 \end{cases}\\[10pt] z\ge1: & \begin{cases} a(1-z^2) & v\le v_0\\ v_\text{free}+a(1-z^2) & v>v_0 \end{cases} \end{cases} $$
@@ -259,10 +262,12 @@ $$ \mathcal{L} = \lambda_\text{data}\mathcal{L}_\text{data} + \lambda_\text{phys
 :::
 ::: {.side}
 ::: {.explain}
-La rete non fitta i parametri direttamente (non osservabili): il loop chiude
-traiettoria → SNN → 5 param → ACC-IIDM → â → confronto con a osservata → loss → gradiente. Nota:
-[azzerare]{.accent} phys/ou/bc muove la validazione di poco → il PINN non è il collo di bottiglia; il
-plateau è architettura/gradiente.
+La rete non fitta i parametri direttamente (non osservabili): il loop chiude traiettoria → SNN → 5 param →
+ACC-IIDM → â → confronto con a osservata → loss → gradiente. Nota: [azzerare]{.accent} phys/ou/bc muove la
+validazione di poco.
+:::
+::: {.notes}
+Precisazione importante emersa dagli esperimenti di ablazione. Se azzeriamo i termini phys, OU e bc, la loss di validazione si muove di pochissimo: questo dimostra che il PINN e le sue penalità NON sono il collo di bottiglia del sistema. Il plateau di performance che osserviamo è attribuibile all'architettura e alla propagazione del gradiente, non alla formulazione della loss fisica. I cinque termini pesati (data 1.0, phys 0.1, OU 0.05, bc 1.0, sr 0.5) restano comunque utili per incoraggiare coerenza fisica e un tasso di spike sano attorno a 0.15.
 :::
 ::: {.eq}
 L_data (1.0) &nbsp;RMSE mascherato / N_valid<br>
@@ -292,11 +297,12 @@ Parte 2 · La loss PINN
 :::
 ::: {.side}
 ::: {.explain}
-I pesi sinaptici sono vincolati a [potenze di due]{.accent}: esponente in $[-4, 1]$, azzerati se
-$|w| < 2^{-5}$ (dead-band), **13 livelli** $\{\pm\tfrac1{16}\dots\pm2,\,0\}$. Su FPGA moltiplicare per
-$2^k$ è un bit-shift. Le operazioni round/clamp/mask non sono derivabili: lo **Straight-Through
-Estimator** risolve — forward col peso quantizzato, backward come identità, aggiornando il peso fp32
-grezzo. Stesso trucco del gradiente surrogato. Costo misurato sul plateau: solo ~0.2%.
+I pesi sono vincolati a [potenze di due]{.accent} (**13 livelli**), così su FPGA moltiplicare per $2^k$ è
+un bit-shift. Round/clamp/mask non sono derivabili: lo **Straight-Through Estimator** fa forward col peso
+quantizzato e backward come identità. Costo misurato sul plateau: solo ~0.2%.
+:::
+::: {.notes}
+Dettagli sulla quantizzazione. L'esponente delle potenze di due è vincolato in [-4, 1], e i pesi vengono azzerati se |w| < 2^-5 (dead-band): questo produce esattamente 13 livelli, {±1/16, ±1/8, ±1/4, ±1/2, ±1, ±2, 0}. Sullo Straight-Through Estimator: in forward si usa il peso quantizzato w_q, mentre in backward il gradiente passa come identità e aggiorna il peso fp32 grezzo sottostante — è lo stesso identico trucco usato per il gradiente surrogato dei neuroni spiking. Il costo di accuratezza di tutta questa quantizzazione, misurato al plateau, è solo circa lo 0.2%: praticamente gratis rispetto al guadagno hardware.
 :::
 ::: {.eq .math}
 $$ w_q = \text{sign}(w)\cdot 2^{\text{clamp}(\text{round}(\log_2|w|),\,-4,\,1)}\cdot\mathbb{1}[\,|w|>2^{-5}\,] $$
@@ -324,11 +330,12 @@ Parte 2 · po2 + STE
 :::
 ::: {.side}
 ::: {.explain}
-Perché [EventProp]{.accent} per noi: dà il gradiente *esatto* dell'SNN a spike, ed è contrattivo per
-costruzione grazie al vincolo spettrale — l'adjoint converge quando ρ < 1. Perché **NON STDP**: la STDP è
-non supervisionata e locale, non propaga «l'accelerazione è sbagliata di X» fino ai pesi → non risolve un
-problema di identificazione supervisionato, resta fuori scopo. Nota storica: la produzione è **BPTT +
-surrogate**; EventProp è lo *studio* in corso su questo branch.
+Perché [EventProp]{.accent}: dà il gradiente *esatto* dell'SNN a spike ed è contrattivo per costruzione
+(l'adjoint converge quando ρ < 1). Perché **NON STDP**: è non supervisionata e locale, non propaga
+«l'accelerazione è sbagliata di X» fino ai pesi → fuori scopo per un problema di identificazione.
+:::
+::: {.notes}
+Contesto e nota storica. EventProp fornisce il gradiente esatto della rete a spike con memoria O(numero di spike), ed è contrattivo per costruzione proprio grazie al vincolo spettrale della slide precedente: l'adjoint propaga all'indietro e converge quando ρ < 1. La STDP è scartata perché è una regola non supervisionata e locale: non ha modo di propagare un segnale di errore supervisionato del tipo «l'accelerazione predetta è sbagliata di X» fino ai pesi, quindi non risolve un problema di system identification supervisionato e resta fuori scopo. Nota storica importante: la pipeline di produzione usa BPTT + gradiente surrogato; EventProp è lo studio attualmente in corso su questo branch (EventProp_Study), non ancora la configurazione di produzione.
 :::
 ::: {.eq}
 EventProp &nbsp;→ gradiente esatto, memoria O(#spike)<br>
