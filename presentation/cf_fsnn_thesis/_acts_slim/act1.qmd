@@ -100,13 +100,9 @@ Parte 1 · Neurone LIF <span>champion:&nbsp;<span class="chip" style="background
 L'ALIF aggiunge una [fatica]{.accent} che alza la soglia a ogni spike, poi decade. Fa tre cose: regola la sparsità, dà una memoria breve del passato recente, stabilizza l'attività a valanga. Decade con lo stesso bit-shift ($\tfrac{7}{8}$) del potenziale.
 :::
 ::: {.eq .math}
-$$
-\begin{aligned}
-\text{soglia efficace:}\quad & \theta_{\text{eff}} = \theta_{\text{base}} + \max(0,\ \text{fatica})\\[4pt]
-\text{spike:}\quad & S = 1 \ \text{ se } \ V \ge \theta_{\text{eff}}\\[4pt]
-\text{la fatica sale allo spike:}\quad & \text{fatica} \leftarrow \tfrac{7}{8}\,\text{fatica} + S\cdot\Delta\theta
-\end{aligned}
-$$
+$$\theta_\text{eff} = \theta_\text{base} + \max(0,\ \text{fatica})$$
+$$S = 1 \ \text{se}\ V \ge \theta_\text{eff}$$
+$$\text{fatica} \leftarrow \tfrac{7}{8}\,\text{fatica} + S\cdot\Delta\theta$$
 :::
 :::
 ::: {.notes}

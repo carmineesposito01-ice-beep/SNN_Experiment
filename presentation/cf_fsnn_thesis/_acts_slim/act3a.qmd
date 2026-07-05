@@ -155,18 +155,18 @@ Parte 3A · osservabilità stratificata [+]
 ## Identificabilità sloppy: rango pieno ma condizionamento enorme {.act3}
 
 ::: {.twocol}
-::: {.vis}
-![](figures/fim.png)
+::: {.vis style="background:#FFFFFF"}
+![](assets/img/sloppy_identifiability.png)
 :::
 ::: {.side}
 ::: {.explain}
-La Fisher Information Matrix ha [rango pieno 5/5]{.accent}, ma condizionamento ~1.6·10⁹: ~29 combinazioni
-di parametri sono equifinali. Causa strutturale: `a` e `b` entrano nel gap quasi solo via √(a·b), quindi il
-rapporto a/b non è osservabile.
+Nel piano (a, b) la loss ha una [valle piatta]{.accent} lungo √(a·b)=cost: la rete impara bene il *prodotto*
+ma non sa separare a da b, e scivola sul punto sbagliato (stessa √(a·b) del vero). La FIM ha rango pieno 5/5
+ma condizionamento ~1.6·10⁹ → ~29 parametrizzazioni equifinali.
 :::
 ::: {.eq .math}
 $$s^{*}=s_0+\max\!\Big(0,\,vT+\tfrac{v\,\Delta v}{2\sqrt{a\,b}}\Big)$$
-rango 5/5 · cond ≈ 1.6·10⁹ · ~29 equifinali
+rango 5/5 · cond ≈ 1.6·10⁹ · ~29 equifinali (s0 meno / T più ident.)
 a/b non osservabile · NRMSE bassa ≠ guida sicura
 :::
 :::
@@ -286,19 +286,22 @@ Parte 3A · robustezza fisica (plant dry/wet/ice) [+]
 
 ## Nel traffico: micro → meso → macro, l'onda stop-and-go si smorza {.act3}
 
-::: {.twocol}
+::: {.threecol}
 ::: {.vis}
 ![](figures/string.png)
 :::
 ::: {.vis style="background:#FFFFFF"}
 ![](assets/results/meso_spacetime.png)
 :::
+::: {.vis}
+![](figures/macro_fd.png)
+:::
 :::
 
 ::: {.explain}
-Salendo di scala il plotone resta stabile: il gain testa→coda è [< 1]{.accent}, la perturbazione si attenua
-e lo space-time su 12 veicoli mostra l'onda stop-and-go che si smorza. Eccezione `Raffaello`: gonfiando `v0`
-distorce il diagramma fondamentale a livello macro.
+Salendo di scala il plotone resta stabile: gain testa→coda [< 1]{.accent} (micro), l'onda stop-and-go si
+smorza (meso), il diagramma fondamentale segue l'oracolo (macro). Eccezione `Raffaello`: gonfia `v0` (≈107
+vs 74 km/h) e sposta in alto la curva flusso-densità.
 :::
 
 ::: {.notes}
