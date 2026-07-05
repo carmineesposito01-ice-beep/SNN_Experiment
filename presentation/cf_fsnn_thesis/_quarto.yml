@@ -6,7 +6,7 @@ format:
     theme: ../_shared/theme/cf_dark.scss
     slide-number: c/t
     navigation-mode: linear
-    html-math-method: mathjax
+    html-math-method: katex
     fig-align: center
     embed-resources: false
 

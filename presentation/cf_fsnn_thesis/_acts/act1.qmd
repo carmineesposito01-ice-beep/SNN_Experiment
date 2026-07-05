@@ -129,15 +129,15 @@ Parte 1 · Soglia adattiva ALIF <span>champion:&nbsp;<span class="chip" style="b
 
 ::: {.threecol}
 ::: {.card}
-### Rate coding
+[Rate coding]{.card-title}
 Informazione nella [frequenza]{.accent} media di spike: più intenso lo stimolo, più fitti gli impulsi. Robusto e semplice da leggere, ma il più lento — servono molti spike, e ogni spike costa.
 :::
 ::: {.card}
-### Temporal / TTFS
+[Temporal / TTFS]{.card-title}
 Conta il [tempo del primo spike]{.accent}: prima scatta, più forte è lo stimolo. Parsimonioso (un solo spike) e a bassa latenza, ma fragile al rumore temporale.
 :::
 ::: {.card}
-### Population / burst
+[Population / burst]{.card-title}
 Informazione [distribuita]{.accent} su un gruppo di neuroni o nella struttura di una raffica. Ridondante e resistente al guasto, ma con più neuroni attivi e quindi più energia.
 :::
 :::
@@ -165,17 +165,17 @@ $$
 
 ::: {.threecol}
 ::: {.card}
-### A · Non-differenziabilità
+[A · Non-differenziabilità]{.card-title}
 Il gradino ha gradiente nullo, quindi il backprop muore al primo neurone spiking.
 **Soluzione:** il [gradiente surrogato]{.accent} — forward binario, backward con una campana liscia che finge una derivata utilizzabile.
 :::
 ::: {.card}
-### B · Credit assignment temporale
+[B · Credit assignment temporale]{.card-title}
 Uno spike ora dipende da input di molti passi prima: a chi va il "merito"? Il gradiente va propagato indietro nel tempo.
 **Soluzione:** [BPTT]{.accent} (backprop nel tempo srotolato) oppure EventProp (adjoint esatto sugli eventi).
 :::
 ::: {.card}
-### C · Implausibilità biologica
+[C · Implausibilità biologica]{.card-title}
 Il backprop richiede pesi condivisi e segnali globali all'indietro — un cervello non li ha.
 **Soluzione:** regole [locali]{.accent} come lo STDP, che aggiornano ogni sinapsi con la sola informazione dei suoi due neuroni.
 :::
@@ -212,7 +212,7 @@ $$
 :::
 
 ::: {.card}
-### STDP — apprendimento biologico locale (non supervisionato)
+[STDP — apprendimento biologico locale (non supervisionato)]{.card-title}
 La Spike-Timing-Dependent Plasticity è la regola biologica: [«chi scatta insieme si lega»]{.accent} — presinaptico prima del postsinaptico rafforza, ordine inverso indebolisce. Nessun errore globale: ogni sinapsi usa solo la temporizzazione dei suoi due neuroni. Famiglia diversa, con obiettivi diversi.
 :::
 

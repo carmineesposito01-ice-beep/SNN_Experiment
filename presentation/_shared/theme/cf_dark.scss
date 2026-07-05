@@ -4,7 +4,7 @@ $body-color: #DDE2E8;
 $link-color: #56B4E9;
 $presentation-heading-color: #EAF1F7;
 $presentation-heading-font-weight: 600;
-$font-size-root: 24px;
+$font-size-root: 22px;
 
 /*-- scss:rules --*/
 // Per-act accent via CSS variable; set with a slide class ({.act1} / {.act2} / {.act3}).
@@ -18,8 +18,8 @@ $font-size-root: 24px;
 // ---- Header band (h2-based) ----
 .reveal h2 {
   background: #232B34; border-bottom: 2px solid var(--accent);
-  padding: 14px 22px; margin: 0 0 22px 0; border-radius: 6px 6px 0 0;
-  font-size: 1.02em; line-height: 1.25; color: #EAF1F7; font-weight: 600;
+  padding: 10px 20px; margin: 0 0 15px 0; border-radius: 6px 6px 0 0;
+  font-size: 1.0em; line-height: 1.22; color: #EAF1F7; font-weight: 600;
   display: flex; align-items: center; justify-content: space-between; gap: 16px;
 }
 .reveal section.act2 h2 { background: #212E27; }
@@ -39,29 +39,34 @@ $font-size-root: 24px;
   flex: 0 0 55%; background: #15181D; border: 1px solid #333B45; border-radius: 9px;
   padding: 8px; display: flex; align-items: center; justify-content: center; position: relative;
 }
-.reveal .twocol .vis img { max-height: 52vh; max-width: 100%; width: auto; margin: 0; }
-.reveal .twocol .side { flex: 0 0 45%; display: flex; flex-direction: column; gap: 14px; justify-content: flex-start; min-width: 0; }
+.reveal .twocol .vis img { max-height: 46vh; max-width: 100%; width: auto; margin: 0; }
+.reveal .twocol .side { flex: 0 0 45%; display: flex; flex-direction: column; gap: 10px; justify-content: flex-start; min-width: 0; }
 
 // three-column variant for dense comparison slides
 .reveal .threecol { display: flex; gap: 18px; align-items: stretch; }
 .reveal .threecol > * { flex: 1 1 0; min-width: 0; }
 
-.reveal .explain { font-size: 0.72em; line-height: 1.5; color: $body-color; }
+.reveal .explain { font-size: 0.72em; line-height: 1.42; color: $body-color; }
 .reveal .explain .accent { color: var(--accent); font-weight: 500; }
 .reveal .accent { color: var(--accent); font-weight: 500; }
 
 // ---- Equation / legend panel ----
 .reveal .eq {
   background: #15181D; border: 1px solid #333B45; border-radius: 9px;
-  padding: 12px 15px; font-family: ui-monospace, 'Courier New', monospace;
-  font-size: 0.58em; line-height: 1.85; color: #C7D0DA;
+  padding: 9px 14px; font-family: ui-monospace, 'Courier New', monospace;
+  font-size: 0.58em; line-height: 1.6; color: #C7D0DA;
 }
-.reveal .eq.math { font-family: inherit; font-size: 0.72em; }
+.reveal .eq.math { font-family: inherit; font-size: 0.66em; }
 
 // ---- concept card (for grids) ----
 .reveal .card {
-  background: #15181D; border: 1px solid #333B45; border-radius: 9px; padding: 12px 14px;
-  font-size: 0.66em; line-height: 1.45;
+  background: #15181D; border: 1px solid #333B45; border-radius: 9px; padding: 9px 12px;
+  font-size: 0.62em; line-height: 1.36;
+}
+// card title — a styled span, NOT an ATX header (### would create an unsupported
+// 3rd-level vertical sub-slide and break linear navigation).
+.reveal .card .card-title {
+  display: block; font-weight: 700; font-size: 1.1em; margin-bottom: 5px; color: #E8EDF2;
 }
 
 // ---- "animato nel deck" pill ----
@@ -72,8 +77,8 @@ $font-size-root: 24px;
 
 // ---- Footer strip ----
 .reveal .footerbar {
-  margin-top: 18px; display: flex; justify-content: space-between; align-items: center;
-  font-size: 0.5em; color: #8A93A0; border-top: 1px solid #2C333C; padding-top: 8px;
+  margin-top: 10px; display: flex; justify-content: space-between; align-items: center;
+  font-size: 0.5em; color: #8A93A0; border-top: 1px solid #2C333C; padding-top: 5px;
 }
 .reveal .chip { display: inline-block; width: 11px; height: 11px; border-radius: 50%; margin: 0 2px; vertical-align: middle; }
 
