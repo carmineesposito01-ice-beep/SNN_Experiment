@@ -182,15 +182,16 @@ Parte 2 · Raggio spettrale
 ::: {.side}
 ::: {.explain}
 Il controllore fisico di cui la rete stima **5 dei 7** parametri ($c=0.99$, $\delta=4$ fissi). Il gap $s^*$
-è l'origine della [sloppy identifiability]{.accent}: $a,b$ entrano quasi solo via $\sqrt{a\,b}$, quindi il
-*rapporto* $a/b$ è strutturalmente non osservabile — proprietà del problema, non della rete.
+è l'origine della [sloppy identifiability]{.accent}: $a,b$ entrano solo via $\sqrt{a\,b}$, quindi il
+*rapporto* $a/b$ è strutturalmente non osservabile.
 :::
 ::: {.notes}
 Dettagli. La rete predice 5 dei 7 parametri; coolness c = 0.99 e δ = 4 sono tenuti fissi. Sulla sloppy identifiability: siccome a e b compaiono quasi solo attraverso il prodotto √(a·b) nel gap desiderato, il loro rapporto a/b è strutturalmente non osservabile dai dati — è un limite intrinseco del problema, non un difetto del modello. Sul floor: s_safe = clamp(gap, 2.0) è una scelta deliberata di controllo del gradiente; con un floor a 0.5 invece che a 2.0 la grad-norm saliva fino a circa 8000, quindi 2.0 tiene i gradienti in un range gestibile.
 :::
 ::: {.eq .math}
 $$ s^{*} = s_0 + \max\!\Big(0,\ vT + \frac{v\,\Delta v}{2\sqrt{a\,b}}\Big),\quad \Delta v = v - v_\text{lead} $$
-$$ s_\text{safe} = \text{clamp}(\text{gap},\ \min = 2.0),\qquad z = \frac{s^{*}}{s_\text{safe}} $$
+$$ s_\text{safe} = \text{clamp}(\text{gap},\ \min = 2.0),\qquad z = \frac{s^{*}}{s_\text{safe}}\ (\le 20) $$
+$$ v_\text{free} = a\Big(1 - \big(\tfrac{v}{v_0}\big)^{4}\Big) $$
 :::
 :::
 :::
