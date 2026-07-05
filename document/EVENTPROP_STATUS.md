@@ -7,10 +7,12 @@ le pratiche, come continuare. **MAPPA DEI DOCUMENTI** (leggerli in quest'ordine 
   `FPGA_REPORT.md/.pdf` (il profilo HARDWARE Fase A pre-silicio, 45 figure/10 sezioni).
 - **Fasi future (post-FPGA)**: `POST_FPGA_ROADMAP.md` (① simulatore · ② HDL · ③ FPGA-in-the-Loop — decise) +
   `SIMULATOR_DESIGN.md` (design MVP v1 del simulatore ①, APPROVATO, non implementato).
-- **Presentazione (2026-07-04)**: `PRESENTATION_DESIGN.md` (design 3 atti SNN/rete/risultati, APPROVATO) +
-  `PRESENTATION_PLAN.md` (piano di build) → **deck Quarto/reveal.js IMPLEMENTATO** in `presentation/cf_fsnn_thesis/`
-  (28 slide core / 42 full; figure rigenerate dai CSV via `figures.py`, 2 GIF hero; `quarto render` builda,
-  `_output/deck_*_standalone.html` + `deck_full.pdf`). Componenti riusabili in `presentation/_shared/`.
+- **Presentazione — MILESTONE COMPLETA (2026-07-05)**: runbook in **`PRESENTATION_MILESTONE.md`** (leggere quello).
+  Deck **scuro** Quarto/reveal.js in `presentation/cf_fsnn_thesis/`, **2 versioni**: `deck_slim.html` (⭐ da presentare,
+  entra a zoom normale) e `deck_reduced/full.html` (denso esaustivo). 16 figure dati (`figs_*.py`) + 12 GIF
+  (`scripts/viz|manim/`), tema in `_shared/`. Verificato con Playwright (nav/overflow/eq-spill/KaTeX/404 puliti);
+  audit adversariale vs trio-v3 → 4 errori fattuali corretti. Design/piano storici: `PRESENTATION_DESIGN.md` +
+  `PRESENTATION_PLAN.md`. **Know-how riusabile → skill `/create-presentation`** (`~/.claude/skills/`).
 - **Design/framework FPGA**: `FPGA_EVALUATE_DESIGN.md` + `FPGA_EVALUATION_FRAMEWORK.md`. **Fisica/glossario**:
   `GLOSSARY.md`. **Upgrade evaluate + studio combinato**: `EVALUATE_UPGRADE.md`, `results/EventProp_Study/combined/INDEX.md`.
 - **Come ri-allineare i documenti e ripartire in modo deterministico**: `RESUME_PROCEDURE.md`.
