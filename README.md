@@ -5,6 +5,7 @@ from V2X (V2V/V2I) signals, targeting deployment on PYNQ-Z1 FPGA.
 
 > 🚀 **Per riprendere a lavorarci dopo un break**: leggi `document/SESSION_RESUME.md` (5 min).
 > 📚 Documenti di navigazione: `SESSION_RESUME.md`, `GLOSSARY.md`, `WORKFLOW.md`, `TIMELINE.md`, `P_S.md`.
+> 🎤 **Presentazione** (aggiornamento lavori — SNN + PINN + EventProp): `presentation/cf_fsnn_thesis/`, render slim in `_output/deck_slim.html` (42 slide, tema scuro).
 
 ## Architecture
 
