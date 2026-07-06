@@ -34,3 +34,42 @@ def test_unknown_verb_raises():
     inj.enqueue(tick=0, verb="teleport")
     with pytest.raises(ValueError):
         inj.tick(0, 20.0)
+
+
+# --- integration with SimStepper (Task 3) ---
+import numpy as np                                          # noqa: E402
+from utils.champion_io import load_champion                 # noqa: E402
+from utils.closed_loop_eval import simulate                 # noqa: E402
+from sim.backend import SoftwareBackend                     # noqa: E402
+from sim.stepper import SimStepper                          # noqa: E402
+
+CHAMP = os.path.join(REPO, "champions", "R33_C2_A1_T12_fix", "best_model.pt")
+
+
+def _scn():
+    return np.array([30.0, 1.5, 2.0, 1.5, 1.5]), np.full(60, 20.0), 25.0, 20.0
+
+
+def test_injector_none_is_bit_identical_to_simulate():
+    pg, vl, s0, v0 = _scn()
+    ref = simulate(load_champion(CHAMP).model, pg, vl, s0, v0)
+    got = SimStepper(SoftwareBackend(load_champion(CHAMP).model), pg, vl, s0, v0,
+                     injector=None).run()
+    for k in ("s", "v", "vl", "dv", "a_ego", "params"):
+        np.testing.assert_array_equal(got[k], ref[k])
+
+
+def test_brake_leader_changes_trajectory_deterministically():
+    pg, vl, s0, v0 = _scn()
+
+    def run_once():
+        inj = EventInjector()
+        inj.enqueue(tick=20, verb="brake_leader", target_v=5.0, duration=10)
+        return SimStepper(SoftwareBackend(load_champion(CHAMP).model), pg, vl, s0, v0,
+                          injector=inj).run()
+
+    a, b = run_once(), run_once()
+    baseline = SimStepper(SoftwareBackend(load_champion(CHAMP).model), pg, vl, s0, v0).run()
+    for k in ("vl", "v", "s"):
+        np.testing.assert_array_equal(a[k], b[k])          # reproducible
+    assert not np.array_equal(a["vl"], baseline["vl"])      # the brake actually changed the leader

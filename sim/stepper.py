@@ -6,6 +6,8 @@ the result is bit-identical (tests/test_sim_stepper.py). The UI loop calls step(
 per QTimer tick; run() is a batch convenience used by the golden test.
 
 backend=None reproduces simulate()'s oracle path (constant params_gt).
+injector=None means the leader follows v_leader exactly (golden path); an
+EventInjector can override the leader velocity live (e.g. brake_leader).
 """
 import numpy as np
 import torch
@@ -19,8 +21,9 @@ from .state import SimState, StepResult
 
 class SimStepper:
     def __init__(self, backend, params_gt, v_leader, s_init, v_init,
-                 cut_in=None, plant=None, channel=None, device="cpu"):
+                 cut_in=None, plant=None, channel=None, injector=None, device="cpu"):
         self.backend = backend                     # None -> oracle
+        self.injector = injector                   # None -> leader follows v_leader exactly
         self.params_gt = np.asarray(params_gt, dtype=np.float64)
         self.v_leader = np.asarray(v_leader, dtype=np.float64)
         self.s_init = float(s_init)
@@ -33,6 +36,13 @@ class SimStepper:
         self.alpha_al = float(np.exp(-DT / ACC_AL_TAU))
         self.pg = torch.tensor(self.params_gt, dtype=torch.float32).view(1, 5)
         self.reset()
+
+    @classmethod
+    def from_scenario(cls, backend, scenario, plant=None, channel=None,
+                      injector=None, device="cpu"):
+        return cls(backend, scenario.params_gt, scenario.v_leader,
+                   scenario.s_init, scenario.v_init, cut_in=scenario.cut_in,
+                   plant=plant, channel=channel, injector=injector, device=device)
 
     def reset(self) -> None:
         self.st = SimState(t=0, s=self.s_init, v=self.v_init,
@@ -48,7 +58,8 @@ class SimStepper:
         t = st.t
         if self.cut_in is not None and t == int(self.cut_in[0]):
             st.s = float(self.cut_in[1])
-        vl = float(self.v_leader[t])
+        base_vl = float(self.v_leader[t])
+        vl = self.injector.tick(t, base_vl) if self.injector is not None else base_vl
         dv = st.v - vl
         if self.channel is not None:
             s_obs, vl_obs, _age = _channel_obs(st.s, vl, st.ch_state, self.channel,
@@ -74,7 +85,7 @@ class SimStepper:
 
         # Peek the ballistic update so this step's result carries the collided flag.
         v_new = max(0.0, st.v + a_ego * DT)
-        s_new = st.s + (vl - v_new) * DT           # physics uses TRUE vl (channel degrades only perception)
+        s_new = st.s + (vl - v_new) * DT           # physics uses TRUE (possibly braked) vl
         collided = s_new <= 0.0
 
         res = StepResult(t=t, s=st.s, v=st.v, vl=vl, dv=dv, a_ego=a_ego,
