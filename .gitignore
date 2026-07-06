@@ -58,3 +58,6 @@ results/**/*.pth
 Arch_Tested/**/checkpoints/
 Arch_Tested/**/checkpoint/best_model.pt
 Arch_Tested/**/__pycache__/
+
+# Parallel-track worktrees (Simulator / Simulink_Importer)
+.worktrees/
