@@ -1,4 +1,4 @@
-# Parte 1 — Le reti spiking (SNN), da zero {.divider .act1}
+# Parte 1 — Le reti neurali Spiking (SNN) {.divider .act1}
 
 ## Le tre generazioni di reti neurali vivono su assi diversi {.act1}
 
@@ -9,7 +9,11 @@
 :::
 ::: {.side}
 ::: {.explain}
-Tre [generazioni]{.accent}, non una scala di accuratezza. Percettrone: soglia netta. ANN: funzione derivabile (da qui il backprop). SNN: spike discreti più uno stato che integra nel tempo. La 3ª gen non è "più accurata" — vive su un altro asse: energia, latenza, silicio.
+Tre modi diversi di *comportarsi*:
+
+- **Percettrone** — soglia netta, uscita binaria: nessuna sfumatura.
+- **ANN** — valore reale continuo e [differenziabile]{.accent}: da qui il backprop.
+- **SNN** — comunica con *spike* discreti e ha uno **stato interno che integra nel tempo**: è il *quando* a portare l'informazione.
 :::
 ::: {.eq .math}
 $$
@@ -28,10 +32,10 @@ Le tre generazioni si leggono su assi diversi, non come una scala di accuratezza
 :::
 
 ::: {.footerbar}
-Parte 1 · Tre generazioni <span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
+Parte 1 · Tre generazioni
 :::
 
-## ANN e SNN si distinguono su sei assi, non solo sull'attivazione {.act1}
+## ANN vs SNN — Funzionamento {.act1}
 
 ::: {.explain}
 Un'ANN è un [dimmer]{.accent}: emette in continuo un valore reale. Una SNN è codice Morse: tace e comunica solo con spike — l'informazione sta nel *quando*. Da qui la regola della Parte 3: l'energia è proporzionale agli eventi, non al tempo.
@@ -53,10 +57,10 @@ Un'ANN è come un dimmer: ogni neurone emette in continuo un valore reale, un nu
 :::
 
 ::: {.footerbar}
-Parte 1 · ANN vs SNN <span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
+Parte 1 · ANN vs SNN
 :::
 
-## Il neurone LIF è un secchio che perde: carica, trabocca, si svuota {.act1}
+## SNN — Neurone LIF {.act1}
 
 ::: {.twocol}
 ::: {.vis}
@@ -65,18 +69,16 @@ Parte 1 · ANN vs SNN <span>champion:&nbsp;<span class="chip" style="background:
 :::
 ::: {.side}
 ::: {.explain}
-Il [secchio bucato]{.accent} descrive il neurone LIF: la corrente entra come acqua, il *leak* svuota, lo spike è l'overflow, il reset abbassa il livello. Chiave per il silicio: il leak è un bit-shift, non una moltiplicazione ($V\cdot\tfrac{7}{8} = V - V/2^{3}$).
+Il [secchio bucato]{.accent} descrive il neurone LIF (Leaky Integrate-and-Fire): la corrente entra come acqua, il *leak* è il buco che lo svuota, lo spike è l'overflow oltre il bordo, il reset abbassa il livello dopo aver traboccato.
 :::
 ::: {.eq .math}
 $$
 \begin{aligned}
-\text{integra + leak:}\quad & V \leftarrow \beta V + I,\qquad \beta = \tfrac{7}{8}\\[4pt]
+\text{integra + leak:}\quad & V \leftarrow \beta V + I\\[4pt]
 \text{spike se piena:}\quad & S = 1 \ \text{ se } \ V \ge \theta\\[4pt]
 \text{reset sottrattivo:}\quad & V \leftarrow V - \theta
 \end{aligned}
 $$
-
-leak come bit-shift:  $V - \dfrac{V}{2^{3}}$
 :::
 :::
 ::: {.notes}
@@ -85,33 +87,7 @@ Il Leaky Integrate-and-Fire (LIF) è il neurone spiking minimo. La metafora del 
 :::
 
 ::: {.footerbar}
-Parte 1 · Neurone LIF <span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
-:::
-
-## La soglia adattiva (ALIF) dà al neurone una memoria breve {.act1}
-
-::: {.twocol}
-::: {.vis}
-[▶ animato nel deck]{.pill}
-![](assets/manim/alif_fatigue_dark.gif)
-:::
-::: {.side}
-::: {.explain}
-L'ALIF aggiunge una [fatica]{.accent} che alza la soglia a ogni spike, poi decade. Fa tre cose: regola la sparsità, dà una memoria breve del passato recente, stabilizza l'attività a valanga. Decade con lo stesso bit-shift ($\tfrac{7}{8}$) del potenziale.
-:::
-::: {.eq .math}
-$$\theta_\text{eff} = \theta_\text{base} + \max(0,\ \text{fatica})$$
-$$S = 1 \ \text{se}\ V \ge \theta_\text{eff}$$
-$$\text{fatica} \leftarrow \tfrac{7}{8}\,\text{fatica} + S\cdot\Delta\theta$$
-:::
-:::
-::: {.notes}
-Il LIF adattivo (Adaptive-LIF, ALIF) aggiunge una sola variabile: una fatica che alza la soglia a ogni spike. Un neurone che ha appena sparato diventa temporaneamente più difficile da eccitare; poi la fatica decade e la soglia torna verso il valore base. Questa piccola aggiunta fa tre cose. Regola la sparsità: senza adattamento un neurone eccitato spara a raffica, con l'ALIF si auto-limita. Dà una memoria breve: la soglia porta traccia del passato recente. E stabilizza: smorza l'attività a valanga che rende instabile l'addestramento delle SNN. La fatica decade anch'essa con lo stesso bit-shift (7/8) del potenziale, quindi non introduce nuovi moltiplicatori sull'hardware.
-:::
-:::
-
-::: {.footerbar}
-Parte 1 · Soglia adattiva ALIF <span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
+Parte 1 · Neurone LIF
 :::
 
 ::: {.content-visible when-profile="full"}
@@ -137,11 +113,11 @@ Tre schemi di codifica degli spike. Rate coding: l'informazione sta nella freque
 :::
 
 ::: {.footerbar}
-Parte 1 · Codifica neurale [+] <span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
+Parte 1 · Codifica neurale [+]
 :::
 :::
 
-## Il backprop classico non basta: lo spike è un gradino, la sua derivata è quasi ovunque zero {.act1}
+## SNN — Training {.act1}
 
 ::: {.explain}
 Lo spike è un gradino di Heaviside: la sua [derivata]{.accent} è zero quasi ovunque. Il gradiente si annulla — il segnale di apprendimento non passa. A ciò si sommano due difficoltà del regime temporale, qui sotto.
@@ -176,34 +152,28 @@ Addestrare una rete significa spingere i pesi lungo il gradiente della perdita. 
 :::
 
 ::: {.footerbar}
-Parte 1 · Perché il backprop non basta <span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
+Parte 1 · Perché il backprop non basta
 :::
 
-## Tre famiglie di metodi addestrano una SNN {.act1}
+## SNN — Training 2 {.act1}
 
-::: {.twocol}
-::: {.vis}
-[▶ animato nel deck]{.pill}
-![](assets/manim/training.gif)
-:::
-::: {.side}
 ::: {.explain}
-Due famiglie [supervisionate]{.accent}. Surrogato + BPTT: srotola la rete tick per tick, derivata sostituita da una campana liscia (memoria che cresce coi passi). EventProp: gradiente *esatto* con un adjoint che salta solo agli spike (memoria ∝ spike). La terza via, biologica e locale, è sotto.
-:::
-::: {.eq .math}
-$$
-\text{surrogato + BPTT:}\quad \frac{\partial S}{\partial V} \approx \sigma'(V-\theta)
-$$
-$$
-\text{EventProp:}\quad \lambda \ \text{aggiornata solo agli spike}
-$$
-:::
-:::
+Tre famiglie di metodi per addestrare una SNN — due [supervisionate]{.accent}, una biologica e locale.
 :::
 
+::: {.threecol}
 ::: {.card}
-[STDP — apprendimento biologico locale (non supervisionato)]{.card-title}
-La Spike-Timing-Dependent Plasticity è la regola biologica: [«chi scatta insieme si lega»]{.accent} — presinaptico prima del postsinaptico rafforza, ordine inverso indebolisce. Nessun errore globale: ogni sinapsi usa solo la temporizzazione dei suoi due neuroni. Famiglia diversa, con obiettivi diversi.
+[Surrogato + BPTT]{.card-title}
+*Supervisionato.* Srotola la rete tick per tick e sostituisce la derivata del gradino con una [campana liscia]{.accent} ($\sigma'$). Robusto e diffuso, ma la memoria cresce col numero di passi.
+:::
+::: {.card}
+[EventProp]{.card-title}
+*Supervisionato.* Gradiente [*esatto*]{.accent} con una variabile aggiunta (adjoint) che salta solo agli spike. Memoria ∝ numero di spike, non alla durata.
+:::
+::: {.card}
+[STDP]{.card-title}
+*Biologico, locale, non supervisionato.* [«Chi scatta insieme si lega»]{.accent}: presinaptico prima del postsinaptico rafforza, ordine inverso indebolisce. Nessun errore globale.
+:::
 :::
 
 ::: {.notes}
@@ -211,11 +181,30 @@ Due famiglie risolvono il problema del gradiente per via supervisionata, propaga
 :::
 
 ::: {.footerbar}
-Parte 1 · Tre metodi di addestramento <span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
+Parte 1 · Tre metodi di addestramento
 :::
 
-## Le SNN sono efficienti ma difficili da addestrare {.act1 .center}
+## SNN — Vantaggi e svantaggi {.act1}
 
-Efficienti sul silicio — energia per evento, calcolo per accumulo, leak per bit-shift.
-Difficili da addestrare — il gradino non ha gradiente, il tempo confonde il merito.
-La nostra rete affronta proprio questo nodo.
+::: {.twocol}
+::: {.card}
+[Vantaggi]{.card-title}
+
+- **Energia** proporzionale agli eventi (spike), non al tempo
+- **Calcolo** per accumulo (AC), non moltiplicazione-accumulo (MAC)
+- Naturali su **hardware neuromorfico / FPGA**, bassa latenza
+- Operazioni hardware-friendly (leak, reset)
+:::
+::: {.card}
+[Svantaggi]{.card-title}
+
+- Lo **spike non ha gradiente** → l'addestramento va reinventato
+- Il **tempo confonde il merito** (credit assignment temporale)
+- Spesso un po' **meno accurate** di una ANN su GPU
+- Rischio di **neuroni morti** e instabilità in training
+:::
+:::
+
+::: {.explain}
+La nostra rete affronta proprio questo nodo: massima efficienza sul silicio, gestendo la difficile addestrabilità.
+:::

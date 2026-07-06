@@ -30,7 +30,6 @@ $$ \text{traiettoria} \xrightarrow{\ \text{SNN}\ } [v_0,\,T,\,s_0,\,a,\,b] \xrig
 
 ::: {.footerbar}
 Parte 2 · La nostra rete
-<span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
 :::
 
 ## L'architettura è ibrida: continuo → spiking → continuo, in 864 parametri {.act2}
@@ -63,7 +62,6 @@ base_threshold 32 &nbsp;·&nbsp; thresh_jump 32 &nbsp;·&nbsp; out_fc 5×32→16
 
 ::: {.footerbar}
 Parte 2 · Architettura
-<span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
 :::
 
 ## Il neurone ALIF: leak a bit-shift, soglia che si affatica, reset sottrattivo {.act2}
@@ -98,7 +96,6 @@ $$ V \leftarrow V - S\cdot\theta_\text{eff} \quad(\text{reset sottrattivo}) $$
 
 ::: {.footerbar}
 Parte 2 · Il neurone ALIF
-<span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
 :::
 
 ## La ricorrenza a basso rango (low-rank): un collo di bottiglia a rango 8 {.act2}
@@ -132,7 +129,6 @@ $$ \text{init ortogonale, gain } 0.2,\quad \text{rango} = 8 $$
 
 ::: {.footerbar}
 Parte 2 · Ricorrenza low-rank
-<span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
 :::
 
 ## Il raggio spettrale ρ(U·V): una manopola, due garanzie {.act2}
@@ -165,7 +161,6 @@ $$ \rho<1 \ \text{contrattivo (sicuro)} \quad \rho>1 \ \text{espansivo} $$
 
 ::: {.footerbar}
 Parte 2 · Raggio spettrale
-<span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
 :::
 
 ## Il modello fisico ACC-IIDM: il gap desiderato e il termine di flusso libero {.act2}
@@ -198,7 +193,6 @@ $$ v_\text{free} = a\big(1 - (\tfrac{v}{v_0})^{4}\big),\quad \Delta v = v - v_\t
 
 ::: {.footerbar}
 Parte 2 · ACC-IIDM (1/2)
-<span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
 :::
 
 ## ACC-IIDM: due regimi (z<1 / z≥1), il blend CAH e il clamp finale {.act2}
@@ -230,7 +224,6 @@ $$ a_\text{ACC} = (1-c)\,a_\text{IIDM} + c\big[a_\text{CAH} + b\tanh\!\big(\tfra
 
 ::: {.footerbar}
 Parte 2 · ACC-IIDM (2/2)
-<span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
 :::
 
 ## L'approccio PINN: cinque penalità pesate chiudono l'anello identificazione ↔ fisica {.act2}
@@ -265,7 +258,6 @@ L_data (1.0) · L_phys (0.1) · L_OU (0.05) · L_bc (1.0) · L_sr (0.5)<br>
 
 ::: {.footerbar}
 Parte 2 · La loss PINN
-<span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
 :::
 
 ## Quantizzazione a potenze di due + STE: moltiplicare diventa uno shift {.act2}
@@ -298,7 +290,6 @@ $$ \{\pm\tfrac1{16},\pm\tfrac18,\pm\tfrac14,\pm\tfrac12,\pm1,\pm2,\,0\}\ \Righta
 
 ::: {.footerbar}
 Parte 2 · po2 + STE
-<span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
 :::
 
 ## Come la addestriamo: EventProp, gradiente esatto — e perché NON STDP {.act2}
@@ -331,5 +322,4 @@ produzione: BPTT + surrogate (storico) · studio: EventProp (branch EventProp_St
 
 ::: {.footerbar}
 Parte 2 · Addestramento: EventProp
-<span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
 :::

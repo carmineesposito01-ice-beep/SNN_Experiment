@@ -27,7 +27,7 @@ Il discriminante di deploy è il [raggio spettrale]{.accent} $\rho(U\!\cdot\!V)$
 :::
 
 ::: {.footerbar}
-Parte 3 · discriminante ρ<1 + 0 morti <span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
+Parte 3 · discriminante ρ<1 + 0 morti
 :::
 
 ## Zero neuroni morti sono capacità che lavora davvero {.act3}
@@ -55,7 +55,7 @@ Un dead neuron (neurone morto) non spara mai: è capacità sprecata, e su hardwa
 :::
 
 ::: {.footerbar}
-Parte 3 · salute della rete <span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
+Parte 3 · salute della rete
 :::
 
 ## L'idoneità FPGA, a colpo d'occhio {.act3}
@@ -84,7 +84,7 @@ Il radar di readiness riassume sei assi: ρ<1, virgola fissa, sparsità, energia
 :::
 
 ::: {.footerbar}
-Parte 3 · readiness · deploy = obiettivo di design <span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
+Parte 3 · readiness · deploy = obiettivo di design
 :::
 
 ## Il vantaggio energetico viene dall'operazione, non dalla sparsità {.act3}
@@ -112,7 +112,7 @@ Il confronto è contro una ANN densa di pari compito e il vantaggio energetico �
 :::
 
 ::: {.footerbar}
-Parte 3 · energia vs ANN · AC<MAC, non sparsità <span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
+Parte 3 · energia vs ANN · AC<MAC, non sparsità
 :::
 
 ## L'errore resta piatto fino a due bit {.act3}
@@ -139,7 +139,7 @@ La rete è nata già quantizzabile. L'errore di identificazione resta sostanzial
 :::
 
 ::: {.footerbar}
-Parte 3 · quantizzazione FPGA-ready <span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
+Parte 3 · quantizzazione FPGA-ready
 :::
 
 ::: {.content-visible when-profile="full"}
@@ -168,7 +168,7 @@ Un SEU (Single-Event Upset) è il classico bit-flip indotto da radiazione, ed è
 :::
 
 ::: {.footerbar}
-Parte 3 · SEU / ISO 26262 <span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
+Parte 3 · SEU / ISO 26262
 :::
 :::
 
@@ -197,7 +197,7 @@ Il verdetto pesa insieme tre dimensioni: qualità di identificazione, sicurezza 
 :::
 
 ::: {.footerbar}
-Parte 3 · verdetto di deploy · Pareto = trade-off <span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
+Parte 3 · verdetto di deploy · Pareto = trade-off
 :::
 
 ## In una frase: cosa portiamo a casa {.act3}
@@ -215,7 +215,7 @@ Tre risultati e un numero.
 :::
 
 ::: {.footerbar}
-Parte 3 · sintesi <span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
+Parte 3 · sintesi
 :::
 
 ## Onestà e prossimi passi {.act3}
@@ -236,5 +236,5 @@ FPGA-in-the-loop: rete su silicio reale, energia e timing misurati — non più 
 :::
 
 ::: {.footerbar}
-Parte 3 · prossimi passi <span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
+Parte 3 · prossimi passi
 :::

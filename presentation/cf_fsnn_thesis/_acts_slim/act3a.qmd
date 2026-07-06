@@ -31,7 +31,6 @@ equilibrato, ρ 0.39; `Leonardo` (BPTT) è il più umano (physics-loss val_data 
 
 ::: {.footerbar}
 Parte 3 · i quattro campioni
-<span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
 :::
 
 ## Come li valutiamo: sei livelli, metrica primaria il comportamento {.act3}
@@ -80,7 +79,6 @@ Fixed-point, po2, ρ<1, timing WCET, risorse, SEU/ISO-26262: il go/no-go hardwar
 
 ::: {.footerbar}
 Parte 3 · gerarchia di valutazione a 6 livelli
-<span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
 :::
 
 # 3A — Il comportamento fisico {.divider .act3}
@@ -114,7 +112,6 @@ dietro la distorsione del diagramma fondamentale a livello macroscopico.
 
 ::: {.footerbar}
 Parte 3A · accuratezza per-parametro
-<span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
 :::
 
 ::: {.content-visible when-profile="full"}
@@ -148,7 +145,6 @@ che l'identificabilità è locale allo scenario, non globale.
 
 ::: {.footerbar}
 Parte 3A · osservabilità stratificata [+]
-<span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
 :::
 :::
 
@@ -182,7 +178,6 @@ una NRMSE bassa non garantisce di per sé una guida sicura.
 
 ::: {.footerbar}
 Parte 3A · identificabilità (sloppy models)
-<span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
 :::
 
 ## Sicurezza in anello chiuso: il residuo è fisica, non la rete {.act3}
@@ -214,7 +209,6 @@ ha raggiunto il limite fisico raggiungibile su quello scenario.
 
 ::: {.footerbar}
 Parte 3A · sicurezza closed-loop (Δ vs oracolo)
-<span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
 :::
 
 ::: {.content-visible when-profile="full"}
@@ -244,7 +238,6 @@ la conferma visiva del verdetto quantitativo di sicurezza mostrato nelle slide p
 
 ::: {.footerbar}
 Parte 3A · traiettorie closed-loop (cut-in · hard-brake) [+]
-<span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
 :::
 :::
 
@@ -280,7 +273,6 @@ veri collassa allo stesso modo (o peggio).
 
 ::: {.footerbar}
 Parte 3A · robustezza fisica (plant dry/wet/ice) [+]
-<span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
 :::
 :::
 
@@ -314,7 +306,6 @@ sul parametro diventa così un errore di sistema a scala macroscopica.
 
 ::: {.footerbar}
 Parte 3A · traffico micro→meso→macro (stop-and-go)
-<span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
 :::
 
 ::: {.content-visible when-profile="full"}
@@ -347,6 +338,5 @@ robustezza al canale, non alla SNN — coerente con la linea differenziale usata
 
 ::: {.footerbar}
 Parte 3A · robustezza V2X (hold-last vs blind) [+]
-<span>champion:&nbsp;<span class="chip" style="background:#E06A2C"></span><span class="chip" style="background:#4AA3E0"></span><span class="chip" style="background:#D48AC0"></span><span class="chip" style="background:#F0AE3A"></span><span class="chip" style="background:#9AA3AD"></span></span>
 :::
 :::
