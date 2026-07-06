@@ -3,7 +3,7 @@
 v1 verb: brake_leader(target_v, duration) -- ramps the leader velocity from its
 value at the trigger tick to target_v over `duration` ticks, then holds. It
 overrides the scenario's leader profile from the trigger tick onward. Verb
-vocabulary follows SUMO TraCI (slowDown). ReplayLog lands in Plan 3.
+vocabulary follows SUMO TraCI (slowDown). A full enqueue-log feeds ReplayLog.
 """
 from dataclasses import dataclass, field
 
@@ -18,13 +18,18 @@ class Event:
 
 class EventInjector:
     def __init__(self):
-        self._events = []                       # list[Event]
+        self._events = []                       # list[Event] (pending; drained per tick)
         self._seq = 0
+        self._log = []                          # full enqueue history (for ReplayLog)
         self._brake = None                      # (t0, v_start, target, duration) | None
 
     def enqueue(self, tick, verb, **params):
         self._events.append(Event(tick=int(tick), seq=self._seq, verb=verb, params=params))
+        self._log.append({"tick": int(tick), "verb": verb, "params": dict(params)})
         self._seq += 1
+
+    def log(self):
+        return [dict(e) for e in self._log]
 
     def tick(self, t, base_vl):
         """Drain events for tick t (stable order), then return the effective leader velocity."""
