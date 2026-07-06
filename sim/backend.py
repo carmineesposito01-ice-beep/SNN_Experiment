@@ -27,6 +27,23 @@ class SoftwareBackend:
     def infer(self, obs_norm: torch.Tensor) -> torch.Tensor:
         return self.model.forward_step(obs_norm.to(self.device))
 
+    def read_probe(self) -> dict:
+        """Zero-intrusion snapshot of the hidden ALIF state (AttributeMonitor pattern).
+
+        numpy (H,) arrays: spikes (last internal tick), v_mem (potential),
+        v_th_eff (base_threshold + fatigue.clamp(min=0)). Requires the standard
+        .cell-nested hidden layer (baseline family).
+        """
+        try:
+            cell = self.model.layer_hidden.cell
+        except AttributeError as e:
+            raise ValueError("read_probe requires a .cell-nested hidden layer "
+                             "(baseline family); this model has none") from e
+        v_mem = cell.potential.detach().cpu().numpy().reshape(-1)
+        spikes = cell.prev_spike.detach().cpu().numpy().reshape(-1)
+        v_th = (cell.base_threshold + cell.fatigue.clamp(min=0)).detach().cpu().numpy().reshape(-1)
+        return {"spikes": spikes, "v_mem": v_mem, "v_th_eff": v_th}
+
 
 class FpgaBackend:
     """Stub -- realized in Fase 3 (PYNQ overlay + AXI/DMA). Same seam."""
