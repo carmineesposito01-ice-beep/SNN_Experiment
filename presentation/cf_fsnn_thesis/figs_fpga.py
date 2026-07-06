@@ -80,53 +80,62 @@ def fig_energy_ann():
 # 2. Quantization: id_err vs frac_bits — curves per champion, fixed vs po2
 # --------------------------------------------------------------------------- #
 def fig_quant():
+    """Two honest panels. LEFT: id_err vs frac_bits (fixed-point weights) — flat/robust down
+    to 2 bit (measured, quantization.csv; no data below 2 bit). RIGHT: the REAL low-bit floor —
+    the membrane leak (V/8) is a bit-shift that UNDERFLOWS at few frac_bits, so the potential
+    stops decaying and gets stuck (mechanistic, deterministic; this is the degradation seen in
+    the FPGA report). po2 cost is a separate metric, stated in the slide text."""
     df = fc.load_csv(REPO, "results/evaluate/v3_TURTLE_POWER!!!/05_Quantization/quantization.csv")
 
-    # x-axis order: float (highest precision) then 12..2. Map to evenly spaced x.
     order = ["float", "12", "8", "6", "4", "3", "2"]
     xpos = {b: i for i, b in enumerate(order)}
 
     fc.apply_dark_style()
-    fig, ax = plt.subplots(figsize=(7.6, 4.6))
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(9.8, 4.3), layout="constrained")
 
+    # ---- LEFT: fixed-point id_err flat = robust ----
     for champ in CHAMPIONS:
         st = fc.champion_style(champ)
-        sub = df[df["champion"] == champ]
-        for mode, ls, fillstyle in (("fixed", "-", "full"), ("po2", "--", "none")):
-            m = sub[sub["mode"] == mode].copy()
-            m["x"] = m["frac_bits"].map(xpos)
-            m = m.sort_values("x")
-            ax.plot(m["x"], m["id_err_mean"], color=st["color"], linestyle=ls,
-                    marker=st["marker"], markersize=8, fillstyle=fillstyle,
-                    markeredgecolor=st["color"], linewidth=2.2,
-                    label=f"{champ} · {mode}")
+        m = df[(df["champion"] == champ) & (df["mode"] == "fixed")].copy()
+        m["x"] = m["frac_bits"].map(xpos)
+        m = m.sort_values("x")
+        ax1.plot(m["x"], m["id_err_mean"], color=st["color"], marker=st["marker"],
+                 markersize=7, linewidth=2.2, label=champ)
+    ax1.set_xticks(list(xpos.values()))
+    ax1.set_xticklabels(order)
+    ax1.set_xlabel("Bit frazionari  (float → 2 bit)")
+    ax1.set_ylabel("Errore identificazione")
+    ax1.set_title("Pesi fixed-point: errore piatto (robusto a 2 bit)",
+                  color=fc.INK, fontsize=11.5, pad=8)
+    ax1.legend(loc="center left", facecolor=fc.BG, edgecolor=fc.SPINE,
+               labelcolor=fc.INK, framealpha=0.9, fontsize=10)
 
-    ax.set_xticks(list(xpos.values()))
-    ax.set_xticklabels(order)
-    ax.set_xlabel("Bit frazionari  (float → 2 bit)")
-    ax.set_ylabel("Errore identificazione  (id_err)")
-
-    # takeaway: fixed-point stays flat down to ~2 bit
-    ax.text(0.02, 1.02,
-            "Fixed-point piatto fino a ~2 bit; PO2 degrada oltre float",
-            transform=ax.transAxes, ha="left", va="bottom",
-            color=fc.INK_MUTED, fontsize=11, style="italic")
-
-    # compact custom legend: champions (colour) + line-style meaning
-    champ_handles = [Line2D([0], [0], color=fc.champion_style(c)["color"],
-                            marker=fc.champion_style(c)["marker"], linestyle="-",
-                            markersize=8, label=c) for c in CHAMPIONS]
-    style_handles = [
-        Line2D([0], [0], color=fc.INK, linestyle="-", label="fixed"),
-        Line2D([0], [0], color=fc.INK, linestyle="--", label="po2"),
-    ]
-    leg1 = ax.legend(handles=champ_handles, loc="upper left",
-                     bbox_to_anchor=(0.0, 0.98), facecolor=fc.BG,
-                     edgecolor=fc.SPINE, labelcolor=fc.INK, framealpha=0.9,
-                     fontsize=11)
-    ax.add_artist(leg1)
-    ax.legend(handles=style_handles, loc="lower left", facecolor=fc.BG,
-              edgecolor=fc.SPINE, labelcolor=fc.INK, framealpha=0.9, fontsize=11)
+    # ---- RIGHT: leak bit-shift underflow = the real low-bit floor ----
+    def q(x, fb):
+        s = 2.0 ** fb
+        return np.round(x * s) / s
+    v0, bit_shift, n = 2.0, 3, 34
+    steps = np.arange(n)
+    pf, fl = v0, []
+    for _ in range(n):
+        fl.append(pf); pf = pf - pf / 2 ** bit_shift
+    ax2.plot(steps, fl, color=fc.INK, lw=2.6, label="float (esatto)")
+    for fb, col in [(8, "#2ECC71"), (4, "#F0B429"), (2, fc.DANGER)]:
+        p, ser = q(v0, fb), []
+        for _ in range(n):
+            ser.append(p)
+            leak = q(p / 2 ** bit_shift, fb)   # V/8 quantized → can round to 0 (underflow)
+            p = q(p - leak, fb)
+        ax2.plot(steps, ser, color=col, lw=2.3, label=f"fixed {fb} bit")
+    ax2.set_xlabel("tick")
+    ax2.set_ylabel("potenziale di membrana  V")
+    ax2.set_title("Il floor reale: leak (V/8) si incastra a pochi bit",
+                  color=fc.INK, fontsize=11.5, pad=8)
+    ax2.legend(loc="upper right", facecolor=fc.BG, edgecolor=fc.SPINE,
+               labelcolor=fc.INK, framealpha=0.9, fontsize=10)
+    ax2.annotate("sotto-flusso: V bloccato", xy=(n - 1, 0.9), xytext=(n * 0.42, 1.35),
+                 color=fc.DANGER, fontsize=10, style="italic",
+                 arrowprops=dict(arrowstyle="->", color=fc.DANGER, lw=1.4))
 
     fig.savefig(OUT / "quant.png")
     plt.close(fig)

@@ -113,18 +113,21 @@ Parte 2 · Il neurone ALIF
 :::
 ::: {.side}
 ::: {.explain}
-La ricorrenza servirebbe una matrice piena 32×32 = **1024 moltiplicazioni**. La fattorizziamo come
-$U(32{\times}8)\cdot V(8{\times}32)$: la *stessa* mappa si genera con **512** → [dimezza i
-moltiplicatori]{.accent}, il costo che pesa su FPGA.
+La ricorrenza piena 32×32 costerebbe **1024 moltiplicazioni**/tick. La spezziamo in due matmul piccole via un
+collo di bottiglia a [8 modi]{.accent}:
 
-Il collo di bottiglia a **rango 8** fa anche da *regolarizzatore* e ospita il raggio spettrale ρ(U·V) (slide dopo).
+- **V comprime** i 32 spike → 8 modi ($256$ molt.).
+- **U espande** gli 8 modi → 32 neuroni ($256$ molt.).
+- **512 vs 1024** → [dimezza i moltiplicatori]{.accent}; $U\!\cdot\!V$ non si forma mai.
+
+Il rango-8 fa anche da *regolarizzatore* (ρ, slide dopo).
 :::
 ::: {.notes}
-Dettaglio sulla fattorizzazione. U è 32×8 e V è 8×32, quindi il feedback dei 32 neuroni è forzato attraverso un collo di bottiglia a soli 8 modi: prima si proietta lo stato sui 8 modi tramite V, poi lo si rilegge tramite U. Il calcolo avviene come due matmul in sequenza, senza mai formare esplicitamente il prodotto U·V (che vanificherebbe il risparmio). È esattamente qui, sul prodotto U·V, che vive il raggio spettrale ρ(U·V) discusso nella slide successiva.
+Dettaglio sulla fattorizzazione. U è 32×8 e V è 8×32, quindi il feedback dei 32 neuroni è forzato attraverso un collo di bottiglia a soli 8 modi: prima si proietta lo stato sui 8 modi tramite V, poi lo si rilegge tramite U. Il calcolo avviene come due matmul in sequenza (256 + 256 = 512 moltiplicazioni), senza mai formare esplicitamente il prodotto U·V (che vanificherebbe il risparmio). Init ortogonale con gain 0.2. È esattamente qui, sul prodotto U·V, che vive il raggio spettrale ρ(U·V) discusso nella slide successiva.
 :::
 ::: {.eq .math}
-$$ W_\text{rec} \approx U\,V,\quad U\in\mathbb{R}^{32\times8},\ V\in\mathbb{R}^{8\times32} $$
-$$ I_\text{rec} = U\,(V\,S_\text{prev}) \ \Rightarrow\ 512 \ \text{vs}\ 1024 \ \text{molt.} $$
+$$ m = V\,s_\text{prev}\ (8{\times}32),\qquad I_\text{rec} = U\,m\ (32{\times}8) $$
+$$ 256 + 256 = 512 \ \text{vs}\ 1024\ \text{(matrice piena)} $$
 :::
 :::
 :::
@@ -180,17 +183,23 @@ Parte 2 · Raggio spettrale
 :::
 ::: {.side}
 ::: {.explain}
-Il controllore fisico di cui la rete stima **5 dei 7** parametri ($c$, $\delta$ fissi). Il [gap desiderato]{.accent}
-$s^*$ dice quanto spazio serve dal veicolo davanti; il **termine di flusso libero** $v_\text{free}$ spinge
-verso la velocità desiderata $v_0$; $z=s^*/s_\text{safe}$ è l'indicatore di regime.
+Il controllore fisico di cui la rete stima **5 dei 7** parametri ($c$, $\delta$ fissi):
+
+- **Gap desiderato** $s^*$ — [quanto spazio]{.accent} serve dal veicolo davanti; cresce con velocità e avvicinamento.
+- **Flusso libero** $v_\text{free}$ — spinge verso la [velocità desiderata]{.accent} $v_0$ a strada libera.
+- **Regime** $z=s^*/s_\text{safe}$ — separa flusso libero ($z<1$) e car-following ($z\ge1$).
 :::
 ::: {.notes}
 Dettagli. La rete predice 5 dei 7 parametri; coolness c = 0.99 e δ = 4 sono tenuti fissi. Sulla sloppy identifiability: siccome a e b compaiono quasi solo attraverso il prodotto √(a·b) nel gap desiderato, il loro rapporto a/b è strutturalmente non osservabile dai dati — è un limite intrinseco del problema, non un difetto del modello. Sul floor: s_safe = clamp(gap, 2.0) è una scelta deliberata di controllo del gradiente; con un floor a 0.5 invece che a 2.0 la grad-norm saliva fino a circa 8000, quindi 2.0 tiene i gradienti in un range gestibile.
 :::
 ::: {.eq .math}
-$$ s^{*} = s_0 + \max\!\big(0,\ vT + \tfrac{v\,\Delta v}{2\sqrt{a\,b}}\big) $$
-$$ s_\text{safe} = \text{clamp}(\text{gap},\,2.0),\quad z = \tfrac{s^{*}}{s_\text{safe}}\,(\le 20) $$
-$$ v_\text{free} = a\big(1 - (\tfrac{v}{v_0})^{4}\big),\quad \Delta v = v - v_\text{lead} $$
+$$
+\begin{aligned}
+\text{gap desiderato:}\quad & s^{*} = s_0 + \max\!\big(0,\ vT + \tfrac{v\,\Delta v}{2\sqrt{a\,b}}\big)\\[4pt]
+\text{regime:}\quad & z = \tfrac{s^{*}}{s_\text{safe}},\quad s_\text{safe} = \text{clamp}(\text{gap},\,2.0)\\[4pt]
+\text{flusso libero:}\quad & v_\text{free} = a\big(1 - (\tfrac{v}{v_0})^{4}\big),\quad \Delta v = v - v_\text{lead}
+\end{aligned}
+$$
 :::
 :::
 :::
@@ -212,15 +221,18 @@ Parte 2 · ACC-IIDM (1/2)
 :::
 ::: {.side}
 ::: {.explain}
-L'IIDM separa [flusso libero]{.accent} ($z<1$) e [car-following]{.accent} ($z\ge1$), ciascuno diviso in
-$v\le v_0$ / $v>v_0$. Il **blend CAH** combina l'IIDM con l'euristica di frenata del leader; un **clamp
-finale** limita l'accelerazione in $[-9,\,a]$ (comfort e sicurezza).
+Due meccanismi fusi in uno:
+
+- **IIDM** — separa [flusso libero]{.accent} ($z<1$) e [car-following]{.accent} ($z\ge1$), ciascuno diviso in $v\le v_0$ / $v>v_0$.
+- **CAH** — l'*euristica di frenata anticipata*: guarda l'accelerazione stimata del leader $a_l$ e frena in anticipo.
+- **Blend + clamp** — fonde i due (peso $c$) e limita l'accelerazione in $[-9,\,a]$ (comfort e sicurezza).
 :::
 ::: {.notes}
 Dettagli sui due regimi e sul blend. Ognuno dei due regimi (z<1 e z≥1) è ulteriormente diviso nei casi v≤v0 e v>v0, come mostrato nel sistema di equazioni. Il termine CAH (Constant-Acceleration Heuristic) anticipa la frenata del leader; da notare che l'accelerazione del leader a_l NON è un input, ma viene ri-stimata da differenze finite filtrate di v_lead. Il tanh nel blend satura la correzione entro ±b, evitando accelerazioni fuori scala. Sull'onestà tecnica: il ramo di flusso libero da libro di testo sarebbe a_free(1 − z^(2a/a_free)); il nostro codice usa invece l'esponente fisso 2, cioè v_free(1 − z²). È una semplificazione deliberata e non è textbook-exact — vale la pena dirlo esplicitamente.
 :::
 ::: {.eq .math}
 $$ a_\text{IIDM} = \begin{cases} z<1: & \begin{cases} v_\text{free}(1-z^2) & v\le v_0\\ v_\text{free} & v>v_0 \end{cases}\\[6pt] z\ge1: & \begin{cases} a(1-z^2) & v\le v_0\\ v_\text{free}+a(1-z^2) & v>v_0 \end{cases} \end{cases} $$
+$$ a_\text{CAH} = \min(a_l,\,a) - \tfrac{\operatorname{ReLU}(\Delta v)^2}{2\,s}\quad(\text{frenata anticipata}) $$
 $$ a_\text{ACC} = (1-c)\,a_\text{IIDM} + c\big[a_\text{CAH} + b\tanh\!\big(\tfrac{a_\text{IIDM}-a_\text{CAH}}{b}\big)\big] \in [-9,\ a] $$
 :::
 :::
@@ -306,13 +318,28 @@ Parte 2 · po2 + STE
 :::
 ::: {.side}
 ::: {.explain}
-La pipeline di **produzione**: BPTT (backprop nel tempo srotolato) + [gradiente surrogato]{.accent}. La rete
-si srotola tick per tick e la derivata del gradino è sostituita da una campana liscia $\sigma'$. Ricetta
-stabile: **gradient clipping** a norma 1.0 (non negoziabile su SNN) e poche epoche.
+Il metodo **standard**. Il *reverse* non è un backprop normale — il gradiente:
+
+- torna indietro attraverso [ogni tick]{.accent}, passando ogni volta per la ricorrenza $(U\!\cdot\!V)^{\!\top}$;
+- **somma** i contributi su tutti i tick → memoria $\propto T$;
+- allo spike (derivata del gradino = 0) passa solo grazie al [surrogato]{.accent} $\sigma'$.
+
+Ricetta stabile: **gradient clipping** a norma 1.0 (non negoziabile su SNN).
 :::
 ::: {.eq .math}
-$$ \text{surrogato:}\quad \tfrac{\partial S}{\partial V} \approx \sigma'(V-\theta) $$
-$$ \text{BPTT: srotola } T \text{ tick} \;\Rightarrow\; \text{memoria} \propto T $$
+$$ \text{surrogato:}\quad \tfrac{\partial S}{\partial V} \approx \sigma'(V-\theta) = \tfrac{1}{(1+\gamma|V-\theta|)^2},\ \gamma{=}1 $$
+$$ \tfrac{\partial\mathcal{L}}{\partial W} = \textstyle\sum_t \tfrac{\partial\mathcal{L}}{\partial V_t}\,\tfrac{\partial V_t}{\partial W}\quad(\text{somma sui tick}) $$
+:::
+::: {.notes}
+Il punto chiave che spesso sfugge: il reverse di BPTT non è un backprop classico. (1) Il gradiente torna
+indietro attraverso ogni singolo tick dell'unroll (seq_len × 10 tick interni), non attraverso un grafo a
+profondità fissa. (2) A ogni passo attraversa la ricorrenza a basso rango, cioè la trasposta $(U\!\cdot\!V)^\top$
+— è da qui che nascono vanishing/exploding, ed è il motivo del clipping obbligatorio. (3) I contributi di tutti
+i tick vengono sommati nel gradiente dei pesi, quindi la memoria cresce con T (O(T·N)). (4) Il gradino dello
+spike ha derivata nulla: il surrogato $\sigma'(V-\theta)=1/(1+\gamma|V-\theta|)^2$ con $\gamma=1$ (alzato da 0.3
+per stringere il kernel e frenare l'esplosione) lo sostituisce solo nel backward — forward resta binario. Il
+surrogato risolve la non-differenziabilità (spaziale), BPTT il credit assignment temporale: ortogonali, usati
+insieme.
 :::
 :::
 :::
@@ -334,15 +361,26 @@ Parte 2 · Training — BPTT
 :::
 ::: {.side}
 ::: {.explain}
-Lo **studio** di questo branch. EventProp calcola il gradiente [*esatto*]{.accent} — non approssimato come il
-surrogato — con una variabile aggiunta (*adjoint*) che salta **solo agli spike**. È **contrattivo per
-costruzione**: l'adjoint converge quando ρ<1 (lo stesso vincolo spettrale di prima).
+L'alternativa **esatta** al surrogato — ha prodotto il campione Donatello. Una variabile *adjoint* $\lambda$
+integrata [all'indietro nel tempo]{.accent} ($T\to0$) che **salta solo agli spike**:
+
+- gradiente [*esatto*]{.accent}, non distorto dal surrogato;
+- tra gli spike solo leak → memoria $\propto$ **#spike**, non $T$;
+- **contrattivo** se ρ<1 (l'adjoint converge).
 :::
-::: {.eq}
-`vs BPTT:  gradiente esatto (non biased dal surrogato)`
-`memoria ∝ #spike (non ∝ durata T)`
-`contrattivo se ρ < 1 (l'adjoint converge)`
-`produzione = BPTT · studio in corso = EventProp`
+::: {.eq .math}
+$$ \text{tra spike:}\quad \lambda \leftarrow (1-\tfrac{\Delta t}{\tau})\,\lambda\qquad(\text{leak}) $$
+$$ \text{allo spike:}\quad \lambda \mathrel{+}= \tfrac{\lambda + \partial\mathcal{L}/\partial s}{V' - \theta}\qquad(\text{salto}) $$
+:::
+::: {.notes}
+EventProp (Wunderlich & Pehle) calcola il gradiente ESATTO di una rete spiking, senza l'approssimazione del
+surrogato. Introduce variabili adjoint (λ_V, λ_I) inizializzate al tempo finale T dalla loss e integrate
+all'indietro nel tempo (da T verso 0): è l'analogo continuo del backprop. Tra uno spike e l'altro l'adjoint
+evolve solo per leak (decadimento liscio); l'informazione di gradiente entra come un SALTO esattamente agli
+istanti di spike (event-driven). Conseguenza: il costo è O(#spike), non O(T) come BPTT — niente grafo srotolato
+da conservare. Ed è contrattivo per costruzione: l'adjoint propaga attraverso Rᵀ e converge solo se ρ<1, lo
+stesso vincolo spettrale che rende lo stato fixed-point limitato. Non a caso i due champion EventProp
+(Donatello, Michelangelo) hanno ρ<1 e 0 neuroni morti; Donatello è il candidato al deploy.
 :::
 :::
 :::

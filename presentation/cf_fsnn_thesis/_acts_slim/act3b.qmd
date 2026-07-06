@@ -107,7 +107,7 @@ adattamento conta. Tutto questo è assorbito nel quantization-aware training, no
 Parte 3B · T5 schema di quantizzazione
 :::
 
-## T5 · L'errore resta piatto fino a due bit {.act3}
+## T5 · Fixed-point robusto; il floor è il leak (V/8) {.act3}
 
 ::: {.twocol}
 ::: {.vis}
@@ -115,24 +115,29 @@ Parte 3B · T5 schema di quantizzazione
 :::
 ::: {.side}
 ::: {.explain}
-L'errore di identificazione resta [piatto]{.accent} riducendo i bit fino a circa 2 bit di parte frazionaria
-(es. Donatello 1.480 float → 1.478 a 2 bit). Il passaggio float → 13 livelli po2 dà un delta $\le 0$ su 3
-champion su 4 (l'unico positivo è Raffaello, +0.16). Distinto è l'errore po2 *assoluto*: il più alto è di
-Leonardo (~15–16%, contro ~2% di Donatello).
+Due facce della quantizzazione:
+
+- **Pesi fixed-point** — l'errore di identificazione resta [piatto]{.accent} fino a 2 bit (Donatello 1.480 → 1.478): quantizzarli non costa.
+- **Il floor** — sotto pochi bit il *leak* (V/8, un bit-shift) va in [sotto-flusso]{.accent} e il potenziale si **blocca**: è questo a fissare il numero minimo di bit, non l'errore.
+- **Costo po2** — i 13 livelli po2 sono assorbiti dal QAT (Δ≤0 su 3/4); paga solo Raffaello (+0.16).
 :::
 ::: {.eq}
-`id_err(frac_bits)  ≈  piatto fino a ~2 bit  (Don. 1.480→1.478)`
+`pesi:   1.480 float → 1.478 @ 2 bit  (piatto)`
 
-`Δ(po2 − float) ≤ 0 su 3/4 · eccezione: Raffaello +0.16`
-`errore po2 assoluto: Leonardo ~15–16% vs Donatello ~2%`
+`stato:  leak V/8 → sotto-flusso a pochi bit`
+
+`po2:    Δ ≤ 0 su 3/4 · Raffaello +0.16`
 :::
 ::: {.notes}
-L'errore di identificazione resta sostanzialmente piatto man mano che si riduce la larghezza dei bit fino a
-circa 2 bit di parte frazionaria: non c'è crollo di precisione da recuperare. Passare dai pesi float ai 13
-livelli po2 dà un delta di errore ≤ 0 su 3 champion su 4 — non peggiora, e in due casi migliora leggermente.
-L'unico con delta positivo è Raffaello (+0.16). Cosa distinta è l'errore po2 assoluto di deploy: il più alto è
-di Leonardo (~15–16%), mentre gli altri restano bassi (Donatello ~2%), coerente con Leonardo come champion più
-fragile anche sugli altri assi.
+Due fenomeni distinti, sui due pannelli. A sinistra (pesi fixed-point): l'errore di identificazione resta
+sostanzialmente piatto riducendo la larghezza dei bit fino a 2 bit di parte frazionaria — non c'è crollo di
+precisione da recuperare, i pesi sono nati quantizzabili. A destra (stato): il leak di membrana è un bit-shift
+(V − V/8); con pochi frac_bits il termine V/8 arrotonda a zero e il potenziale smette di decadere, restando
+BLOCCATO (sotto-flusso). È questo — non l'errore di identificazione — a fissare il numero minimo di bit del
+datapath fixed-point, ed è la degradazione visibile nel report FPGA. Terzo punto, distinto: il passaggio ai 13
+livelli po2 è assorbito dal QAT (delta ≤ 0 su 3 champion su 4, migliora anzi in due casi); l'unico con delta
+positivo è Raffaello (+0.16). L'errore po2 assoluto di deploy più alto è di Leonardo (~15–16%), coerente con
+la sua fragilità sugli altri assi.
 :::
 :::
 :::
@@ -258,10 +263,13 @@ Parte 3B · T5 timing (WCET == BCET)
 :::
 ::: {.side}
 ::: {.explain}
-Il verdetto pesa tutti i livelli: identificazione (T0/T4), sicurezza (T1/T2/T3) e idoneità hardware (T5). Il
-candidato è [Donatello]{.accent}: $\rho\,0.05$, NRMSE 0.152, 84.75%, 0 neuroni morti — in anello chiuso sicuro
-quanto l'oracolo. Gli altri tre restano sul fronte di Pareto: un [trade-off]{.accent}, non un dominatore su
-ogni asse.
+Il verdetto pesa **tutti i livelli** insieme. Il candidato è [Donatello]{.accent}, che vince dove conta:
+
+- **T0 / T4 — identificazione** — NRMSE minima **0.152**, accuratezza **84.75%** (la più alta).
+- **T1–T3 — comportamento** — in anello chiuso [sicuro quanto l'oracolo]{.accent}.
+- **T5 — hardware** — ρ **0.05** (il più contrattivo), **0 neuroni morti** → FPGA-safe.
+
+Gli altri: fronte di **Pareto** — un [trade-off]{.accent}, non un dominatore su ogni asse.
 :::
 ::: {.eq}
 `Donatello    ρ0.05  84.75%  0 dead  → DEPLOY`

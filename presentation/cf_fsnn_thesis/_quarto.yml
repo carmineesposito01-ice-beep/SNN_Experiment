@@ -11,7 +11,8 @@ format:
     embed-resources: false
     include-after-body: fit-equations.js   # auto-scale wide equations to fit their .eq box
 
+# Single deck (slim). 'reduced' is the only profile; the one when-profile="full"
+# block (Part-1 coding-schemes slide) stays hidden. Deterministic single render:
+#   quarto render slides_slim.qmd   ->   _output/slides_slim.html
 profile:
   default: reduced
-  group:
-    - [reduced, full]
