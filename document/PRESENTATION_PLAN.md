@@ -1,5 +1,7 @@
 # Presentazione CF_FSNN — Piano di implementazione
 
+> ⚠️ **STORICO / SUPERATO (2026-07-06).** Piano di implementazione *iniziale*. La presentazione è stata implementata e finalizzata come **deck unico** `deck_slim.html` su branch `main`. Stato attuale e runbook: **`PRESENTATION_MILESTONE.md`**.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** costruire il deck Quarto/reveal.js della presentazione CF_FSNN (3 atti, 38 slide, profilo ridotto ~25 + completo) descritto in `document/PRESENTATION_DESIGN.md`, con figure ri-stilate dai CSV reali e 2 animazioni hero.

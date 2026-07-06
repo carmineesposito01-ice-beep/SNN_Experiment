@@ -188,7 +188,7 @@ bar/gbar=bar (raggruppato) · wf=waterfall · cont=contour · rad=radar · rast=
 > notebook è stato **ri-committato con la palette giusta (`c40ff82`)**; i test locali girano su 4 checkpoint
 > **stand-in** (i champion veri sono solo su Azure), quindi validano stile/pipeline, non i numeri finali.
 >
-> **➡️ Re-run (lo lancia l'utente su Azure):** `git pull origin EventProp_Study` →
+> **➡️ Re-run (lo lancia l'utente su Azure):** `git pull origin main` →
 > **`rm -rf results/evaluate/FPGA`** (indispensabile: senza, il done-skip salta le sezioni vecchie) →
 > `jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=-1 Eval_FPGA.ipynb` →
 > `python scripts/verify_fpga_eval.py`. Bug già catturato dal gate pre-notebook e corretto: `aoi_max_surface` era

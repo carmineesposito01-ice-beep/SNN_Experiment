@@ -1,5 +1,7 @@
 # PRESENTATION_DESIGN — Presentazione CF_FSNN (SNN → la nostra rete → risultati): design
 
+> ⚠️ **STORICO / SUPERATO (2026-07-06).** Questo è il design *iniziale* approvato. La presentazione è stata **implementata, rivista e finalizzata** come **deck unico** `deck_slim.html` (42 slide, Parte 3 organizzata per tier T0→T5), su branch `main`. Per lo stato attuale e il runbook vedi **`PRESENTATION_MILESTONE.md`**.
+
 > **Data:** 2026-07-04 · **Branch:** `EventProp_Study` · **Stato:** **DESIGN APPROVATO dall'utente — NON ancora implementato.**
 >
 > Design di una presentazione esaustiva e comprensibile del progetto CF_FSNN, in tre macro-parti

@@ -1,18 +1,24 @@
-# EventProp — Stato attuale + punto di ripresa (2026-07-03)
+# EventProp — Stato attuale + punto di ripresa (2026-07-06)
 
-Branch `EventProp_Study`. **Documento-master di ripresa**: dove siamo, cosa funziona, cosa è escluso e perché,
+Branch **`main`** (lo studio `EventProp_Study` è stato **consolidato in `main`** con fast-forward il 2026-07-06 e si lavora su `main`; il branch `EventProp_Study` resta come riferimento ma è indietro). **Documento-master di ripresa**: dove siamo, cosa funziona, cosa è escluso e perché,
 le pratiche, come continuare. **MAPPA DEI DOCUMENTI** (leggerli in quest'ordine per riprendere):
 - **Trio v3** (allineati e complementari — nessuna duplicazione, si rimandano a vicenda): `HOW_IT_WORKS_v3.md/.pdf`
   (COME funziona — teoria) · `VALIDATION_REPORT_v3.md/.pdf` (i RISULTATI dell'evaluate a 6-tier, verdetto deploy) ·
   `FPGA_REPORT.md/.pdf` (il profilo HARDWARE Fase A pre-silicio, 45 figure/10 sezioni).
 - **Fasi future (post-FPGA)**: `POST_FPGA_ROADMAP.md` (① simulatore · ② HDL · ③ FPGA-in-the-Loop — decise) +
   `SIMULATOR_DESIGN.md` (design MVP v1 del simulatore ①, APPROVATO, non implementato).
-- **Presentazione — MILESTONE COMPLETA (2026-07-05)**: runbook in **`PRESENTATION_MILESTONE.md`** (leggere quello).
-  Deck **scuro** Quarto/reveal.js in `presentation/cf_fsnn_thesis/`, **2 versioni**: `deck_slim.html` (⭐ da presentare,
-  entra a zoom normale) e `deck_reduced/full.html` (denso esaustivo). 16 figure dati (`figs_*.py`) + 12 GIF
-  (`scripts/viz|manim/`), tema in `_shared/`. Verificato con Playwright (nav/overflow/eq-spill/KaTeX/404 puliti);
-  audit adversariale vs trio-v3 → 4 errori fattuali corretti. Design/piano storici: `PRESENTATION_DESIGN.md` +
-  `PRESENTATION_PLAN.md`. **Know-how riusabile → skill `/create-presentation`** (`~/.claude/skills/`).
+- **Presentazione — MILESTONE COMPLETA e FINALIZZATA (2026-07-06)**: runbook in **`PRESENTATION_MILESTONE.md`**.
+  Deck **scuro** Quarto/reveal.js in `presentation/cf_fsnn_thesis/`, ora **DECK UNICO**: `slides_slim.qmd` →
+  **`deck_slim.html`** = **42 slide** (il deck denso `slides.qmd`+`_acts/` è stato ELIMINATO; `_quarto.yml` →
+  `profile: default: reduced`, render singolo deterministico `quarto render slides_slim.qmd`). Parte 3 organizzata
+  per **tier T0→T5**; roster intro **senza spoiler** (`champions_roster_intro.png`); animazioni **BPTT/EventProp
+  ridisegnate** (BPTT mostra il reverse: (U·V)ᵀ per tick + surrogato σ' allo spike; EventProp dark con freccia
+  "indietro nel tempo"); figura quant onesta a 2 pannelli (fixed-point piatto + leak V/8 underflow = floor reale);
+  aggiunta l'equazione a_CAH sulla slide ACC-IIDM. **Generatori figure/animazioni DETERMINISTICI** (RNG seedato /
+  CSV, md5 identico a doppio run). **PPTX**: `quarto --to pptx` PERDE tutte le figure/animazioni → export fedele con
+  **`presentation/cf_fsnn_thesis/build_pptx.py`** (immagini full-slide + GIF sovrapposte che partono in slideshow +
+  note). Verificato Playwright (nav/overflow/eq-spill/KaTeX/404 puliti). Design/piano storici: `PRESENTATION_DESIGN.md`
+  + `PRESENTATION_PLAN.md`. **Know-how riusabile → skill `/create-presentation`** (`~/.claude/skills/`).
 - **Design/framework FPGA**: `FPGA_EVALUATE_DESIGN.md` + `FPGA_EVALUATION_FRAMEWORK.md`. **Fisica/glossario**:
   `GLOSSARY.md`. **Upgrade evaluate + studio combinato**: `EVALUATE_UPGRADE.md`, `results/EventProp_Study/combined/INDEX.md`.
 - **Come ri-allineare i documenti e ripartire in modo deterministico**: `RESUME_PROCEDURE.md`.
@@ -25,18 +31,20 @@ Le §1-§8 di questo doc sono il record storico dello studio EventProp; la **§9
 **Progetto CF_FSNN**: una SNN (ALIF + EventProp) che, osservata una traiettoria di car-following,
 **identifica i 5 parametri ACC-IIDM** `[v0, T, s0, a, b]`. Target finale: deploy FPGA PYNQ-Z1 (pesi po2).
 
-**Stato in una riga (2026-07-03)**: studio EventProp **mappato e chiuso** (BigSweep1→3 + **studio combinato** su
+**Stato in una riga (2026-07-06)**: studio EventProp **mappato e chiuso** (BigSweep1→3 + **studio combinato** su
 102 arm). EventProp è su un **fronte di Pareto** col BPTT champion: il champion vince la fisica di ~5.5%, EventProp
 vince NRMSE + stabilità (ρ **0.05-0.39** vs **1.16-2.99** dei BPTT champion) + FPGA-friendliness, e **entrambi
 guidano in SICUREZZA**. **Evaluate v3 (6-tier) COMPLETO** → `VALIDATION_REPORT_v3`. **FPGA-evaluate Fase A COMPLETA**
 (45 figure/10 sezioni, render **HB_AZURE in locale** sui champion versionati) → `FPGA_REPORT`. **Trio v3 allineato**
 (teoria/risultati/hardware, senza duplicazioni). **Simulatore ① PROGETTATO** (MVP v1 approvato, `SIMULATOR_DESIGN.md`).
-Bug n_ticks corretto (punto 7). **➡️ PROSSIMA AZIONE: implementare il simulatore ①** (sessione writing-plans su
-`SIMULATOR_DESIGN.md`) — in alternativa ② convertitore HDL o ③ FPGA-in-the-Loop (`POST_FPGA_ROADMAP.md`). I job
-pesanti girano su Azure **o in locale** (i 4 champion sono versionati in `champions/`).
+Bug n_ticks corretto (punto 7). **Presentazione FINALIZZATA** (2026-07-06): deck **unico** `deck_slim.html` (42 slide,
+Parte 3 per tier T0→T5), consolidato su `main`, denso eliminato, export pptx fedele via `build_pptx.py`, generatori
+deterministici, skill `/create-presentation` aggiornata. **➡️ PROSSIMA AZIONE: implementare il simulatore ①** (sessione
+writing-plans su `SIMULATOR_DESIGN.md`) — in alternativa ② convertitore HDL o ③ FPGA-in-the-Loop (`POST_FPGA_ROADMAP.md`).
+I job pesanti girano su Azure **o in locale** (i 4 champion sono versionati in `champions/`).
 
 **Per continuare (dal più fresco):**
-1. `git pull origin EventProp_Study`.
+1. `git pull origin main`.
 2. **Evaluate v3 — COMPLETO (2026-07-01), 15/15 sezioni** in `results/evaluate/v3_TURTLE_POWER!!!/`
    (re-run post-fix eseguito su Azure; `python scripts/verify_eval_v3.py` OK).
    **Verdetto cross-champion**: fixed-point output trascurabile fino a 2 bit; QAT funziona (pesi po2 ≤ float su 3/4 champion,

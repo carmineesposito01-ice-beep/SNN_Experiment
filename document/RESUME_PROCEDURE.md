@@ -5,7 +5,7 @@
 > **(B)** «dammi il prompt di ripresa».
 > Seguendo questo documento passo-passo NON serve ri-spiegare come farlo, e non si dimentica nulla.
 >
-> **Branch:** `EventProp_Study` · **Repo:** `D:\Project_MBSE\1.Reti Neurali\Rete_SNN_Test\CF_FSNN`
+> **Branch:** `main` (lo studio `EventProp_Study` è stato consolidato in `main` il 2026-07-06; si lavora su `main`) · **Repo:** `D:\Project_MBSE\1.Reti Neurali\Rete_SNN_Test\CF_FSNN`
 
 ---
 
@@ -38,7 +38,7 @@ La ripresa a freddo poggia su **due canali**: (1) la **memoria** dell'assistente
 
 ## 2. Procedura deterministica di ALLINEAMENTO (task A)
 
-1. **`git pull origin EventProp_Study`** e verifica lo stato (`git status`, `git log --oneline -8`).
+1. **`git pull origin main`** e verifica lo stato (`git status`, `git log --oneline -8`).
 2. **Aggiorna il master `EVENTPROP_STATUS.md` §0**:
    - la **data** nell'header;
    - lo **"stato in una riga"** (cosa è fatto, cosa no) — rimuovi ogni «PROSSIMA AZIONE» ormai completata e metti quella nuova;
@@ -86,7 +86,7 @@ Il subagente NON ha la memoria dell'assistente: così il test verifica la **suff
 - **Metrica primaria** = comportamento fisico (`val_data`), non la NRMSE nuda.
 - **Design prima del codice**: per nuove funzionalità usare la skill di brainstorming, poi writing-plans; non saltare
   all'implementazione.
-- **Commit** chiari e conventional, **senza `Co-Authored-By`** (attribution disabilitata). Branch `EventProp_Study`.
+- **Commit** chiari e conventional, **senza `Co-Authored-By`** (attribution disabilitata). Branch `main`.
 
 ---
 
@@ -98,9 +98,9 @@ Il subagente NON ha la memoria dell'assistente: così il test verifica la **suff
 Riprendi il progetto CF_FSNN. Non ho contesto in questa chat (post-clear): NON chiedermi lo stato,
 ricostruiscilo dai documenti.
 
-Repo: D:\Project_MBSE\1.Reti Neurali\Rete_SNN_Test\CF_FSNN — branch EventProp_Study.
+Repo: D:\Project_MBSE\1.Reti Neurali\Rete_SNN_Test\CF_FSNN — branch main.
 
-1. git pull origin EventProp_Study
+1. git pull origin main
 2. Leggi PRIMA document/EVENTPROP_STATUS.md §0 (COME RIPRENDERE): stato in una riga + MAPPA DEI
    DOCUMENTI + prossima azione. Segui la mappa: trio v3 (HOW_IT_WORKS_v3 = teoria, VALIDATION_REPORT_v3
    = risultati, FPGA_REPORT = hardware) e, per le fasi future, POST_FPGA_ROADMAP + SIMULATOR_DESIGN.
