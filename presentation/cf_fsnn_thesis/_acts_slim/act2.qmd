@@ -1,6 +1,6 @@
-# Parte 2 — La nostra rete {.divider .act2}
+# Parte 2 — CF-SNN (la nostra rete) {.divider .act2}
 
-## Non prevediamo la traiettoria: identifichiamo i 5 parametri che la generano {.act2}
+## CF-SNN — il problema inverso (l'idea PINN) {.act2}
 
 ::: {.progress-dots}
 []{.dot .filled} []{.dot} []{.dot}
@@ -32,7 +32,7 @@ $$ \text{traiettoria} \xrightarrow{\ \text{SNN}\ } [v_0,\,T,\,s_0,\,a,\,b] \xrig
 Parte 2 · La nostra rete
 :::
 
-## L'architettura è ibrida: continuo → spiking → continuo, in 864 parametri {.act2}
+## Architettura {.act2}
 
 ::: {.progress-dots}
 []{.dot .filled} []{.dot} []{.dot}
@@ -45,17 +45,19 @@ Parte 2 · La nostra rete
 :::
 ::: {.side}
 ::: {.explain}
-Tre strati. **INPUT** (4): i segnali V2X entrano come [corrente continua]{.accent} $I = Wx$, non spike.
-**HIDDEN** (32): neuroni ALIF *spiking*, l'unico strato che spara. **OUTPUT** (5): integratori a perdita,
-senza soglia. Ogni passo Δt = 0.1 s gira su **10 tick interni**: 50 passi → 500 tick.
+Ibrida: continuo → spiking → continuo, in 864 parametri.
+
+- **INPUT** (4) — i segnali V2X entrano come [corrente continua]{.accent} ($I=Wx$), non spike.
+- **HIDDEN** (32) — neuroni **ALIF spiking**: l'unico strato che spara.
+- **OUTPUT** (5) — integratori a perdita (LI), senza soglia; il readout è la tensione.
+
+Ogni passo Δt = 0.1 s → **10 tick interni** di assestamento.
 :::
 ::: {.notes}
 Dettaglio esteso sui tre strati. INPUT (4): i segnali V2X normalizzati entrano come corrente continua I = W x, non come treni di spike. HIDDEN (32): neuroni ALIF spiking con loop ricorrente a basso rango — è l'unico strato che effettivamente spara. OUTPUT (5): integratori a perdita (LI) continui, senza soglia; il readout è direttamente la tensione di membrana. Dopo l'output un decode σ mappa ogni tensione nel suo range fisico. Ogni passo fisico Δt = 0.1 s è elaborato con 10 tick interni a input costante: quei tick sono tempo di assestamento della dinamica, non nuova informazione. Quindi 50 passi fisici corrispondono a 500 tick interni.
 :::
 ::: {.eq}
-fc 32×4→128 &nbsp;·&nbsp; rec_U 32×8→256 &nbsp;·&nbsp; rec_V 8×32→256<br>
-base_threshold 32 &nbsp;·&nbsp; thresh_jump 32 &nbsp;·&nbsp; out_fc 5×32→160<br>
-──────────────── TOT = 864
+**864 pesi** = `fc` 128 + ricorrenza `U·V` 512 + soglie ALIF 64 + `out` 160
 :::
 :::
 :::
@@ -64,7 +66,7 @@ base_threshold 32 &nbsp;·&nbsp; thresh_jump 32 &nbsp;·&nbsp; out_fc 5×32→16
 Parte 2 · Architettura
 :::
 
-## Il neurone ALIF: leak a bit-shift, soglia che si affatica, reset sottrattivo {.act2}
+## Architettura — Neurone ALIF {.act2}
 
 ::: {.progress-dots}
 []{.dot .filled} []{.dot} []{.dot}
@@ -85,11 +87,11 @@ sono **apprendibili, per-neurone (32 + 32)**. Reset sottrattivo, hardware-friend
 Approfondimento sul neurone e sul perché delle scelte. base_threshold init 1.5 e thresh_jump init 0.5 sono parametri apprendibili, per-neurone (32 + 32 valori), e NON sono quantizzati po2 — restano fp. Il reset sottrattivo significa nessun azzeramento forzato della membrana e nessun divisore, quindi resta amichevole verso l'hardware FPGA. Punto importante sul training: il canale-soglia è l'unica via attraverso cui base e jump ricevono gradiente e imparano, perciò il termine di reset NON va staccato dal grafo di autograd, altrimenti quei due parametri smettono di aggiornarsi.
 :::
 ::: {.eq .math}
-$$ V \leftarrow V - \tfrac{V}{8} + I_\text{in} + I_\text{rec} $$
-$$ \theta_\text{eff} = \text{base} + \max(0,\ \text{fatica}) $$
-$$ S = \mathbb{1}[\,V \ge \theta_\text{eff}\,] $$
-$$ \text{fatica} \leftarrow \text{fatica} - \tfrac{\text{fatica}}{8} + S\cdot\text{jump} $$
-$$ V \leftarrow V - S\cdot\theta_\text{eff} \quad(\text{reset sottrattivo}) $$
+$$ \text{integra + leak:}\quad V \leftarrow V - \tfrac{V}{8} + I_\text{in} + I_\text{rec} $$
+$$ \text{soglia efficace:}\quad \theta_\text{eff} = \text{base} + \max(0,\ \text{fatica}) $$
+$$ \text{spike:}\quad S = \mathbb{1}[\,V \ge \theta_\text{eff}\,] $$
+$$ \text{fatica (adattamento):}\quad \text{fatica} \leftarrow \text{fatica} - \tfrac{\text{fatica}}{8} + S\cdot\text{jump} $$
+$$ \text{reset sottrattivo:}\quad V \leftarrow V - S\cdot\theta_\text{eff} $$
 :::
 :::
 :::
@@ -98,7 +100,7 @@ $$ V \leftarrow V - S\cdot\theta_\text{eff} \quad(\text{reset sottrattivo}) $$
 Parte 2 · Il neurone ALIF
 :::
 
-## La ricorrenza a basso rango (low-rank): un collo di bottiglia a rango 8 {.act2}
+## Architettura — Low-Rank {.act2}
 
 ::: {.progress-dots}
 []{.dot .filled} []{.dot} []{.dot}
@@ -111,18 +113,18 @@ Parte 2 · Il neurone ALIF
 :::
 ::: {.side}
 ::: {.explain}
-Invece di una matrice ricorrente piena 32×32 (1024 pesi), fattorizziamo $W_\text{rec} = U V$: **512 pesi
-contro 1024**, metà memoria. Il feedback passa per un [bottleneck a 8 modi]{.accent}, una *capacità usata
-come regolarizzatore* che vieta gli accoppiamenti instabili che fanno esplodere il training SNN.
+La ricorrenza servirebbe una matrice piena 32×32 = **1024 moltiplicazioni**. La fattorizziamo come
+$U(32{\times}8)\cdot V(8{\times}32)$: la *stessa* mappa si genera con **512** → [dimezza i
+moltiplicatori]{.accent}, il costo che pesa su FPGA.
+
+Il collo di bottiglia a **rango 8** fa anche da *regolarizzatore* e ospita il raggio spettrale ρ(U·V) (slide dopo).
 :::
 ::: {.notes}
 Dettaglio sulla fattorizzazione. U è 32×8 e V è 8×32, quindi il feedback dei 32 neuroni è forzato attraverso un collo di bottiglia a soli 8 modi: prima si proietta lo stato sui 8 modi tramite V, poi lo si rilegge tramite U. Il calcolo avviene come due matmul in sequenza, senza mai formare esplicitamente il prodotto U·V (che vanificherebbe il risparmio). È esattamente qui, sul prodotto U·V, che vive il raggio spettrale ρ(U·V) discusso nella slide successiva.
 :::
 ::: {.eq .math}
 $$ W_\text{rec} \approx U\,V,\quad U\in\mathbb{R}^{32\times8},\ V\in\mathbb{R}^{8\times32} $$
-$$ I_\text{rec} = U\,(V\,S_\text{prev}) $$
-$$ 256 + 256 = 512 \ \text{pesi} \ \ \text{vs} \ \ 1024 $$
-$$ \text{init ortogonale, gain } 0.2,\quad \text{rango} = 8 $$
+$$ I_\text{rec} = U\,(V\,S_\text{prev}) \ \Rightarrow\ 512 \ \text{vs}\ 1024 \ \text{molt.} $$
 :::
 :::
 :::
@@ -131,7 +133,7 @@ $$ \text{init ortogonale, gain } 0.2,\quad \text{rango} = 8 $$
 Parte 2 · Ricorrenza low-rank
 :::
 
-## Il raggio spettrale ρ(U·V): una manopola, due garanzie {.act2}
+## Architettura — Raggio spettrale {.act2}
 
 ::: {.progress-dots}
 []{.dot .filled} []{.dot} []{.dot}
@@ -144,9 +146,11 @@ Parte 2 · Ricorrenza low-rank
 :::
 ::: {.side}
 ::: {.explain}
-Il [raggio spettrale]{.accent} dice se la mappa ricorrente *amplifica* (ρ > 1) o *smorza* (ρ < 1) lo stato.
-Un vincolo soft su σ_max serve due scopi con un solo termine: **(1)** su FPGA il fixed-point resta limitato
-solo se contrattivo; **(2)** l'adjoint di EventProp converge solo se ρ < 1.
+Il [raggio spettrale]{.accent} ρ dice se la ricorrenza *amplifica* (ρ>1) o *smorza* (ρ<1) lo stato
+tick-dopo-tick. Un solo vincolo soft su ρ serve **due scopi**:
+
+- **Stabilità hardware** — in virgola fissa (FPGA) lo stato resta limitato e gli errori di arrotondamento si smorzano solo se ρ<1.
+- **Addestrabilità** — l'adjoint di EventProp converge solo se ρ<1.
 :::
 ::: {.notes}
 Dettaglio tecnico. Nel codice ρ è misurato come norma spettrale σ_max, che è un limite superiore del raggio spettrale, calcolata sulla ricorrenza quantizzata. Il vincolo è soft (constraint C11): penalizza solo il superamento del target, non forza un valore esatto. Sul doppio ruolo: (1) in fixed-point su FPGA lo stato resta limitato solo se la mappa è contrattiva; (2) l'adjoint di EventProp propaga all'indietro attraverso Rᵀ e diverge se ρ cresce, quindi vincolare σ_max rende EventProp contrattivo per costruzione. Il messaggio chiave è che stabilità hardware e addestrabilità arrivano dallo stesso identico termine di loss.
@@ -163,7 +167,7 @@ $$ \rho<1 \ \text{contrattivo (sicuro)} \quad \rho>1 \ \text{espansivo} $$
 Parte 2 · Raggio spettrale
 :::
 
-## Il modello fisico ACC-IIDM: il gap desiderato e il termine di flusso libero {.act2}
+## Modello Fisico — ACC-IIDM {.act2}
 
 ::: {.progress-dots}
 []{.dot .filled} []{.dot} []{.dot}
@@ -176,9 +180,9 @@ Parte 2 · Raggio spettrale
 :::
 ::: {.side}
 ::: {.explain}
-Il controllore fisico di cui la rete stima **5 dei 7** parametri ($c=0.99$, $\delta=4$ fissi). Il gap $s^*$
-è l'origine della [sloppy identifiability]{.accent}: $a,b$ entrano solo via $\sqrt{a\,b}$, quindi il
-*rapporto* $a/b$ è strutturalmente non osservabile.
+Il controllore fisico di cui la rete stima **5 dei 7** parametri ($c$, $\delta$ fissi). Il [gap desiderato]{.accent}
+$s^*$ dice quanto spazio serve dal veicolo davanti; il **termine di flusso libero** $v_\text{free}$ spinge
+verso la velocità desiderata $v_0$; $z=s^*/s_\text{safe}$ è l'indicatore di regime.
 :::
 ::: {.notes}
 Dettagli. La rete predice 5 dei 7 parametri; coolness c = 0.99 e δ = 4 sono tenuti fissi. Sulla sloppy identifiability: siccome a e b compaiono quasi solo attraverso il prodotto √(a·b) nel gap desiderato, il loro rapporto a/b è strutturalmente non osservabile dai dati — è un limite intrinseco del problema, non un difetto del modello. Sul floor: s_safe = clamp(gap, 2.0) è una scelta deliberata di controllo del gradiente; con un floor a 0.5 invece che a 2.0 la grad-norm saliva fino a circa 8000, quindi 2.0 tiene i gradienti in un range gestibile.
@@ -195,7 +199,7 @@ $$ v_\text{free} = a\big(1 - (\tfrac{v}{v_0})^{4}\big),\quad \Delta v = v - v_\t
 Parte 2 · ACC-IIDM (1/2)
 :::
 
-## ACC-IIDM: due regimi (z<1 / z≥1), il blend CAH e il clamp finale {.act2}
+## Modello Fisico — ACC-IIDM (regimi e blend) {.act2}
 
 ::: {.progress-dots}
 []{.dot .filled} []{.dot} []{.dot}
@@ -208,9 +212,9 @@ Parte 2 · ACC-IIDM (1/2)
 :::
 ::: {.side}
 ::: {.explain}
-L'IIDM separa flusso libero ($z<1$) e car-following ($z\ge1$). Il blend è **99% ACC + 1% floor IIDM**,
-clamp finale in $[-9,\,a]$. [**Onestà:**]{.accent} il ramo da libro userebbe l'esponente $2a/a_\text{free}$;
-il codice usa un esponente fisso 2, semplificazione deliberata.
+L'IIDM separa [flusso libero]{.accent} ($z<1$) e [car-following]{.accent} ($z\ge1$), ciascuno diviso in
+$v\le v_0$ / $v>v_0$. Il **blend CAH** combina l'IIDM con l'euristica di frenata del leader; un **clamp
+finale** limita l'accelerazione in $[-9,\,a]$ (comfort e sicurezza).
 :::
 ::: {.notes}
 Dettagli sui due regimi e sul blend. Ognuno dei due regimi (z<1 e z≥1) è ulteriormente diviso nei casi v≤v0 e v>v0, come mostrato nel sistema di equazioni. Il termine CAH (Constant-Acceleration Heuristic) anticipa la frenata del leader; da notare che l'accelerazione del leader a_l NON è un input, ma viene ri-stimata da differenze finite filtrate di v_lead. Il tanh nel blend satura la correzione entro ±b, evitando accelerazioni fuori scala. Sull'onestà tecnica: il ramo di flusso libero da libro di testo sarebbe a_free(1 − z^(2a/a_free)); il nostro codice usa invece l'esponente fisso 2, cioè v_free(1 − z²). È una semplificazione deliberata e non è textbook-exact — vale la pena dirlo esplicitamente.
@@ -226,41 +230,38 @@ $$ a_\text{ACC} = (1-c)\,a_\text{IIDM} + c\big[a_\text{CAH} + b\tanh\!\big(\tfra
 Parte 2 · ACC-IIDM (2/2)
 :::
 
-## L'approccio PINN: cinque penalità pesate chiudono l'anello identificazione ↔ fisica {.act2}
+## Approccio PINN — il processo {.act2}
 
 ::: {.progress-dots}
 []{.dot .filled} []{.dot} []{.dot}
 :::
 
 ::: {.twocol}
-::: {.vis style="background:#15181D"}
-::: {.eq .math}
-$$ \text{traiettoria} \xrightarrow{\text{SNN}} [v_0,T,s_0,a,b] $$
-$$ \xrightarrow{\text{ACC-IIDM}} \hat a \;\overset{?}{\approx}\; a_\text{obs} \xrightarrow{} \mathcal{L} \xrightarrow{\nabla} \text{rete} $$
-$$ \mathcal{L} = \lambda_\text{data}\mathcal{L}_\text{data} + \lambda_\text{phys}\mathcal{L}_\text{phys} + \lambda_\text{OU}\mathcal{L}_\text{OU} + \lambda_\text{bc}\mathcal{L}_\text{bc} + \lambda_\text{sr}\mathcal{L}_\text{sr} $$
-:::
+::: {.vis}
+[▶ animato nel deck]{.pill}
+![](assets/manim/pinn_loop.gif)
 :::
 ::: {.side}
 ::: {.explain}
-La rete non fitta i parametri direttamente (non osservabili): il loop chiude traiettoria → SNN → 5 param →
-ACC-IIDM → â → confronto con a osservata → loss → gradiente. Nota: [azzerare]{.accent} phys/ou/bc muove
-la validazione di poco.
+La rete **non fitta i parametri** (non osservabili). Chiude un [anello]{.accent}: la traiettoria entra nella
+SNN → 5 parametri → il modello fisico ACC-IIDM ricostruisce l'accelerazione $\hat a$ → il confronto con
+quella osservata forma la **loss**, il cui gradiente aggiorna la rete.
+:::
+::: {.eq .math}
+$$ \text{traiettoria} \xrightarrow{\ \text{SNN}\ } [v_0,T,s_0,a,b] \xrightarrow{\ \text{ACC-IIDM}\ } \hat a $$
+$$ \hat a \;\overset{?}{\approx}\; a_\text{obs} \;\Rightarrow\; \mathcal{L} \xrightarrow{\ \nabla\ } \text{aggiorna la rete} $$
 :::
 ::: {.notes}
-Precisazione importante emersa dagli esperimenti di ablazione. Se azzeriamo i termini phys, OU e bc, la loss di validazione si muove di pochissimo: questo dimostra che il PINN e le sue penalità NON sono il collo di bottiglia del sistema. Il plateau di performance che osserviamo è attribuibile all'architettura e alla propagazione del gradiente, non alla formulazione della loss fisica. I cinque termini pesati (data 1.0, phys 0.1, OU 0.05, bc 1.0, sr 0.5) restano comunque utili per incoraggiare coerenza fisica e un tasso di spike sano attorno a 0.15.
-:::
-::: {.eq}
-L_data (1.0) · L_phys (0.1) · L_OU (0.05) · L_bc (1.0) · L_sr (0.5)<br>
-= RMSE mascherato + coerenza fisica + residuo OU su T + barriera s0 + sparsità 0.15
+La rete non fitta i parametri direttamente (non sono osservabili): chiude un anello traiettoria → SNN → 5 parametri → ACC-IIDM → â → confronto con a osservata → loss → gradiente. La loss combina più termini pesati (dati, coerenza fisica, ecc.), ma l'ablazione mostra che azzerare i termini fisici muove la validazione di pochissimo: il collo di bottiglia è l'architettura/gradiente, non la formulazione PINN.
 :::
 :::
 :::
 
 ::: {.footerbar}
-Parte 2 · La loss PINN
+Parte 2 · Approccio PINN
 :::
 
-## Quantizzazione a potenze di due + STE: moltiplicare diventa uno shift {.act2}
+## FPGA-Friendly — Po2 {.act2}
 
 ::: {.progress-dots}
 []{.dot .filled} []{.dot} []{.dot}
@@ -292,7 +293,7 @@ $$ \{\pm\tfrac1{16},\pm\tfrac18,\pm\tfrac14,\pm\tfrac12,\pm1,\pm2,\,0\}\ \Righta
 Parte 2 · po2 + STE
 :::
 
-## Come la addestriamo: EventProp, gradiente esatto — e perché NON STDP {.act2}
+## Training — BPTT {.act2}
 
 ::: {.progress-dots}
 []{.dot .filled} []{.dot} []{.dot}
@@ -301,25 +302,51 @@ Parte 2 · po2 + STE
 ::: {.twocol}
 ::: {.vis}
 [▶ animato nel deck]{.pill}
-![](assets/manim/training.gif)
+![](assets/manim/bptt_training.gif)
 :::
 ::: {.side}
 ::: {.explain}
-Perché [EventProp]{.accent}: dà il gradiente *esatto* dell'SNN a spike ed è contrattivo per costruzione
-(l'adjoint converge quando ρ < 1). Perché **NON STDP**: non supervisionata e locale, non propaga
-«l'accelerazione è sbagliata di X» fino ai pesi → fuori scopo per l'identificazione.
+La pipeline di **produzione**: BPTT (backprop nel tempo srotolato) + [gradiente surrogato]{.accent}. La rete
+si srotola tick per tick e la derivata del gradino è sostituita da una campana liscia $\sigma'$. Ricetta
+stabile: **gradient clipping** a norma 1.0 (non negoziabile su SNN) e poche epoche.
 :::
-::: {.notes}
-Contesto e nota storica. EventProp fornisce il gradiente esatto della rete a spike con memoria O(numero di spike), ed è contrattivo per costruzione proprio grazie al vincolo spettrale della slide precedente: l'adjoint propaga all'indietro e converge quando ρ < 1. La STDP è scartata perché è una regola non supervisionata e locale: non ha modo di propagare un segnale di errore supervisionato del tipo «l'accelerazione predetta è sbagliata di X» fino ai pesi, quindi non risolve un problema di system identification supervisionato e resta fuori scopo. Nota storica importante: la pipeline di produzione usa BPTT + gradiente surrogato; EventProp è lo studio attualmente in corso su questo branch (EventProp_Study), non ancora la configurazione di produzione.
-:::
-::: {.eq}
-EventProp → gradiente esatto, memoria O(#spike), contrattivo se ρ &lt; 1<br>
-STDP → non supervisionato, locale → fuori scopo<br>
-produzione: BPTT + surrogate (storico) · studio: EventProp (branch EventProp_Study)
+::: {.eq .math}
+$$ \text{surrogato:}\quad \tfrac{\partial S}{\partial V} \approx \sigma'(V-\theta) $$
+$$ \text{BPTT: srotola } T \text{ tick} \;\Rightarrow\; \text{memoria} \propto T $$
 :::
 :::
 :::
 
 ::: {.footerbar}
-Parte 2 · Addestramento: EventProp
+Parte 2 · Training — BPTT
+:::
+
+## Training — EventProp {.act2}
+
+::: {.progress-dots}
+[]{.dot .filled} []{.dot} []{.dot}
+:::
+
+::: {.twocol}
+::: {.vis}
+[▶ animato nel deck]{.pill}
+![](assets/manim/eventprop_adjoint.gif)
+:::
+::: {.side}
+::: {.explain}
+Lo **studio** di questo branch. EventProp calcola il gradiente [*esatto*]{.accent} — non approssimato come il
+surrogato — con una variabile aggiunta (*adjoint*) che salta **solo agli spike**. È **contrattivo per
+costruzione**: l'adjoint converge quando ρ<1 (lo stesso vincolo spettrale di prima).
+:::
+::: {.eq}
+`vs BPTT:  gradiente esatto (non biased dal surrogato)`
+`memoria ∝ #spike (non ∝ durata T)`
+`contrattivo se ρ < 1 (l'adjoint converge)`
+`produzione = BPTT · studio in corso = EventProp`
+:::
+:::
+:::
+
+::: {.footerbar}
+Parte 2 · Training — EventProp
 :::

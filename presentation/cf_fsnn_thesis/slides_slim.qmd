@@ -1,6 +1,6 @@
 ---
-title: "CF_FSNN — una rete spiking fisica-informata per l'identificazione di parametri di controllo"
-subtitle: "SNN + PINN + EventProp, verso l'FPGA · aggiornamento sui lavori"
+title: "CF-SNN — Car-Following Spiking Neural Network"
+subtitle: "SNN + PINN · aggiornamento sui lavori"
 format:
   revealjs:
     theme: [../_shared/theme/cf_dark.scss, cf_slim.scss]
