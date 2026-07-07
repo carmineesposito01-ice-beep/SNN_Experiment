@@ -61,3 +61,5 @@ Arch_Tested/**/__pycache__/
 
 # Parallel-track worktrees (Simulator / Simulink_Importer)
 .worktrees/
+
+sim_frame.png
