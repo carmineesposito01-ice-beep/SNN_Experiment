@@ -83,3 +83,15 @@ def test_topdown_ego_scrolls_and_leader_tracks_gap(qapp):
     ex2, lx2 = view.ego_x_m(), view.leader_x_m()
     assert ex2 > ex1                             # ego advanced (integrated v)
     assert (lx2 - ex2) < (lx1 - ex1)             # gap shrank 30 -> 25
+
+
+# --- Plan 5 Task 2: net-panel readability ---
+def test_netpanel_has_current_values(qapp):
+    probe = AttributeProbe(capacity=50)
+    for t in range(4):
+        probe.record(t, {"spikes": np.zeros(8), "v_mem": np.linspace(0, 1, 8),
+                          "v_th_eff": np.ones(8)}, np.array([30., 1.5, 2., 1.5, 1.5]))
+    panel = NetPanel()
+    panel.update_frame(probe)
+    labels = panel.current_param_labels()        # ["v0=30.00", "T=1.50", ...]
+    assert len(labels) == 5 and labels[0].startswith("v0=") and panel.n_params_curves() == 5
