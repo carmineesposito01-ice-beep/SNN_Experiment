@@ -95,3 +95,16 @@ def test_netpanel_has_current_values(qapp):
     panel.update_frame(probe)
     labels = panel.current_param_labels()        # ["v0=30.00", "T=1.50", ...]
     assert len(labels) == 5 and labels[0].startswith("v0=") and panel.n_params_curves() == 5
+
+
+# --- Plan 5 Task 3: controls + status bar ---
+def test_simapp_status_reset_step(qapp):
+    win = SimApp(CHAMP)
+    win.select_scenario(0)
+    win._advance(0.5)
+    s = win.status_text()
+    assert "gap" in s and "ego" in s
+    win.step_once()
+    t_after = win.loop.stepper.st.t
+    win.reset_run()
+    assert win.loop.stepper.st.t == 0 and t_after >= 5
