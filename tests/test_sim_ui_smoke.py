@@ -108,3 +108,13 @@ def test_simapp_status_reset_step(qapp):
     t_after = win.loop.stepper.st.t
     win.reset_run()
     assert win.loop.stepper.st.t == 0 and t_after >= 5
+
+
+# --- Plan 5 Task 4: dark theme ---
+from sim.ui.theme import apply_dark_theme     # noqa: E402
+
+
+def test_dark_theme_applies(qapp):
+    from PySide6.QtGui import QPalette
+    apply_dark_theme(qapp)
+    assert qapp.palette().color(QPalette.Window).lightness() < 128
