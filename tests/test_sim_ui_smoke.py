@@ -118,3 +118,10 @@ def test_dark_theme_applies(qapp):
     from PySide6.QtGui import QPalette
     apply_dark_theme(qapp)
     assert qapp.palette().color(QPalette.Window).lightness() < 128
+
+
+def test_simapp_selector_syncs_on_programmatic_select(qapp):
+    win = SimApp(CHAMP)
+    win.select_scenario(3)
+    assert win._selector.currentIndex() == 3
+    assert win._selector.currentText() == win._scenarios[3].name

@@ -89,6 +89,10 @@ class SimApp(QMainWindow):
 
     def select_scenario(self, idx: int):
         self._current_idx = int(idx)
+        if self._selector.currentIndex() != self._current_idx:   # keep combobox in sync on programmatic select
+            self._selector.blockSignals(True)
+            self._selector.setCurrentIndex(self._current_idx)
+            self._selector.blockSignals(False)
         sc = self._scenarios[self._current_idx]
         self._injector = EventInjector()
         self._probe = AttributeProbe(capacity=500, sample_every=1)
