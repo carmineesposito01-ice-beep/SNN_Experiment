@@ -17,9 +17,11 @@ def main():
     win = SimApp(sys.argv[1] if len(sys.argv) > 1 else DEFAULT)
     win.resize(1000, 720)
     win.show()
-    idx = [s.name for s in win._scenarios].index("cut_in")
-    win.select_scenario(idx)                 # cut_in — visually interesting
-    for _ in range(80):
+    win.select_scenario([s.name for s in win._scenarios].index("following"))
+    for _ in range(20):
+        win._advance(0.1)
+    win.inject_brake()                       # brake the leader -> gap shrinks, TTC colour changes
+    for _ in range(60):
         win._advance(0.1)
     app.processEvents()
     out = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "sim_frame.png")

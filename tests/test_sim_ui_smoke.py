@@ -24,17 +24,7 @@ def qapp():
     yield app
 
 
-def _step(s):
-    return StepResult(t=0, s=s, v=20.0, vl=20.0, dv=0.0, a_ego=0.0,
-                      params=np.zeros(5), collided=False)
-
-
-def test_topdown_instantiates_and_updates(qapp):
-    view = TopDownView()
-    view.update_frame(_step(30.0))
-    x30 = view.leader_x_px()
-    view.update_frame(_step(10.0))
-    assert view.leader_x_px() < x30          # smaller gap -> leader closer
+# (old minimal topdown test superseded by test_topdown_ego_scrolls_and_leader_tracks_gap below)
 
 
 # --- Task 3: NetPanel ---
@@ -67,3 +57,29 @@ def test_simapp_loads_champion_and_advances(qapp):
     assert win.loop.stepper.st.t >= 5
     win.inject_brake()                       # enqueues a brake_leader at current tick
     win._advance(0.5)                        # must not raise
+
+
+# --- Plan 5 Task 1: top-down polish ---
+from sim.ui.topdown import ttc_color         # noqa: E402
+
+
+def _stepv(s, v, dv=0.0):
+    return StepResult(t=0, s=s, v=v, vl=v - dv, dv=dv, a_ego=0.0, params=np.zeros(5),
+                      collided=False)
+
+
+def test_ttc_color_bands():
+    assert ttc_color(100.0, -5.0) == "safe"      # opening -> safe
+    assert ttc_color(50.0, 0.0) == "safe"        # not closing -> safe
+    assert ttc_color(3.0, 5.0) == "danger"       # 0.6 s TTC -> danger
+    assert ttc_color(15.0, 5.0) == "caution"     # 3 s TTC -> caution
+
+
+def test_topdown_ego_scrolls_and_leader_tracks_gap(qapp):
+    view = TopDownView()
+    view.update_frame(_stepv(s=30.0, v=20.0))
+    ex1, lx1 = view.ego_x_m(), view.leader_x_m()
+    view.update_frame(_stepv(s=25.0, v=20.0))
+    ex2, lx2 = view.ego_x_m(), view.leader_x_m()
+    assert ex2 > ex1                             # ego advanced (integrated v)
+    assert (lx2 - ex2) < (lx1 - ex1)             # gap shrank 30 -> 25

@@ -1,12 +1,36 @@
-"""Top-down view: ego (pinned) + leader, camera follows ego. Positions are (x, y, heading)
-with y=0/heading=0 in v1 (2D-ready for future lane changes, design §9)."""
-from PySide6.QtCore import QRectF
-from PySide6.QtGui import QBrush, QColor
-from PySide6.QtWidgets import QGraphicsRectItem, QGraphicsScene, QGraphicsView
+"""Top-down road view: ego pinned centre-screen while a dashed road + leader scroll past.
+Gap between ego and leader is drawn and coloured by time-to-collision (TTC)."""
+from PySide6.QtCore import QPointF, QRectF, Qt
+from PySide6.QtGui import QBrush, QColor, QFont, QPainter, QPen, QPolygonF
+from PySide6.QtWidgets import (QGraphicsLineItem, QGraphicsPolygonItem,
+                               QGraphicsRectItem, QGraphicsScene, QGraphicsTextItem,
+                               QGraphicsView)
 
-PX_PER_M = 6.0
+from config import DT
+
+PX_PER_M = 8.0
 VEH_LEN_M = 5.0
-VEH_W_M = 2.0
+VEH_W_M = 2.2
+LANE_H_M = 8.0
+ROAD_X0_M = -200.0
+ROAD_LEN_M = 5000.0
+DASH_EVERY_M = 12.0
+
+TTC_DANGER = 1.5
+TTC_CAUTION = 4.0
+_COL = {"safe": "#2e8b57", "caution": "#e8871e", "danger": "#d1495b"}
+
+
+def ttc_color(s, dv):
+    """'safe'|'caution'|'danger' from gap s [m] and closing speed dv [m/s] (>0 = closing)."""
+    if dv <= 0.1:
+        return "safe"
+    ttc = s / dv
+    if ttc < TTC_DANGER:
+        return "danger"
+    if ttc < TTC_CAUTION:
+        return "caution"
+    return "safe"
 
 
 class TopDownView(QGraphicsView):
@@ -14,20 +38,83 @@ class TopDownView(QGraphicsView):
         super().__init__()
         self._scene = QGraphicsScene()
         self.setScene(self._scene)
-        self._ego = self._vehicle(QColor("#2a7fb8"))       # ego (blue)
-        self._leader = self._vehicle(QColor("#d1495b"))    # leader (red)
-        self._ego.setPos(0.0, 0.0)
+        self.setRenderHint(QPainter.Antialiasing)
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.setBackgroundBrush(QBrush(QColor("#3a3a3a")))
+        self._ego_x = 0.0
+        self._last_s = 0.0
+        self._build_road()
+        self._ego = self._vehicle("#2a7fb8")
+        self._leader = self._vehicle("#d1495b")
+        self._ego_label = self._label("ego")
+        self._leader_label = self._label("leader")
+        self._gap_line = QGraphicsLineItem()
+        self._scene.addItem(self._gap_line)
+        self._gap_text = self._label("")
+
+    def _build_road(self):
+        top = -LANE_H_M / 2 * PX_PER_M
+        h = LANE_H_M * PX_PER_M
+        x0 = ROAD_X0_M * PX_PER_M
+        w = ROAD_LEN_M * PX_PER_M
+        road = QGraphicsRectItem(QRectF(x0, top, w, h))
+        road.setBrush(QBrush(QColor("#2b2b2b")))
+        road.setPen(QPen(Qt.NoPen))
+        self._scene.addItem(road)
+        for y in (top, top + h):
+            e = QGraphicsLineItem(x0, y, x0 + w, y)
+            e.setPen(QPen(QColor("#d0d0d0"), 2))
+            self._scene.addItem(e)
+        n = int(ROAD_LEN_M / DASH_EVERY_M)
+        for i in range(n):
+            x = (ROAD_X0_M + i * DASH_EVERY_M) * PX_PER_M
+            d = QGraphicsLineItem(x, 0, x + DASH_EVERY_M * 0.5 * PX_PER_M, 0)
+            d.setPen(QPen(QColor("#f0c419"), 2))
+            self._scene.addItem(d)
+        self._scene.setSceneRect(x0, top - 60, w, h + 120)
 
     def _vehicle(self, color):
         w, h = VEH_LEN_M * PX_PER_M, VEH_W_M * PX_PER_M
-        item = QGraphicsRectItem(QRectF(-w / 2, -h / 2, w, h))
-        item.setBrush(QBrush(color))
+        pts = QPolygonF([QPointF(-w / 2, -h / 2), QPointF(w * 0.28, -h / 2),
+                         QPointF(w / 2, 0), QPointF(w * 0.28, h / 2),
+                         QPointF(-w / 2, h / 2)])          # arrow-nosed car (points +x)
+        item = QGraphicsPolygonItem(pts)
+        item.setBrush(QBrush(QColor(color)))
+        item.setPen(QPen(QColor("#101010"), 1.5))
         self._scene.addItem(item)
         return item
 
-    def leader_x_px(self) -> float:
-        return float(self._leader.x())
+    def _label(self, text):
+        t = QGraphicsTextItem(text)
+        t.setDefaultTextColor(QColor("#e6e6e6"))
+        f = QFont()
+        f.setPointSize(9)
+        t.setFont(f)
+        self._scene.addItem(t)
+        return t
+
+    def ego_x_m(self):
+        return self._ego_x
+
+    def leader_x_m(self):
+        return self._ego_x + VEH_LEN_M + self._last_s
 
     def update_frame(self, r):
-        self._leader.setX((r.s + VEH_LEN_M) * PX_PER_M)    # gap ahead of ego
-        self.centerOn(self._ego)                            # follow ego
+        self._ego_x += r.v * DT                            # integrate ego position
+        self._last_s = r.s
+        ego_px = self._ego_x * PX_PER_M
+        leader_px = self.leader_x_m() * PX_PER_M
+        self._ego.setPos(ego_px, 0)
+        self._leader.setPos(leader_px, 0)
+        self._ego_label.setPos(ego_px - 12, -VEH_W_M * PX_PER_M - 8)
+        self._leader_label.setPos(leader_px - 18, -VEH_W_M * PX_PER_M - 8)
+        col = QColor(_COL[ttc_color(r.s, r.dv)])
+        y = VEH_W_M * PX_PER_M + 4
+        self._gap_line.setLine(ego_px + VEH_LEN_M / 2 * PX_PER_M, y,
+                               leader_px - VEH_LEN_M / 2 * PX_PER_M, y)
+        self._gap_line.setPen(QPen(col, 2, Qt.DashLine))
+        self._gap_text.setPlainText(f"s = {r.s:.1f} m")
+        self._gap_text.setDefaultTextColor(col)
+        self._gap_text.setPos((ego_px + leader_px) / 2 - 22, y + 2)
+        self.centerOn(ego_px, 0)                           # follow ego (pinned centre)
