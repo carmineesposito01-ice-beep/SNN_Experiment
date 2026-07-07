@@ -63,3 +63,4 @@ Arch_Tested/**/__pycache__/
 .worktrees/
 
 sim_frame.png
+verify_*.png
