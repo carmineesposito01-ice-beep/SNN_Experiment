@@ -35,3 +35,19 @@ def test_topdown_instantiates_and_updates(qapp):
     x30 = view.leader_x_px()
     view.update_frame(_step(10.0))
     assert view.leader_x_px() < x30          # smaller gap -> leader closer
+
+
+# --- Task 3: NetPanel ---
+from sim.probe import AttributeProbe        # noqa: E402
+from sim.ui.netpanel import NetPanel        # noqa: E402
+
+
+def test_netpanel_instantiates_and_updates(qapp):
+    probe = AttributeProbe(capacity=50)
+    for t in range(5):
+        probe.record(t, {"spikes": (np.arange(8) % 2).astype(float),
+                          "v_mem": np.linspace(0, 1, 8),
+                          "v_th_eff": np.ones(8)}, np.arange(5) + t)
+    panel = NetPanel()
+    panel.update_frame(probe)               # must not raise
+    assert panel.n_params_curves() == 5
