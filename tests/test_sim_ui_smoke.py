@@ -51,3 +51,19 @@ def test_netpanel_instantiates_and_updates(qapp):
     panel = NetPanel()
     panel.update_frame(probe)               # must not raise
     assert panel.n_params_curves() == 5
+
+
+# --- Task 4: SimApp ---
+from sim.ui.app import SimApp               # noqa: E402
+
+CHAMP = os.path.join(REPO, "champions", "R33_C2_A1_T12_fix", "best_model.pt")
+
+
+def test_simapp_loads_champion_and_advances(qapp):
+    win = SimApp(CHAMP)
+    assert win.scenario_count() >= 10        # 9 library (include_tail) + manual
+    win.select_scenario(0)
+    win._advance(0.5)                        # 5 fixed steps, headless (no timer)
+    assert win.loop.stepper.st.t >= 5
+    win.inject_brake()                       # enqueues a brake_leader at current tick
+    win._advance(0.5)                        # must not raise
