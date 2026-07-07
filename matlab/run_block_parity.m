@@ -18,10 +18,15 @@ function run_block_parity()
     add_block('simulink/Sources/From Workspace', [mdl '/FW'], ...
               'VariableName', 'fw_data', 'Interpolate', 'off', ...
               'OutputAfterFinalValue', 'Holding final value');
+    add_block('simulink/Signal Routing/Demux', [mdl '/DM'], 'Outputs', '4');
     add_block([lib '/' name], [mdl '/DUT']);
+    add_block('simulink/Signal Routing/Mux', [mdl '/MX'], 'Inputs', '5');
     add_block('simulink/Sinks/To Workspace', [mdl '/TW'], ...
               'VariableName', 'yo', 'SaveFormat', 'Array');
-    add_line(mdl, 'FW/1', 'DUT/1'); add_line(mdl, 'DUT/1', 'TW/1');
+    add_line(mdl, 'FW/1', 'DM/1');
+    for j = 1:4, add_line(mdl, ['DM/' num2str(j)], ['DUT/' num2str(j)]); end
+    for j = 1:5, add_line(mdl, ['DUT/' num2str(j)], ['MX/' num2str(j)]); end
+    add_line(mdl, 'MX/1', 'TW/1');
     set_param(mdl, 'SolverType', 'Fixed-step', 'FixedStep', '1', 'StopTime', num2str(N - 1));
     assignin('base', 'fw_data', [(0:N-1).', c.x_phys]);   % N x 5 (time + 4 feature)
     out = sim(mdl);

@@ -10,20 +10,32 @@ function build_library()
   if isfile(fullfile(here, [lib '.slx'])), delete(fullfile(here, [lib '.slx'])); end
   new_system(lib, 'Library');
 
+  in_names  = {'s', 'v', 'dv', 'v_l'};           % dv = v - v_l (velocita' relativa)
+  out_names = {'v0', 'T', 's0', 'a', 'b'};       % parametri ACC-IIDM
   for i = 1:numel(champs)
     c = champs(i); name = char(string(c.name));
     write_weights_fn(fullfile(here, [name '_weights.m']), name, c);
     sub = [lib '/' name];
     add_block('built-in/Subsystem', sub);
-    add_block('built-in/Inport',  [sub '/x_phys']);
-    add_block('built-in/Outport', [sub '/params']);
+    % MATLAB Function con I/O vettoriale (invariata, gia' provata a parita')
     add_block('simulink/User-Defined Functions/MATLAB Function', [sub '/SNN']);
-    add_line(sub, 'x_phys/1', 'SNN/1'); add_line(sub, 'SNN/1', 'params/1');
     code = sprintf(['function params = SNN(x_phys)\n%%#codegen\n' ...
                     'params = snn_entry(''double'', x_phys(:), %s_weights());\n' ...
                     'end\n'], name);
     chart = sfroot().find('-isa', 'Stateflow.EMChart', 'Path', [sub '/SNN']);
     chart.Script = code;
+    % Mux/Demux -> porte scalari etichettate (ergonomia, evita miscablaggio)
+    add_block('simulink/Signal Routing/Mux',   [sub '/mux'],   'Inputs', '4');
+    add_block('simulink/Signal Routing/Demux', [sub '/demux'], 'Outputs', '5');
+    for j = 1:4
+      add_block('built-in/Inport', [sub '/' in_names{j}], 'Port', num2str(j));
+      add_line(sub, [in_names{j} '/1'], ['mux/' num2str(j)]);
+    end
+    add_line(sub, 'mux/1', 'SNN/1'); add_line(sub, 'SNN/1', 'demux/1');
+    for j = 1:5
+      add_block('built-in/Outport', [sub '/' out_names{j}], 'Port', num2str(j));
+      add_line(sub, ['demux/' num2str(j)], [out_names{j} '/1']);
+    end
   end
   set_param(lib, 'EnableLBRepository', 'on');
   save_system(lib, fullfile(here, [lib '.slx']));
