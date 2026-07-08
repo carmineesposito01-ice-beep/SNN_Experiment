@@ -125,3 +125,36 @@ def test_simapp_selector_syncs_on_programmatic_select(qapp):
     win.select_scenario(3)
     assert win._selector.currentIndex() == 3
     assert win._selector.currentText() == win._scenarios[3].name
+
+
+# --- Extension Phase 1: param legibility ---
+def test_netpanel_params_in_physical_units(qapp):
+    probe = AttributeProbe(capacity=50)
+    for t in range(4):
+        probe.record(t, {"spikes": np.zeros(8), "v_mem": np.zeros(8), "v_th_eff": np.ones(8)},
+                     np.array([44.0, 1.1, 2.5, 0.5, 1.0]))
+    panel = NetPanel()
+    panel.update_frame(probe)
+    assert panel.n_params_curves() == 5                       # unchanged public API
+    y_v0 = panel._param_curves[0].getData()[1]                # RAW value, not 0..1
+    assert y_v0 is not None and float(np.nanmax(y_v0)) > 40.0  # v0 plotted in m/s
+    assert panel.current_param_labels()[0] == "v0=44.00"
+
+
+def test_netpanel_ground_truth_reference(qapp):
+    panel = NetPanel()
+    panel.set_ground_truth(np.array([30.0, 1.5, 2.0, 1.5, 1.5]))
+    assert panel._gt_lines[0].isVisible()
+    assert abs(panel._gt_lines[0].value() - 30.0) < 1e-6
+    panel.set_ground_truth(None)
+    assert not panel._gt_lines[0].isVisible()
+
+
+def test_netpanel_firing_readout(qapp):
+    probe = AttributeProbe(capacity=50)
+    for t in range(3):
+        probe.record(t, {"spikes": np.array([1., 0., 1., 0., 1., 0., 1., 0.]),
+                         "v_mem": np.zeros(8), "v_th_eff": np.ones(8)}, np.zeros(5))
+    panel = NetPanel()
+    panel.update_frame(probe)
+    assert "%" in panel._firing_label.text() and "50" in panel._firing_label.text()
