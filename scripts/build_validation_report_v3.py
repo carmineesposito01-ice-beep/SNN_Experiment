@@ -99,7 +99,7 @@ def fig_accuracy():
         a1.bar(x + (i - 1.5) * w, vals, w, label=f'{ch} ({METHOD[ch]})', color=COLOR[ch])
     a1.set_xticks(x); a1.set_xticklabels(PN)
     a1.axhline(0.2, color='gray', ls=':', lw=1)
-    a1.set_ylabel('NRMSE per canale  (piu\' basso = meglio)')
+    a1.set_ylabel('NRMSE per canale  (più basso = meglio)')
     a1.set_title('Errore di identificazione per parametro')
     a1.legend(fontsize=7, ncol=2); a1.grid(alpha=0.3, axis='y')
     accs = [ACC.loc[ch, 'accuracy_pct'] for ch in CHAMP]
@@ -140,7 +140,7 @@ def fig_fpga():
             ha='center', fontsize=9, color='#c62828', style='italic')
     ax.set_xlabel('raggio spettrale rho(U*V) della ricorrenza ALIF')
     ax.set_ylabel('accuratezza di identificazione [%]')
-    ax.set_title('Discriminante FPGA: EventProp e\' contrattivo + piu\' accurato. '
+    ax.set_title('Discriminante FPGA: EventProp è contrattivo + più accurato. '
                  'Marker = area proporzionale al vantaggio energetico.\n'
                  'Cerchio = EventProp, quadrato = BPTT. In alto-a-sinistra = ideale per il deploy.',
                  fontsize=9.5)
@@ -153,10 +153,10 @@ def fig_fpga():
 
 
 def fig_safety():
-    panels = [('collision_rate', 'tasso di collisione  (piu\' basso = meglio)'),
-              ('brake_margin_min', 'margine di frenata minimo [m]  (piu\' alto = meglio)'),
-              ('min_ttc', 'TTC minimo [s]  (piu\' alto = meglio)'),
-              ('impact_dv', 'delta-v d\'impatto [m/s]  (piu\' basso = meglio)')]
+    panels = [('collision_rate', 'tasso di collisione  (più basso = meglio)'),
+              ('brake_margin_min', 'margine di frenata minimo [m]  (più alto = meglio)'),
+              ('min_ttc', 'TTC minimo [s]  (più alto = meglio)'),
+              ('impact_dv', 'delta-v d\'impatto [m/s]  (più basso = meglio)')]
     fig, axes = plt.subplots(1, 4, figsize=(17, 4.4))
     for ax, (col, title) in zip(axes, panels):
         vals = [SAF.loc[s, col] for s in SRC]
@@ -196,7 +196,7 @@ def fig_quant():
     a2.set_xticks(range(len(CHAMP))); a2.set_xticklabels(CHAMP, fontsize=8)
     a2.set_ylabel('delta errore po2 (ON - OFF)')
     a2.set_title('QAT assorbe i pesi po2: delta <= 0 su 3/4 champion\n'
-                 '(verde = po2 non peggiora; il peso-di-2 e\' gia\' quello nativo)')
+                 '(verde = po2 non peggiora; il peso-di-2 è già quello nativo)')
     for bb, d in zip(b, deltas):
         a2.text(bb.get_x() + bb.get_width() / 2, d, f'{d:+.2f}',
                 ha='center', va='bottom' if d >= 0 else 'top', fontsize=8)
@@ -281,6 +281,20 @@ def copy_reused():
     return out
 
 
+def fig_eq(name, lines, fs=15, color='#12233a'):
+    """Renderizza una o più righe di equazione (mathtext) in un PNG 'tight'.
+    Nota: nessun carattere accentato dentro la formula (le legende vanno in didascalia)."""
+    n = len(lines)
+    fig = plt.figure(figsize=(9.2, 0.52 * n + 0.22))
+    for i, ln in enumerate(lines):
+        fig.text(0.5, 1.0 - (i + 0.5) / n, '$' + ln + '$',
+                 ha='center', va='center', fontsize=fs, color=color)
+    p = os.path.join(FIGDIR, name)
+    fig.savefig(p, dpi=150, bbox_inches='tight', pad_inches=0.18, facecolor='white')
+    plt.close(fig)
+    return p
+
+
 print('[1/4] genero figure-chiave...')
 F_ACC = fig_accuracy()
 F_FPGA = fig_fpga()
@@ -288,6 +302,25 @@ F_SAFE = fig_safety()
 F_QUANT = fig_quant()
 F_V2X = fig_v2x()
 R = copy_reused()
+EQ_NRMSE = fig_eq('eq_nrmse.png', [
+    r'\mathrm{NRMSE}(p) = \frac{\sqrt{\frac{1}{N}\sum_{i}(\hat p_i - p_i)^2}}{p_{\max}-p_{\min}}',
+])
+EQ_FIM = fig_eq('eq_fim.png', [
+    r'\mathrm{FIM} = J^{\top} J\,, \qquad \kappa(\mathrm{FIM}) = \frac{\sigma_{\max}}{\sigma_{\min}}',
+])
+EQ_SSM = fig_eq('eq_ssm.png', [
+    r'\mathrm{TTC} = \frac{s}{\Delta v}\;(\Delta v>0)\,, \quad \mathrm{DRAC} = \frac{\Delta v^{2}}{2\,s}\,, \quad \mathrm{TET} = \sum_t \Delta t\cdot\mathbf{1}[\,\mathrm{TTC}_t < \tau\,]',
+])
+EQ_KS = fig_eq('eq_ks.png', [
+    r'D_{\mathrm{KS}} = \sup_x\, \left|\,F_{\mathrm{rete}}(x) - F_{\mathrm{umano}}(x)\,\right|',
+])
+EQ_STRING = fig_eq('eq_string.png', [
+    r'G_{\mathrm{h2t}} = \frac{\max_t \left|\,s_N(t)-\bar s_N\,\right|}{\max_t \left|\,s_1(t)-\bar s_1\,\right|}',
+    r'G_{\mathrm{h2t}} < 1 \ \ \Rightarrow \ \ \mathrm{string\ stable}',
+])
+EQ_FD = fig_eq('eq_fd.png', [
+    r'q(\rho) = \rho \cdot v(\rho)',
+])
 print('  figure in', FIGDIR)
 
 
@@ -316,40 +349,58 @@ def build_doc():
         'subtitle': 'Chiusura dello studio EventProp: 4 champion (2 BPTT + 2 EventProp) '
                     'a confronto con l\'oracolo, su un evaluate esaustivo a 6-tier',
         'meta': [
-            'Versione: 2026-07-01  (branch EventProp_Study)',
-            'Champion validati: Raffaello, Leonardo (BPTT) - Donatello, Michelangelo (EventProp)',
+            'Champion validati: Raffaello, Leonardo (BPTT) · Donatello, Michelangelo (EventProp)',
             'Riferimento: Master Splinter (oracolo = ACC-IIDM coi parametri veri)',
-            'Analisi sorgente: results/evaluate/v3_TURTLE_POWER!!!  (15 dimensioni)',
-            'Lettore atteso: ingegnere che non conosce il progetto e vuole piena',
-            'coscienza dello stato in ~35 minuti (i 4 champion + validazione a 6-tier + sommario del profilo FPGA; il dettaglio hardware e\' nel FPGA_REPORT).',
+            'Sorgente dei dati: results/evaluate/v3_TURTLE_POWER!!! (15 dimensioni)',
+            'Documento della terna CF_FSNN — gemello di HOW_IT_WORKS_v3 (la rete) e FPGA_REPORT (il profilo hardware)',
         ],
     }))
 
+    A(('h1', 'Indice'))
+    A(('table', (
+        ['Sezione', 'Contenuto'],
+        [
+            ['1', 'Sommario esecutivo'],
+            ['2', 'Il contesto: lo studio EventProp e i 4 champion'],
+            ['3', 'Metodologia: la valutazione a 6-tier'],
+            ['4', 'Identificazione dei parametri (accuratezza, osservabilità, FIM)'],
+            ['5', 'Sicurezza closed-loop'],
+            ['6', 'Robustezza fisica e curva di rottura'],
+            ['7', 'Traffico: micro, meso, macro'],
+            ['8', 'Robustezza V2X'],
+            ['9', 'Profilo FPGA (sommario)'],
+            ['10', 'Verdetto consolidato e raccomandazione di deploy'],
+            ['11', 'Limiti residui e prossimi passi'],
+            ['12', 'Riproducibilità e mappa dei file'],
+            ['13', 'Riferimenti'],
+        ],
+    )))
+
     # ---- 1. SOMMARIO ESECUTIVO ----
     A(('h1', '1. Sommario esecutivo'))
-    A(('p', 'CF_FSNN e\' una rete neurale spiking (SNN, ~860 parametri, target FPGA PYNQ-Z1) '
-           'che osserva un veicolo follower via V2X (gap, velocita\', delta-v, velocita\' leader) '
+    A(('p', 'CF_FSNN è una rete neurale spiking (SNN, ~860 parametri, target FPGA PYNQ-Z1) '
+           'che osserva un veicolo follower via V2X (gap, velocità, delta-v, velocità leader) '
            'e ne identifica i 5 parametri del modello di car-following ACC-IIDM: [v0, T, s0, a, b] '
-           '(Treiber & Kesting, Ch.12). Questo documento e\' il report di CHIUSURA dello studio '
+           '(Treiber & Kesting, Ch.12). Questo documento è il report di CHIUSURA dello studio '
            'EventProp: mette a confronto i 4 champion emersi dallo studio - due addestrati con '
            'BPTT+surrogate gradient (Raffaello, Leonardo) e due con EventProp, il gradiente '
-           'aggiunto esatto (Donatello, Michelangelo) - piu\' l\'oracolo, su una validazione '
+           'aggiunto esatto (Donatello, Michelangelo) - più l\'oracolo, su una validazione '
            'closed-loop esaustiva a 6 livelli (15 dimensioni: dall\'accuratezza alla sicurezza, '
            'al traffico, al profilo hardware FPGA).'))
-    A(('p', 'Verdetto. Tutti e 4 i champion GUIDANO IN SICUREZZA: in anello chiuso il loro tasso '
-           'di collisione e\' allineato a quello dell\'oracolo, con margini di frenata e TTC pari '
-           'o superiori (guidano piu\' cauti, non meno). Le collisioni residue non sono un difetto '
+    A(('p', 'Verdetto. Tutti e 4 i champion guidano in sicurezza: in anello chiuso il loro tasso '
+           'di collisione è allineato a quello dell\'oracolo, con TTC pari o superiori e margini '
+           'di frenata comparabili (guidano più cauti, non meno). Le collisioni residue non sono un difetto '
            'della rete ma un limite fisico: geometrie di cut-in inevitabili e fondo ghiacciato '
            'fanno collidere anche l\'oracolo. Sul piano hardware emerge un discriminante netto: '
-           'i due champion EventProp sono CONTRATTIVI (raggio spettrale della ricorrenza rho<1) e '
+           'i due champion EventProp sono contrattivi (raggio spettrale della ricorrenza rho<1) e '
            'non hanno neuroni morti, mentre i due BPTT sono espansivi (rho>1) con ~31% di neuroni '
            'morti. Contrattivo = stato limitato in aritmetica a virgola fissa = sicuro su FPGA. '
            'Sommato alla migliore accuratezza, questo indica '
            + '**Donatello (EventProp)** come candidato al deploy: rho=' + f2(EN.loc['Donatello', 'spectral_radius'])
            + ', accuratezza ' + f2(ACC.loc['Donatello', 'accuracy_pct']) + '%, 0 neuroni morti. '
            + 'Avvertenza importante: tutti i risultati qui riportati sono in SIMULAZIONE closed-loop '
-           + '(plant e oracolo simulati); il deploy su FPGA e\' progettato ma NON ancora validato in '
-           + 'hardware - la conversione in HDL e\' un problema aperto (sezione 11).'))
+           + '(plant e oracolo simulati); il deploy su FPGA è progettato ma NON ancora validato in '
+           + 'hardware - la conversione in HDL è un problema aperto (sezione 11).'))
     A(('table', (
         ['Asse', 'Risultato', 'Lettura'],
         [
@@ -362,7 +413,7 @@ def build_doc():
             ['Traffico (meso plotone)',
              f'string-stable: gain testa->coda {f2(MESO_GMIN)}-{f2(MESO_GMAX)} (<1)',
              'plotone di 12 stabile'],
-            ['Stabilita\' FPGA (discriminante)',
+            ['Stabilità FPGA (discriminante)',
              f'rho EventProp {f2(EN.loc["Donatello","spectral_radius"])}/{f2(EN.loc["Michelangelo","spectral_radius"])} (<1) vs BPTT {f2(EN.loc["Leonardo","spectral_radius"])}/{f2(EN.loc["Raffaello","spectral_radius"])} (>1)',
              'EventProp contrattivo -> fixed-point sicuro'],
             ['Quantizzazione',
@@ -370,16 +421,16 @@ def build_doc():
              'pronto per pesi potenze-di-due'],
             ['Energia',
              f'{f2(min(EN.loc[c,"advantage_x"] for c in CHAMP))}x-{f2(max(EN.loc[c,"advantage_x"] for c in CHAMP))}x vs ANN densa; spike rate {f2(SPK_MIN)}-{f2(SPK_MAX)}% (NON sparso)',
-             'da costo AC (accumulo) < MAC (molt.-accum.), non da sparsita\''],
+             'da costo AC (accumulo) < MAC (molt.-accum.), non da sparsità'],
             ['V2X (perdita pacchetti)',
              f'blind = {f2(_v2x("Donatello","hold_mode","blind")*100)}% collisione; con hold-last ~{f2(_v2x("Donatello","hold_mode","hold_last")*100)}%',
              'robustezza data dall\'handler, non dalla rete'],
             ['Candidato deploy', 'Donatello (contrattivo + best accuracy + 0 morti)', 'runner-up Michelangelo'],
         ],
     )))
-    A(('callout', 'Una lezione trasversale dello studio, confermata qui in closed-loop: la FISICA '
-                  '(errore sul dato/comportamento di guida) governa la sicurezza, NON la sola NRMSE. '
-                  'Un champion con NRMSE piu\' bassa non e\' automaticamente piu\' sicuro; per questo '
+    A(('callout', 'Una lezione trasversale dello studio, confermata qui in closed-loop: la fisica '
+                  '(errore sul dato/comportamento di guida) governa la sicurezza, non la sola NRMSE. '
+                  'Un champion con NRMSE più bassa non è automaticamente più sicuro; per questo '
                   'il report privilegia le metriche di comportamento e i margini di sicurezza rispetto '
                   'all\'accuratezza nuda.'))
 
@@ -388,32 +439,32 @@ def build_doc():
     A(('h2', '2.1 CF_FSNN in una pagina'))
     A(('p', 'Architettura: input(4) -> strato nascosto ALIF (neuroni spiking con soglia adattiva, '
            'ricorrenza a basso rango, ritardi assonali) -> output LI (5) -> sigmoide + bounds fisici '
-           '-> [v0, T, s0, a, b]. Ogni passo reale (0.1 s) e\' elaborato con piu\' tick SNN interni; '
+           '-> [v0, T, s0, a, b]. Ogni passo reale (0.1 s) è elaborato con più tick SNN interni; '
            'i pesi sono destinati a essere quantizzati a potenze-di-due (moltiplicazione -> bit-shift '
-           'su FPGA) e il leak di membrana e\' un bit-shift. La loss e\' PINN (physics-informed): un '
+           'su FPGA) e il leak di membrana è un bit-shift. La loss è PINN (physics-informed): un '
            'termine dati (l\'accelerazione ricostruita dai parametri predetti deve combaciare con '
-           'quella ACC-IIDM vera) piu\' termini di coerenza fisica. La rete non predice una '
+           'quella ACC-IIDM vera) più termini di coerenza fisica. La rete non predice una '
            'traiettoria ma i 5 NUMERI che caratterizzano lo stile di guida. Dettagli completi di '
            'architettura, neurone ALIF e loss in document/HOW_IT_WORKS_v3.md e GLOSSARY.md.'))
     A(('h2', '2.2 EventProp vs BPTT: un fronte di Pareto'))
     A(('p', 'Lo studio ha mappato e chiuso il confronto tra due modi di calcolare il gradiente '
            'attraverso i tick della SNN: BPTT con surrogate gradient (si "ammorbidisce" la soglia '
            'non-differenziabile dello spike) contro EventProp (adjoint esatto sugli istanti di '
-           'spike). Il risultato e\' un fronte di Pareto, non un vincitore secco: il champion BPTT '
+           'spike). Il risultato è un fronte di Pareto, non un vincitore secco: il champion BPTT '
            'vince di poco sulla fisica pura (~5.5%), ma EventProp vince su NRMSE, su STABILITA\' '
            '(raggio spettrale ρ 0.05-0.39 negli EventProp contro 1.16-2.99 nei BPTT champion — le '
            'famiglie BPTT storiche scartate toccavano ~22) e '
            'su FPGA-friendliness; ed entrambi guidano in sicurezza. Il presente evaluate quantifica '
            'quel fronte su tutte le dimensioni che contano per un deploy neuromorfico.'))
-    A(('callout', 'rho(U*V) e\' il raggio spettrale della ricorrenza low-rank: rho<1 = mappa contrattiva '
+    A(('callout', 'rho(U*V) è il raggio spettrale della ricorrenza low-rank: rho<1 = mappa contrattiva '
                   '(stato limitato, quantizzazione sicura in virgola fissa), rho>1 = espansiva (rischio '
                   'saturazione/overflow). I FONDAMENTI teorici sono in HOW_IT_WORKS_v3 §11; qui il '
                   'RISULTATO: EventProp produce reti contrattive per costruzione (confermato sui champion, '
                   '§9.3) - un vantaggio strutturale sul silicio.'))
     A(('h2', '2.3 I 4 champion e l\'oracolo'))
-    A(('p', 'Il confronto usa 4 champion piu\' l\'oracolo. Tutti i champion hanno la stessa '
+    A(('p', 'Il confronto usa 4 champion più l\'oracolo. Tutti i champion hanno la stessa '
            'architettura; differiscono per metodo e ricetta di training. L\'oracolo (nome in codice '
-           '"Master Splinter") NON e\' una rete: e\' il modello ACC-IIDM con i parametri veri, e '
+           '"Master Splinter") NON è una rete: è il modello ACC-IIDM con i parametri veri, e '
            'serve da limite superiore di riferimento. I nomi sono un tema (le Tartarughe Ninja); '
            'la run porta l\'etichetta "TURTLE POWER!!!".'))
     A(('table', (
@@ -425,7 +476,7 @@ def build_doc():
 
     # ---- 3. METODOLOGIA ----
     A(('h1', '3. Metodologia: l\'evaluate a 6-tier'))
-    A(('p', 'L\'evaluate e\' passato da validazione "data-driven" a "physics/network-driven": '
+    A(('p', 'L\'evaluate è passato da validazione "data-driven" a "physics/network-driven": '
            'misura non solo quanto la rete indovina i numeri, ma come si comporta quando quei '
            'numeri GUIDANO davvero un\'auto, sotto plant fisico realistico e canale V2X imperfetto, '
            'e che aspetto ha la rete come futuro circuito. Le 15 dimensioni sono organizzate in '
@@ -438,7 +489,7 @@ def build_doc():
              'SSM estese, scenari di coda, curva di rottura'],
             ['T2 plant+canale', '06 V2X, 07 VehicleDynamics', 'attuatore/attrito/pendenza, PDR/latenza/AoI'],
             ['T3 traffico', '03 String, 12 Mesoscopico, 13 Macroscopico', 'string stability, plotone, diagramma fondamentale'],
-            ['T4 identificabilita\'', '04 Identifiability', 'FIM, equifinalita\', causale, naturalisticita\''],
+            ['T4 identificabilità', '04 Identifiability', 'FIM, equifinalità, causale, naturalisticità'],
             ['T5 FPGA', '05 Quantizzazione, 08 Energia/Spiking', 'Qm.n/po2, energia, salute della rete, rho'],
         ],
     )))
@@ -450,7 +501,7 @@ def build_doc():
            'confrontarli isola l\'effetto dell\'errore di identificazione sul comportamento.'))
     A(('h2', '3.2 Scenari e metriche'))
     A(('p', 'Scenari avversari: following, stop&go, hard-brake, cut-in (realistico ed evitabile), '
-           'aggressive cut-in, panic-stop, sinusoidale; l\'accuratezza e\' inoltre stratificata su '
+           'aggressive cut-in, panic-stop, sinusoidale; l\'accuratezza è inoltre stratificata su '
            '6 famiglie (highway, urban, launch, freeflow, truck, mixed). Le metriche di sicurezza '
            'usano indicatori CONTINUI (surrogate safety measures) che non saturano come il solo '
            'tasso di collisione:'))
@@ -459,26 +510,33 @@ def build_doc():
         [
             ['collision_rate', 'frazione di scenari con gap -> 0', 'sicurezza assoluta'],
             ['brake_margin_min', 'margine di decelerazione residuo (con segno)', 'quanto vicino al limite di frenata'],
-            ['min_ttc / min_gap', 'time-to-collision e distanza minimi', 'prossimita\' al pericolo'],
-            ['DRAC / TET / TIT', 'decel. richiesta; tempo e integrale sotto soglia TTC', 'severita\' ed esposizione'],
-            ['impact_dv', 'delta-v ipotetico d\'impatto', 'gravita\' potenziale'],
+            ['min_ttc / min_gap', 'time-to-collision e distanza minimi', 'prossimità al pericolo'],
+            ['DRAC / TET / TIT', 'decel. richiesta; tempo e integrale sotto soglia TTC', 'severità ed esposizione'],
+            ['impact_dv', 'delta-v ipotetico d\'impatto', 'gravità potenziale'],
             ['rms_jerk / frac_iso', 'strappo RMS; frazione fuori soglia ISO', 'comfort'],
             ['head_to_tail_gain', 'ampiezza coda / testa nel plotone', 'string stability (<1 = stabile)'],
-            ['rho(U*V), dead_frac', 'raggio spettrale ricorrenza; neuroni morti', 'salute e stabilita\' hardware'],
+            ['rho(U*V), dead_frac', 'raggio spettrale ricorrenza; neuroni morti', 'salute e stabilità hardware'],
         ],
     )))
+    A(('img', (EQ_SSM, 'Equazione 3.1 — Principali surrogate safety measures (indicatori continui di '
+                       'rischio). s = gap [m]; Δv = velocità di avvicinamento (v−v_leader) [m/s]; '
+                       'τ = soglia di time-to-collision; 𝟏[·] = indicatore. TTC = time-to-collision; '
+                       'DRAC = deceleration rate to avoid a crash; TET = tempo esposto a TTC sotto soglia.')))
 
     # ---- 4. IDENTIFICAZIONE ----
     A(('h1', '4. Identificazione dei parametri (Tier 0/4)'))
     A(('h2', '4.1 Accuratezza per champion e per parametro'))
-    A(('p', f'Donatello (EventProp) e\' il piu\' accurato ({f2(ACC.loc["Donatello","accuracy_pct"])}%, '
+    A(('p', f'Donatello (EventProp) è il più accurato ({f2(ACC.loc["Donatello","accuracy_pct"])}%, '
            f'NRMSE media {f3(ACC.loc["Donatello","nrmse_mean"])}), seguito da Michelangelo '
            f'({f2(ACC.loc["Michelangelo","accuracy_pct"])}%) e Leonardo ({f2(ACC.loc["Leonardo","accuracy_pct"])}%). '
-           f'Raffaello e\' l\'anello debole ({f2(ACC.loc["Raffaello","accuracy_pct"])}%): la sua NRMSE '
-           f'su v0 e\' {f3(ACC.loc["Raffaello","nrmse_v0"])}, cioe\' sbaglia grossolanamente la '
-           f'velocita\' desiderata - un difetto che riemerge nel diagramma fondamentale macro (sezione 7). '
-           f'In media EventProp batte BPTT ({ACC_MEAN_EP:.0f}% vs {ACC_MEAN_BP:.0f}%). Il canale piu\' '
-           f'facile e\' s0 per quasi tutti; i piu\' ostici sono v0 e b.'))
+           f'Raffaello è l\'anello debole ({f2(ACC.loc["Raffaello","accuracy_pct"])}%): la sua NRMSE '
+           f'su v0 è {f3(ACC.loc["Raffaello","nrmse_v0"])}, cioè sbaglia grossolanamente la '
+           f'velocità desiderata - un difetto che riemerge nel diagramma fondamentale macro (sezione 7). '
+           f'In media EventProp batte BPTT ({ACC_MEAN_EP:.0f}% vs {ACC_MEAN_BP:.0f}%). Il canale più '
+           f'facile è s0 per quasi tutti; i più ostici sono v0 e b.'))
+    A(('img', (EQ_NRMSE, 'Equazione 4.1 — NRMSE per parametro. p̂ = valore predetto, p = valore vero, '
+                         'N = numero di campioni; il denominatore (p_max − p_min) normalizza sul range '
+                         'fisico del parametro (0 = perfetto). L\'accuratezza riportata è 1 − NRMSE media.')))
     A(('table', (
         ['Champion', 'NRMSE v0', 'NRMSE T', 'NRMSE s0', 'NRMSE a', 'NRMSE b', 'media', 'accur.'],
         [[ch, f3(ACC.loc[ch, 'nrmse_v0']), f3(ACC.loc[ch, 'nrmse_T']), f3(ACC.loc[ch, 'nrmse_s0']),
@@ -487,47 +545,54 @@ def build_doc():
     )))
     A(('img', (F_ACC, 'Figura 4.1 - Errore per parametro (sx) e accuratezza complessiva (dx). '
                       'I due champion EventProp (Donatello viola, Michelangelo arancione) hanno NRMSE '
-                      'per-canale piu\' uniforme e bassa; Raffaello (rosso) crolla su v0. '
-                      'La linea tratteggiata a 100% e\' l\'oracolo.')))
+                      'per-canale più uniforme e bassa; Raffaello (rosso) crolla su v0. '
+                      'La linea tratteggiata a 100% è l\'oracolo.')))
     A(('h2', '4.2 Dove ogni parametro diventa osservabile (stratificazione)'))
-    A(('p', 'La NRMSE stratificata per famiglia di scenario mostra QUANDO ciascun parametro e\' '
+    A(('p', 'La NRMSE stratificata per famiglia di scenario mostra QUANDO ciascun parametro è '
            'osservabile: v0 richiede tratti di free-flow/highway (Raffaello lo sbaglia proprio in '
-           'urban, dove v0 non e\' eccitato), a emerge nei transitori di accelerazione (launch), b '
-           'nelle frenate. E\' la firma della stessa non-identificabilita\' strutturale del modello '
-           'car-following gia\' nota dallo studio.'))
+           'urban, dove v0 non è eccitato), a emerge nei transitori di accelerazione (launch), b '
+           'nelle frenate. È la firma della stessa non-identificabilità strutturale del modello '
+           'car-following già nota dallo studio.'))
     A(('img', (R['nrmse_stratified.png'],
                'Figura 4.2 - NRMSE per parametro x famiglia di scenario, per ciascun champion. '
-               'Le celle piu\' scure segnano dove un parametro resta poco osservabile (es. v0 in '
+               'Le celle più scure segnano dove un parametro resta poco osservabile (es. v0 in '
                'urban per Raffaello, b in freeflow per quasi tutti).')))
-    A(('h2', '4.3 Identificabilita\' strutturale (FIM ed equifinalita\')'))
+    A(('h2', '4.3 Identificabilità strutturale (FIM ed equifinalità)'))
     A(('p', f'La matrice di Fisher (FIM) ha rango pieno ({int(_fimnum("rank_FIM"))} su 5): tutti i '
            f'parametri sono in linea di principio identificabili, nessuno "sotto-eccitato". Ma il '
-           f'numero di condizionamento e\' enorme (~{_fimnum("cond_mean")/1e9:.1f} miliardi): il problema '
-           f'e\' fortemente mal-condizionato ("sloppy"), con un insieme di equifinalita\' stimato in '
+           f'numero di condizionamento è enorme (~{_fimnum("cond_mean")/1e9:.1f} miliardi): il problema '
+           f'è fortemente mal-condizionato ("sloppy"), con un insieme di equifinalità stimato in '
            f'~{int(_fimnum("n_equivalent"))} combinazioni di parametri che producono traiettorie quasi '
            f'indistinguibili. Il parametro localmente meno identificabile risulta {FIM["least_identifiable"]}, '
-           f'il piu\' identificabile {FIM["most_identifiable"]}. In pratica: piu\' set di parametri '
-           f'spiegano ugualmente bene la stessa guida - ecco perche\' due champion possono avere '
+           f'il più identificabile {FIM["most_identifiable"]}. In pratica: più set di parametri '
+           f'spiegano ugualmente bene la stessa guida - ecco perché due champion possono avere '
            f'NRMSE diverse e comportamenti di guida simili.'))
-    A(('img', (R['fim.png'], 'Figura 4.3 - Analisi di identificabilita\' via FIM: sensibilita\' per '
-                             'parametro e struttura di correlazione (il mal-condizionamento e\' la '
-                             'ragione fisica dell\'equifinalita\').')))
-    A(('h2', '4.4 Sensibilita\' causale e naturalisticita\''))
-    A(('p', f'La sensibilita\' causale (risposta delle predizioni a interventi controllati sul '
-           f'leader) conferma che T reagisce alla variazione di velocita\' del leader in tutti i '
+    A(('img', (EQ_FIM, 'Equazione 4.2 — Matrice di Fisher e numero di condizionamento. J = jacobiano '
+                       'delle predizioni rispetto ai 5 parametri; σ_max, σ_min = valori singolari '
+                       'estremi della FIM. κ grande = problema mal-condizionato (sloppy): molti set di parametri '
+                       'producono traiettorie quasi indistinguibili.')))
+    A(('img', (R['fim.png'], 'Figura 4.3 - Analisi di identificabilità via FIM: sensibilità per '
+                             'parametro e struttura di correlazione (il mal-condizionamento è la '
+                             'ragione fisica dell\'equifinalità).')))
+    A(('h2', '4.4 Sensibilità causale e naturalisticità'))
+    A(('p', f'La sensibilità causale (risposta delle predizioni a interventi controllati sul '
+           f'leader) conferma che T reagisce alla variazione di velocità del leader in tutti i '
            f'champion; le risposte di a/b differiscono per champion (Donatello mostra una firma '
-           f'causale distinta su s0/b). Sul realismo, il test di naturalisticita\' (distanza KS tra '
+           f'causale distinta su s0/b). Sul realismo, il test di naturalisticità (distanza KS tra '
            f'le distribuzioni di time-gap e jerk della rete e quelle umane) incorona Leonardo come '
-           f'il piu\' "umano" (KS time-gap {f3(NAT.loc["Leonardo","ks_time_gap"])}, KS jerk '
-           f'{f3(NAT.loc["Leonardo","ks_jerk"])}); nessun champion, pero\', rientra pienamente nella '
+           f'il più "umano" (KS time-gap {f3(NAT.loc["Leonardo","ks_time_gap"])}, KS jerk '
+           f'{f3(NAT.loc["Leonardo","ks_jerk"])}); nessun champion, però, rientra pienamente nella '
            f'banda naturalistica di riferimento (within_floor = falso per tutti) - un limite residuo, '
            f'non un difetto di sicurezza.'))
-    A(('img', (R['causal.png'], 'Figura 4.4 - Sensibilita\' causale: quanto la stima di ciascun '
-                                'parametro risponde a interventi su velocita\' leader, |delta-v| e '
+    A(('img', (EQ_KS, 'Equazione 4.3 — Distanza di Kolmogorov-Smirnov tra la distribuzione della rete e '
+                      'quella umana (per time-gap e jerk). F = funzione di ripartizione empirica; '
+                      'D_KS ∈ [0,1], con 0 = distribuzioni identiche.')))
+    A(('img', (R['causal.png'], 'Figura 4.4 - Sensibilità causale: quanto la stima di ciascun '
+                                'parametro risponde a interventi su velocità leader, |delta-v| e '
                                 '|accelerazione|.')))
-    A(('img', (R['naturalisticity.png'], 'Figura 4.5 - Naturalisticita\'/calibrazione: distanza dalle '
-                                         'distribuzioni umane di time-gap e jerk. Leonardo e\' il piu\' '
-                                         'naturale; nessuno e\' ancora dentro la banda di riferimento.')))
+    A(('img', (R['naturalisticity.png'], 'Figura 4.5 - Naturalisticità/calibrazione: distanza dalle '
+                                         'distribuzioni umane di time-gap e jerk. Leonardo è il più '
+                                         'naturale; nessuno è ancora dentro la banda di riferimento.')))
 
     # ---- 5. SICUREZZA ----
     A(('h1', '5. Sicurezza closed-loop (Tier 0/1)'))
@@ -535,10 +600,10 @@ def build_doc():
     A(('p', f'In anello chiuso i 4 champion collidono quanto l\'oracolo: il tasso di collisione va '
            f'da {f2(SAF.loc["Raffaello","collision_rate"]*100)}% (Raffaello) a '
            f'{f2(SAF.loc["Donatello","collision_rate"]*100)}% (Donatello), contro '
-           f'{f2(SAF.loc[ORACLE,"collision_rate"]*100)}% dell\'oracolo. Il residuo non e\' la rete: '
+           f'{f2(SAF.loc[ORACLE,"collision_rate"]*100)}% dell\'oracolo. Il residuo non è la rete: '
            f'deriva da geometrie di cut-in fisicamente inevitabili (vedi curva di rottura, 6.3) in '
            f'cui anche l\'oracolo collide. Sul TTC minimo tutti e 4 i champion sono pari o superiori '
-           f'all\'oracolo ({f3(SAF.loc[ORACLE,"min_ttc"])} s), quindi piu\' cauti. Sul margine di '
+           f'all\'oracolo ({f3(SAF.loc[ORACLE,"min_ttc"])} s), quindi più cauti. Sul margine di '
            f'frenata minimo Leonardo ({f2(SAF.loc["Leonardo","brake_margin_min"])} m) e Michelangelo '
            f'({f2(SAF.loc["Michelangelo","brake_margin_min"])} m) superano l\'oracolo '
            f'({f2(SAF.loc[ORACLE,"brake_margin_min"])} m), mentre Raffaello '
@@ -557,28 +622,28 @@ def build_doc():
                        'o migliori dell\'oracolo (grigio) su collisione, margine di frenata, TTC e '
                        'delta-v d\'impatto.')))
     A(('img', (R['delta_vs_oracle.png'], 'Figura 5.2 - Delta di ciascuna metrica di sicurezza rispetto '
-                                         'all\'oracolo: valori dal lato "piu\' sicuro" confermano il '
+                                         'all\'oracolo: valori dal lato "più sicuro" confermano il '
                                          'profilo conservativo dei champion.')))
     A(('img', (R['ssm_distribution.png'], 'Figura 5.3 - Distribuzioni delle surrogate safety measures '
                                           '(non solo la media): le code restano lontane dalle soglie '
                                           'critiche.')))
     A(('img', (R['per_scenario_min_gap.png'], 'Figura 5.4 - Gap minimo per tipologia di scenario: il '
-                                              'cut-in e\' il piu\' stressante, ma il gap resta sopra la '
+                                              'cut-in è il più stressante, ma il gap resta sopra la '
                                               'linea di collisione tranne nelle geometrie impossibili.')))
     A(('img', (R['comfort_iso.png'], 'Figura 5.5 - Comfort ISO (accelerazione/jerk): i champion sono '
-                                     'comparabili all\'oracolo, con accelerazioni tendenzialmente piu\' dolci.')))
-    A(('h2', '5.6 Traiettorie closed-loop'))
-    A(('p', 'Il modo piu\' diretto di "vedere" la guida e\' la traiettoria in anello chiuso: gap, '
-           'velocita\' e accelerazione dell\'ego nel tempo, per ciascun champion sovrapposto '
+                                     'comparabili all\'oracolo, con accelerazioni tendenzialmente più dolci.')))
+    A(('h2', '5.2 Traiettorie closed-loop'))
+    A(('p', 'Il modo più diretto di osservare la guida è la traiettoria in anello chiuso: gap, '
+           'velocità e accelerazione dell\'ego nel tempo, per ciascun champion sovrapposto '
            'all\'oracolo. La run produce le tracce per i 5 scenari (cut-in, hard-brake, stop&go, '
            'panic-stop, aggressive cut-in) in results/evaluate/v3_TURTLE_POWER!!!/09_Trajectories/. '
-           'Ne mostriamo due rappresentative: nel cut-in il gap crolla al taglio e tutte le varianti '
+           'Se ne riportano due rappresentative: nel cut-in il gap crolla al taglio e tutte le varianti '
            'lo recuperano dolcemente senza toccare la linea di collisione; nell\'hard-brake l\'ego '
            'insegue la decelerazione del leader mantenendo il margine.'))
-    A(('img', (R['traj_cut_in.png'], 'Figura 5.6a - Traiettorie closed-loop nel cut-in: gap, velocita\' '
+    A(('img', (R['traj_cut_in.png'], 'Figura 5.6 - Traiettorie closed-loop nel cut-in: gap, velocità '
                                      'e accelerazione. Il gap si recupera senza collisione (salvo le '
                                      'geometrie impossibili, dove collide anche l\'oracolo).')))
-    A(('img', (R['traj_hard_brake.png'], 'Figura 5.6b - Traiettorie closed-loop nell\'hard-brake: '
+    A(('img', (R['traj_hard_brake.png'], 'Figura 5.7 - Traiettorie closed-loop nell\'hard-brake: '
                                          'l\'ego segue la frenata del leader mantenendo il margine di '
                                          'sicurezza.')))
 
@@ -590,90 +655,96 @@ def build_doc():
            f'~{f2(PLANT.loc["Donatello","collision_bagnato"]*100)}% su bagnato fino a '
            f'~{f2(PLANT.loc["Donatello","collision_ghiaccio"]*100)}% su ghiaccio - e l\'oracolo si '
            f'comporta uguale ({f2(PLANT.loc[ORACLE,"collision_ghiaccio"]*100)}% su ghiaccio). Il '
-           f'~60% di collisioni su ghiaccio e\' un limite fisico (coefficiente d\'attrito troppo basso '
+           f'~60% di collisioni su ghiaccio è un limite fisico (coefficiente d\'attrito troppo basso '
            f'per fermarsi in tempo), non un errore della SNN; anzi, su ghiaccio i champion mantengono '
            f'un margine di frenata leggermente migliore dell\'oracolo.'))
     A(('img', (R['plant.png'], 'Figura 6.1 - Collisione e margine di frenata su asciutto/bagnato/ghiaccio. '
-                              'La degradazione e\' guidata dall\'attrito ed e\' identica tra champion e oracolo.')))
-    A(('h2', '6.2 Reachability e 6.3 curva di rottura'))
+                              'La degradazione è guidata dall\'attrito ed è identica tra champion e oracolo.')))
+    A(('h2', '6.2 Reachability e curva di rottura'))
     A(('p', 'L\'analisi di reachability (gap minimo di sicurezza al variare del delta-v iniziale) '
-           'mostra un inviluppo praticamente sovrapposto a quello dell\'oracolo, marginalmente piu\' '
+           'mostra un inviluppo praticamente sovrapposto a quello dell\'oracolo, marginalmente più '
            'conservativo ai delta-v alti (es. a delta-v=15 m/s i champion chiedono ~17-18 m contro i '
            '16.7 m dell\'oracolo). La curva di rottura conferma il punto centrale sulla sicurezza: '
            'sotto panic-braking fino a 10 m/s2 la collisione resta a zero per tutti; nel cut-in la '
            'collisione cresce al restringersi del gap ESATTAMENTE come per l\'oracolo. La rete si '
            'rompe solo dove si rompe la fisica.'))
     A(('img', (R['reachability.png'], 'Figura 6.2 - Inviluppo di gap-sicuro vs delta-v iniziale: '
-                                      'champion (colore) ~ oracolo (grigio), leggermente piu\' cauti.')))
-    A(('img', (R['breakdown.png'], 'Figura 6.3 - Curva di rottura: collisione vs severita\' '
+                                      'champion (colore) ~ oracolo (grigio), leggermente più cauti.')))
+    A(('img', (R['breakdown.png'], 'Figura 6.3 - Curva di rottura: collisione vs severità '
                                    '(panic-decel e gap di cut-in). La frontiera dei champion coincide '
                                    'con quella dell\'oracolo.')))
 
     # ---- 7. TRAFFICO ----
     A(('h1', '7. Traffico: micro -> meso -> macro (Tier 3)'))
     A(('h2', '7.1 String stability (singolo veicolo)'))
-    A(('p', f'Il guadagno testa->coda e\' <1 per tutti i champion (da '
+    A(('p', f'Il guadagno testa->coda è <1 per tutti i champion (da '
            f'{f2(SS.loc["Leonardo","head_to_tail"])} a {f2(SS.loc["Donatello","head_to_tail"])}), '
-           f'quindi le perturbazioni si smorzano. Nessuno e\' strettamente monotono come l\'ideale; '
+           f'quindi le perturbazioni si smorzano. Nessuno è strettamente monotono come l\'ideale; '
            f'Michelangelo mostra un picco di amplificazione transitoria a certe frequenze '
            f'(peak_gain {f2(SS.loc["Michelangelo","peak_gain"])}) pur restando globalmente stabile.'))
+    A(('img', (EQ_STRING, 'Equazione 7.1 — Guadagno testa→coda (string stability). s_1, s_N = '
+                          'perturbazione del gap del primo e dell\'ultimo veicolo del plotone; il '
+                          'plotone è string-stable se G_h2t < 1 (le perturbazioni si smorzano lungo la '
+                          'catena).')))
     A(('h2', '7.2 Mesoscopico: plotone di 12 veicoli'))
     A(('p', f'In un plotone in catena di 12 veicoli, tutti i champion sono string-stable a livello '
            f'testa->coda (gain {f2(MESO_GMIN)}-'
            f'{f2(MESO_GMAX)}, tutti <1) e nessuno collide; l\'onda in '
-           f'testa si smorza lungo la catena. E\' il risultato di traffico piu\' importante: i 5 '
+           f'testa si smorza lungo la catena. È il risultato di traffico più importante: i 5 '
            f'numeri predetti, propagati su una fila di veicoli, non generano stop-and-go artificiali.'))
     A(('img', (R['meso_gain.png'], 'Figura 7.1 - Guadagno per veicolo lungo il plotone: tutte le curve '
                                    '<1 e decrescenti = catena stabile.')))
-    A(('img', (R['meso_spacetime.png'], 'Figura 7.2 - Heatmap spazio-tempo della velocita\' nel plotone: '
+    A(('img', (R['meso_spacetime.png'], 'Figura 7.2 - Heatmap spazio-tempo della velocità nel plotone: '
                                         'la perturbazione iniziale si attenua a valle.')))
     A(('h2', '7.3 Macroscopico: diagramma fondamentale'))
-    A(('p', f'Sul livello macro (simulazione ad anello -> diagramma fondamentale flusso-densita\') '
+    A(('p', f'Sul livello macro (simulazione ad anello -> diagramma fondamentale flusso-densità) '
            f'emerge in modo netto l\'effetto dell\'errore di identificazione. Michelangelo, Leonardo '
-           f'e Donatello producono velocita\' di free-flow plausibili '
+           f'e Donatello producono velocità di free-flow plausibili '
            f'({f2(MACRO.loc["Leonardo","v_free_km_h"])}-{f2(MACRO.loc["Michelangelo","v_free_km_h"])} km/h, '
            f'vicine ai {f2(MACRO.loc[ORACLE,"v_free_km_h"])} km/h dell\'oracolo), mentre Raffaello - '
            f'che sbaglia v0 - gonfia la free-flow a {f2(MACRO.loc["Raffaello","v_free_km_h"])} km/h e '
-           f'con essa la capacita\' ({int(MACRO.loc["Raffaello","capacity_veh_h"])} veic/h contro i '
+           f'con essa la capacità ({int(MACRO.loc["Raffaello","capacity_veh_h"])} veic/h contro i '
            f'~{int(MACRO.loc[ORACLE,"capacity_veh_h"])} dell\'oracolo): il diagramma fondamentale ne '
-           f'esce distorto. L\'insorgenza dell\'instabilita\' stop-and-go (densita\' critica) e\' '
-           f'invece uniforme tra i modelli. Diversamente dalla precedente validazione, qui il '
-           f'simulatore macro produce curve sensate e viene quindi RIPORTATO, con la sola avvertenza '
+           f'esce distorto. L\'insorgenza dell\'instabilità stop-and-go (densità critica) è '
+           f'invece uniforme tra i modelli. Il livello macro è riportato con l\'avvertenza '
            f'sull\'artefatto v0 di Raffaello.'))
-    A(('img', (R['macro_fd.png'], 'Figura 7.3 - Diagramma fondamentale (flusso vs densita\'). La curva '
-                                  'di Raffaello e\' spostata in alto per la sovrastima di v0; gli altri '
+    A(('img', (EQ_FD, 'Equazione 7.2 — Diagramma fondamentale del traffico. ρ = densità [veicoli/km]; '
+                      'v(ρ) = velocità media in funzione della densità; q = flusso [veicoli/h]. La '
+                      'curva q(ρ) sintetizza capacità e densità critica.')))
+    A(('img', (R['macro_fd.png'], 'Figura 7.3 - Diagramma fondamentale (flusso vs densità). La curva '
+                                  'di Raffaello è spostata in alto per la sovrastima di v0; gli altri '
                                   'champion seguono l\'oracolo.')))
 
     # ---- 8. V2X ----
     A(('h1', '8. Robustezza V2X (Tier 2)'))
     A(('h2', '8.1 Il "hold-last-CAM" maschera la perdita di pacchetti'))
-    A(('p', f'Il canale V2X e\' modellato in modo realistico: probabilita\' di consegna (PDR), '
+    A(('p', f'Il canale V2X è modellato in modo realistico: probabilità di consegna (PDR), '
            f'latenza, jitter, perdite a raffica (Gilbert-Elliott), blackout, con tracciamento '
            f'dell\'Age-of-Information (AoI). Quando un pacchetto CAM manca, la strategia di default '
            f'"hold-last" mantiene l\'ultimo stato ricevuto (zero-order hold). Confrontando le '
            f'strategie: con hold-last (o dead-reckoning) la collisione resta al livello nominale '
            f'(~{f2(V2X[(V2X.champion=="Donatello")&(V2X.axis=="hold_mode")&(V2X.val=="hold_last")].collision_rate.iloc[0]*100)}%); '
-           f'ma in modalita\' "blind" - la rete lasciata sola, senza alcun handler di perdita - la '
+           f'ma in modalità "blind" - la rete lasciata sola, senza alcun handler di perdita - la '
            f'collisione ESPLODE a ~'
            f'{f2(V2X[(V2X.champion=="Donatello")&(V2X.axis=="hold_mode")&(V2X.val=="blind")].collision_rate.iloc[0]*100)}%. '
-           f'Lettura onesta: la robustezza alla perdita di pacchetti osservata NON e\' una proprieta\' '
+           f'Lettura onesta: la robustezza alla perdita di pacchetti osservata NON è una proprietà '
            f'intrinseca della SNN, ma dell\'handler hold-last che le sta davanti. La rete da sola non '
-           f'e\' robusta al packet-loss; il livello di canale la protegge.'))
+           f'è robusta al packet-loss; il livello di canale la protegge.'))
     A(('img', (F_V2X, 'Figura 8.1 - Sinistra: collisione per strategia di gestione perdita '
-                      '(hold-last/dead-reckon/blind); "blind" rivela la fragilita\' della rete nuda. '
+                      '(hold-last/dead-reckon/blind); "blind" rivela la fragilità della rete nuda. '
                       'Destra: degrado sotto stress di canale (PDR/latenza tollerati, canale pessimo e '
                       'blackout costosi).')))
     A(('img', (R['v2x_holdmode.png'], 'Figura 8.2 - Dettaglio per champion delle tre strategie di '
                                       'gestione della perdita.')))
-    A(('img', (R['v2x_aoi.png'], 'Figura 8.3 - Age-of-Information: l\'eta\' dell\'ultimo dato ricevuto '
+    A(('img', (R['v2x_aoi.png'], 'Figura 8.3 - Age-of-Information: l\'età dell\'ultimo dato ricevuto '
                                  'cresce con latenza e blackout, spiegando il degrado.')))
 
     # ---- 9. PROFILO FPGA ----
     A(('h1', '9. Profilo FPGA: quantizzazione, energia, salute della rete (Tier 5)'))
-    A(('callout', 'Questa sezione e\' il SOMMARIO del profilo FPGA nel contesto dell\'evaluate a 6-tier: '
-                  'i tre findings chiave (quantizzazione fixed-point, energia, discriminante di stabilita\'). '
+    A(('callout', 'Questa sezione è il SOMMARIO del profilo FPGA nel contesto dell\'evaluate a 6-tier: '
+                  'i tre findings chiave (quantizzazione fixed-point, energia, discriminante di stabilità). '
                   'Il profilo hardware COMPLETO — readiness/scorecard, pesi po2, fixed-point, spiking, energia, '
-                  'timing/WCET, risorse/DSE, SEU, I/O-HIL, thermal (45 figure su 10 sezioni) — e\' nel documento '
+                  'timing/WCET, risorse/DSE, SEU, I/O-HIL, thermal (45 figure su 10 sezioni) — è nel documento '
                   'dedicato FPGA_REPORT (Fase A pre-silicio).'))
     A(('h2', '9.1 Quantizzazione: fixed-point e potenze-di-due'))
     A(('p', f'La rete tollera una quantizzazione aggressiva. In virgola fissa l\'errore di '
@@ -681,8 +752,8 @@ def build_doc():
            f'(es. Donatello: {f3(QNT[(QNT.champion=="Donatello")&(QNT["mode"]=="fixed")&(QNT.frac_bits=="float")].id_err_mean.iloc[0])} '
            f'in float -> {f3(QNT[(QNT.champion=="Donatello")&(QNT["mode"]=="fixed")&(QNT.frac_bits=="2")].id_err_mean.iloc[0])} '
            f'a 2 bit). Con pesi a potenze-di-due (po2, che trasformano la moltiplicazione in uno '
-           f'shift-add) l\'errore e\' insensibile al numero di bit (dipende dall\'esponente, non dalla '
-           f'mantissa) e, soprattutto, viene ASSORBITO dal training: il "peso di 2" e\' gia\' quello '
+           f'shift-add) l\'errore è insensibile al numero di bit (dipende dall\'esponente, non dalla '
+           f'mantissa) e, soprattutto, viene ASSORBITO dal training: il "peso di 2" è già quello '
            f'nativo. L\'ablazione dei pesi mostra delta_qat_absorbed <= 0 per 3 champion su 4 '
            f'(accendere po2 non peggiora, anzi migliora), mentre Raffaello subisce un piccolo '
            f'aumento (+{f2(QAB.loc["Raffaello","delta_qat_absorbed"])}).'))
@@ -690,23 +761,21 @@ def build_doc():
                         'le x segnano la variante po2. Destra: il QAT assorbe i pesi po2 (barre verdi '
                         '= po2 non peggiora l\'errore).')))
     A(('h2', '9.2 Energia'))
-    A(('p', f'Il vantaggio energetico per inferenza e\' MODESTO: da '
+    A(('p', f'Il vantaggio energetico per inferenza è modesto: da '
            f'{f2(min(EN.loc[c,"advantage_x"] for c in CHAMP))}x a '
-           f'{f2(max(EN.loc[c,"advantage_x"] for c in CHAMP))}x vs una ANN densa equivalente. '
-           f'CORREZIONE (rispetto a una versione precedente di questo report): lo spike rate NON e\' '
-           f'iper-sparso ma ~{f2(SPK_MIN)}-{f2(SPK_MAX)}% e il vantaggio e\' ~5-6x, non 22-30x -- i numeri '
-           f'precedenti erano affetti da un bug di DOPPIA normalizzazione (divisione due volte per i tick '
-           f'interni, n_ticks) nel calcolo energia, ora corretto (le altre metriche del report non erano '
-           f'toccate). NOTA ONESTA: il vantaggio NON deriva dalla sparsita\' -- queste reti sparano ~15%, '
-           f'NON ~1-2%. Le operazioni sinaptiche (SynOps) SUPERANO i MAC dell\'ANN, quindi a parita\' di '
-           f'costo/operazione la SNN sarebbe peggiore; il guadagno viene solo dal minor costo unitario di '
-           f'un accumulo (AC) rispetto a un MAC, amplificato su FPGA dai pesi po2 (AC = shift+add) e dallo '
-           f'0 DSP. Importante: gli EventProp NON vincono sull\'energia -- Donatello (il piu\' contrattivo) '
-           f'ha anzi il vantaggio piu\' BASSO ({f2(EN.loc["Donatello","advantage_x"])}x) perche\' spara di '
-           f'piu\' ({f2(EN.loc["Donatello","mean_spike_rate_pct"])}%). Il loro vantaggio FPGA sta altrove: '
-           f'ρ<1 (contrattivo) e 0 neuroni morti (sezione 9.3).'))
+           f'{f2(max(EN.loc[c,"advantage_x"] for c in CHAMP))}x rispetto a una ANN densa equivalente. '
+           f'Il vantaggio non deriva dalla sparsità: queste reti sparano ~{f2(SPK_MIN)}-{f2(SPK_MAX)}%, '
+           f'non l\'1-2% talvolta attribuito alle SNN, e le operazioni sinaptiche (SynOps) eguagliano o '
+           f'superano i MAC dell\'ANN. A parità di costo per operazione la SNN sarebbe in svantaggio; il '
+           f'guadagno viene dal minor costo unitario di un accumulo (AC) rispetto a un MAC (modello di '
+           f'Horowitz 2014), amplificato su FPGA dai pesi po2 (AC = shift+add) e dallo 0 DSP. Gli '
+           f'EventProp non vincono sull\'energia: Donatello (il più contrattivo) ha anzi il vantaggio più '
+           f'basso ({f2(EN.loc["Donatello","advantage_x"])}x) perché spara di più '
+           f'({f2(EN.loc["Donatello","mean_spike_rate_pct"])}%); il loro vantaggio FPGA sta altrove, in '
+           f'ρ<1 e 0 neuroni morti (§9.3). Il profilo op-count dettagliato e la stima energetica per '
+           f'architettura sono in FPGA_REPORT.'))
     A(('img', (R['energy.png'], 'Figura 9.2 - Energia per inferenza e conteggio operazioni per champion.')))
-    A(('h2', '9.3 Salute della rete e il discriminante di stabilita\''))
+    A(('h2', '9.3 Salute della rete e il discriminante di stabilità'))
     A(('p', f'Qui si consuma la differenza hardware tra le due famiglie. I champion EventProp hanno '
            f'ZERO neuroni morti e una ricorrenza CONTRATTIVA (rho '
            f'{f2(EN.loc["Donatello","spectral_radius"])} per Donatello, '
@@ -716,22 +785,22 @@ def build_doc():
            f'{f2(EN.loc["Raffaello","spectral_radius"])} per Raffaello). Su FPGA, rho<1 garantisce '
            f'uno stato limitato in aritmetica a virgola fissa (l\'errore di quantizzazione si smorza), '
            f'mentre rho>1 espone al rischio di amplificazione/overflow e richiederebbe guardband e '
-           f'saturazione esplicita. E\' il motivo tecnico per cui EventProp e\' piu\' "FPGA-friendly", '
-           f'e per cui Donatello - contrattivo al massimo e piu\' accurato - e\' il candidato naturale '
+           f'saturazione esplicita. È il motivo tecnico per cui EventProp è più "FPGA-friendly", '
+           f'e per cui Donatello - contrattivo al massimo e più accurato - è il candidato naturale '
            f'al deploy.'))
     A(('img', (F_FPGA, 'Figura 9.3 - Il discriminante FPGA in un solo grafico: raggio spettrale (x) vs '
                        'accuratezza (y), area del marker ~ vantaggio energetico. La zona verde (rho<1) '
-                       'e\' quella sicura in fixed-point; Donatello e Michelangelo (cerchi) ci stanno, i '
+                       'è quella sicura in fixed-point; Donatello e Michelangelo (cerchi) ci stanno, i '
                        'BPTT (quadrati) no.')))
-    A(('img', (R['raster_Donatello.png'], 'Figura 9.4a - Raster/attivita\' di Donatello (EventProp): '
-                                          'attivita\' distribuita su tutti i neuroni, NESSUN neurone spento '
-                                          '(0 morti) -- nota: non e\' iper-sparsa, spara ~19%.')))
+    A(('img', (R['raster_Donatello.png'], 'Figura 9.4a - Raster/attività di Donatello (EventProp): '
+                                          'attività distribuita su tutti i neuroni, NESSUN neurone spento '
+                                          '(0 morti) -- nota: non è iper-sparsa, spara ~19%.')))
     A(('img', (R['raster_Raffaello.png'], 'Figura 9.4b - Raster di Raffaello (BPTT): ~31% di neuroni MAI '
-                                          'attivi (capacita\' sprecata) -- la differenza con EventProp e\' '
+                                          'attivi (capacità sprecata) -- la differenza con EventProp è '
                                           'l\'utilizzo dei neuroni, non il tasso di spike.')))
     A(('img', (R['showcase_Donatello.png'], 'Figura 9.5 - Vetrina di Donatello: identificazione, guida '
                                             'closed-loop e spiking su un episodio reale. La run contiene '
-                                            'la vetrina per tutti e 4 i champion piu\' una GIF "in diretta" '
+                                            'la vetrina per tutti e 4 i champion più una GIF "in diretta" '
                                             '(14_Showcase/showcase_*.png e showcase_live_Raffaello.gif).')))
 
     # ---- 10. VERDETTO ----
@@ -741,7 +810,7 @@ def build_doc():
         [
             ['Raffaello (BPTT)', 'ok (~oracolo)', f'{f2(ACC.loc["Raffaello","accuracy_pct"])}% (v0 mal-id)',
              f'rho {f2(EN.loc["Raffaello","spectral_radius"])}, 31% morti', 'sconsigliato (instabile + v0)'],
-            ['Leonardo (BPTT)', 'ok, piu\' umano', f'{f2(ACC.loc["Leonardo","accuracy_pct"])}%',
+            ['Leonardo (BPTT)', 'ok, più umano', f'{f2(ACC.loc["Leonardo","accuracy_pct"])}%',
              f'rho {f2(EN.loc["Leonardo","spectral_radius"])}, 31% morti', 'ottimo software, ma espansivo'],
             ['Donatello (EventProp)', 'ok (~oracolo)', f'{f2(ACC.loc["Donatello","accuracy_pct"])}% (best)',
              f'rho {f2(EN.loc["Donatello","spectral_radius"])}, 0 morti', 'CANDIDATO DEPLOY'],
@@ -749,39 +818,39 @@ def build_doc():
              f'rho {f2(EN.loc["Michelangelo","spectral_radius"])}, 0 morti', 'runner-up deploy'],
         ],
     )))
-    A(('p', 'Raccomandazione. Per il deploy FPGA la scelta e\' Donatello: unisce la migliore '
-           'accuratezza, una ricorrenza fortemente contrattiva (rho~0.05, la piu\' sicura in '
-           'fixed-point), zero neuroni morti e sicurezza pari all\'oracolo. Michelangelo e\' il '
+    A(('p', 'Raccomandazione. Per il deploy FPGA la scelta è Donatello: unisce la migliore '
+           'accuratezza, una ricorrenza fortemente contrattiva (rho~0.05, la più sicura in '
+           'fixed-point), zero neuroni morti e sicurezza pari all\'oracolo. Michelangelo è il '
            'runner-up (contrattivo, buona accuratezza). Leonardo resta il migliore sul piano '
-           'software (piu\' umano/naturale) ma la sua ricorrenza espansiva (rho>1) imporrebbe '
-           'guardband in hardware. Raffaello e\' sconsigliato: mis-identifica v0 (distorce il macro), '
-           'e\' il piu\' espansivo (rho~3) e ha il 31% di neuroni morti.'))
+           'software (più umano/naturale) ma la sua ricorrenza espansiva (rho>1) imporrebbe '
+           'guardband in hardware. Raffaello è sconsigliato: mis-identifica v0 (distorce il macro), '
+           'è il più espansivo (rho~3) e ha il 31% di neuroni morti.'))
     A(('callout', 'In una frase: lo studio EventProp si chiude confermando il fronte di Pareto - '
-                  'BPTT vince di poco sulla fisica, EventProp vince su accuratezza, stabilita\' e '
-                  'idoneita\' al silicio - e indica Donatello (EventProp) come la rete da portare su FPGA.'))
+                  'BPTT vince di poco sulla fisica, EventProp vince su accuratezza, stabilità e '
+                  'idoneità al silicio - e indica Donatello (EventProp) come la rete da portare su FPGA.'))
 
     # ---- 11. LIMITI E PROSSIMI PASSI ----
     A(('h1', '11. Limiti residui e prossimi passi'))
     A(('p', 'Limiti onesti di questa validazione: (1) nessun champion rientra ancora pienamente nella '
            'banda naturalistica umana (within_floor falso); (2) il problema resta mal-condizionato '
-           '(cond ~1.6e9, equifinalita\' ~29 set) - piu\' parametri spiegano la stessa guida; '
+           '(cond ~1.6e9, equifinalità ~29 set) - più parametri spiegano la stessa guida; '
            '(3) i champion BPTT hanno neuroni morti e ricorrenza espansiva; (4) le collisioni su '
            'ghiaccio e nei cut-in impossibili sono limiti fisici del plant, non correggibili dalla '
            'rete; (5) la robustezza V2X osservata dipende dall\'handler hold-last, non dalla rete '
-           'nuda. Il livello macro e\' ora riportato ma con l\'avvertenza sull\'artefatto v0 di '
+           'nuda. Il livello macro è ora riportato ma con l\'avvertenza sull\'artefatto v0 di '
            'Raffaello.'))
-    A(('p', 'Prossimi passi (fase FPGA). La presentazione della valutazione hardware e\' gia\' '
+    A(('p', 'Prossimi passi (fase FPGA). La presentazione della valutazione hardware è già '
            'progettata e bloccata per la Fase A "software_now" (pre-silicio) in '
            'document/FPGA_EVALUATE_DESIGN.md (il progetto) e il quadro tecnico in '
            'document/FPGA_EVALUATION_FRAMEWORK.md; il deliverable ESEGUITO di quella Fase A — la '
-           'FPGA-evaluate profonda (45 figure su 10 sezioni) — e\' il FPGA_REPORT. Restano aperte la Fase B (HDL) e la Fase C '
-           '(board): la conversione della SNN in HDL non e\' immediata (i tool tipo FINN non '
-           'supportano il neurone ALIF-PINN; la strada probabile e\' import in Simulink + HDL Coder), '
-           'ed e\' documentata come problema aperto. Su questo evaluate, il candidato Donatello e\' il '
+           'FPGA-evaluate profonda (45 figure su 10 sezioni) — è il FPGA_REPORT. Restano aperte la Fase B (HDL) e la Fase C '
+           '(board): la conversione della SNN in HDL non è immediata (i tool tipo FINN non '
+           'supportano il neurone ALIF-PINN; la strada probabile è import in Simulink + HDL Coder), '
+           'ed è documentata come problema aperto. Su questo evaluate, il candidato Donatello è il '
            'punto di partenza del percorso di deploy.'))
 
     # ---- 12. RIPRODUCIBILITA' ----
-    A(('h1', '12. Riproducibilita\' e mappa dei file'))
+    A(('h1', '12. Riproducibilità e mappa dei file'))
     A(('table', (
         ['Cosa', 'Dove'],
         [
@@ -792,7 +861,7 @@ def build_doc():
             ['Questo report (generatore)', 'scripts/build_validation_report_v3.py'],
             ['Simulatore closed-loop + plant/canale', 'utils/closed_loop_eval.py'],
             ['Identificazione closed-loop + V2X sweep', 'scripts/closed_loop_identify.py'],
-            ['Identificabilita\' (FIM/causale/...)', 'utils/identifiability.py'],
+            ['Identificabilità (FIM/causale/...)', 'utils/identifiability.py'],
             ['Quantizzazione (Qm.n/po2)', 'utils/quantize.py'],
             ['Diagnostica rete (dead/rho/raster)', 'utils/net_diagnostics.py'],
             ['Documento-master dello studio', 'document/EVENTPROP_STATUS.md'],
@@ -804,10 +873,33 @@ def build_doc():
     A(('p', 'Le figure-chiave di questo report (accuratezza, discriminante FPGA, sicurezza, '
            'quantizzazione, V2X) sono RICOSTRUITE dai CSV eseguendo '
            '"python scripts/build_validation_report_v3.py". Le figure di dettaglio (stratificazione, '
-           'FIM, causale, naturalisticita\', traiettorie, plant, reachability, breakdown, string/meso/'
+           'FIM, causale, naturalisticità, traiettorie, plant, reachability, breakdown, string/meso/'
            'macro, raster, showcase) sono RIUSATE dai PNG genuini prodotti dal notebook v3. La run '
-           'completa contiene 46 figure; qui ne e\' riportato un sottoinsieme curato - il resto e\' '
+           'completa contiene 46 figure; qui ne è riportato un sottoinsieme curato - il resto è '
            'nelle 15 sottocartelle dei risultati.'))
+
+    # ---- 13. RIFERIMENTI ----
+    A(('h1', '13. Riferimenti'))
+    A(('table', (
+        ['Riferimento', 'Tema'],
+        [
+            ['Greenshields, B.D. (1935). A study of traffic capacity. Highway Research Board Proceedings 14, 448–477.', 'Diagramma fondamentale (§7.3)'],
+            ['Massey, F.J. (1951). The Kolmogorov-Smirnov test for goodness of fit. J. American Statistical Association 46(253), 68–78.', 'Distanza di Kolmogorov-Smirnov (§4.4)'],
+            ['Gilbert, E.N. (1960). Capacity of a burst-noise channel. Bell System Technical Journal 39, 1253–1265.', 'Modello Gilbert-Elliott (§8.1)'],
+            ['Hayward, J.C. (1972). Near-miss determination through use of a scale of danger. Highway Research Record 384, 24–34.', 'Time-to-collision / SSM (§3.2)'],
+            ['ISO 2631-1 (1997). Mechanical vibration and shock — Evaluation of human exposure to whole-body vibration. ISO, Ginevra.', 'Soglia comfort/jerk (§5.1)'],
+            ['Transtrum, M.K., Machta, B.B., Sethna, J.P. (2011). Geometry of nonlinear least squares with applications to sloppy models and optimization. Physical Review E 83, 036701.', 'FIM, modelli sloppy (§4.3)'],
+            ['Kaul, S., Yates, R., Gruteser, M. (2012). Real-time status: how often should one update? IEEE INFOCOM, 2731–2735.', 'Age-of-Information (§8.1)'],
+            ['Treiber, M., Kesting, A. (2013). Traffic Flow Dynamics: Data, Models and Simulation. Springer.', 'ACC-IIDM, calibrazione, string stability (§1, §4, §7)'],
+            ['Horowitz, M. (2014). Computing\'s energy problem (and what we can do about it). IEEE Int. Solid-State Circuits Conf. (ISSCC), 10–14.', 'Energia AC/MAC (§9.2)'],
+            ['Bellec, G., Salaj, D., Subramoney, A., Legenstein, R., Maass, W. (2018). Long short-term memory and learning-to-learn in networks of spiking neurons. NeurIPS 31.', 'Neurone ALIF (§2.1)'],
+            ['Neftci, E.O., Mostafa, H., Zenke, F. (2019). Surrogate gradient learning in spiking neural networks. IEEE Signal Processing Magazine 36(6), 51–63.', 'BPTT+surrogate (§2.2)'],
+            ['Raissi, M., Perdikaris, P., Karniadakis, G.E. (2019). Physics-informed neural networks. J. Computational Physics 378, 686–707.', 'Loss PINN (§2.1)'],
+            ['ETSI EN 302 637-2 (2019). Intelligent Transport Systems; Cooperative Awareness Basic Service (CAM). ETSI.', 'V2X / CAM (§8.1)'],
+            ['Wunderlich, T.C., Pehle, C. (2021). Event-based backpropagation can compute exact gradients for spiking neural networks. Scientific Reports 11, 12829.', 'EventProp (§2.2)'],
+            ['Mishchenko, K., Defazio, A. (2023). Prodigy: an expeditiously adaptive parameter-free learner. arXiv:2306.06101.', 'Ottimizzatore Prodigy (§2.3)'],
+        ],
+    )))
     return D
 
 
@@ -962,7 +1054,7 @@ def render_pdf(doc, outpath):
         canvas.saveState()
         canvas.setFont('DJ', 7.5)
         canvas.setFillColor(colors.HexColor('#888888'))
-        canvas.drawString(2 * cm, 1.1 * cm, 'CF_FSNN - Report di Validazione v3 (EventProp_Study)')
+        canvas.drawString(2 * cm, 1.1 * cm, 'CF_FSNN — Report di Validazione (v3)')
         canvas.drawRightString(A4[0] - 2 * cm, 1.1 * cm, f'pag. {docx.page}')
         canvas.restoreState()
 
