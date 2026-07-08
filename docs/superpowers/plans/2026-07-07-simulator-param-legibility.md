@@ -1,5 +1,7 @@
 # Simulator Param-Legibility Implementation Plan (Extension Phase 1)
 
+> **STATUS: ✅ COMPLETE (2026-07-08).** Executed inline in `cf_sim` (TDD). Task 1 = commit `10b8da4`, Task 2 = commit `d6200dd` (pushed to `origin/Simulator`). 46 tests green; core golden untouched; render offscreen-inspected.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: superpowers:executing-plans (inline). Steps use checkbox (`- [ ]`) syntax.
 > Runs entirely in the **`cf_sim`** conda env: `conda run -n cf_sim python -m pytest ...` (offscreen for Qt). All changes are in `sim/ui/*`; the golden-tested headless core (`sim/state.py`, `sim/stepper.py`, `sim/backend.py`, `sim/events.py`, `sim/probe.py`, `sim/eventprop_stepper.py`) is untouched.
 

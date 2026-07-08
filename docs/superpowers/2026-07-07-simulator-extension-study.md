@@ -131,9 +131,11 @@ The core already computes these but shows none of them:
 
 ## 6. Revised roadmap (post-decisions)
 
-- **Phase 1 — RECOMMENDED FIRST. Param legibility (drop-in `NetPanel` replacement).** 5 linked
-  small-multiples in physical units (+ optional GT reference) + a spike-sparsity/firing-% readout.
-  Zero dock dependency, zero `restoreState` risk. Delivers exactly the headline ask (§0.3, §2).
+- **Phase 1 — ✅ DONE (2026-07-08, commits `10b8da4`+`d6200dd`). Param legibility (drop-in `NetPanel`
+  replacement).** 5 linked small-multiples in physical units (+ optional GT reference) + a
+  spike-sparsity/firing-% readout. Zero dock dependency, zero `restoreState` risk. Delivered exactly the
+  headline ask (§0.3, §2). Plan: `docs/superpowers/plans/2026-07-07-simulator-param-legibility.md`;
+  46 tests green in `cf_sim`, core golden untouched.
 - **Phase 2 — Dockable shell.** Migrate `app.py` → `DockArea`; 4 panels → docks; save/restore +
   1–2 presets; "View" lazy-add-dock menu. Isolated so the library risk can't block the science.
 - **Phase 3 — Time backbone + live metric docks.** Wire ring buffer + `ReplayLog` into a global
