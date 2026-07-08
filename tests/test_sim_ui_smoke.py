@@ -158,3 +158,11 @@ def test_netpanel_firing_readout(qapp):
     panel = NetPanel()
     panel.update_frame(probe)
     assert "%" in panel._firing_label.text() and "50" in panel._firing_label.text()
+
+
+def test_simapp_feeds_ground_truth_to_netpanel(qapp):
+    win = SimApp(CHAMP)
+    win.select_scenario(0)
+    gt = win._scenarios[0].params_gt
+    assert win._netpanel._gt_lines[0].isVisible()
+    assert abs(win._netpanel._gt_lines[0].value() - float(gt[0])) < 1e-6

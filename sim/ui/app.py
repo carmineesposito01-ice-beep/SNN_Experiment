@@ -101,6 +101,7 @@ class SimApp(QMainWindow):
         self.loop = SimLoop(stepper, self._probe, dt_fixed=DT)
         self._last_result = None
         self._header.setText(f"champion: {self._champ_name}    |    scenario: {sc.name}")
+        self._netpanel.set_ground_truth(sc.params_gt)
         self._refresh_status()
 
     def reset_run(self):
