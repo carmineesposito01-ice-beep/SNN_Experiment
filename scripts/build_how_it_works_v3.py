@@ -905,9 +905,11 @@ def build_doc():
                                'calibrazione per canale (default off=0, τ=1); σ = sigmoide. La sigmoide '
                                'garantisce che ogni parametro resti entro i bound fisici della tabella '
                                'seguente.')))
-    A(('p', 'I 864 parametri si ripartiscono così: fc 128 + rec_U 256 + rec_V 256 + base_threshold 32 + '
-           'thresh_jump 32 + out_fc 160. Le 64 soglie (32 base_threshold + 32 thresh_jump) sono '
-           'apprendibili ma non quantizzate po2. I bound fisici dei cinque parametri:'))
+    A(('p', 'I 864 parametri della baseline (rango 8) si ripartiscono così: fc 128 + rec_U 256 + rec_V '
+           '256 + base_threshold 32 + thresh_jump 32 + out_fc 160. Le 64 soglie (32 base_threshold + 32 '
+           'thresh_jump) sono apprendibili ma non quantizzate po2. Le varianti a rango 16 (usate da due '
+           'dei champion del report gemello) raddoppiano i pesi ricorrenti, per ~1400 parametri. I bound '
+           'fisici dei cinque parametri:'))
     A(('table', (
         ['Parametro fisico', 'Simbolo', 'Lo', 'Hi', 'Unità'],
         [['velocità desiderata', 'v0', '8.0', '45.0', 'm/s'],
@@ -1124,8 +1126,8 @@ def build_doc():
            'po2 (§15) → PowerOf2Quantize; PINN (§12) → pinn_loss.'))
     A(('p', 'Lo stato attuale, in modo dichiarato: il plateau di validazione (val_data, l\'errore fisico '
            'sull\'accelerazione) è ~0.19–0.20, allineato al riferimento di calibrazione ~0.20 '
-           '(Treiber & Kesting 2013), con un record a 0.1926; i valori per champion sono in '
-           'VALIDATION_REPORT_v3 §4.1. Due cause strutturali sono diagnosticate — l\'identificabilità '
+           '(Treiber & Kesting 2013), con un record a 0.1926; l\'accuratezza di identificazione per '
+           'champion è riportata in VALIDATION_REPORT_v3 §4.1. Due cause strutturali sono diagnosticate — l\'identificabilità '
            'sloppy di a/b e la qualità del gradiente SNN; l\'esito del confronto BPTT vs EventProp '
            '(fronte di Pareto) e il verdetto di sicurezza sono nel report gemello (VALIDATION_REPORT_v3 '
            '§1, §5, §10). Va sempre distinto ciò che è validato in produzione (BPTT+surrogate, '

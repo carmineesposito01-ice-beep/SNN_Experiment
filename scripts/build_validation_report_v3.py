@@ -134,11 +134,11 @@ def fig_fpga():
         ax.annotate(f'{ch} ({METHOD[ch]})\nrho={rho:.2f} | {dead:.0f}% neuroni morti | {adv:.0f}x energia',
                     (rho, acc), xytext=(rho + dx, acc - 2.4), fontsize=8, ha=ha,
                     color=COLOR[ch])
-    ax.text(0.5, 71.5, 'ZONA CONTRATTIVA  rho<1\n(stato limitato in fixed-point)',
+    ax.text(0.5, 71.5, 'ZONA CONTRATTIVA  ρ<1\n(stato limitato in fixed-point)',
             ha='center', fontsize=9, color='#2e7d32', style='italic')
-    ax.text(2.1, 71.5, 'ZONA ESPANSIVA  rho>1\n(rischio blow-up)',
+    ax.text(2.1, 71.5, 'ZONA ESPANSIVA  ρ>1\n(rischio blow-up)',
             ha='center', fontsize=9, color='#c62828', style='italic')
-    ax.set_xlabel('raggio spettrale rho(U*V) della ricorrenza ALIF')
+    ax.set_xlabel('raggio spettrale ρ(U·V) della ricorrenza ALIF')
     ax.set_ylabel('accuratezza di identificazione [%]')
     ax.set_title('Discriminante FPGA: EventProp è contrattivo + più accurato. '
                  'Marker = area proporzionale al vantaggio energetico.\n'
@@ -378,7 +378,7 @@ def build_doc():
 
     # ---- 1. SOMMARIO ESECUTIVO ----
     A(('h1', '1. Sommario esecutivo'))
-    A(('p', 'CF_FSNN è una rete neurale spiking (SNN, ~860 parametri, target FPGA PYNQ-Z1) '
+    A(('p', 'CF_FSNN è una rete neurale spiking (SNN, ~860-1400 parametri secondo il rango della ricorrenza, target FPGA PYNQ-Z1) '
            'che osserva un veicolo follower via V2X (gap, velocità, delta-v, velocità leader) '
            'e ne identifica i 5 parametri del modello di car-following ACC-IIDM: [v0, T, s0, a, b] '
            '(Treiber & Kesting, Ch.12). Questo documento è il report di CHIUSURA dello studio '
@@ -392,11 +392,11 @@ def build_doc():
            'di frenata comparabili (guidano più cauti, non meno). Le collisioni residue non sono un difetto '
            'della rete ma un limite fisico: geometrie di cut-in inevitabili e fondo ghiacciato '
            'fanno collidere anche l\'oracolo. Sul piano hardware emerge un discriminante netto: '
-           'i due champion EventProp sono contrattivi (raggio spettrale della ricorrenza rho<1) e '
-           'non hanno neuroni morti, mentre i due BPTT sono espansivi (rho>1) con ~31% di neuroni '
+           'i due champion EventProp sono contrattivi (raggio spettrale della ricorrenza ρ<1) e '
+           'non hanno neuroni morti, mentre i due BPTT sono espansivi (ρ>1) con ~31% di neuroni '
            'morti. Contrattivo = stato limitato in aritmetica a virgola fissa = sicuro su FPGA. '
            'Sommato alla migliore accuratezza, questo indica '
-           + '**Donatello (EventProp)** come candidato al deploy: rho=' + f2(EN.loc['Donatello', 'spectral_radius'])
+           + '**Donatello (EventProp)** come candidato al deploy: ρ=' + f2(EN.loc['Donatello', 'spectral_radius'])
            + ', accuratezza ' + f2(ACC.loc['Donatello', 'accuracy_pct']) + '%, 0 neuroni morti. '
            + 'Avvertenza importante: tutti i risultati qui riportati sono in SIMULAZIONE closed-loop '
            + '(plant e oracolo simulati); il deploy su FPGA è progettato ma NON ancora validato in '
@@ -414,7 +414,7 @@ def build_doc():
              f'string-stable: gain testa->coda {f2(MESO_GMIN)}-{f2(MESO_GMAX)} (<1)',
              'plotone di 12 stabile'],
             ['Stabilità FPGA (discriminante)',
-             f'rho EventProp {f2(EN.loc["Donatello","spectral_radius"])}/{f2(EN.loc["Michelangelo","spectral_radius"])} (<1) vs BPTT {f2(EN.loc["Leonardo","spectral_radius"])}/{f2(EN.loc["Raffaello","spectral_radius"])} (>1)',
+             f'ρ EventProp {f2(EN.loc["Donatello","spectral_radius"])}/{f2(EN.loc["Michelangelo","spectral_radius"])} (<1) vs BPTT {f2(EN.loc["Leonardo","spectral_radius"])}/{f2(EN.loc["Raffaello","spectral_radius"])} (>1)',
              'EventProp contrattivo -> fixed-point sicuro'],
             ['Quantizzazione',
              'fixed-point trascurabile fino a 2 bit; po2 assorbito dal QAT (delta<=0 su 3/4)',
@@ -456,19 +456,20 @@ def build_doc():
            'famiglie BPTT storiche scartate toccavano ~22) e '
            'su FPGA-friendliness; ed entrambi guidano in sicurezza. Il presente evaluate quantifica '
            'quel fronte su tutte le dimensioni che contano per un deploy neuromorfico.'))
-    A(('callout', 'rho(U*V) è il raggio spettrale della ricorrenza low-rank: rho<1 = mappa contrattiva '
-                  '(stato limitato, quantizzazione sicura in virgola fissa), rho>1 = espansiva (rischio '
+    A(('callout', 'ρ(U·V) è il raggio spettrale della ricorrenza low-rank: ρ<1 = mappa contrattiva '
+                  '(stato limitato, quantizzazione sicura in virgola fissa), ρ>1 = espansiva (rischio '
                   'saturazione/overflow). I FONDAMENTI teorici sono in HOW_IT_WORKS_v3 §11; qui il '
                   'RISULTATO: EventProp produce reti contrattive per costruzione (confermato sui champion, '
                   '§9.3) - un vantaggio strutturale sul silicio.'))
     A(('h2', '2.3 I 4 champion e l\'oracolo'))
-    A(('p', 'Il confronto usa 4 champion più l\'oracolo. Tutti i champion hanno la stessa '
-           'architettura; differiscono per metodo e ricetta di training. L\'oracolo (nome in codice '
+    A(('p', 'Il confronto usa 4 champion più l\'oracolo. Tutti i champion condividono la stessa '
+           'struttura (input(4) → ALIF(32) → LI(5)); differiscono per metodo e ricetta di addestramento '
+           'e per il rango della ricorrenza (8 nei BPTT, 16 negli EventProp). L\'oracolo (nome in codice '
            '"Master Splinter") NON è una rete: è il modello ACC-IIDM con i parametri veri, e '
            'serve da limite superiore di riferimento. I nomi sono un tema (le Tartarughe Ninja); '
            'la run porta l\'etichetta "TURTLE POWER!!!".'))
     A(('table', (
-        ['Champion', 'Checkpoint', 'Metodo', 'Accuratezza', 'rho(U*V)', 'Carattere'],
+        ['Champion', 'Checkpoint', 'Metodo', 'Accuratezza', 'ρ(U·V)', 'Carattere'],
         [[ch, CKPT[ch], METHOD[ch], f'{f2(ACC.loc[ch,"accuracy_pct"])}%',
           f2(EN.loc[ch, 'spectral_radius']), CHARACTER[ch]] for ch in CHAMP]
         + [[ORACLE, 'parametri veri', 'oracolo (ACC-IIDM)', '100%', '-', 'riferimento']],
@@ -490,7 +491,7 @@ def build_doc():
             ['T2 plant+canale', '06 V2X, 07 VehicleDynamics', 'attuatore/attrito/pendenza, PDR/latenza/AoI'],
             ['T3 traffico', '03 String, 12 Mesoscopico, 13 Macroscopico', 'string stability, plotone, diagramma fondamentale'],
             ['T4 identificabilità', '04 Identifiability', 'FIM, equifinalità, causale, naturalisticità'],
-            ['T5 FPGA', '05 Quantizzazione, 08 Energia/Spiking', 'Qm.n/po2, energia, salute della rete, rho'],
+            ['T5 FPGA', '05 Quantizzazione, 08 Energia/Spiking', 'Qm.n/po2, energia, salute della rete, ρ'],
         ],
     )))
     A(('h2', '3.1 Il simulatore closed-loop e l\'oracolo'))
@@ -515,7 +516,7 @@ def build_doc():
             ['impact_dv', 'delta-v ipotetico d\'impatto', 'gravità potenziale'],
             ['rms_jerk / frac_iso', 'strappo RMS; frazione fuori soglia ISO', 'comfort'],
             ['head_to_tail_gain', 'ampiezza coda / testa nel plotone', 'string stability (<1 = stabile)'],
-            ['rho(U*V), dead_frac', 'raggio spettrale ricorrenza; neuroni morti', 'salute e stabilità hardware'],
+            ['ρ(U·V), dead_frac', 'raggio spettrale ricorrenza; neuroni morti', 'salute e stabilità hardware'],
         ],
     )))
     A(('img', (EQ_SSM, 'Equazione 3.1 — Principali surrogate safety measures (indicatori continui di '
@@ -777,19 +778,19 @@ def build_doc():
     A(('img', (R['energy.png'], 'Figura 9.2 - Energia per inferenza e conteggio operazioni per champion.')))
     A(('h2', '9.3 Salute della rete e il discriminante di stabilità'))
     A(('p', f'Qui si consuma la differenza hardware tra le due famiglie. I champion EventProp hanno '
-           f'ZERO neuroni morti e una ricorrenza CONTRATTIVA (rho '
+           f'ZERO neuroni morti e una ricorrenza CONTRATTIVA (ρ '
            f'{f2(EN.loc["Donatello","spectral_radius"])} per Donatello, '
            f'{f2(EN.loc["Michelangelo","spectral_radius"])} per Michelangelo); i champion BPTT hanno '
            f'~{f2(EN.loc["Raffaello","dead_frac"]*100)}% di neuroni morti e una ricorrenza ESPANSIVA '
-           f'(rho {f2(EN.loc["Leonardo","spectral_radius"])} per Leonardo, '
-           f'{f2(EN.loc["Raffaello","spectral_radius"])} per Raffaello). Su FPGA, rho<1 garantisce '
+           f'(ρ {f2(EN.loc["Leonardo","spectral_radius"])} per Leonardo, '
+           f'{f2(EN.loc["Raffaello","spectral_radius"])} per Raffaello). Su FPGA, ρ<1 garantisce '
            f'uno stato limitato in aritmetica a virgola fissa (l\'errore di quantizzazione si smorza), '
-           f'mentre rho>1 espone al rischio di amplificazione/overflow e richiederebbe guardband e '
+           f'mentre ρ>1 espone al rischio di amplificazione/overflow e richiederebbe guardband e '
            f'saturazione esplicita. È il motivo tecnico per cui EventProp è più "FPGA-friendly", '
            f'e per cui Donatello - contrattivo al massimo e più accurato - è il candidato naturale '
            f'al deploy.'))
     A(('img', (F_FPGA, 'Figura 9.3 - Il discriminante FPGA in un solo grafico: raggio spettrale (x) vs '
-                       'accuratezza (y), area del marker ~ vantaggio energetico. La zona verde (rho<1) '
+                       'accuratezza (y), area del marker ~ vantaggio energetico. La zona verde (ρ<1) '
                        'è quella sicura in fixed-point; Donatello e Michelangelo (cerchi) ci stanno, i '
                        'BPTT (quadrati) no.')))
     A(('img', (R['raster_Donatello.png'], 'Figura 9.4a - Raster/attività di Donatello (EventProp): '
@@ -806,25 +807,25 @@ def build_doc():
     # ---- 10. VERDETTO ----
     A(('h1', '10. Verdetto consolidato e raccomandazione di deploy'))
     A(('table', (
-        ['Champion', 'Sicurezza', 'Accuratezza', 'FPGA (rho, morti)', 'Sintesi'],
+        ['Champion', 'Sicurezza', 'Accuratezza', 'FPGA (ρ, morti)', 'Sintesi'],
         [
             ['Raffaello (BPTT)', 'ok (~oracolo)', f'{f2(ACC.loc["Raffaello","accuracy_pct"])}% (v0 mal-id)',
-             f'rho {f2(EN.loc["Raffaello","spectral_radius"])}, 31% morti', 'sconsigliato (instabile + v0)'],
+             f'ρ {f2(EN.loc["Raffaello","spectral_radius"])}, 31% morti', 'sconsigliato (instabile + v0)'],
             ['Leonardo (BPTT)', 'ok, più umano', f'{f2(ACC.loc["Leonardo","accuracy_pct"])}%',
-             f'rho {f2(EN.loc["Leonardo","spectral_radius"])}, 31% morti', 'ottimo software, ma espansivo'],
+             f'ρ {f2(EN.loc["Leonardo","spectral_radius"])}, 31% morti', 'ottimo software, ma espansivo'],
             ['Donatello (EventProp)', 'ok (~oracolo)', f'{f2(ACC.loc["Donatello","accuracy_pct"])}% (best)',
-             f'rho {f2(EN.loc["Donatello","spectral_radius"])}, 0 morti', 'CANDIDATO DEPLOY'],
+             f'ρ {f2(EN.loc["Donatello","spectral_radius"])}, 0 morti', 'CANDIDATO DEPLOY'],
             ['Michelangelo (EventProp)', 'ok', f'{f2(ACC.loc["Michelangelo","accuracy_pct"])}%',
-             f'rho {f2(EN.loc["Michelangelo","spectral_radius"])}, 0 morti', 'runner-up deploy'],
+             f'ρ {f2(EN.loc["Michelangelo","spectral_radius"])}, 0 morti', 'runner-up deploy'],
         ],
     )))
     A(('p', 'Raccomandazione. Per il deploy FPGA la scelta è Donatello: unisce la migliore '
-           'accuratezza, una ricorrenza fortemente contrattiva (rho~0.05, la più sicura in '
+           'accuratezza, una ricorrenza fortemente contrattiva (ρ~0.05, la più sicura in '
            'fixed-point), zero neuroni morti e sicurezza pari all\'oracolo. Michelangelo è il '
            'runner-up (contrattivo, buona accuratezza). Leonardo resta il migliore sul piano '
-           'software (più umano/naturale) ma la sua ricorrenza espansiva (rho>1) imporrebbe '
+           'software (più umano/naturale) ma la sua ricorrenza espansiva (ρ>1) imporrebbe '
            'guardband in hardware. Raffaello è sconsigliato: mis-identifica v0 (distorce il macro), '
-           'è il più espansivo (rho~3) e ha il 31% di neuroni morti.'))
+           'è il più espansivo (ρ~3) e ha il 31% di neuroni morti.'))
     A(('callout', 'In una frase: lo studio EventProp si chiude confermando il fronte di Pareto - '
                   'BPTT vince di poco sulla fisica, EventProp vince su accuratezza, stabilità e '
                   'idoneità al silicio - e indica Donatello (EventProp) come la rete da portare su FPGA.'))
@@ -863,7 +864,7 @@ def build_doc():
             ['Identificazione closed-loop + V2X sweep', 'scripts/closed_loop_identify.py'],
             ['Identificabilità (FIM/causale/...)', 'utils/identifiability.py'],
             ['Quantizzazione (Qm.n/po2)', 'utils/quantize.py'],
-            ['Diagnostica rete (dead/rho/raster)', 'utils/net_diagnostics.py'],
+            ['Diagnostica rete (dead/ρ/raster)', 'utils/net_diagnostics.py'],
             ['Documento-master dello studio', 'document/EVENTPROP_STATUS.md'],
             ['Design valutazione FPGA (progetto)', 'document/FPGA_EVALUATE_DESIGN.md / FPGA_EVALUATION_FRAMEWORK.md'],
             ['Profilo FPGA profondo — Fase A (45 figure, 10 sez.)', 'document/FPGA_REPORT.md / .pdf'],
@@ -892,9 +893,9 @@ def build_doc():
             ['Kaul, S., Yates, R., Gruteser, M. (2012). Real-time status: how often should one update? IEEE INFOCOM, 2731–2735.', 'Age-of-Information (§8.1)'],
             ['Treiber, M., Kesting, A. (2013). Traffic Flow Dynamics: Data, Models and Simulation. Springer.', 'ACC-IIDM, calibrazione, string stability (§1, §4, §7)'],
             ['Horowitz, M. (2014). Computing\'s energy problem (and what we can do about it). IEEE Int. Solid-State Circuits Conf. (ISSCC), 10–14.', 'Energia AC/MAC (§9.2)'],
-            ['Bellec, G., Salaj, D., Subramoney, A., Legenstein, R., Maass, W. (2018). Long short-term memory and learning-to-learn in networks of spiking neurons. NeurIPS 31.', 'Neurone ALIF (§2.1)'],
+            ['Bellec, G., Salaj, D., Subramoney, A., Legenstein, R., Maass, W. (2018). Long short-term memory and learning-to-learn in networks of spiking neurons. Advances in Neural Information Processing Systems (NeurIPS) 31.', 'Neurone ALIF (§2.1)'],
             ['Neftci, E.O., Mostafa, H., Zenke, F. (2019). Surrogate gradient learning in spiking neural networks. IEEE Signal Processing Magazine 36(6), 51–63.', 'BPTT+surrogate (§2.2)'],
-            ['Raissi, M., Perdikaris, P., Karniadakis, G.E. (2019). Physics-informed neural networks. J. Computational Physics 378, 686–707.', 'Loss PINN (§2.1)'],
+            ['Raissi, M., Perdikaris, P., Karniadakis, G.E. (2019). Physics-informed neural networks: a deep learning framework for solving forward and inverse problems involving nonlinear PDEs. J. Computational Physics 378, 686–707.', 'Loss PINN (§2.1)'],
             ['ETSI EN 302 637-2 (2019). Intelligent Transport Systems; Cooperative Awareness Basic Service (CAM). ETSI.', 'V2X / CAM (§8.1)'],
             ['Wunderlich, T.C., Pehle, C. (2021). Event-based backpropagation can compute exact gradients for spiking neural networks. Scientific Reports 11, 12829.', 'EventProp (§2.2)'],
             ['Mishchenko, K., Defazio, A. (2023). Prodigy: an expeditiously adaptive parameter-free learner. arXiv:2306.06101.', 'Ottimizzatore Prodigy (§2.3)'],

@@ -31,16 +31,16 @@
 
 ## 1. Sommario esecutivo
 
-CF_FSNN è una rete neurale spiking (SNN, ~860 parametri, target FPGA PYNQ-Z1) che osserva un veicolo follower via V2X (gap, velocità, delta-v, velocità leader) e ne identifica i 5 parametri del modello di car-following ACC-IIDM: [v0, T, s0, a, b] (Treiber & Kesting, Ch.12). Questo documento è il report di CHIUSURA dello studio EventProp: mette a confronto i 4 champion emersi dallo studio - due addestrati con BPTT+surrogate gradient (Raffaello, Leonardo) e due con EventProp, il gradiente aggiunto esatto (Donatello, Michelangelo) - più l'oracolo, su una validazione closed-loop esaustiva a 6 livelli (15 dimensioni: dall'accuratezza alla sicurezza, al traffico, al profilo hardware FPGA).
+CF_FSNN è una rete neurale spiking (SNN, ~860-1400 parametri secondo il rango della ricorrenza, target FPGA PYNQ-Z1) che osserva un veicolo follower via V2X (gap, velocità, delta-v, velocità leader) e ne identifica i 5 parametri del modello di car-following ACC-IIDM: [v0, T, s0, a, b] (Treiber & Kesting, Ch.12). Questo documento è il report di CHIUSURA dello studio EventProp: mette a confronto i 4 champion emersi dallo studio - due addestrati con BPTT+surrogate gradient (Raffaello, Leonardo) e due con EventProp, il gradiente aggiunto esatto (Donatello, Michelangelo) - più l'oracolo, su una validazione closed-loop esaustiva a 6 livelli (15 dimensioni: dall'accuratezza alla sicurezza, al traffico, al profilo hardware FPGA).
 
-Verdetto. Tutti e 4 i champion guidano in sicurezza: in anello chiuso il loro tasso di collisione è allineato a quello dell'oracolo, con TTC pari o superiori e margini di frenata comparabili (guidano più cauti, non meno). Le collisioni residue non sono un difetto della rete ma un limite fisico: geometrie di cut-in inevitabili e fondo ghiacciato fanno collidere anche l'oracolo. Sul piano hardware emerge un discriminante netto: i due champion EventProp sono contrattivi (raggio spettrale della ricorrenza rho<1) e non hanno neuroni morti, mentre i due BPTT sono espansivi (rho>1) con ~31% di neuroni morti. Contrattivo = stato limitato in aritmetica a virgola fissa = sicuro su FPGA. Sommato alla migliore accuratezza, questo indica **Donatello (EventProp)** come candidato al deploy: rho=0.05, accuratezza 84.75%, 0 neuroni morti. Avvertenza importante: tutti i risultati qui riportati sono in SIMULAZIONE closed-loop (plant e oracolo simulati); il deploy su FPGA è progettato ma NON ancora validato in hardware - la conversione in HDL è un problema aperto (sezione 11).
+Verdetto. Tutti e 4 i champion guidano in sicurezza: in anello chiuso il loro tasso di collisione è allineato a quello dell'oracolo, con TTC pari o superiori e margini di frenata comparabili (guidano più cauti, non meno). Le collisioni residue non sono un difetto della rete ma un limite fisico: geometrie di cut-in inevitabili e fondo ghiacciato fanno collidere anche l'oracolo. Sul piano hardware emerge un discriminante netto: i due champion EventProp sono contrattivi (raggio spettrale della ricorrenza ρ<1) e non hanno neuroni morti, mentre i due BPTT sono espansivi (ρ>1) con ~31% di neuroni morti. Contrattivo = stato limitato in aritmetica a virgola fissa = sicuro su FPGA. Sommato alla migliore accuratezza, questo indica **Donatello (EventProp)** come candidato al deploy: ρ=0.05, accuratezza 84.75%, 0 neuroni morti. Avvertenza importante: tutti i risultati qui riportati sono in SIMULAZIONE closed-loop (plant e oracolo simulati); il deploy su FPGA è progettato ma NON ancora validato in hardware - la conversione in HDL è un problema aperto (sezione 11).
 
 | Asse | Risultato | Lettura |
 |---|---|---|
 | Accuratezza (identificazione) | EventProp 82% vs BPTT 73% (media); best Donatello 84.75% | EventProp identifica meglio |
 | Sicurezza (closed-loop) | collisione champion 6.67-7.56% ~ oracolo 7.56% | come l'oracolo (residuo = fisica) |
 | Traffico (meso plotone) | string-stable: gain testa->coda 0.11-0.15 (<1) | plotone di 12 stabile |
-| Stabilità FPGA (discriminante) | rho EventProp 0.05/0.39 (<1) vs BPTT 1.16/2.99 (>1) | EventProp contrattivo -> fixed-point sicuro |
+| Stabilità FPGA (discriminante) | ρ EventProp 0.05/0.39 (<1) vs BPTT 1.16/2.99 (>1) | EventProp contrattivo -> fixed-point sicuro |
 | Quantizzazione | fixed-point trascurabile fino a 2 bit; po2 assorbito dal QAT (delta<=0 su 3/4) | pronto per pesi potenze-di-due |
 | Energia | 4.77x-6.01x vs ANN densa; spike rate 13.31-19.00% (NON sparso) | da costo AC (accumulo) < MAC (molt.-accum.), non da sparsità |
 | V2X (perdita pacchetti) | blind = 66.67% collisione; con hold-last ~8.15% | robustezza data dall'handler, non dalla rete |
@@ -61,14 +61,14 @@ Architettura: input(4) -> strato nascosto ALIF (neuroni spiking con soglia adatt
 
 Lo studio ha mappato e chiuso il confronto tra due modi di calcolare il gradiente attraverso i tick della SNN: BPTT con surrogate gradient (si "ammorbidisce" la soglia non-differenziabile dello spike) contro EventProp (adjoint esatto sugli istanti di spike). Il risultato è un fronte di Pareto, non un vincitore secco: il champion BPTT vince di poco sulla fisica pura (~5.5%), ma EventProp vince su NRMSE, su STABILITA' (raggio spettrale ρ 0.05-0.39 negli EventProp contro 1.16-2.99 nei BPTT champion — le famiglie BPTT storiche scartate toccavano ~22) e su FPGA-friendliness; ed entrambi guidano in sicurezza. Il presente evaluate quantifica quel fronte su tutte le dimensioni che contano per un deploy neuromorfico.
 
-> **Nota.** rho(U*V) è il raggio spettrale della ricorrenza low-rank: rho<1 = mappa contrattiva (stato limitato, quantizzazione sicura in virgola fissa), rho>1 = espansiva (rischio saturazione/overflow). I FONDAMENTI teorici sono in HOW_IT_WORKS_v3 §11; qui il RISULTATO: EventProp produce reti contrattive per costruzione (confermato sui champion, §9.3) - un vantaggio strutturale sul silicio.
+> **Nota.** ρ(U·V) è il raggio spettrale della ricorrenza low-rank: ρ<1 = mappa contrattiva (stato limitato, quantizzazione sicura in virgola fissa), ρ>1 = espansiva (rischio saturazione/overflow). I FONDAMENTI teorici sono in HOW_IT_WORKS_v3 §11; qui il RISULTATO: EventProp produce reti contrattive per costruzione (confermato sui champion, §9.3) - un vantaggio strutturale sul silicio.
 
 
 ### 2.3 I 4 champion e l'oracolo
 
-Il confronto usa 4 champion più l'oracolo. Tutti i champion hanno la stessa architettura; differiscono per metodo e ricetta di training. L'oracolo (nome in codice "Master Splinter") NON è una rete: è il modello ACC-IIDM con i parametri veri, e serve da limite superiore di riferimento. I nomi sono un tema (le Tartarughe Ninja); la run porta l'etichetta "TURTLE POWER!!!".
+Il confronto usa 4 champion più l'oracolo. Tutti i champion condividono la stessa struttura (input(4) → ALIF(32) → LI(5)); differiscono per metodo e ricetta di addestramento e per il rango della ricorrenza (8 nei BPTT, 16 negli EventProp). L'oracolo (nome in codice "Master Splinter") NON è una rete: è il modello ACC-IIDM con i parametri veri, e serve da limite superiore di riferimento. I nomi sono un tema (le Tartarughe Ninja); la run porta l'etichetta "TURTLE POWER!!!".
 
-| Champion | Checkpoint | Metodo | Accuratezza | rho(U*V) | Carattere |
+| Champion | Checkpoint | Metodo | Accuratezza | ρ(U·V) | Carattere |
 |---|---|---|---|---|---|
 | Raffaello | R33_C2_A1_T12_fix | BPTT | 69.34% | 2.99 | Prodigy, aggressivo |
 | Leonardo | LS3_PEAK_R0_launch_d03 | BPTT | 77.53% | 1.16 | BPTT, conservativo |
@@ -88,7 +88,7 @@ L'evaluate è passato da validazione "data-driven" a "physics/network-driven": m
 | T2 plant+canale | 06 V2X, 07 VehicleDynamics | attuatore/attrito/pendenza, PDR/latenza/AoI |
 | T3 traffico | 03 String, 12 Mesoscopico, 13 Macroscopico | string stability, plotone, diagramma fondamentale |
 | T4 identificabilità | 04 Identifiability | FIM, equifinalità, causale, naturalisticità |
-| T5 FPGA | 05 Quantizzazione, 08 Energia/Spiking | Qm.n/po2, energia, salute della rete, rho |
+| T5 FPGA | 05 Quantizzazione, 08 Energia/Spiking | Qm.n/po2, energia, salute della rete, ρ |
 
 
 ### 3.1 Il simulatore closed-loop e l'oracolo
@@ -109,7 +109,7 @@ Scenari avversari: following, stop&go, hard-brake, cut-in (realistico ed evitabi
 | impact_dv | delta-v ipotetico d'impatto | gravità potenziale |
 | rms_jerk / frac_iso | strappo RMS; frazione fuori soglia ISO | comfort |
 | head_to_tail_gain | ampiezza coda / testa nel plotone | string stability (<1 = stabile) |
-| rho(U*V), dead_frac | raggio spettrale ricorrenza; neuroni morti | salute e stabilità hardware |
+| ρ(U·V), dead_frac | raggio spettrale ricorrenza; neuroni morti | salute e stabilità hardware |
 
 ![Equazione 3.1 — Principali surrogate safety measures (indicatori continui di rischio). s = gap [m]; Δv = velocità di avvicinamento (v−v_leader) [m/s]; τ = soglia di time-to-collision; 𝟏[·] = indicatore. TTC = time-to-collision; DRAC = deceleration rate to avoid a crash; TET = tempo esposto a TTC sotto soglia.](figures_validation_v3/eq_ssm.png)
 *Equazione 3.1 — Principali surrogate safety measures (indicatori continui di rischio). s = gap [m]; Δv = velocità di avvicinamento (v−v_leader) [m/s]; τ = soglia di time-to-collision; 𝟏[·] = indicatore. TTC = time-to-collision; DRAC = deceleration rate to avoid a crash; TET = tempo esposto a TTC sotto soglia.*
@@ -306,10 +306,10 @@ Il vantaggio energetico per inferenza è modesto: da 4.77x a 6.01x rispetto a un
 
 ### 9.3 Salute della rete e il discriminante di stabilità
 
-Qui si consuma la differenza hardware tra le due famiglie. I champion EventProp hanno ZERO neuroni morti e una ricorrenza CONTRATTIVA (rho 0.05 per Donatello, 0.39 per Michelangelo); i champion BPTT hanno ~31.25% di neuroni morti e una ricorrenza ESPANSIVA (rho 1.16 per Leonardo, 2.99 per Raffaello). Su FPGA, rho<1 garantisce uno stato limitato in aritmetica a virgola fissa (l'errore di quantizzazione si smorza), mentre rho>1 espone al rischio di amplificazione/overflow e richiederebbe guardband e saturazione esplicita. È il motivo tecnico per cui EventProp è più "FPGA-friendly", e per cui Donatello - contrattivo al massimo e più accurato - è il candidato naturale al deploy.
+Qui si consuma la differenza hardware tra le due famiglie. I champion EventProp hanno ZERO neuroni morti e una ricorrenza CONTRATTIVA (ρ 0.05 per Donatello, 0.39 per Michelangelo); i champion BPTT hanno ~31.25% di neuroni morti e una ricorrenza ESPANSIVA (ρ 1.16 per Leonardo, 2.99 per Raffaello). Su FPGA, ρ<1 garantisce uno stato limitato in aritmetica a virgola fissa (l'errore di quantizzazione si smorza), mentre ρ>1 espone al rischio di amplificazione/overflow e richiederebbe guardband e saturazione esplicita. È il motivo tecnico per cui EventProp è più "FPGA-friendly", e per cui Donatello - contrattivo al massimo e più accurato - è il candidato naturale al deploy.
 
-![Figura 9.3 - Il discriminante FPGA in un solo grafico: raggio spettrale (x) vs accuratezza (y), area del marker ~ vantaggio energetico. La zona verde (rho<1) è quella sicura in fixed-point; Donatello e Michelangelo (cerchi) ci stanno, i BPTT (quadrati) no.](figures_validation_v3/val_fpga_discriminant.png)
-*Figura 9.3 - Il discriminante FPGA in un solo grafico: raggio spettrale (x) vs accuratezza (y), area del marker ~ vantaggio energetico. La zona verde (rho<1) è quella sicura in fixed-point; Donatello e Michelangelo (cerchi) ci stanno, i BPTT (quadrati) no.*
+![Figura 9.3 - Il discriminante FPGA in un solo grafico: raggio spettrale (x) vs accuratezza (y), area del marker ~ vantaggio energetico. La zona verde (ρ<1) è quella sicura in fixed-point; Donatello e Michelangelo (cerchi) ci stanno, i BPTT (quadrati) no.](figures_validation_v3/val_fpga_discriminant.png)
+*Figura 9.3 - Il discriminante FPGA in un solo grafico: raggio spettrale (x) vs accuratezza (y), area del marker ~ vantaggio energetico. La zona verde (ρ<1) è quella sicura in fixed-point; Donatello e Michelangelo (cerchi) ci stanno, i BPTT (quadrati) no.*
 
 ![Figura 9.4a - Raster/attività di Donatello (EventProp): attività distribuita su tutti i neuroni, NESSUN neurone spento (0 morti) -- nota: non è iper-sparsa, spara ~19%.](figures_validation_v3/raster_Donatello.png)
 *Figura 9.4a - Raster/attività di Donatello (EventProp): attività distribuita su tutti i neuroni, NESSUN neurone spento (0 morti) -- nota: non è iper-sparsa, spara ~19%.*
@@ -323,14 +323,14 @@ Qui si consuma la differenza hardware tra le due famiglie. I champion EventProp 
 
 ## 10. Verdetto consolidato e raccomandazione di deploy
 
-| Champion | Sicurezza | Accuratezza | FPGA (rho, morti) | Sintesi |
+| Champion | Sicurezza | Accuratezza | FPGA (ρ, morti) | Sintesi |
 |---|---|---|---|---|
-| Raffaello (BPTT) | ok (~oracolo) | 69.34% (v0 mal-id) | rho 2.99, 31% morti | sconsigliato (instabile + v0) |
-| Leonardo (BPTT) | ok, più umano | 77.53% | rho 1.16, 31% morti | ottimo software, ma espansivo |
-| Donatello (EventProp) | ok (~oracolo) | 84.75% (best) | rho 0.05, 0 morti | CANDIDATO DEPLOY |
-| Michelangelo (EventProp) | ok | 79.18% | rho 0.39, 0 morti | runner-up deploy |
+| Raffaello (BPTT) | ok (~oracolo) | 69.34% (v0 mal-id) | ρ 2.99, 31% morti | sconsigliato (instabile + v0) |
+| Leonardo (BPTT) | ok, più umano | 77.53% | ρ 1.16, 31% morti | ottimo software, ma espansivo |
+| Donatello (EventProp) | ok (~oracolo) | 84.75% (best) | ρ 0.05, 0 morti | CANDIDATO DEPLOY |
+| Michelangelo (EventProp) | ok | 79.18% | ρ 0.39, 0 morti | runner-up deploy |
 
-Raccomandazione. Per il deploy FPGA la scelta è Donatello: unisce la migliore accuratezza, una ricorrenza fortemente contrattiva (rho~0.05, la più sicura in fixed-point), zero neuroni morti e sicurezza pari all'oracolo. Michelangelo è il runner-up (contrattivo, buona accuratezza). Leonardo resta il migliore sul piano software (più umano/naturale) ma la sua ricorrenza espansiva (rho>1) imporrebbe guardband in hardware. Raffaello è sconsigliato: mis-identifica v0 (distorce il macro), è il più espansivo (rho~3) e ha il 31% di neuroni morti.
+Raccomandazione. Per il deploy FPGA la scelta è Donatello: unisce la migliore accuratezza, una ricorrenza fortemente contrattiva (ρ~0.05, la più sicura in fixed-point), zero neuroni morti e sicurezza pari all'oracolo. Michelangelo è il runner-up (contrattivo, buona accuratezza). Leonardo resta il migliore sul piano software (più umano/naturale) ma la sua ricorrenza espansiva (ρ>1) imporrebbe guardband in hardware. Raffaello è sconsigliato: mis-identifica v0 (distorce il macro), è il più espansivo (ρ~3) e ha il 31% di neuroni morti.
 
 > **Nota.** In una frase: lo studio EventProp si chiude confermando il fronte di Pareto - BPTT vince di poco sulla fisica, EventProp vince su accuratezza, stabilità e idoneità al silicio - e indica Donatello (EventProp) come la rete da portare su FPGA.
 
@@ -355,7 +355,7 @@ Prossimi passi (fase FPGA). La presentazione della valutazione hardware è già 
 | Identificazione closed-loop + V2X sweep | scripts/closed_loop_identify.py |
 | Identificabilità (FIM/causale/...) | utils/identifiability.py |
 | Quantizzazione (Qm.n/po2) | utils/quantize.py |
-| Diagnostica rete (dead/rho/raster) | utils/net_diagnostics.py |
+| Diagnostica rete (dead/ρ/raster) | utils/net_diagnostics.py |
 | Documento-master dello studio | document/EVENTPROP_STATUS.md |
 | Design valutazione FPGA (progetto) | document/FPGA_EVALUATE_DESIGN.md / FPGA_EVALUATION_FRAMEWORK.md |
 | Profilo FPGA profondo — Fase A (45 figure, 10 sez.) | document/FPGA_REPORT.md / .pdf |
@@ -377,9 +377,9 @@ Le figure-chiave di questo report (accuratezza, discriminante FPGA, sicurezza, q
 | Kaul, S., Yates, R., Gruteser, M. (2012). Real-time status: how often should one update? IEEE INFOCOM, 2731–2735. | Age-of-Information (§8.1) |
 | Treiber, M., Kesting, A. (2013). Traffic Flow Dynamics: Data, Models and Simulation. Springer. | ACC-IIDM, calibrazione, string stability (§1, §4, §7) |
 | Horowitz, M. (2014). Computing's energy problem (and what we can do about it). IEEE Int. Solid-State Circuits Conf. (ISSCC), 10–14. | Energia AC/MAC (§9.2) |
-| Bellec, G., Salaj, D., Subramoney, A., Legenstein, R., Maass, W. (2018). Long short-term memory and learning-to-learn in networks of spiking neurons. NeurIPS 31. | Neurone ALIF (§2.1) |
+| Bellec, G., Salaj, D., Subramoney, A., Legenstein, R., Maass, W. (2018). Long short-term memory and learning-to-learn in networks of spiking neurons. Advances in Neural Information Processing Systems (NeurIPS) 31. | Neurone ALIF (§2.1) |
 | Neftci, E.O., Mostafa, H., Zenke, F. (2019). Surrogate gradient learning in spiking neural networks. IEEE Signal Processing Magazine 36(6), 51–63. | BPTT+surrogate (§2.2) |
-| Raissi, M., Perdikaris, P., Karniadakis, G.E. (2019). Physics-informed neural networks. J. Computational Physics 378, 686–707. | Loss PINN (§2.1) |
+| Raissi, M., Perdikaris, P., Karniadakis, G.E. (2019). Physics-informed neural networks: a deep learning framework for solving forward and inverse problems involving nonlinear PDEs. J. Computational Physics 378, 686–707. | Loss PINN (§2.1) |
 | ETSI EN 302 637-2 (2019). Intelligent Transport Systems; Cooperative Awareness Basic Service (CAM). ETSI. | V2X / CAM (§8.1) |
 | Wunderlich, T.C., Pehle, C. (2021). Event-based backpropagation can compute exact gradients for spiking neural networks. Scientific Reports 11, 12829. | EventProp (§2.2) |
 | Mishchenko, K., Defazio, A. (2023). Prodigy: an expeditiously adaptive parameter-free learner. arXiv:2306.06101. | Ottimizzatore Prodigy (§2.3) |
