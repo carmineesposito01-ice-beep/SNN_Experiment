@@ -51,10 +51,12 @@ class EventPropStepper:
         self._V_out = torch.zeros(self._B, self._w_out.shape[0], device=device)
         self._x_hist = deque([torch.zeros(self._B, self.in_dim, device=device)] * self.max_delay,
                              maxlen=self.max_delay)
+        self._last_x = None
 
     @torch.no_grad()
     def step(self, x_norm):
         """x_norm: (B, in) -> decoded params (B, 5). Runs n_ticks internal ticks with x_norm."""
+        self._last_x = x_norm.detach().cpu().numpy().reshape(-1)
         for _ in range(self.n_ticks):
             self._x_hist.append(x_norm)
             I = torch.zeros(self._B, self.out_dim, device=self._device)
@@ -76,4 +78,5 @@ class EventPropStepper:
             "spikes": self._s_prev.detach().cpu().numpy().reshape(-1),
             "v_mem": self._V.detach().cpu().numpy().reshape(-1),
             "v_th_eff": v_th.detach().cpu().numpy().reshape(-1),
+            "input": self._last_x,
         }

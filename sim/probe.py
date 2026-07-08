@@ -17,6 +17,7 @@ class ProbeFrame:
     v_mem: np.ndarray       # (H,)
     v_th_eff: np.ndarray    # (H,)
     params: np.ndarray      # (5,)
+    input: np.ndarray = None  # (in,) network input at this tick; None if not captured
 
 
 class AttributeProbe:
@@ -30,12 +31,14 @@ class AttributeProbe:
 
     def record(self, t, probe, params):
         if self._count % self.sample_every == 0:
+            inp = probe.get("input")
             self._buf.append(ProbeFrame(
                 t=t,
                 spikes=np.asarray(probe["spikes"], dtype=np.float64),
                 v_mem=np.asarray(probe["v_mem"], dtype=np.float64),
                 v_th_eff=np.asarray(probe["v_th_eff"], dtype=np.float64),
                 params=np.asarray(params, dtype=np.float64).reshape(-1),
+                input=(np.asarray(inp, dtype=np.float64).reshape(-1) if inp is not None else None),
             ))
         self._count += 1
 

@@ -25,6 +25,7 @@ class SoftwareBackend:
         self.device = device
         self._eventprop = isinstance(model, CF_FSNN_Net_EventProp_Full)
         self._stepper = EventPropStepper(model) if self._eventprop else None
+        self._last_input = None
 
     def reset(self) -> None:
         self.model.eval()
@@ -35,6 +36,7 @@ class SoftwareBackend:
 
     def infer(self, obs_norm: torch.Tensor) -> torch.Tensor:
         obs = obs_norm.to(self.device)
+        self._last_input = obs.detach().cpu().numpy().reshape(-1)
         if self._eventprop:
             return self._stepper.step(obs)
         return self.model.forward_step(obs)
@@ -52,7 +54,7 @@ class SoftwareBackend:
         v_mem = cell.potential.detach().cpu().numpy().reshape(-1)
         spikes = cell.prev_spike.detach().cpu().numpy().reshape(-1)
         v_th = (cell.base_threshold + cell.fatigue.clamp(min=0)).detach().cpu().numpy().reshape(-1)
-        return {"spikes": spikes, "v_mem": v_mem, "v_th_eff": v_th}
+        return {"spikes": spikes, "v_mem": v_mem, "v_th_eff": v_th, "input": self._last_input}
 
 
 class FpgaBackend:
