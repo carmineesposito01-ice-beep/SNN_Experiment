@@ -50,7 +50,9 @@ class SimApp(QMainWindow):
                         for i, (n, u, c) in enumerate(zip(PARAM_NAMES, PARAM_UNITS, PARAM_COLORS))]
         for p in self._params[1:]:
             p.plot_item.setXLink(self._params[0].plot_item)
-        self._spikerate._plot.getPlotItem().setXLink(self._params[0].plot_item)   # unified time axis
+        # NB: SpikeRate is intentionally NOT X-linked to the params — in tab-stacked presets a linked
+        # param can be a hidden tab, whose stale range would corrupt SpikeRate's axis. A unified time
+        # cursor is a Phase-3b (scrub) concern; here each time-series autoranges to its own data.
         self._live_panels = [self._netstate, self._spikerate, self._vmem, *self._params]
 
         widgets = {"Road": self._topdown, "NetState": self._netstate, "SpikeRate": self._spikerate,
