@@ -5,7 +5,47 @@
 
 ---
 
-## 🎯 Stato attuale (2026-06-21 — **EventProp_Study: training a gradiente esatto**)
+## 🎯 Stato attuale (2026-07-08 — **Simulink_Importer / fase ②-HDL: po2→shift, RTL bit-accurato**)
+
+> ⚠️ **WORKTREE PARALLELO — NON è il track principale `main`.** Sei nel worktree
+> `.worktrees/Simulink_Importer` (branch **`Simulink_Importer`**), **traccia ②** (import checkpoint → Simulink → HDL).
+> Il track ① (Simulatore) vive in `.worktrees/Simulator`. Per il track principale (EventProp/training) vedi
+> «Stato precedente» sotto + `EVENTPROP_STATUS.md`. Contesto tracce parallele: memoria `cf-fsnn-parallel-tracks`.
+
+**➜ PUNTO D'INGRESSO HDL: leggi `document/HDL_PHASE.md` §0 (RIPRESA RAPIDA)** — stato, prossima azione, comandi di
+verifica, e **§9 gotcha** (i tranelli da non ri-sbattere). Contesto libreria/blocchi: `document/SIMULINK_IMPORT_DESIGN.md`.
+
+**Stato in una riga:** RTL VHDL **bit-accurato** generato per Donatello via HDL Coder, **single-source da `snn_core`**
+(type-parametrizzato double/fi, NON riscrittura a mano). **po2→shift FATTO → moltiplicatori 27.840 → 32** (premessa
+0-DSP raggiunta **in STIMA**, non ancora sintetizzato), comportamento preservato (parità double **2e-6**, errore
+fixed **≤0.028 = max sui 5 parametri** (v0 il peggiore), Leonardo NON regredito). "bit-accurato" = garanzia HDL Coder
+vs il fixed MATLAB, non ancora cosim'd. **Bug leak-division RISOLTO** (`V./ld` fi = plateau ~3.5 → `leaky` bit-shift).
+
+**Cosa fare adesso** — **[Vivado in installazione ~3h, NON locale; nessun simulatore = niente cosim]:**
+1. Quando Vivado è pronto → **sintetizzare** l'RTL Donatello su Zynq-7020 `xc7z020clg400-1` per numeri **VERI**
+   DSP/LUT/FF/timing. Il resource-report di HDL Coder è solo una **STIMA** (pessimista sui DSP). Se sta / è vicino →
+   area OK. Se LUT alti (stima adder 5524/mux 11536) → **streaming ÷32** (refactor RAM-friendly, `HDL_PHASE.md §8` punto 2).
+2. Poi: **decode→LUT** (`coder.approximate` su σ), **altri 3 champion** (`make_hdl('Michelangelo'|...)`), **cosim**.
+
+**Vincoli/modi (track ②):** niente workaround; **VHDL MAI a mano** (rompe la catena 1:1); ottimizzare via config
+HDL Coder o sorgente MATLAB **behavior-preserving, gated dalla parità** (`run_parity_tests` double ~2e-6 dopo OGNI
+modifica a `snn_core`/`snn_types`); metrica primaria = comportamento (gap), non i param grezzi; commit senza
+`Co-Authored-By`. **Merge su `main` NON ancora fatto** (coordinare col track Simulator).
+
+**File chiave (worktree):** sorgente HDL `matlab/snn_core.m`+`snn_types.m` (+`snn_normalize/decode/entry`); wrapper
+`matlab/snn_hdl_<name>.m` (gen da `gen_hdl_tops.m`); driver `matlab/make_hdl.m`; verifiche `run_parity_tests.m`
+(double), `run_fixed_{parity,sweep}.m` + `run_hdl_verify.m` (fixed); diagnostica `diag_{ranges,quant}.m`; export
+`scripts/export_champions.py` → `matlab/champions_export.mat`. RTL generato in `matlab/codegen/` (gitignored,
+rigenerabile con `make_hdl('Donatello')`). MATLAB **R2026a headless** (`C:\Program Files\MATLAB\R2026a\bin`).
+
+**4 champion** (`champions/`): Donatello=`PE_t05_gp0002` + Michelangelo=`A_lr1e2_t06_r16` = **entrambi
+`eventprop_alif_full` rank 16**; Raffaello=`R33_C2_A1_T12_fix` + Leonardo=`LS3_PEAK_R0_launch_d03` = **entrambi
+`baseline` rank 8**. Traiettoria ottimizzazione area e
+catena 1:1 (4 anelli) in `HDL_PHASE.md §5/§2`.
+
+---
+
+## 🎯 Stato precedente (2026-06-21 — **EventProp_Study: training a gradiente esatto**)
 
 **Branch corrente**: `EventProp_Study` (da `main`). **`Dynamic_Study` e `Loss_Study` CHIUSI e mergiati in
 `main`, poi eliminati** (locale + remoto). `main` @ `db9fbdb` contiene tutto il lavoro.

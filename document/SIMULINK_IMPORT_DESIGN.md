@@ -1,6 +1,12 @@
 # SIMULINK_IMPORT_DESIGN — Fase ②: import dei champion in una libreria Simulink
 
-> **Data:** 2026-07-06 · **Branch:** `Simulink_Importer` · **Stato:** **DESIGN APPROVATO — non ancora implementato.**
+> **Data:** 2026-07-06 · **Branch:** `Simulink_Importer` · **Stato:** libreria Simulink FATTA (v1).
+>
+> ⚠️ **LE SEZIONI HDL DI QUESTO DOC SONO SUPERATE da `HDL_PHASE.md` (2026-07-08)** — leggi il §0 di quel doc per lo
+> stato HDL reale. In particolare cambiano: (1) **Qm.n `f=13`** (non il floor `f=5` di §1/§8); (2) generazione RTL via
+> `make_hdl.m` → `codegen -config hdl` sui wrapper `snn_hdl_<name>.m` (**non** `makehdl` sul `.slx` di §5.2/§7); (3) il
+> fixed-point eventprop è già fatto (il prerequisito «ri-profilare eventprop prima del fixed-point» di §7 è dissolto da
+> f=13 uniforme). Questo doc resta valido per la **libreria comportamentale** e il contesto di progetto.
 >
 > Design della **prima sotto-fase di ② (Convertitore HDL)**: portare i 4 champion CF_FSNN in una **libreria
 > Simulink** di blocchi riusabili, plug&play e interscambiabili. È il ponte verso l'HDL (fase ②-HDL) e verso la

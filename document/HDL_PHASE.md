@@ -10,27 +10,38 @@
 
 ## §0 RIPRESA RAPIDA (leggi prima questo)
 
-**Stato in una riga:** RTL VHDL **bit-accurato** generato per Donatello via HDL Coder, single-source
-da `snn_core`. **po2→shift FATTO** → moltiplicatori **27.840 → 32** (premessa 0-DSP raggiunta),
-comportamento preservato (parità double 2e-6, errore fixed ≤0.028 su v0). Resta il **lato LUT**
-(adder/mux, alti in STIMA) e il **verdetto di sintesi VERO** (serve Vivado).
+**Stato in una riga:** RTL VHDL **bit-accurato** (garanzia HDL Coder vs il fixed MATLAB — **NON ancora
+cosim'd**) generato per Donatello, single-source da `snn_core`. **po2→shift FATTO** → moltiplicatori
+**27.840 → 32 in STIMA** (premessa 0-DSP; **NON ancora sintetizzato**), comportamento preservato (parità
+double 2e-6, errore fixed **≤0.028 = max sui 5 parametri**, v0 il peggiore). Resta il **lato LUT**
+(adder/mux, alti in STIMA) e il **verdetto di sintesi VERO** (serve Vivado — che include il simulatore,
+quindi UNA installazione sblocca sia la sintesi ④ sia la cosim ③).
 
 **Prossima azione (quando Vivado è pronto):** sintetizzare l'RTL Donatello
 (`matlab/codegen/snn_hdl_Donatello/hdlsrc/snn_hdl_Donatello.vhd` — rigenerabile) su **Zynq-7020
 `xc7z020clg400-1`** per numeri DSP/LUT/FF/timing REALI. La resource-report di HDL Coder è solo una
-STIMA (pessimista sui DSP). Se sta / è vicino → area OK. Se LUT troppo alti → streaming ÷32 (§8.2).
+STIMA (pessimista sui DSP). Se sta / è vicino → area OK. Se LUT troppo alti → streaming ÷32 (§8 punto 2).
 
 **Comandi di verifica (dalla dir `matlab/`, MATLAB su PATH):**
 ```
-matlab -batch "cd('<...>/matlab'); run_parity_tests"                 % double vs golden PyTorch (~2e-6 — DEVE passare)
-matlab -batch "cd('<...>/matlab'); run_fixed_sweep"                  % errore fixed vs frac bits (convergenza a f=13)
-matlab -batch "cd('<...>/matlab'); gen_hdl_tops; run_hdl_verify"     % wrapper HDL vs golden (≤0.028)
-matlab -batch "cd('<...>/matlab'); make_hdl('Donatello')"            % rigenera RTL + report risorse
+matlab -batch "cd('D:/Project_MBSE/1.Reti Neurali/Rete_SNN_Test/CF_FSNN/.worktrees/Simulink_Importer/matlab'); run_parity_tests"                 % double vs golden PyTorch (~2e-6 — DEVE passare)
+matlab -batch "cd('D:/Project_MBSE/1.Reti Neurali/Rete_SNN_Test/CF_FSNN/.worktrees/Simulink_Importer/matlab'); run_fixed_sweep"                  % errore fixed vs frac bits (convergenza a f=13)
+matlab -batch "cd('D:/Project_MBSE/1.Reti Neurali/Rete_SNN_Test/CF_FSNN/.worktrees/Simulink_Importer/matlab'); gen_hdl_tops; run_hdl_verify"     % wrapper HDL vs golden (≤0.028)
+matlab -batch "cd('D:/Project_MBSE/1.Reti Neurali/Rete_SNN_Test/CF_FSNN/.worktrees/Simulink_Importer/matlab'); make_hdl('Donatello')"            % rigenera RTL + report risorse
 ```
 
 **Regola d'oro (cancello 1:1):** ogni modifica a `snn_core.m`/`snn_types.m` → rilancia
 `run_parity_tests` (double DEVE restare ~2e-6) PRIMA di procedere. È così che è stato trovato il bug
 leak-division e verificato ogni passo.
+
+**Decisioni che SUPERANO `SIMULINK_IMPORT_DESIGN.md` (2026-07-06)** — quel doc precede questa fase:
+- **Qm.n uniforme `f=13`** (non il floor `f=5` del design §1/§8). Uniforme e generoso su tutti i champion →
+  **dissolve il prerequisito** «ri-profilare i range per-stato dell'eventprop prima del fixed-point» (design §7):
+  il fixed-point su Donatello/Michelangelo (eventprop) è GIÀ fatto a f=13, errore ≤0.028. `snn_types('fixed',nfrac)`
+  resta parametrico → il floor f=5 vale se un domani si vuole comprimere, ma NON è l'operating point attuale.
+- **Generazione RTL via `make_hdl.m` → `codegen -config hdl`** sui wrapper `snn_hdl_<name>.m`, **NON** `makehdl`
+  sul `.slx` (design §5.2/§7): il flow Simulink-HDL non aiuta con un MATLAB Function block (§9). Il blocco
+  `snn_champions_lib.slx` resta l'**artefatto comportamentale** (double), non il sorgente HDL.
 
 ---
 
@@ -92,7 +103,7 @@ Config in `make_hdl.m`: `LoopOptimization='StreamLoops'`, `ConstantMultiplierOpt
 - ✅ RTL bit-accurato generato per **Donatello** (+ testbench auto vs golden), 0 errori codegen.
 - ✅ Comportamento: parità double 2e-6; errore fixed ≤0.028 (v0) su tutti e 4 (Leonardo NON regredito).
 - ⏳ **Lato LUT**: adder 5.524 + mux 11.536 (barrel-shift + wide-acc + conditional-add) — alti in STIMA.
-- ⏳ **Streaming ÷32** dei neuroni: BLOCCATO da RAM-mapping (accessi non-scalari) — §8.2 / §9.
+- ⏳ **Streaming ÷32** dei neuroni: BLOCCATO da RAM-mapping (accessi non-scalari) — §8 punto 2 / §9.
 - ⏳ **Vivado/sintesi**: non locale (in installazione). Nessun simulatore → **niente cosim** ancora.
 - ⏳ **Decode (sigmoid)**: ESCLUSO dall'RTL → **LUT in fabric** (deciso), non ancora implementato.
 - ⏳ **Altri 3 champion**: wrapper generati; RTL prodotto solo per Donatello.
@@ -106,7 +117,9 @@ Config in `make_hdl.m`: `LoopOptimization='StreamLoops'`, `ConstantMultiplierOpt
   `run_hdl_verify.m` (wrapper HDL).
 - **Diagnostica:** `diag_ranges.m` (range segnali interni), `diag_quant.m` (quantizzazione stato vs bug).
 - **Export pesi:** `scripts/export_champions.py` → `matlab/champions_export.mat` (po2 reale, delays, golden).
-- **Generato, NON versionato** (`matlab/.gitignore`): `matlab/codegen/` (RTL in `snn_hdl_<name>/hdlsrc/`).
+- **Generato, NON versionato** (`matlab/.gitignore`): `matlab/codegen/` (RTL in `snn_hdl_<name>/hdlsrc/`). HDL Coder
+  emette più file: top `snn_hdl_<name>.vhd`, stadio/i pipeline `snn_hdl_<name>p<N>.vhd` (dal delay-balancing del
+  clock-rate), test-config `*_tc.vhd`, package `*_pkg.vhd`, testbench `*_tb.vhd` + vettori `xn.dat`/`raw_expected.dat`.
 
 ## §8 Prossimi passi
 1. **[Vivado pronto] Sintesi vera** RTL Donatello su Zynq-7020 (`xc7z020clg400-1`): crea progetto, aggiungi
@@ -140,4 +153,4 @@ Config in `make_hdl.m`: `LoopOptimization='StreamLoops'`, `ConstantMultiplierOpt
 - **Accumulatore a larghezza fissa (codegen)**: una variabile non può cambiare tipo tra iterazioni del loop →
   usare `x(:) = ...` per forzare il tipo dichiarato (I_input, wacc, t_lr).
 - **loopspec factor**: `coder.hdl.loopspec('stream', N)` con N = trip-count NON serializza (interpretato come
-  parallelismo). Semantica non chiarita in R2026a → per lo streaming affidarsi prima al RAM-mapping (§8.2).
+  parallelismo). Semantica non chiarita in R2026a → per lo streaming affidarsi prima al RAM-mapping (§8 punto 2).
