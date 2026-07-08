@@ -12,22 +12,87 @@ PARAM_COLORS = ["#d1495b", "#2a7fb8", "#7b3fa0", "#e8871e", "#2e8b57"]
 _N_SAMPLE = 4
 
 
-class RasterPanel(QWidget):
+class SpikeRatePanel(QWidget):
+    """Firing-rate trend: % of hidden neurons spiking per tick, over the buffer."""
     def __init__(self):
         super().__init__()
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        self._plot = pg.PlotWidget(title="spike raster")
+        self._plot = pg.PlotWidget(title="spike rate (% hidden firing)")
         self._plot.setLabel("bottom", "time", units="steps")
-        self._plot.setLabel("left", "neuron")
-        self._img = pg.ImageItem()
-        self._plot.addItem(self._img)
+        self._plot.setLabel("left", "rate", units="%")
+        self._plot.setDownsampling(auto=True, mode="peak")
+        self._plot.setClipToView(True)
+        self._curve = self._plot.plot(pen=pg.mkPen("#e8871e", width=2))
         layout.addWidget(self._plot)
 
     def update_frame(self, probe):
         sm = probe.spikes_matrix()          # (frames, H)
         if sm.size:
-            self._img.setImage(sm, autoLevels=False, levels=(0.0, 1.0))   # X=time, Y=neuron (col-major)
+            self._curve.setData(sm.mean(axis=1) * 100.0)
+
+
+_GROUP_BORDERS = [("input", "#2a7fb8"), ("hidden", "#7b3fa0"), ("output", "#2e8b57")]
+
+
+class NeuronStatePanel(QWidget):
+    """Instantaneous neuron-state map at the latest tick: input | hidden | output groups with
+    coloured borders; hidden = v_mem heat (viridis) + white overlay on neurons that spiked this tick."""
+    def __init__(self):
+        super().__init__()
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        self._glw = pg.GraphicsLayoutWidget()
+        layout.addWidget(self._glw)
+        self._cmap = pg.colormap.get("viridis")
+        self._lut = self._cmap.getLookupTable(0.0, 1.0, 256)
+        self._groups = {}     # name -> (plot, heat_img, overlay_img_or_None)
+        for row, (name, color) in enumerate(_GROUP_BORDERS):
+            p = self._glw.addPlot(row=row, col=0)
+            p.setTitle(name)
+            p.hideAxis("left")
+            p.hideAxis("bottom")
+            p.getViewBox().setBorder(pg.mkPen(color, width=2))
+            heat = pg.ImageItem()
+            heat.setColorMap(self._cmap)
+            p.addItem(heat)
+            overlay = None
+            if name == "hidden":
+                overlay = pg.ImageItem()      # drawn on top of the heat
+                p.addItem(overlay)
+            self._groups[name] = (p, heat, overlay)
+
+    def _set_strip(self, name, values):
+        _, heat, _ = self._groups[name]
+        heat.setImage(np.asarray(values, dtype=np.float64).reshape(1, -1), autoLevels=True)
+
+    def _set_hidden(self, v_mem, spikes):
+        _, heat, overlay = self._groups["hidden"]
+        v = np.asarray(v_mem, dtype=np.float64).reshape(-1)
+        H = v.size
+        rows = max(1, int(np.floor(np.sqrt(H))))
+        cols = int(np.ceil(H / rows))
+        vmin, vmax = float(np.nanmin(v)), float(np.nanmax(v))
+        idx = np.clip(((v - vmin) / (vmax - vmin + 1e-9) * 255).astype(int), 0, 255)
+        base = np.zeros((rows * cols, 4), dtype=np.ubyte)
+        base[:H, :3] = self._lut[idx][:, :3]
+        base[:H, 3] = 255
+        heat.setImage(base.reshape(rows, cols, 4))
+        ov = np.zeros((rows * cols, 4), dtype=np.ubyte)
+        spk = np.zeros(rows * cols, dtype=bool)
+        spk[:H] = np.asarray(spikes, dtype=np.float64).reshape(-1)[:H] > 0
+        ov[spk] = [255, 255, 255, 180]
+        overlay.setImage(ov.reshape(rows, cols, 4))
+
+    def update_frame(self, probe):
+        frames = probe.frames()
+        if not frames:
+            return
+        f = frames[-1]
+        if f.input is not None and np.size(f.input):
+            self._set_strip("input", f.input)
+        self._set_hidden(f.v_mem, f.spikes)
+        self._set_strip("output", f.params)
 
 
 class VmemPanel(QWidget):
