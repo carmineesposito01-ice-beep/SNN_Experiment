@@ -136,8 +136,12 @@ The core already computes these but shows none of them:
   spike-sparsity/firing-% readout. Zero dock dependency, zero `restoreState` risk. Delivered exactly the
   headline ask (§0.3, §2). Plan: `docs/superpowers/plans/2026-07-07-simulator-param-legibility.md`;
   46 tests green in `cf_sim`, core golden untouched.
-- **Phase 2 — Dockable shell.** Migrate `app.py` → `DockArea`; 4 panels → docks; save/restore +
-  1–2 presets; "View" lazy-add-dock menu. Isolated so the library risk can't block the science.
+- **Phase 2 — ✅ DONE (2026-07-08, commits `fbb40da`→`24468ae`). Dockable shell.** Migrated `app.py` →
+  pyqtgraph `DockArea`; NetPanel dissolved into `panels.py` (Raster/Vmem/Param); **8 docks** (per-param);
+  X-link across docks; `layout.py` = 4 presets (Overview/Guida/Identificazione/Neuro-debug) +
+  guarded save/restore (fallback Overview); View/Layout menus; firing-% → status bar. Spec
+  `docs/superpowers/specs/2026-07-08-simulator-dockable-shell-design.md`, plan
+  `docs/superpowers/plans/2026-07-08-simulator-dockable-shell.md`; 57 tests green in `cf_sim`, core golden untouched.
 - **Phase 3 — Time backbone + live metric docks.** Wire ring buffer + `ReplayLog` into a global
   time cursor (pause/scrub, shortcuts); add trajectory, safety strip, per-neuron/input-encoding
   inspector, event timeline (click→seek).

@@ -1,5 +1,7 @@
 # Simulator Dockable Shell Implementation Plan (Extension Phase 2)
 
+> **STATUS: ✅ COMPLETE (2026-07-08).** Executed inline in `cf_sim` (TDD). T1 `panels.py`, T2 `layout.py`, T3 `app.py`+remove netpanel — commits up to `24468ae` (pushed). 57 tests green; core golden untouched; both Overview + Identificazione presets render-verified on the real `windows` platform.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: superpowers:executing-plans (inline). Steps use checkbox (`- [ ]`) syntax.
 > Runs entirely in the **`cf_sim`** conda env: `conda run -n cf_sim python -m pytest ...` (offscreen for Qt). All changes are in `sim/ui/*` + `scripts/run_simulator.py`; the golden-tested headless core is untouched.
 > Spec: `docs/superpowers/specs/2026-07-08-simulator-dockable-shell-design.md`. API pre-verified against pyqtgraph 0.14.0.
