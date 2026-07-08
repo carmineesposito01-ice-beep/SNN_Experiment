@@ -18,12 +18,30 @@ import os
 import glob
 import shutil
 import pandas as pd
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DOCDIR = os.path.join(ROOT, 'document')
 FIGDIR = os.path.join(DOCDIR, 'figures_fpga')
 EVAL = os.path.join(ROOT, 'results', 'evaluate', 'FPGA')
 os.makedirs(FIGDIR, exist_ok=True)
+
+
+def fig_eq(name, lines, fs=15, color='#12233a'):
+    """Renderizza una o più righe di equazione (mathtext) in un PNG 'tight'.
+    Nessun carattere accentato dentro la formula (le legende vanno in didascalia)."""
+    n = len(lines)
+    fig = plt.figure(figsize=(9.2, 0.52 * n + 0.22))
+    for i, ln in enumerate(lines):
+        fig.text(0.5, 1.0 - (i + 0.5) / n, '$' + ln + '$',
+                 ha='center', va='center', fontsize=fs, color=color)
+    p = os.path.join(FIGDIR, name)
+    fig.savefig(p, dpi=150, bbox_inches='tight', pad_inches=0.18, facecolor='white')
+    plt.close(fig)
+    return p
+
 
 CHAMP = ['Raffaello', 'Leonardo', 'Donatello', 'Michelangelo']
 METHOD = {'Raffaello': 'BPTT', 'Leonardo': 'BPTT', 'Donatello': 'EventProp', 'Michelangelo': 'EventProp'}
@@ -82,7 +100,7 @@ DON_ADV = en('Donatello', 'advantage_worstcase_x', '%.2f') if ENP is not None el
 # caption curate per nome-file (stem). Fallback: nome prettificato.
 CAP = {
     'readiness_radar': 'Radar di FPGA-readiness per champion (small-multiples). Ogni asse 0-1 con ANCORA esplicita fra parentesi (1 = ideale FPGA): ρ<1 (contrattivo), Fix-pt (quant po2 senza errore), Sparsità (poco firing), Energia (≥15× vs ANN), Timing (util≈0), SEU (0 bit critici). I valori numerici reali sono nella tabella successiva.',
-    'deploy_verdict': 'I NUMERI REALI dietro il radar, una colonna per asse + footprint. Colorazione per RANGO (verde = migliore dei 4 su quella metrica, nessuna soglia arbitraria). Candidato deploy: Donatello (ρ minimo 0.05, quant robusto).',
+    'deploy_verdict': 'I numeri reali dietro il radar, una colonna per asse + footprint (la colonna energia usa il vantaggio nel caso tipico; la tabella in testa al report usa il worst-case). Colorazione per rango (verde = migliore dei 4 su quella metrica, nessuna soglia arbitraria). Candidato deploy: Donatello (ρ minimo 0.05, quant robusto).',
     'po2_alphabet': 'Alfabeto po2 dei pesi (13 valori sign·2^k) per champion. "pesi a 0 = sinapsi eliminabili" è la potatura strutturale del connettoma (sinapsi a peso 0), NON neuroni morti. Il moltiplicatore è UNO di 13 valori → barrel-shifter, 0 DSP.',
     'resource_occupancy': 'Occupazione stimata del budget Zynq-7020 (LUT/FF/BRAM/DSP) per champion. BRAM reale (footprint pesi); LUT/FF stima; DSP = 0 (po2 → shift-add).',
     'spectral_recurrence': 'Raggio spettrale ρ(U·V): pieno = po2, vuoto = float. ρ<1 (EventProp) = loop contrattivo, sicuro in fixed-point; ρ>1 (BPTT) = espansivo (rischio overflow). È IL discriminante di stabilità hardware.',
@@ -105,7 +123,7 @@ CAP = {
     'synops_split': 'Parte statica (input, sempre-on) vs dinamica (spike-driven) delle SynOps per champion → dove conviene il clock-gating.',
     'op_count': 'Conteggio operazioni per tick (input del WCET), per champion: si vede la differenza rank-8 (baseline) vs rank-16 (EventProp) sui rami ricorrenti.',
     'wcet_cycles': 'Cicli e µs per inferenza secondo 4 architetture HW (esemplare: Donatello; datapath simile fra champion).',
-    'latency_margin': 'Tempo di inferenza vs deadline di controllo 100 ms, per champion: margine enorme (util ~0.1%).',
+    'latency_margin': 'Tempo di inferenza vs deadline di controllo 100 ms, per champion: margine enorme (util ~0.1-0.2%, variante seriale).',
     'jitter_proof': 'WCET == BCET: il numero di operazioni è costante a ogni spike-rate → jitter di calcolo = 0 (esemplare: Donatello).',
     'decode_criticalpath': 'STIMA del datapath del decode ACC-IIDM (sqrt/div/sigmoid/tanh) in PL: CORDIC iterativo (shift-add, DSP≈0) sul budget di 100 ms.',
     'op_by_celltype': 'Operazioni per tipo di cella (AC spike-driven vs shift-add po2) per champion: nessun moltiplicatore → 0 DSP.',
@@ -147,8 +165,8 @@ SEC_TITLE = {
 SEC_PROSE = {
     '00_Readiness': [
         'La sezione apre con il cruscotto: un radar per champion e una tabella di numeri reali. '
-        'Le sei dimensioni della readiness sono TUTTE metriche misurate (niente colonne costanti o '
-        'etichette fuorvianti): ρ<1 (contrattività della ricorrenza), Fix-pt (robustezza alla '
+        'Le sei dimensioni della readiness sono tutte metriche misurate, non colonne costanti o '
+        'etichette fuorvianti: ρ<1 (contrattività della ricorrenza), Fix-pt (robustezza alla '
         'quantizzazione po2), Sparsità (firing), Energia (vantaggio AC<MAC), Timing (margine sul '
         'deadline), SEU (robustezza al bit-flip). Il radar dà la forma d\'insieme; la tabella '
         'deploy_verdict dà i valori esatti confrontabili, colorati per rango.',
@@ -159,13 +177,14 @@ SEC_PROSE = {
         f'sparsità o l\'energia.',
     ],
     '01_Weights_po2': [
-        'Il cuore del co-design è la quantizzazione po2 (schema e razionale in HOW_IT_WORKS_v3 §15). '
-        'Qui il lato hardware misurato: il moltiplicatore diventa un bit-shift → **0 DSP**; e '
-        'l\'istogramma po2_alphabet mostra la SPARSITÀ DEI PESI (sinapsi a valore 0 = eliminabili dal '
+        'Il cuore del co-design è la quantizzazione po2 (schema e razionale in HOW_IT_WORKS_v3 §15; '
+        'quantizzazione logaritmica dei pesi, Miyashita et al. 2016). Qui il lato hardware misurato: il '
+        'moltiplicatore diventa un bit-shift → **0 DSP**; e '
+        'l\'istogramma po2_alphabet mostra la sparsità dei pesi (sinapsi a valore 0 = eliminabili dal '
         'connettoma) — da non confondere coi neuroni morti (attività, §3): sono sinapsi che '
         'semplicemente non esistono in hardware.',
         'Il footprint dei pesi è di 400-656 byte per champion (rank-8 vs rank-16): trascurabile vs '
-        'la BRAM (§6). Il raggio spettrale ρ(U·V) (definizione in HOW §11) separa nettamente EventProp '
+        'la BRAM (§6). Il raggio spettrale ρ(U·V) (definizione in HOW §11) separa EventProp '
         '(contrattivo, ρ<1) da BPTT (espansivo, ρ>1): è il discriminante che rende gli EventProp sicuri '
         'in aritmetica a virgola fissa.',
     ],
@@ -183,11 +202,10 @@ SEC_PROSE = {
     ],
     '03_Spiking': [
         f'La dinamica spiking sfata un equivoco: i champion **sparano ~{SPK_LO}-{SPK_HI}%** dei '
-        f'neuroni per tick, NON sono iper-sparsi (~1-2%). Il raster e la mappa di attività lo mostrano '
-        f'cross-champion. Questo è il dato corretto dopo il fix del bug n_ticks: il valore ~1.5% era '
-        f'un artefatto di calcolo (doppia divisione per n_ticks). NB: questi spike-rate (profiler '
-        f'op-count, finestra launch) differiscono di ~1-2 punti da VALIDATION §9.2 (evaluate a 6-tier; '
-        f'es. Donatello {DON_SPK}% qui vs 19.0% là) — stessa realtà, finestre/metodo di misura diversi.',
+        f'neuroni per tick, non sono iper-sparsi (l\'1-2% talvolta attribuito alle SNN). Il raster e la '
+        f'mappa di attività lo mostrano cross-champion. Questi spike-rate (profiler op-count, finestra '
+        f'launch) differiscono di ~1-2 punti da VALIDATION_REPORT_v3 §9.2 (valutazione a 6-tier; es. '
+        f'Donatello {DON_SPK}% qui vs 19.0% là): stessa realtà, finestre e metodo di misura diversi.',
         'Il picco di spike simultanei per tick dimensiona l\'albero di accumulo (AC) in hardware; '
         'l\'ISI minimo dà il worst-case back-to-back. La salute della rete è il vero discriminante: '
         'gli **EventProp hanno 0 neuroni morti**, i BPTT ~31% — la ricorrenza contrattiva e il '
@@ -195,7 +213,7 @@ SEC_PROSE = {
     ],
     '04_Energy': [
         f'Il vantaggio energetico vs una ANN densa è **~{ADVW_LO}-{ADVW_HI}×** (worst-case; fino a '
-        f'~15× nel caso tipico). NON viene dalla sparsità: le SynOps eguagliano o superano i MAC '
+        f'~15× nel caso tipico). Non viene dalla sparsità: le SynOps eguagliano o superano i MAC '
         f'dell\'ANN. Viene dal minor costo unitario di un accumulo (AC) rispetto a una '
         f'moltiplicazione-accumulo (MAC), amplificato su FPGA dai pesi po2 (AC = shift+add) e da 0 DSP.',
         f'Conseguenza contro-intuitiva: **Donatello**, il più contrattivo, spara di più (~{DON_SPK}%) '
@@ -203,15 +221,16 @@ SEC_PROSE = {
         f'spendono i pJ (la ricorrenza rec_V/rec_U domina nei rank-16); il grafico energy_vs_rate marca '
         f'il rate operativo reale, ben dentro il regime denso, non quello iper-sparso.',
         f'Coerenza col gemello: VALIDATION_REPORT_v3 §9.2 riporta una stima più grossolana (~4.77-6.01×) '
-        f'dall\'evaluate a 6-tier; qui il modello op-count distingue il worst-case (~{ADVW_LO}-{ADVW_HI}×) '
-        f'dal tipico (~9-15×). Stesso ordine di grandezza — e ben lontano dai 22-30× pre-fix del bug n_ticks.',
+        f'dalla valutazione a 6-tier; qui il modello op-count distingue il worst-case '
+        f'(~{ADVW_LO}-{ADVW_HI}×) dal tipico (~9-15×), dello stesso ordine di grandezza.',
     ],
     '05_Timing_WCET': [
         'Il conteggio operazioni per tick è l\'input del WCET e distingue rank-8 (baseline) da '
-        'rank-16 (EventProp) sui rami ricorrenti. Su qualunque delle 4 architetture HW considerate, '
-        'il tempo di inferenza è di pochi µs contro un **deadline di controllo di 100 ms**: il margine '
-        'è enorme (utilizzo ~0.1%). Il budget di 100 ms è la leva che permette di ottimizzare per '
-        'AREA (CORDIC iterativo, DSP≈0) invece che per velocità.',
+        'rank-16 (EventProp) sui rami ricorrenti. Il tempo di inferenza dipende dal grado di '
+        'parallelismo: la variante seriale (minima in area) impiega ~120-171 µs, le varianti più '
+        'parallele scendono a pochi µs — tutte contro un **deadline di controllo di 100 ms**. Anche la '
+        'seriale usa quindi solo ~0.1-0.2% del budget: il margine è enorme, ed è proprio questo che permette '
+        'di ottimizzare per area (CORDIC iterativo, DSP≈0) invece che per velocità.',
         'Proprietà preziosa per un sistema safety: **WCET == BCET**. Il numero di operazioni è '
         'costante a ogni spike-rate (worst-case), quindi il jitter di calcolo è nullo — un vantaggio '
         'di determinismo temporale rispetto a un\'esecuzione data-dependent.',
@@ -244,11 +263,43 @@ SEC_PROSE = {
         'figure combinano dati reali (comportamento della rete) e stime di modello (coda).',
     ],
     '09_Thermal': [
-        'La sezione termica è interamente di STIMA (🟡): il derating di Fmax con la temperatura di '
+        'La sezione termica è interamente di stima (🟡): il derating di Fmax con la temperatura di '
         'giunzione e il budget termico sullo Zynq-7020. Servono a impostare i margini, ma i numeri '
         'reali arriveranno solo dalla sintesi e dalla misura su board (Fasi B/C). Sono inclusi marcati '
         'come stime, non come risultati.',
     ],
+}
+
+# --- equazioni (mathtext -> PNG), iniettate dopo la prosa della sezione ------
+EQ_QMN = fig_eq('eq_qmn.png', [
+    r'x_{Qm.n} = \frac{k}{2^{n}}\,, \quad k \in \mathbb{Z}\,, \ \ x \in [\,-2^{\,m-1},\ 2^{\,m-1}-2^{-n}\,]',
+])
+EQ_ENERGY = fig_eq('eq_energy.png', [
+    r'\frac{E_{\mathrm{ANN}}}{E_{\mathrm{SNN}}} = \frac{N_{\mathrm{MAC}}\, e_{\mathrm{MAC}}}{\mathrm{SynOps}\cdot e_{\mathrm{AC}}}',
+])
+EQ_WCET = fig_eq('eq_wcet.png', [
+    r'\mathrm{WCET} = N_{\mathrm{cicli}}\cdot T_{\mathrm{clk}}\,, \qquad \mathrm{util} = \frac{\mathrm{WCET}}{T_{\mathrm{deadline}}}',
+])
+EQ_IOHIL = fig_eq('eq_iohil.png', [
+    r'P_K = \frac{(1-a)\,a^{K}}{1-a^{K+1}}\,, \quad a = \lambda/\mu',
+    r'\mathrm{AoI}:\ \ \Delta(t) = t - u(t)',
+])
+SEC_EQ = {
+    '02_FixedPoint': [(EQ_QMN, 'Equazione 2.1 — Formato fixed-point Qm.n. m = bit interi (con segno), '
+                              'n = bit frazionari; il valore è un intero k scalato di 2⁻ⁿ. Gli int_bits '
+                              'derivano dal range misurato dello stato, i frac_bits dal budget di bit '
+                              '(qui m include il bit di segno; la figura bit_allocation lo mostra separato).')],
+    '04_Energy': [(EQ_ENERGY, 'Equazione 4.1 — Vantaggio energetico. N_MAC = moltiplicazioni-accumulo '
+                             'della ANN equivalente; SynOps = Σ (spike × fan-out); e_MAC ≈ 4.6 pJ, '
+                             'e_AC ≈ 0.9 pJ (modello Horowitz 2014, 45 nm). Il guadagno viene da '
+                             'e_AC < e_MAC e dallo 0 DSP, non dalla sparsità.')],
+    '05_Timing_WCET': [(EQ_WCET, 'Equazione 5.1 — WCET e utilizzo. N_cicli = conteggio operazioni per '
+                                'inferenza; T_clk = periodo di clock; T_deadline = 100 ms (10 Hz, ciclo '
+                                'di controllo/V2X). WCET == BCET perché il conteggio è data-indipendente.')],
+    '08_IO_HIL': [(EQ_IOHIL, 'Equazione 8.1 — Coda RX M/M/1/K (sopra) e Age-of-Information (sotto). '
+                            'P_K = probabilità di blocco (drop a buffer pieno); K = profondità della coda; '
+                            'a = λ/μ = intensità di traffico; Δ(t) = età dell\'ultimo CAM ricevuto '
+                            '(t meno l\'istante u(t) di generazione).')],
 }
 
 
@@ -272,10 +323,10 @@ def build_doc():
     A = D.append
     A(('cover', {
         'title': 'CF_FSNN — Report FPGA (Fase A)',
-        'subtitle': 'Profilo di idoneità FPGA (Zynq-7020 / PYNQ-Z1) dei 4 champion, pre-silicio — 45 figure a dati reali su 10 sezioni',
+        'subtitle': 'Profilo di idoneità FPGA (Zynq-7020 / PYNQ-Z1) dei 4 champion, pre-silicio — 45 figure su 10 sezioni (dati reali dove 🟢, stime dove 🟡/🔴)',
         'meta': [
-            'Terzo membro del trio v3 · gemelli: HOW_IT_WORKS_v3 (teoria) · VALIDATION_REPORT_v3 (risultati)',
-            'Branch EventProp_Study · Fase A "software_now": profilazione SW pre-silicio (le Fasi B/C = HDL/board)',
+            'Documento della terna CF_FSNN — gemelli: HOW_IT_WORKS_v3 (teoria) · VALIDATION_REPORT_v3 (risultati)',
+            'Fase A "software_now": profilazione software pre-silicio (le Fasi B/C = HDL/board)',
             'Sorgente figure: scripts/fpga_figures.py (librerie weight/state/latency/seu/io) · risultati: results/evaluate/FPGA/',
         ],
     }))
@@ -294,10 +345,10 @@ def build_doc():
             'Contesto e teoria della rete: HOW_IT_WORKS_v3 §16. I risultati di validazione della guida '
             '(sicurezza, traffico, accuratezza): VALIDATION_REPORT_v3 (di cui §9 è il sommario FPGA che '
             'rimanda qui).'))
-    A(('callout', f'Due verità che attraversano tutto il report (coerenti col fix del bug n_ticks): '
-                  f'(1) i champion sparano ~{SPK_LO}-{SPK_HI}%, NON sono iper-sparsi; (2) il vantaggio '
-                  f'energetico (~{ADVW_LO}-{ADVW_HI}×) viene dal costo AC<MAC e da 0 DSP, NON dalla '
-                  f'sparsità. L\'edge FPGA degli EventProp è ρ<1 (contrattivo) + 0 neuroni morti.'))
+    A(('callout', f'Due verità che attraversano tutto il report: (1) i champion sparano '
+                  f'~{SPK_LO}-{SPK_HI}%, non sono iper-sparsi; (2) il vantaggio energetico '
+                  f'(~{ADVW_LO}-{ADVW_HI}×) viene dal costo AC<MAC e da 0 DSP, non dalla sparsità. '
+                  f'L\'edge FPGA degli EventProp è ρ<1 (contrattivo) + 0 neuroni morti.'))
 
     # Tabella riassuntiva dei champion (dai CSV)
     if SCORE is not None and ENP is not None:
@@ -307,13 +358,33 @@ def build_doc():
                          en(c, 'spike_rate_pct', '%.1f') + '%',
                          en(c, 'advantage_worstcase_x', '%.2f') + '×',
                          sc(c, 'footprint_B', '%.0f') + ' B'])
-        A(('table', (['Champion', 'Metodo', 'Checkpoint', 'ρ(U·V)', 'spike %', 'energia ×', 'footprint'], rows)))
+        A(('table', (['Champion', 'Metodo', 'Checkpoint', 'ρ(U·V)', 'spike %', 'energia × (worst)', 'footprint'], rows)))
+
+    A(('h1', 'Indice'))
+    A(('table', (
+        ['Sezione', 'Contenuto'],
+        [
+            ['0', 'Readiness: la scorecard di idoneità FPGA'],
+            ['1', 'Pesi Power-of-Two: il moltiplicatore che sparisce'],
+            ['2', 'Fixed-point: formato Qm.n e robustezza alla quantizzazione'],
+            ['3', 'Dinamica spiking: sparsità reale e salute della rete'],
+            ['4', 'Energia: il vantaggio AC<MAC'],
+            ['5', 'Timing / WCET: margine sul deadline e jitter zero'],
+            ['6', 'Risorse e DSE: 0 DSP, <1% BRAM'],
+            ['7', 'SEU / ISO 26262: robustezza ai bit-flip e TMR mirato'],
+            ['8', 'I/O e Hardware-in-the-Loop: canale V2X e code'],
+            ['9', 'Termico: derating (stime pre-sintesi)'],
+            ['—', 'Verdetto e prossimi passi · Riferimenti · Mappa dei file'],
+        ],
+    )))
 
     # Sezioni
     for section in SECTION_ORDER:
         A(('h1', SEC_TITLE.get(section, section)))
         for para in SEC_PROSE.get(section, []):
             A(('p', para))
+        for eqp, eqc in SEC_EQ.get(section, []):
+            A(('img', (eqp, eqc)))
         for dest, cap in _figs(section):
             A(('img', (dest, cap)))
 
@@ -329,6 +400,26 @@ def build_doc():
                   'area LUT/FF, datapath del decode, overhead TMR, coda RX, termico. Le stime si '
                   'confermano solo in Fase B (sintesi Vivado → LUT/FF/DSP/Fmax reali) e Fase C '
                   '(FPGA-in-the-Loop → potenza/latenza/SEU su silicio).'))
+
+    # Riferimenti
+    A(('h1', 'Riferimenti'))
+    A(('table', (
+        ['Riferimento', 'Tema'],
+        [
+            ['Volder, J.E. (1959). The CORDIC trigonometric computing technique. IRE Trans. Electronic Computers EC-8(3), 330–334.', 'CORDIC per il decode (§5)'],
+            ['Kleinrock, L. (1975). Queueing Systems, Volume 1: Theory. Wiley.', 'Coda M/M/1/K (§8)'],
+            ['JEDEC JESD89A (2006). Measurement and Reporting of Alpha Particle and Terrestrial Cosmic Ray-Induced Soft Errors in Semiconductor Devices. JEDEC.', 'Soft error / SEU (§7)'],
+            ['Kaul, S., Yates, R., Gruteser, M. (2012). Real-time status: how often should one update? IEEE INFOCOM, 2731–2735.', 'Age-of-Information (§8)'],
+            ['Treiber, M., Kesting, A. (2013). Traffic Flow Dynamics: Data, Models and Simulation. Springer.', 'Controllore ACC-IIDM (§5)'],
+            ['Horowitz, M. (2014). Computing\'s energy problem (and what we can do about it). IEEE Int. Solid-State Circuits Conf. (ISSCC), 10–14.', 'Energia AC/MAC (§4)'],
+            ['Miyashita, D., Lee, E.H., Murmann, B. (2016). Convolutional neural networks using logarithmic data representation. arXiv:1603.01025.', 'Quantizzazione logaritmica / po2 (§1, §2)'],
+            ['Xilinx (2018). Zynq-7000 SoC Data Sheet: Overview (DS190). Xilinx.', 'Budget Zynq-7020: BRAM, Tj (§6, §9)'],
+            ['ISO 26262 (2018). Road vehicles — Functional safety. ISO, Ginevra.', 'Sicurezza funzionale (§7)'],
+            ['Neftci, E.O., Mostafa, H., Zenke, F. (2019). Surrogate gradient learning in spiking neural networks. IEEE Signal Processing Magazine 36(6), 51–63.', 'Champion BPTT'],
+            ['ETSI EN 302 637-2 (2019). Intelligent Transport Systems; Cooperative Awareness Basic Service (CAM). ETSI.', 'V2X / CAM (§8)'],
+            ['Wunderlich, T.C., Pehle, C. (2021). Event-based backpropagation can compute exact gradients for spiking neural networks. Scientific Reports 11, 12829.', 'Champion EventProp'],
+        ],
+    )))
 
     # Mappa file
     A(('h1', 'Riproducibilità e mappa dei file'))
@@ -489,7 +580,7 @@ def render_pdf(doc, outpath):
         canvas.saveState()
         canvas.setFont('DJ', 7.5)
         canvas.setFillColor(colors.HexColor('#888888'))
-        canvas.drawString(2 * cm, 1.1 * cm, 'CF_FSNN - Report FPGA / Fase A (EventProp_Study)')
+        canvas.drawString(2 * cm, 1.1 * cm, 'CF_FSNN — Report FPGA (Fase A)')
         canvas.drawRightString(A4[0] - 2 * cm, 1.1 * cm, f'pag. {docx.page}')
         canvas.restoreState()
 

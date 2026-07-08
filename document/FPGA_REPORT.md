@@ -1,9 +1,9 @@
 # CF_FSNN — Report FPGA (Fase A)
 
-> **Profilo di idoneità FPGA (Zynq-7020 / PYNQ-Z1) dei 4 champion, pre-silicio — 45 figure a dati reali su 10 sezioni**
+> **Profilo di idoneità FPGA (Zynq-7020 / PYNQ-Z1) dei 4 champion, pre-silicio — 45 figure su 10 sezioni (dati reali dove 🟢, stime dove 🟡/🔴)**
 
-> Terzo membro del trio v3 · gemelli: HOW_IT_WORKS_v3 (teoria) · VALIDATION_REPORT_v3 (risultati)  
-> Branch EventProp_Study · Fase A "software_now": profilazione SW pre-silicio (le Fasi B/C = HDL/board)  
+> Documento della terna CF_FSNN — gemelli: HOW_IT_WORKS_v3 (teoria) · VALIDATION_REPORT_v3 (risultati)  
+> Fase A "software_now": profilazione software pre-silicio (le Fasi B/C = HDL/board)  
 > Sorgente figure: scripts/fpga_figures.py (librerie weight/state/latency/seu/io) · risultati: results/evaluate/FPGA/  
 
 ---
@@ -15,9 +15,9 @@ Questo report è la valutazione di idoneità FPGA dei 4 champion (2 BPTT: Raffae
 
 Come si legge: la sezione 0 è il cruscotto (radar + tabella di numeri reali) con il verdetto di deploy; le sezioni 1-8 lo fondano dimensione per dimensione (pesi po2, fixed-point, spiking, energia, timing, risorse, SEU, I/O); la 9 è termica (stime). Contesto e teoria della rete: HOW_IT_WORKS_v3 §16. I risultati di validazione della guida (sicurezza, traffico, accuratezza): VALIDATION_REPORT_v3 (di cui §9 è il sommario FPGA che rimanda qui).
 
-> **Nota.** Due verità che attraversano tutto il report (coerenti col fix del bug n_ticks): (1) i champion sparano ~13-21%, NON sono iper-sparsi; (2) il vantaggio energetico (~5.11-8.38×) viene dal costo AC<MAC e da 0 DSP, NON dalla sparsità. L'edge FPGA degli EventProp è ρ<1 (contrattivo) + 0 neuroni morti.
+> **Nota.** Due verità che attraversano tutto il report: (1) i champion sparano ~13-21%, non sono iper-sparsi; (2) il vantaggio energetico (~5.11-8.38×) viene dal costo AC<MAC e da 0 DSP, non dalla sparsità. L'edge FPGA degli EventProp è ρ<1 (contrattivo) + 0 neuroni morti.
 
-| Champion | Metodo | Checkpoint | ρ(U·V) | spike % | energia × | footprint |
+| Champion | Metodo | Checkpoint | ρ(U·V) | spike % | energia × (worst) | footprint |
 |---|---|---|---|---|---|---|
 | Raffaello | BPTT | R33_C2_A1_T12_fix | 2.99 | 13.9% | 8.38× | 400 B |
 | Leonardo | BPTT | LS3_PEAK_R0_launch_d03 | 1.16 | 12.6% | 8.38× | 400 B |
@@ -25,14 +25,31 @@ Come si legge: la sezione 0 è il cruscotto (radar + tabella di numeri reali) co
 | Michelangelo | EventProp | A_lr1e2_t06_r16 | 0.39 | 15.5% | 5.11× | 656 B |
 
 
+## Indice
+
+| Sezione | Contenuto |
+|---|---|
+| 0 | Readiness: la scorecard di idoneità FPGA |
+| 1 | Pesi Power-of-Two: il moltiplicatore che sparisce |
+| 2 | Fixed-point: formato Qm.n e robustezza alla quantizzazione |
+| 3 | Dinamica spiking: sparsità reale e salute della rete |
+| 4 | Energia: il vantaggio AC<MAC |
+| 5 | Timing / WCET: margine sul deadline e jitter zero |
+| 6 | Risorse e DSE: 0 DSP, <1% BRAM |
+| 7 | SEU / ISO 26262: robustezza ai bit-flip e TMR mirato |
+| 8 | I/O e Hardware-in-the-Loop: canale V2X e code |
+| 9 | Termico: derating (stime pre-sintesi) |
+| — | Verdetto e prossimi passi · Riferimenti · Mappa dei file |
+
+
 ## 0. Readiness: la scorecard di idoneità FPGA
 
-La sezione apre con il cruscotto: un radar per champion e una tabella di numeri reali. Le sei dimensioni della readiness sono TUTTE metriche misurate (niente colonne costanti o etichette fuorvianti): ρ<1 (contrattività della ricorrenza), Fix-pt (robustezza alla quantizzazione po2), Sparsità (firing), Energia (vantaggio AC<MAC), Timing (margine sul deadline), SEU (robustezza al bit-flip). Il radar dà la forma d'insieme; la tabella deploy_verdict dà i valori esatti confrontabili, colorati per rango.
+La sezione apre con il cruscotto: un radar per champion e una tabella di numeri reali. Le sei dimensioni della readiness sono tutte metriche misurate, non colonne costanti o etichette fuorvianti: ρ<1 (contrattività della ricorrenza), Fix-pt (robustezza alla quantizzazione po2), Sparsità (firing), Energia (vantaggio AC<MAC), Timing (margine sul deadline), SEU (robustezza al bit-flip). Il radar dà la forma d'insieme; la tabella deploy_verdict dà i valori esatti confrontabili, colorati per rango.
 
 Il candidato al deploy è **Donatello** (EventProp): ρ minimo (0.051), errore di quantizzazione po2 il più basso, 0 neuroni morti. Il rovescio onesto: spara di più (20.8%) e ha quindi il vantaggio energetico più BASSO (5.11×). **Leonardo** (BPTT) è il più fragile (Fix-pt e SEU bassi). L'edge FPGA di EventProp è ρ<1 + 0 morti, NON la sparsità o l'energia.
 
-![I NUMERI REALI dietro il radar, una colonna per asse + footprint. Colorazione per RANGO (verde = migliore dei 4 su quella metrica, nessuna soglia arbitraria). Candidato deploy: Donatello (ρ minimo 0.05, quant robusto).](figures_fpga/00_Readiness__deploy_verdict.png)
-*I NUMERI REALI dietro il radar, una colonna per asse + footprint. Colorazione per RANGO (verde = migliore dei 4 su quella metrica, nessuna soglia arbitraria). Candidato deploy: Donatello (ρ minimo 0.05, quant robusto).*
+![I numeri reali dietro il radar, una colonna per asse + footprint (la colonna energia usa il vantaggio nel caso tipico; la tabella in testa al report usa il worst-case). Colorazione per rango (verde = migliore dei 4 su quella metrica, nessuna soglia arbitraria). Candidato deploy: Donatello (ρ minimo 0.05, quant robusto).](figures_fpga/00_Readiness__deploy_verdict.png)
+*I numeri reali dietro il radar, una colonna per asse + footprint (la colonna energia usa il vantaggio nel caso tipico; la tabella in testa al report usa il worst-case). Colorazione per rango (verde = migliore dei 4 su quella metrica, nessuna soglia arbitraria). Candidato deploy: Donatello (ρ minimo 0.05, quant robusto).*
 
 ![Radar di FPGA-readiness per champion (small-multiples). Ogni asse 0-1 con ANCORA esplicita fra parentesi (1 = ideale FPGA): ρ<1 (contrattivo), Fix-pt (quant po2 senza errore), Sparsità (poco firing), Energia (≥15× vs ANN), Timing (util≈0), SEU (0 bit critici). I valori numerici reali sono nella tabella successiva.](figures_fpga/00_Readiness__readiness_radar.png)
 *Radar di FPGA-readiness per champion (small-multiples). Ogni asse 0-1 con ANCORA esplicita fra parentesi (1 = ideale FPGA): ρ<1 (contrattivo), Fix-pt (quant po2 senza errore), Sparsità (poco firing), Energia (≥15× vs ANN), Timing (util≈0), SEU (0 bit critici). I valori numerici reali sono nella tabella successiva.*
@@ -40,9 +57,9 @@ Il candidato al deploy è **Donatello** (EventProp): ρ minimo (0.051), errore d
 
 ## 1. Pesi Power-of-Two: il moltiplicatore che sparisce
 
-Il cuore del co-design è la quantizzazione po2 (schema e razionale in HOW_IT_WORKS_v3 §15). Qui il lato hardware misurato: il moltiplicatore diventa un bit-shift → **0 DSP**; e l'istogramma po2_alphabet mostra la SPARSITÀ DEI PESI (sinapsi a valore 0 = eliminabili dal connettoma) — da non confondere coi neuroni morti (attività, §3): sono sinapsi che semplicemente non esistono in hardware.
+Il cuore del co-design è la quantizzazione po2 (schema e razionale in HOW_IT_WORKS_v3 §15; quantizzazione logaritmica dei pesi, Miyashita et al. 2016). Qui il lato hardware misurato: il moltiplicatore diventa un bit-shift → **0 DSP**; e l'istogramma po2_alphabet mostra la sparsità dei pesi (sinapsi a valore 0 = eliminabili dal connettoma) — da non confondere coi neuroni morti (attività, §3): sono sinapsi che semplicemente non esistono in hardware.
 
-Il footprint dei pesi è di 400-656 byte per champion (rank-8 vs rank-16): trascurabile vs la BRAM (§6). Il raggio spettrale ρ(U·V) (definizione in HOW §11) separa nettamente EventProp (contrattivo, ρ<1) da BPTT (espansivo, ρ>1): è il discriminante che rende gli EventProp sicuri in aritmetica a virgola fissa.
+Il footprint dei pesi è di 400-656 byte per champion (rank-8 vs rank-16): trascurabile vs la BRAM (§6). Il raggio spettrale ρ(U·V) (definizione in HOW §11) separa EventProp (contrattivo, ρ<1) da BPTT (espansivo, ρ>1): è il discriminante che rende gli EventProp sicuri in aritmetica a virgola fissa.
 
 ![Alfabeto po2 dei pesi (13 valori sign·2^k) per champion. "pesi a 0 = sinapsi eliminabili" è la potatura strutturale del connettoma (sinapsi a peso 0), NON neuroni morti. Il moltiplicatore è UNO di 13 valori → barrel-shifter, 0 DSP.](figures_fpga/01_Weights_po2__po2_alphabet.png)
 *Alfabeto po2 dei pesi (13 valori sign·2^k) per champion. "pesi a 0 = sinapsi eliminabili" è la potatura strutturale del connettoma (sinapsi a peso 0), NON neuroni morti. Il moltiplicatore è UNO di 13 valori → barrel-shifter, 0 DSP.*
@@ -66,6 +83,9 @@ Ogni registro interno (potenziale, fatica, corrente ricorrente, uscita LI) ricev
 
 Il caveat onesto: la curva quant_vs_bits è pienamente valida solo con re-training QAT; qui è una stima post-hoc. Il leak di membrana (bit-shift, cfr. HOW §15) con troppo pochi frac_bits manda il potenziale in sotto-flusso e lo blocca — un vincolo reale sul numero minimo di bit frazionari (figura leak_decay). Gli state-range sono catturati solo per i baseline (limite del profiler sulla variante EventProp, che non fa un forward per-step).
 
+![Equazione 2.1 — Formato fixed-point Qm.n. m = bit interi (con segno), n = bit frazionari; il valore è un intero k scalato di 2⁻ⁿ. Gli int_bits derivano dal range misurato dello stato, i frac_bits dal budget di bit (qui m include il bit di segno; la figura bit_allocation lo mostra separato).](figures_fpga/eq_qmn.png)
+*Equazione 2.1 — Formato fixed-point Qm.n. m = bit interi (con segno), n = bit frazionari; il valore è un intero k scalato di 2⁻ⁿ. Gli int_bits derivano dal range misurato dello stato, i frac_bits dal budget di bit (qui m include il bit di segno; la figura bit_allocation lo mostra separato).*
+
 ![Formato Qm.n per ogni stato interno (segno + interi dal RANGE MISURATO + frazionari). Solo baseline (gli stati non sono catturati per la variante EventProp — limite del profiler).](figures_fpga/02_FixedPoint__bit_allocation.png)
 *Formato Qm.n per ogni stato interno (segno + interi dal RANGE MISURATO + frazionari). Solo baseline (gli stati non sono catturati per la variante EventProp — limite del profiler).*
 
@@ -87,7 +107,7 @@ Il caveat onesto: la curva quant_vs_bits è pienamente valida solo con re-traini
 
 ## 3. Dinamica spiking: sparsità reale e salute della rete
 
-La dinamica spiking sfata un equivoco: i champion **sparano ~13-21%** dei neuroni per tick, NON sono iper-sparsi (~1-2%). Il raster e la mappa di attività lo mostrano cross-champion. Questo è il dato corretto dopo il fix del bug n_ticks: il valore ~1.5% era un artefatto di calcolo (doppia divisione per n_ticks). NB: questi spike-rate (profiler op-count, finestra launch) differiscono di ~1-2 punti da VALIDATION §9.2 (evaluate a 6-tier; es. Donatello 20.8% qui vs 19.0% là) — stessa realtà, finestre/metodo di misura diversi.
+La dinamica spiking sfata un equivoco: i champion **sparano ~13-21%** dei neuroni per tick, non sono iper-sparsi (l'1-2% talvolta attribuito alle SNN). Il raster e la mappa di attività lo mostrano cross-champion. Questi spike-rate (profiler op-count, finestra launch) differiscono di ~1-2 punti da VALIDATION_REPORT_v3 §9.2 (valutazione a 6-tier; es. Donatello 20.8% qui vs 19.0% là): stessa realtà, finestre e metodo di misura diversi.
 
 Il picco di spike simultanei per tick dimensiona l'albero di accumulo (AC) in hardware; l'ISI minimo dà il worst-case back-to-back. La salute della rete è il vero discriminante: gli **EventProp hanno 0 neuroni morti**, i BPTT ~31% — la ricorrenza contrattiva e il gradiente esatto tengono viva l'intera popolazione.
 
@@ -109,11 +129,14 @@ Il picco di spike simultanei per tick dimensiona l'albero di accumulo (AC) in ha
 
 ## 4. Energia: il vantaggio AC<MAC (e da dove NON viene)
 
-Il vantaggio energetico vs una ANN densa è **~5.11-8.38×** (worst-case; fino a ~15× nel caso tipico). NON viene dalla sparsità: le SynOps eguagliano o superano i MAC dell'ANN. Viene dal minor costo unitario di un accumulo (AC) rispetto a una moltiplicazione-accumulo (MAC), amplificato su FPGA dai pesi po2 (AC = shift+add) e da 0 DSP.
+Il vantaggio energetico vs una ANN densa è **~5.11-8.38×** (worst-case; fino a ~15× nel caso tipico). Non viene dalla sparsità: le SynOps eguagliano o superano i MAC dell'ANN. Viene dal minor costo unitario di un accumulo (AC) rispetto a una moltiplicazione-accumulo (MAC), amplificato su FPGA dai pesi po2 (AC = shift+add) e da 0 DSP.
 
 Conseguenza contro-intuitiva: **Donatello**, il più contrattivo, spara di più (~20.8%) e ha quindi il vantaggio energetico più basso (~5.11×). Il breakdown mostra dove si spendono i pJ (la ricorrenza rec_V/rec_U domina nei rank-16); il grafico energy_vs_rate marca il rate operativo reale, ben dentro il regime denso, non quello iper-sparso.
 
-Coerenza col gemello: VALIDATION_REPORT_v3 §9.2 riporta una stima più grossolana (~4.77-6.01×) dall'evaluate a 6-tier; qui il modello op-count distingue il worst-case (~5.11-8.38×) dal tipico (~9-15×). Stesso ordine di grandezza — e ben lontano dai 22-30× pre-fix del bug n_ticks.
+Coerenza col gemello: VALIDATION_REPORT_v3 §9.2 riporta una stima più grossolana (~4.77-6.01×) dalla valutazione a 6-tier; qui il modello op-count distingue il worst-case (~5.11-8.38×) dal tipico (~9-15×), dello stesso ordine di grandezza.
+
+![Equazione 4.1 — Vantaggio energetico. N_MAC = moltiplicazioni-accumulo della ANN equivalente; SynOps = Σ (spike × fan-out); e_MAC ≈ 4.6 pJ, e_AC ≈ 0.9 pJ (modello Horowitz 2014, 45 nm). Il guadagno viene da e_AC < e_MAC e dallo 0 DSP, non dalla sparsità.](figures_fpga/eq_energy.png)
+*Equazione 4.1 — Vantaggio energetico. N_MAC = moltiplicazioni-accumulo della ANN equivalente; SynOps = Σ (spike × fan-out); e_MAC ≈ 4.6 pJ, e_AC ≈ 0.9 pJ (modello Horowitz 2014, 45 nm). Il guadagno viene da e_AC < e_MAC e dallo 0 DSP, non dalla sparsità.*
 
 ![Dove si spendono i pJ per champion (fc / rec_V / rec_U / out / non-sinaptiche).](figures_fpga/04_Energy__energy_breakdown.png)
 *Dove si spendono i pJ per champion (fc / rec_V / rec_U / out / non-sinaptiche).*
@@ -130,9 +153,12 @@ Coerenza col gemello: VALIDATION_REPORT_v3 §9.2 riporta una stima più grossola
 
 ## 5. Timing / WCET: margine sul deadline e jitter zero
 
-Il conteggio operazioni per tick è l'input del WCET e distingue rank-8 (baseline) da rank-16 (EventProp) sui rami ricorrenti. Su qualunque delle 4 architetture HW considerate, il tempo di inferenza è di pochi µs contro un **deadline di controllo di 100 ms**: il margine è enorme (utilizzo ~0.1%). Il budget di 100 ms è la leva che permette di ottimizzare per AREA (CORDIC iterativo, DSP≈0) invece che per velocità.
+Il conteggio operazioni per tick è l'input del WCET e distingue rank-8 (baseline) da rank-16 (EventProp) sui rami ricorrenti. Il tempo di inferenza dipende dal grado di parallelismo: la variante seriale (minima in area) impiega ~120-171 µs, le varianti più parallele scendono a pochi µs — tutte contro un **deadline di controllo di 100 ms**. Anche la seriale usa quindi solo ~0.1-0.2% del budget: il margine è enorme, ed è proprio questo che permette di ottimizzare per area (CORDIC iterativo, DSP≈0) invece che per velocità.
 
 Proprietà preziosa per un sistema safety: **WCET == BCET**. Il numero di operazioni è costante a ogni spike-rate (worst-case), quindi il jitter di calcolo è nullo — un vantaggio di determinismo temporale rispetto a un'esecuzione data-dependent.
+
+![Equazione 5.1 — WCET e utilizzo. N_cicli = conteggio operazioni per inferenza; T_clk = periodo di clock; T_deadline = 100 ms (10 Hz, ciclo di controllo/V2X). WCET == BCET perché il conteggio è data-indipendente.](figures_fpga/eq_wcet.png)
+*Equazione 5.1 — WCET e utilizzo. N_cicli = conteggio operazioni per inferenza; T_clk = periodo di clock; T_deadline = 100 ms (10 Hz, ciclo di controllo/V2X). WCET == BCET perché il conteggio è data-indipendente.*
 
 ![STIMA del datapath del decode ACC-IIDM (sqrt/div/sigmoid/tanh) in PL: CORDIC iterativo (shift-add, DSP≈0) sul budget di 100 ms.](figures_fpga/05_Timing_WCET__decode_criticalpath.png)
 *STIMA del datapath del decode ACC-IIDM (sqrt/div/sigmoid/tanh) in PL: CORDIC iterativo (shift-add, DSP≈0) sul budget di 100 ms.*
@@ -140,8 +166,8 @@ Proprietà preziosa per un sistema safety: **WCET == BCET**. Il numero di operaz
 ![WCET == BCET: il numero di operazioni è costante a ogni spike-rate → jitter di calcolo = 0 (esemplare: Donatello).](figures_fpga/05_Timing_WCET__jitter_proof.png)
 *WCET == BCET: il numero di operazioni è costante a ogni spike-rate → jitter di calcolo = 0 (esemplare: Donatello).*
 
-![Tempo di inferenza vs deadline di controllo 100 ms, per champion: margine enorme (util ~0.1%).](figures_fpga/05_Timing_WCET__latency_margin.png)
-*Tempo di inferenza vs deadline di controllo 100 ms, per champion: margine enorme (util ~0.1%).*
+![Tempo di inferenza vs deadline di controllo 100 ms, per champion: margine enorme (util ~0.1-0.2%, variante seriale).](figures_fpga/05_Timing_WCET__latency_margin.png)
+*Tempo di inferenza vs deadline di controllo 100 ms, per champion: margine enorme (util ~0.1-0.2%, variante seriale).*
 
 ![Conteggio operazioni per tick (input del WCET), per champion: si vede la differenza rank-8 (baseline) vs rank-16 (EventProp) sui rami ricorrenti.](figures_fpga/05_Timing_WCET__op_count.png)
 *Conteggio operazioni per tick (input del WCET), per champion: si vede la differenza rank-8 (baseline) vs rank-16 (EventProp) sui rami ricorrenti.*
@@ -203,6 +229,9 @@ Il lato I/O modella il canale V2X e le code di ingresso. La superficie AoI (Age-
 
 Il dimensionamento della coda RX (M/M/1/K) dà il buffer minimo anti-burst dei messaggi; la curva PDR mostra il "ginocchio" oltre cui la perdita pacchetti diventa pericolosa. Queste figure combinano dati reali (comportamento della rete) e stime di modello (coda).
 
+![Equazione 8.1 — Coda RX M/M/1/K (sopra) e Age-of-Information (sotto). P_K = probabilità di blocco (drop a buffer pieno); K = profondità della coda; a = λ/μ = intensità di traffico; Δ(t) = età dell'ultimo CAM ricevuto (t meno l'istante u(t) di generazione).](figures_fpga/eq_iohil.png)
+*Equazione 8.1 — Coda RX M/M/1/K (sopra) e Age-of-Information (sotto). P_K = probabilità di blocco (drop a buffer pieno); K = profondità della coda; a = λ/μ = intensità di traffico; Δ(t) = età dell'ultimo CAM ricevuto (t meno l'istante u(t) di generazione).*
+
 ![Distribuzione dell'Age-of-Information sotto perdita/ritardo dei pacchetti V2X.](figures_fpga/08_IO_HIL__aoi_dist.png)
 *Distribuzione dell'Age-of-Information sotto perdita/ritardo dei pacchetti V2X.*
 
@@ -221,7 +250,7 @@ Il dimensionamento della coda RX (M/M/1/K) dà il buffer minimo anti-burst dei m
 
 ## 9. Termico: derating (stime pre-sintesi)
 
-La sezione termica è interamente di STIMA (🟡): il derating di Fmax con la temperatura di giunzione e il budget termico sullo Zynq-7020. Servono a impostare i margini, ma i numeri reali arriveranno solo dalla sintesi e dalla misura su board (Fasi B/C). Sono inclusi marcati come stime, non come risultati.
+La sezione termica è interamente di stima (🟡): il derating di Fmax con la temperatura di giunzione e il budget termico sullo Zynq-7020. Servono a impostare i margini, ma i numeri reali arriveranno solo dalla sintesi e dalla misura su board (Fasi B/C). Sono inclusi marcati come stime, non come risultati.
 
 ![STIMA: Fmax vs temperatura di giunzione Tj — a caldo il clock scende, resta headroom sul target a 100 °C?](figures_fpga/09_Thermal__derating_tj_fmax.png)
 *STIMA: Fmax vs temperatura di giunzione Tj — a caldo il clock scende, resta headroom sul target a 100 °C?*
@@ -235,6 +264,24 @@ La sezione termica è interamente di STIMA (🟡): il derating di Fmax con la te
 Sul profilo pre-silicio il candidato al deploy è **Donatello** (EventProp): ricorrenza contrattiva (ρ≈0.051 → fixed-point sicuro), quantizzazione po2 robusta, 0 neuroni morti, timing e risorse soddisfatti con margine enorme (0 DSP, <1% BRAM, µs vs 100 ms). Il rovescio onesto: essendo il più attivo (~20.8% firing) ha il vantaggio energetico più basso (~5.11×); e **Leonardo** resta il più fragile su quantizzazione e SEU.
 
 > **Nota.** Cosa è REALE e cosa è STIMA. Reali (🟢): readiness, pesi po2, spiking, energia (modello Horowitz), op-count/timing, footprint/BRAM, SEU (fault-injection SW). Stime (🟡/🔴): area LUT/FF, datapath del decode, overhead TMR, coda RX, termico. Le stime si confermano solo in Fase B (sintesi Vivado → LUT/FF/DSP/Fmax reali) e Fase C (FPGA-in-the-Loop → potenza/latenza/SEU su silicio).
+
+
+## Riferimenti
+
+| Riferimento | Tema |
+|---|---|
+| Volder, J.E. (1959). The CORDIC trigonometric computing technique. IRE Trans. Electronic Computers EC-8(3), 330–334. | CORDIC per il decode (§5) |
+| Kleinrock, L. (1975). Queueing Systems, Volume 1: Theory. Wiley. | Coda M/M/1/K (§8) |
+| JEDEC JESD89A (2006). Measurement and Reporting of Alpha Particle and Terrestrial Cosmic Ray-Induced Soft Errors in Semiconductor Devices. JEDEC. | Soft error / SEU (§7) |
+| Kaul, S., Yates, R., Gruteser, M. (2012). Real-time status: how often should one update? IEEE INFOCOM, 2731–2735. | Age-of-Information (§8) |
+| Treiber, M., Kesting, A. (2013). Traffic Flow Dynamics: Data, Models and Simulation. Springer. | Controllore ACC-IIDM (§5) |
+| Horowitz, M. (2014). Computing's energy problem (and what we can do about it). IEEE Int. Solid-State Circuits Conf. (ISSCC), 10–14. | Energia AC/MAC (§4) |
+| Miyashita, D., Lee, E.H., Murmann, B. (2016). Convolutional neural networks using logarithmic data representation. arXiv:1603.01025. | Quantizzazione logaritmica / po2 (§1, §2) |
+| Xilinx (2018). Zynq-7000 SoC Data Sheet: Overview (DS190). Xilinx. | Budget Zynq-7020: BRAM, Tj (§6, §9) |
+| ISO 26262 (2018). Road vehicles — Functional safety. ISO, Ginevra. | Sicurezza funzionale (§7) |
+| Neftci, E.O., Mostafa, H., Zenke, F. (2019). Surrogate gradient learning in spiking neural networks. IEEE Signal Processing Magazine 36(6), 51–63. | Champion BPTT |
+| ETSI EN 302 637-2 (2019). Intelligent Transport Systems; Cooperative Awareness Basic Service (CAM). ETSI. | V2X / CAM (§8) |
+| Wunderlich, T.C., Pehle, C. (2021). Event-based backpropagation can compute exact gradients for spiking neural networks. Scientific Reports 11, 12829. | Champion EventProp |
 
 
 ## Riproducibilità e mappa dei file
