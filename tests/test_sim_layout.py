@@ -46,10 +46,10 @@ def test_identificazione_hides_vmem(qapp):
     assert {"v0", "T", "s0", "a", "b"} <= vis
 
 
-def test_neuro_debug_shows_raster_and_vmem(qapp):
+def test_neuro_debug_shows_netstate_and_spikerate(qapp):
     area, docks = _build_area()
     apply_neuro_debug(area, docks)
-    assert {"Raster", "v_mem"} <= visible_docks(area)
+    assert {"NetState", "SpikeRate", "v_mem"} <= visible_docks(area)
 
 
 def test_preset_then_overview_restores_all(qapp):

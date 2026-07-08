@@ -6,7 +6,7 @@ fragile saveState format; only the user's custom layout uses saveState/restoreSt
 import json
 import os
 
-DOCK_ORDER = ["Road", "Raster", "v_mem", "v0", "T", "s0", "a", "b"]
+DOCK_ORDER = ["Road", "NetState", "SpikeRate", "v_mem", "v0", "T", "s0", "a", "b"]
 _PARAMS = ["v0", "T", "s0", "a", "b"]
 LAYOUT_PATH = os.path.expanduser(os.path.join("~", ".cf_fsnn_sim", "layout.json"))
 
@@ -44,17 +44,19 @@ def _hide(docks, name):
 
 def apply_overview(area, docks):
     _show(area, docks, "Road", "top")
-    _show(area, docks, "Raster", "bottom", "Road")
-    _show(area, docks, "v_mem", "right", "Raster")
-    _show(area, docks, "v0", "bottom", "Raster")
+    _show(area, docks, "NetState", "bottom", "Road")
+    _show(area, docks, "SpikeRate", "right", "NetState")
+    _show(area, docks, "v_mem", "bottom", "NetState")
+    _show(area, docks, "v0", "bottom", "v_mem")
     for prev, n in zip(["v0", "T", "s0", "a"], ["T", "s0", "a", "b"]):
         _show(area, docks, n, "right", prev)
 
 
 def apply_guida(area, docks):
+    _hide(docks, "NetState")
+    _hide(docks, "SpikeRate")
     _show(area, docks, "Road", "left")
-    _show(area, docks, "Raster", "right", "Road")
-    _show(area, docks, "v_mem", "bottom", "Raster")
+    _show(area, docks, "v_mem", "right", "Road")
     _show(area, docks, "v0", "bottom", "v_mem")
     for n in ["T", "s0", "a", "b"]:
         _show(area, docks, n, "above", "v0")   # tab-stack params together
@@ -62,18 +64,20 @@ def apply_guida(area, docks):
 
 def apply_identificazione(area, docks):
     _hide(docks, "v_mem")
+    _hide(docks, "NetState")
+    _hide(docks, "SpikeRate")
     _show(area, docks, "Road", "top")
-    _show(area, docks, "Raster", "right", "Road")
     _show(area, docks, "v0", "bottom", "Road")
     for prev, n in zip(["v0", "T", "s0", "a"], ["T", "s0", "a", "b"]):
         _show(area, docks, n, "bottom", prev)   # 5 params stacked, dominant
 
 
 def apply_neuro_debug(area, docks):
-    _show(area, docks, "Raster", "top")
-    _show(area, docks, "v_mem", "bottom", "Raster")
+    _show(area, docks, "NetState", "left")
+    _show(area, docks, "SpikeRate", "right", "NetState")
+    _show(area, docks, "v_mem", "bottom", "NetState")
     _show(area, docks, "Road", "bottom", "v_mem")
-    _show(area, docks, "v0", "right", "Raster")
+    _show(area, docks, "v0", "right", "SpikeRate")
     for n in ["T", "s0", "a", "b"]:
         _show(area, docks, n, "above", "v0")   # params tab-stacked, compact
 

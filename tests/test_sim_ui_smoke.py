@@ -89,9 +89,9 @@ def test_dark_theme_applies(qapp):
 
 
 # --- Extension Phase 2: dockable shell ---
-def test_simapp_builds_eight_docks(qapp):
+def test_simapp_builds_docks(qapp):
     win = SimApp(CHAMP)
-    assert set(win._docks.keys()) == set(DOCK_ORDER)
+    assert set(win._docks.keys()) == set(DOCK_ORDER)     # 9 docks (Road/NetState/SpikeRate/v_mem/5 params)
     assert visible_docks(win._area) == set(DOCK_ORDER)   # Overview on startup (no layout_path)
 
 

@@ -19,7 +19,8 @@ from sim.stepper import SimStepper
 from sim.ui.layout import (DOCK_ORDER, LAYOUT_PATH, PRESETS, apply_overview, load_layout,
                            save_layout, visible_docks)
 from sim.ui.loop import SimLoop
-from sim.ui.panels import PARAM_COLORS, PARAM_NAMES, PARAM_UNITS, ParamPanel, RasterPanel, VmemPanel
+from sim.ui.panels import (PARAM_COLORS, PARAM_NAMES, PARAM_UNITS, NeuronStatePanel, ParamPanel,
+                           SpikeRatePanel, VmemPanel)
 from sim.ui.topdown import TopDownView
 from utils.champion_io import load_champion
 
@@ -42,17 +43,19 @@ class SimApp(QMainWindow):
         self._last_result = None
 
         self._topdown = TopDownView()
-        self._raster = RasterPanel()
+        self._netstate = NeuronStatePanel()
+        self._spikerate = SpikeRatePanel()
         self._vmem = VmemPanel()
         self._params = [ParamPanel(i, n, u, c)
                         for i, (n, u, c) in enumerate(zip(PARAM_NAMES, PARAM_UNITS, PARAM_COLORS))]
         for p in self._params[1:]:
             p.plot_item.setXLink(self._params[0].plot_item)
-        self._live_panels = [self._raster, self._vmem, *self._params]
+        self._spikerate._plot.getPlotItem().setXLink(self._params[0].plot_item)   # unified time axis
+        self._live_panels = [self._netstate, self._spikerate, self._vmem, *self._params]
 
-        widgets = {"Road": self._topdown, "Raster": self._raster, "v_mem": self._vmem,
-                   "v0": self._params[0], "T": self._params[1], "s0": self._params[2],
-                   "a": self._params[3], "b": self._params[4]}
+        widgets = {"Road": self._topdown, "NetState": self._netstate, "SpikeRate": self._spikerate,
+                   "v_mem": self._vmem, "v0": self._params[0], "T": self._params[1],
+                   "s0": self._params[2], "a": self._params[3], "b": self._params[4]}
         self._area = DockArea()
         self._docks = {}
         for name in DOCK_ORDER:
