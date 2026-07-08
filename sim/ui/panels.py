@@ -47,8 +47,8 @@ class NeuronStatePanel(QWidget):
         self._cmap = pg.colormap.get("viridis")
         self._lut = self._cmap.getLookupTable(0.0, 1.0, 256)
         self._groups = {}     # name -> (plot, heat_img, overlay_img_or_None)
-        for row, (name, color) in enumerate(_GROUP_BORDERS):
-            p = self._glw.addPlot(row=row, col=0)
+        for col, (name, color) in enumerate(_GROUP_BORDERS):
+            p = self._glw.addPlot(row=0, col=col)   # groups side by side: input | hidden | output
             p.setTitle(name)
             p.hideAxis("left")
             p.hideAxis("bottom")
@@ -61,6 +61,8 @@ class NeuronStatePanel(QWidget):
                 overlay = pg.ImageItem()      # drawn on top of the heat
                 p.addItem(overlay)
             self._groups[name] = (p, heat, overlay)
+        for c, factor in enumerate((1, 4, 1)):   # give the 32-neuron hidden grid the width
+            self._glw.ci.layout.setColumnStretchFactor(c, factor)
 
     def _set_strip(self, name, values):
         _, heat, _ = self._groups[name]

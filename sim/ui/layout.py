@@ -45,11 +45,11 @@ def _hide(docks, name):
 def apply_overview(area, docks):
     _show(area, docks, "Road", "top")
     _show(area, docks, "NetState", "bottom", "Road")
-    _show(area, docks, "SpikeRate", "right", "NetState")
     _show(area, docks, "v_mem", "bottom", "NetState")
     _show(area, docks, "v0", "bottom", "v_mem")
     for prev, n in zip(["v0", "T", "s0", "a"], ["T", "s0", "a", "b"]):
         _show(area, docks, n, "right", prev)
+    _show(area, docks, "SpikeRate", "right", "NetState")   # last: split NetState's row -> NetState | SpikeRate
 
 
 def apply_guida(area, docks):
