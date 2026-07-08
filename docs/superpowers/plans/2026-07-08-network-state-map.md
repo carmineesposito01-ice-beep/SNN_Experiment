@@ -1,5 +1,7 @@
 # Network State Map + Spike-Rate Implementation Plan
 
+> **STATUS: ✅ COMPLETE (2026-07-08).** Executed inline in `cf_sim` (TDD). T1 input capture, T2 panels, T3 wiring — commits up to `a86f867` (pushed). 63 tests green; golden bit-identity preserved. Post-render fix: SpikeRate un-X-linked from params (a hidden param tab corrupted its axis). NetState (3 groups + spike overlay) + SpikeRate render-verified on the real `windows` platform.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: superpowers:executing-plans (inline). Steps use checkbox (`- [ ]`) syntax.
 > Runs in **`cf_sim`** (offscreen for Qt). Spec: `docs/superpowers/specs/2026-07-08-network-state-map-design.md`. pyqtgraph 0.14 heatmap API pre-verified (`colormap.get('viridis')` → LUT (256,3); `ImageItem.setColorMap`/RGBA `setImage((h,w,4))`; `ViewBox.setBorder`; `hideAxis`).
 
