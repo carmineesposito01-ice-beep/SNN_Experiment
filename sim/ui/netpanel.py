@@ -42,8 +42,8 @@ class NetPanel(QWidget):
         self._param_plots, self._param_curves, self._gt_lines = [], [], []
         for i, (name, unit, color) in enumerate(zip(_PARAM_NAMES, _PARAM_UNITS, _PARAM_COLORS)):
             p = self._param_glw.addPlot(row=i, col=0)
-            p.setLabel("left", name, units=unit)
-            p.showGrid(x=False, y=True, alpha=0.2)
+            p.setTitle(f"{name} ({unit})")   # name+units in the title (updated with the value on each frame);
+            p.showGrid(x=False, y=True, alpha=0.2)   # left axis keeps only tick numbers -> no label overlap
             if i < len(_PARAM_NAMES) - 1:
                 p.getAxis("bottom").setStyle(showValues=False)
             else:

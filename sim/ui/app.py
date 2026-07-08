@@ -65,7 +65,7 @@ class SimApp(QMainWindow):
         root.addWidget(self._header)
         root.addLayout(controls)
         root.addWidget(self._topdown, stretch=1)
-        root.addWidget(self._netpanel, stretch=1)
+        root.addWidget(self._netpanel, stretch=3)   # net panel (5 params + raster + v_mem) needs the room; road is a thin strip
         container = QWidget()
         container.setLayout(root)
         self.setCentralWidget(container)

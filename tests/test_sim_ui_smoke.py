@@ -166,3 +166,20 @@ def test_simapp_feeds_ground_truth_to_netpanel(qapp):
     gt = win._scenarios[0].params_gt
     assert win._netpanel._gt_lines[0].isVisible()
     assert abs(win._netpanel._gt_lines[0].value() - float(gt[0])) < 1e-6
+
+
+# --- Extension Phase 1 polish: vertical legibility ---
+def test_simapp_netpanel_gets_more_vertical_space(qapp):
+    win = SimApp(CHAMP)
+    lay = win.centralWidget().layout()
+    # the network panel (5 params + raster + v_mem) needs more room than the thin road strip
+    assert lay.stretch(lay.indexOf(win._netpanel)) > lay.stretch(lay.indexOf(win._topdown))
+
+
+def test_netpanel_param_axis_labels_uncluttered(qapp):
+    panel = NetPanel()
+    # redundant left-axis TITLE removed (name+units+value live in the per-plot title);
+    # only tick numbers remain, so short stacked plots don't overlap their labels
+    assert panel._param_plots[0].getAxis("left").labelText == ""
+    # but each plot is still labelled up-front, before the first frame
+    assert "v0" in panel._param_plots[0].titleLabel.text
