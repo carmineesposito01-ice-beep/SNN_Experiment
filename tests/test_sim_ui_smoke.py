@@ -13,9 +13,14 @@ if REPO not in sys.path:
 pytest.importorskip("PySide6")
 pytest.importorskip("pyqtgraph")
 
-from PySide6.QtWidgets import QApplication  # noqa: E402
-from sim.state import StepResult            # noqa: E402
-from sim.ui.topdown import TopDownView      # noqa: E402
+from PySide6.QtWidgets import QApplication          # noqa: E402
+from sim.state import StepResult                    # noqa: E402
+from sim.ui.topdown import TopDownView, ttc_color   # noqa: E402
+from sim.ui.app import SimApp                        # noqa: E402
+from sim.ui.layout import DOCK_ORDER, visible_docks  # noqa: E402
+from sim.ui.theme import apply_dark_theme            # noqa: E402
+
+CHAMP = os.path.join(REPO, "champions", "R33_C2_A1_T12_fix", "best_model.pt")
 
 
 @pytest.fixture(scope="module")
@@ -24,45 +29,7 @@ def qapp():
     yield app
 
 
-# (old minimal topdown test superseded by test_topdown_ego_scrolls_and_leader_tracks_gap below)
-
-
-# --- Task 3: NetPanel ---
-from sim.probe import AttributeProbe        # noqa: E402
-from sim.ui.netpanel import NetPanel        # noqa: E402
-
-
-def test_netpanel_instantiates_and_updates(qapp):
-    probe = AttributeProbe(capacity=50)
-    for t in range(5):
-        probe.record(t, {"spikes": (np.arange(8) % 2).astype(float),
-                          "v_mem": np.linspace(0, 1, 8),
-                          "v_th_eff": np.ones(8)}, np.arange(5) + t)
-    panel = NetPanel()
-    panel.update_frame(probe)               # must not raise
-    assert panel.n_params_curves() == 5
-
-
-# --- Task 4: SimApp ---
-from sim.ui.app import SimApp               # noqa: E402
-
-CHAMP = os.path.join(REPO, "champions", "R33_C2_A1_T12_fix", "best_model.pt")
-
-
-def test_simapp_loads_champion_and_advances(qapp):
-    win = SimApp(CHAMP)
-    assert win.scenario_count() >= 10        # 9 library (include_tail) + manual
-    win.select_scenario(0)
-    win._advance(0.5)                        # 5 fixed steps, headless (no timer)
-    assert win.loop.stepper.st.t >= 5
-    win.inject_brake()                       # enqueues a brake_leader at current tick
-    win._advance(0.5)                        # must not raise
-
-
-# --- Plan 5 Task 1: top-down polish ---
-from sim.ui.topdown import ttc_color         # noqa: E402
-
-
+# --- top-down view ---
 def _stepv(s, v, dv=0.0):
     return StepResult(t=0, s=s, v=v, vl=v - dv, dv=dv, a_ego=0.0, params=np.zeros(5),
                       collided=False)
@@ -85,19 +52,17 @@ def test_topdown_ego_scrolls_and_leader_tracks_gap(qapp):
     assert (lx2 - ex2) < (lx1 - ex1)             # gap shrank 30 -> 25
 
 
-# --- Plan 5 Task 2: net-panel readability ---
-def test_netpanel_has_current_values(qapp):
-    probe = AttributeProbe(capacity=50)
-    for t in range(4):
-        probe.record(t, {"spikes": np.zeros(8), "v_mem": np.linspace(0, 1, 8),
-                          "v_th_eff": np.ones(8)}, np.array([30., 1.5, 2., 1.5, 1.5]))
-    panel = NetPanel()
-    panel.update_frame(probe)
-    labels = panel.current_param_labels()        # ["v0=30.00", "T=1.50", ...]
-    assert len(labels) == 5 and labels[0].startswith("v0=") and panel.n_params_curves() == 5
+# --- SimApp: champion + controls + status ---
+def test_simapp_loads_champion_and_advances(qapp):
+    win = SimApp(CHAMP)
+    assert win.scenario_count() >= 10        # 9 library (include_tail) + manual
+    win.select_scenario(0)
+    win._advance(0.5)                        # 5 fixed steps, headless (no timer)
+    assert win.loop.stepper.st.t >= 5
+    win.inject_brake()                       # enqueues a brake_leader at current tick
+    win._advance(0.5)                        # must not raise
 
 
-# --- Plan 5 Task 3: controls + status bar ---
 def test_simapp_status_reset_step(qapp):
     win = SimApp(CHAMP)
     win.select_scenario(0)
@@ -110,8 +75,11 @@ def test_simapp_status_reset_step(qapp):
     assert win.loop.stepper.st.t == 0 and t_after >= 5
 
 
-# --- Plan 5 Task 4: dark theme ---
-from sim.ui.theme import apply_dark_theme     # noqa: E402
+def test_simapp_selector_syncs_on_programmatic_select(qapp):
+    win = SimApp(CHAMP)
+    win.select_scenario(3)
+    assert win._selector.currentIndex() == 3
+    assert win._selector.currentText() == win._scenarios[3].name
 
 
 def test_dark_theme_applies(qapp):
@@ -120,66 +88,46 @@ def test_dark_theme_applies(qapp):
     assert qapp.palette().color(QPalette.Window).lightness() < 128
 
 
-def test_simapp_selector_syncs_on_programmatic_select(qapp):
+# --- Extension Phase 2: dockable shell ---
+def test_simapp_builds_eight_docks(qapp):
     win = SimApp(CHAMP)
-    win.select_scenario(3)
-    assert win._selector.currentIndex() == 3
-    assert win._selector.currentText() == win._scenarios[3].name
+    assert set(win._docks.keys()) == set(DOCK_ORDER)
+    assert visible_docks(win._area) == set(DOCK_ORDER)   # Overview on startup (no layout_path)
 
 
-# --- Extension Phase 1: param legibility ---
-def test_netpanel_params_in_physical_units(qapp):
-    probe = AttributeProbe(capacity=50)
-    for t in range(4):
-        probe.record(t, {"spikes": np.zeros(8), "v_mem": np.zeros(8), "v_th_eff": np.ones(8)},
-                     np.array([44.0, 1.1, 2.5, 0.5, 1.0]))
-    panel = NetPanel()
-    panel.update_frame(probe)
-    assert panel.n_params_curves() == 5                       # unchanged public API
-    y_v0 = panel._param_curves[0].getData()[1]                # RAW value, not 0..1
-    assert y_v0 is not None and float(np.nanmax(y_v0)) > 40.0  # v0 plotted in m/s
-    assert panel.current_param_labels()[0] == "v0=44.00"
+def test_simapp_params_xlinked(qapp):
+    win = SimApp(CHAMP)
+    vb0 = win._params[0].plot_item.getViewBox()
+    vb3 = win._params[3].plot_item.getViewBox()
+    assert vb3.linkedView(vb3.XAxis) is vb0   # param3 X-linked to param0 (holds even when torn out)
 
 
-def test_netpanel_ground_truth_reference(qapp):
-    panel = NetPanel()
-    panel.set_ground_truth(np.array([30.0, 1.5, 2.0, 1.5, 1.5]))
-    assert panel._gt_lines[0].isVisible()
-    assert abs(panel._gt_lines[0].value() - 30.0) < 1e-6
-    panel.set_ground_truth(None)
-    assert not panel._gt_lines[0].isVisible()
-
-
-def test_netpanel_firing_readout(qapp):
-    probe = AttributeProbe(capacity=50)
-    for t in range(3):
-        probe.record(t, {"spikes": np.array([1., 0., 1., 0., 1., 0., 1., 0.]),
-                         "v_mem": np.zeros(8), "v_th_eff": np.ones(8)}, np.zeros(5))
-    panel = NetPanel()
-    panel.update_frame(probe)
-    assert "%" in panel._firing_label.text() and "50" in panel._firing_label.text()
-
-
-def test_simapp_feeds_ground_truth_to_netpanel(qapp):
+def test_simapp_feeds_ground_truth_to_params(qapp):
     win = SimApp(CHAMP)
     win.select_scenario(0)
     gt = win._scenarios[0].params_gt
-    assert win._netpanel._gt_lines[0].isVisible()
-    assert abs(win._netpanel._gt_lines[0].value() - float(gt[0])) < 1e-6
+    assert win._params[0]._gt.isVisible()
+    assert abs(win._params[0]._gt.value() - float(gt[0])) < 1e-6
 
 
-# --- Extension Phase 1 polish: vertical legibility ---
-def test_simapp_netpanel_gets_more_vertical_space(qapp):
+def test_simapp_status_has_firing(qapp):
     win = SimApp(CHAMP)
-    lay = win.centralWidget().layout()
-    # the network panel (5 params + raster + v_mem) needs more room than the thin road strip
-    assert lay.stretch(lay.indexOf(win._netpanel)) > lay.stretch(lay.indexOf(win._topdown))
+    win.select_scenario(0)
+    win._advance(0.5)
+    assert "firing" in win.status_text()
 
 
-def test_netpanel_param_axis_labels_uncluttered(qapp):
-    panel = NetPanel()
-    # redundant left-axis TITLE removed (name+units+value live in the per-plot title);
-    # only tick numbers remain, so short stacked plots don't overlap their labels
-    assert panel._param_plots[0].getAxis("left").labelText == ""
-    # but each plot is still labelled up-front, before the first frame
-    assert "v0" in panel._param_plots[0].titleLabel.text
+def test_simapp_view_toggle_hides_and_shows_dock(qapp):
+    win = SimApp(CHAMP)
+    win._set_dock_visible("v_mem", False)
+    assert "v_mem" not in visible_docks(win._area)
+    win._set_dock_visible("v_mem", True)
+    assert "v_mem" in visible_docks(win._area)
+
+
+def test_simapp_apply_preset(qapp):
+    win = SimApp(CHAMP)
+    win.apply_preset("Identificazione")
+    assert "v_mem" not in visible_docks(win._area)
+    win.apply_preset("Overview")
+    assert visible_docks(win._area) == set(DOCK_ORDER)

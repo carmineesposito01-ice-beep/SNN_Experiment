@@ -1,11 +1,14 @@
-"""SimApp -- main window: champion + scenario selector + run/pause/reset/step + brake-leader
-+ speed, wiring SimLoop + TopDownView + NetPanel via a QTimer (fixed-timestep), with a status bar."""
+"""SimApp -- main window: a dockable workspace (pyqtgraph DockArea) of 8 graphs (Road, Raster, v_mem,
+and the 5 identified params) + champion/scenario controls + View/Layout menus (presets + persistence),
+driven by a fixed-timestep QTimer loop, with a status bar (incl. network firing %)."""
 import os
 
 import numpy as np
 from PySide6.QtCore import QElapsedTimer, Qt, QTimer
+from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (QComboBox, QHBoxLayout, QLabel, QMainWindow, QPushButton,
                                QSlider, QVBoxLayout, QWidget)
+from pyqtgraph.dockarea import Dock, DockArea
 
 from config import DT
 from sim.backend import SoftwareBackend
@@ -13,8 +16,10 @@ from sim.events import EventInjector
 from sim.probe import AttributeProbe
 from sim.scenario import manual_scenario, scenario_library
 from sim.stepper import SimStepper
+from sim.ui.layout import (DOCK_ORDER, LAYOUT_PATH, PRESETS, apply_overview, load_layout,
+                           save_layout, visible_docks)
 from sim.ui.loop import SimLoop
-from sim.ui.netpanel import NetPanel
+from sim.ui.panels import PARAM_COLORS, PARAM_NAMES, PARAM_UNITS, ParamPanel, RasterPanel, VmemPanel
 from sim.ui.topdown import TopDownView
 from utils.champion_io import load_champion
 
@@ -23,7 +28,7 @@ _PARAMS_GT = np.array([30.0, 1.5, 2.0, 1.5, 1.5])
 
 
 class SimApp(QMainWindow):
-    def __init__(self, champion_path):
+    def __init__(self, champion_path, layout_path=None):
         super().__init__()
         self.setWindowTitle("CF_FSNN Simulator")
         self._champ_name = os.path.basename(os.path.dirname(champion_path))
@@ -36,25 +41,36 @@ class SimApp(QMainWindow):
         self._last_result = None
 
         self._topdown = TopDownView()
-        self._netpanel = NetPanel()
+        self._raster = RasterPanel()
+        self._vmem = VmemPanel()
+        self._params = [ParamPanel(i, n, u, c)
+                        for i, (n, u, c) in enumerate(zip(PARAM_NAMES, PARAM_UNITS, PARAM_COLORS))]
+        for p in self._params[1:]:
+            p.plot_item.setXLink(self._params[0].plot_item)
+        self._live_panels = [self._raster, self._vmem, *self._params]
+
+        widgets = {"Road": self._topdown, "Raster": self._raster, "v_mem": self._vmem,
+                   "v0": self._params[0], "T": self._params[1], "s0": self._params[2],
+                   "a": self._params[3], "b": self._params[4]}
+        self._area = DockArea()
+        self._docks = {}
+        for name in DOCK_ORDER:
+            d = Dock(name, closable=True)
+            d.addWidget(widgets[name])
+            d.sigClosed.connect(lambda *_, n=name: self._on_dock_closed(n))
+            self._docks[name] = d
+        apply_overview(self._area, self._docks)   # place all docks so restoreState can find them
 
         self._selector = QComboBox()
         self._selector.addItems([s.name for s in self._scenarios])
-        self._run_btn = QPushButton("Run")
-        self._run_btn.setCheckable(True)
+        self._run_btn = QPushButton("Run"); self._run_btn.setCheckable(True)
         self._run_btn.toggled.connect(self._on_run_toggled)
-        self._step_btn = QPushButton("Step")
-        self._step_btn.clicked.connect(self.step_once)
-        self._reset_btn = QPushButton("Reset")
-        self._reset_btn.clicked.connect(self.reset_run)
-        self._brake_btn = QPushButton("Brake leader")
-        self._brake_btn.clicked.connect(self.inject_brake)
-        self._speed_slider = QSlider(Qt.Horizontal)
-        self._speed_slider.setRange(1, 8)
-        self._speed_slider.setValue(1)
-        self._speed_slider.setFixedWidth(90)
+        self._step_btn = QPushButton("Step"); self._step_btn.clicked.connect(self.step_once)
+        self._reset_btn = QPushButton("Reset"); self._reset_btn.clicked.connect(self.reset_run)
+        self._brake_btn = QPushButton("Brake leader"); self._brake_btn.clicked.connect(self.inject_brake)
+        self._speed_slider = QSlider(Qt.Horizontal); self._speed_slider.setRange(1, 8)
+        self._speed_slider.setValue(1); self._speed_slider.setFixedWidth(90)
         self._speed_slider.valueChanged.connect(self._on_speed)
-
         controls = QHBoxLayout()
         for w in (self._selector, self._run_btn, self._step_btn, self._reset_btn,
                   self._brake_btn, QLabel("speed"), self._speed_slider):
@@ -64,12 +80,12 @@ class SimApp(QMainWindow):
         root = QVBoxLayout()
         root.addWidget(self._header)
         root.addLayout(controls)
-        root.addWidget(self._topdown, stretch=1)
-        root.addWidget(self._netpanel, stretch=3)   # net panel (5 params + raster + v_mem) needs the room; road is a thin strip
-        container = QWidget()
-        container.setLayout(root)
+        root.addWidget(self._area, stretch=1)
+        container = QWidget(); container.setLayout(root)
         self.setCentralWidget(container)
         self._status = self.statusBar()
+
+        self._build_menus()
 
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._on_timer)
@@ -78,6 +94,64 @@ class SimApp(QMainWindow):
         self.select_scenario(0)
         self._selector.currentIndexChanged.connect(self.select_scenario)
 
+        if layout_path:
+            load_layout(self._area, self._docks, layout_path)
+        self._sync_view_actions()
+
+    # ---- menus / docks ----
+    def _build_menus(self):
+        view = self.menuBar().addMenu("View")
+        self._view_actions = {}
+        for name in DOCK_ORDER:
+            a = QAction(name, self, checkable=True)
+            a.setChecked(True)
+            a.toggled.connect(lambda vis, n=name: self._set_dock_visible(n, vis))
+            view.addAction(a)
+            self._view_actions[name] = a
+        layout_menu = self.menuBar().addMenu("Layout")
+        for name in PRESETS:
+            a = QAction(name, self)
+            a.triggered.connect(lambda _=False, n=name: self.apply_preset(n))
+            layout_menu.addAction(a)
+        layout_menu.addSeparator()
+        a_save = QAction("Save layout", self); a_save.triggered.connect(self._save_layout)
+        a_reset = QAction("Reset to saved", self); a_reset.triggered.connect(self._load_saved)
+        layout_menu.addAction(a_save); layout_menu.addAction(a_reset)
+
+    def apply_preset(self, name):
+        PRESETS[name](self._area, self._docks)
+        self._sync_view_actions()
+
+    def _set_dock_visible(self, name, visible):
+        present = name in visible_docks(self._area)
+        if visible and not present:
+            self._area.addDock(self._docks[name], "right")
+        elif not visible and present:
+            self._docks[name].close()
+        self._sync_view_actions()
+
+    def _on_dock_closed(self, name):
+        a = getattr(self, "_view_actions", {}).get(name)
+        if a is not None:
+            a.blockSignals(True); a.setChecked(False); a.blockSignals(False)
+
+    def _sync_view_actions(self):
+        vis = visible_docks(self._area)
+        for name, a in getattr(self, "_view_actions", {}).items():
+            a.blockSignals(True); a.setChecked(name in vis); a.blockSignals(False)
+
+    def _save_layout(self):
+        try:
+            save_layout(self._area, LAYOUT_PATH)
+            self._status.showMessage(f"layout saved to {LAYOUT_PATH}", 3000)
+        except OSError as e:
+            self._status.showMessage(f"save failed: {e}", 5000)
+
+    def _load_saved(self):
+        load_layout(self._area, self._docks, LAYOUT_PATH)
+        self._sync_view_actions()
+
+    # ---- scenario / loop ----
     @staticmethod
     def _manual(pg):
         v_set = 0.7 * float(pg[0])
@@ -89,7 +163,7 @@ class SimApp(QMainWindow):
 
     def select_scenario(self, idx: int):
         self._current_idx = int(idx)
-        if self._selector.currentIndex() != self._current_idx:   # keep combobox in sync on programmatic select
+        if self._selector.currentIndex() != self._current_idx:
             self._selector.blockSignals(True)
             self._selector.setCurrentIndex(self._current_idx)
             self._selector.blockSignals(False)
@@ -101,7 +175,8 @@ class SimApp(QMainWindow):
         self.loop = SimLoop(stepper, self._probe, dt_fixed=DT)
         self._last_result = None
         self._header.setText(f"champion: {self._champ_name}    |    scenario: {sc.name}")
-        self._netpanel.set_ground_truth(sc.params_gt)
+        for i, p in enumerate(self._params):
+            p.set_ground_truth(float(sc.params_gt[i]))
         self._refresh_status()
 
     def reset_run(self):
@@ -124,7 +199,8 @@ class SimApp(QMainWindow):
         if results:
             self._last_result = results[-1]
             self._topdown.update_frame(results[-1])
-            self._netpanel.update_frame(self._probe)
+            for p in self._live_panels:
+                p.update_frame(self._probe)
         self._refresh_status()
 
     def status_text(self) -> str:
@@ -134,8 +210,10 @@ class SimApp(QMainWindow):
         leader = r.vl if r is not None else float(self.loop.stepper.v_leader[0])
         gap = r.s if r is not None else st.s
         state = "COLLIDED" if st.collided else "ok"
+        sm = self._probe.spikes_matrix()
+        firing = f"{float(sm[-1].mean()) * 100:.1f}%" if sm.size else "--"
         return (f"t={st.t} ({st.t * DT:.1f}s)   |   ego {ego:.1f} m/s   |   leader {leader:.1f} m/s"
-                f"   |   gap {gap:.1f} m   |   {state}")
+                f"   |   gap {gap:.1f} m   |   firing {firing}   |   {state}")
 
     def _refresh_status(self):
         self._status.showMessage(self.status_text())
