@@ -25,9 +25,9 @@ class RasterPanel(QWidget):
         layout.addWidget(self._plot)
 
     def update_frame(self, probe):
-        sm = probe.spikes_matrix()
+        sm = probe.spikes_matrix()          # (frames, H)
         if sm.size:
-            self._img.setImage(sm.T, autoLevels=False, levels=(0.0, 1.0))
+            self._img.setImage(sm, autoLevels=False, levels=(0.0, 1.0))   # X=time, Y=neuron (col-major)
 
 
 class VmemPanel(QWidget):

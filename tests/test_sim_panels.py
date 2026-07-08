@@ -54,3 +54,16 @@ def test_param_panel_ground_truth(qapp):
     assert p._gt.isVisible() and abs(p._gt.value() - 1.5) < 1e-6
     p.set_ground_truth(None)
     assert not p._gt.isVisible()
+
+
+def test_raster_orientation_time_x_neuron_y(qapp):
+    # F frames of H neurons -> image must be X=time (F wide), Y=neuron (H tall), NOT transposed
+    F, H = 9, 4
+    p = AttributeProbe(capacity=50)
+    for t in range(F):
+        p.record(t, {"spikes": (np.arange(H) % 2).astype(float), "v_mem": np.zeros(H),
+                     "v_th_eff": np.ones(H)}, np.zeros(5))
+    panel = RasterPanel()
+    panel.update_frame(p)
+    br = panel._img.boundingRect()
+    assert round(br.width()) == F and round(br.height()) == H   # time on X, neuron on Y
