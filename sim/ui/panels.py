@@ -38,6 +38,8 @@ class VmemPanel(QWidget):
         self._plot = pg.PlotWidget(title="v_mem (sample neurons) + effective threshold (dashed)")
         self._plot.setLabel("bottom", "time", units="steps")
         self._plot.setLabel("left", "v_mem")
+        self._plot.setDownsampling(auto=True, mode="peak")   # render only what's visible/needed
+        self._plot.setClipToView(True)
         self._vmem_curves = [self._plot.plot(pen=pg.mkPen("#8fd6ff", width=1)) for _ in range(_N_SAMPLE)]
         self._vth_curves = [self._plot.plot(pen=pg.mkPen("#e8871e", width=1, style=Qt.DashLine))
                             for _ in range(_N_SAMPLE)]
@@ -64,6 +66,8 @@ class ParamPanel(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         self._plot = pg.PlotWidget(title=f"{name} ({unit})")
+        self._plot.setDownsampling(auto=True, mode="peak")   # render only what's visible/needed
+        self._plot.setClipToView(True)
         self._plot.showGrid(x=False, y=True, alpha=0.2)
         self._curve = self._plot.plot(pen=pg.mkPen(color, width=2))
         self._gt = pg.InfiniteLine(angle=0, movable=False,

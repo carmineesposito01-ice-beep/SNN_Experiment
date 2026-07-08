@@ -67,3 +67,9 @@ def test_raster_orientation_time_x_neuron_y(qapp):
     panel.update_frame(p)
     br = panel._img.boundingRect()
     assert round(br.width()) == F and round(br.height()) == H   # time on X, neuron on Y
+
+
+def test_line_panels_have_clip_to_view(qapp):
+    # downsampling + clip keep the live plots cheap; clipToViewMode() reports the clip state
+    assert VmemPanel()._plot.getPlotItem().clipToViewMode() is True
+    assert ParamPanel(0, "v0", "m/s", "#d1495b")._plot.getPlotItem().clipToViewMode() is True

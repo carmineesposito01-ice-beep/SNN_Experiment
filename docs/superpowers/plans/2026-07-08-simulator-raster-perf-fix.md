@@ -84,10 +84,9 @@ Append to `tests/test_sim_panels.py`:
 
 ```python
 def test_line_panels_have_clip_to_view(qapp):
-    # downsampling + clip keep the live plots cheap; clipToView is the introspectable flag
-    from sim.ui.panels import ParamPanel, VmemPanel
-    assert VmemPanel()._plot.getPlotItem().clipToViewMode is True
-    assert ParamPanel(0, "v0", "m/s", "#d1495b")._plot.getPlotItem().clipToViewMode is True
+    # downsampling + clip keep the live plots cheap; clipToViewMode() reports the clip state
+    assert VmemPanel()._plot.getPlotItem().clipToViewMode() is True
+    assert ParamPanel(0, "v0", "m/s", "#d1495b")._plot.getPlotItem().clipToViewMode() is True
 ```
 
 Append to `tests/test_sim_ui_smoke.py`:

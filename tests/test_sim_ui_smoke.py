@@ -131,3 +131,9 @@ def test_simapp_apply_preset(qapp):
     assert "v_mem" not in visible_docks(win._area)
     win.apply_preset("Overview")
     assert visible_docks(win._area) == set(DOCK_ORDER)
+
+
+def test_simapp_clamps_frame_dt(qapp):
+    win = SimApp(CHAMP)
+    assert win._clamp_frame_dt(5.0) == 0.1     # a lagged frame can't cascade into a huge step-batch
+    assert win._clamp_frame_dt(0.02) == 0.02   # normal frames pass through

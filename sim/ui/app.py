@@ -24,6 +24,7 @@ from sim.ui.topdown import TopDownView
 from utils.champion_io import load_champion
 
 _UI_FPS_MS = 33
+_MAX_FRAME_DT = 0.1        # clamp real-time elapsed so a lagged frame can't cascade into a huge step-batch
 _PARAMS_GT = np.array([30.0, 1.5, 2.0, 1.5, 1.5])
 
 
@@ -228,7 +229,10 @@ class SimApp(QMainWindow):
         else:
             self._timer.stop()
 
+    def _clamp_frame_dt(self, elapsed: float) -> float:
+        return min(float(elapsed), _MAX_FRAME_DT)   # avoid the spiral of death under load
+
     def _on_timer(self):
-        self._advance(self._clock.restart() / 1000.0)
+        self._advance(self._clamp_frame_dt(self._clock.restart() / 1000.0))
         if self.loop.done:
             self._run_btn.setChecked(False)
