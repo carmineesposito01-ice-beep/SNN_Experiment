@@ -21,7 +21,8 @@ opaque cells + 3 padding — the grid was just illegible.)
 | D1 | Viz | **Node-link graph** (`pg.GraphItem` + `ScatterPlotItem`), replacing the heat-grid `NeuronStatePanel` |
 | D2 | Nodes | 4 input · 32 hidden · 5 output circles, coloured by activation (v_mem heat + white ring on spiking) |
 | D3 | Edges | **Full connectivity** (input→hidden, recurrent hidden→hidden 32×32, hidden→output) as a **faint static skeleton**, opacity ∝ \|weight\| (weak edges vanish → no solid block) |
-| D4 | Active pathways | Per tick, **edges out of firing hidden neurons** (recurrent + to output) are **highlighted bright** → the sparse spike routes. **Headline behaviour.** |
+| D4 | Active pathways | Per tick, **edges out of firing hidden neurons** (recurrent + to output) are **highlighted white** → the sparse spike routes. **Headline behaviour.** |
+| D7 | Labels | Group titles carry the **type**; input/output nodes carry the **quantity name** — input `s,v,Δv,vl` (`input · osservazione`), hidden (`hidden · 32 ALIF`), output `v0,T,s0,a,b` (`output · parametri (readout)`). Hidden nodes unlabelled (32) |
 | D5 | Topology | Weights read **family-aware, additively** (`read_weights()` on the backend); golden bit-identity re-verified |
 | D6 | Energy dock | **DEFERRED** to Phase 3a/b backlog (study §6) — not in this spec |
 
@@ -49,11 +50,16 @@ One `pg.PlotWidget` (axes hidden, aspect free) holding three stacked items, bott
    per matrix), thin, cool grey. Built **once** in `set_topology(w_in, w_rec, w_out)`. Recurrent **self-edges
    (i==i) skipped**.
 2. **`_active`** (`pg.GraphItem`, symbols off): only the **active edges** this tick — the outgoing recurrent +
-   output edges of hidden neurons that **spiked** — bright warm pen, thicker. Rebuilt each `update_frame`
+   output edges of hidden neurons that **spiked** — **white** pen, thicker. Rebuilt each `update_frame`
    (sparse → cheap). Input→hidden stays in the skeleton (continuous drive, not a spike event).
 3. **`_nodes`** (`pg.ScatterPlotItem`): the 41 nodes; per-node **brush = viridis(activation)** (input value /
    v_mem / param value), and a **white ring pen** on hidden nodes that spiked. Updated each frame (41 points →
-   cheap).
+   cheap). White = the "firing/active" language, shared by the spike rings and the active edges.
+
+**Labels (D7):** three group titles (`input · osservazione`, `hidden · 32 ALIF`, `output · parametri (readout)`);
+per-node text at the input nodes (`s`, `v`, `Δv`, `vl` — order from `_norm_obs`: gap, ego speed, closing speed,
+leader speed) and at the output nodes (`v0`, `T`, `s0`, `a`, `b` = `PARAM_NAMES`). Hidden nodes are unlabelled
+(32 dots). Text as `pg.TextItem`s placed beside each I/O node + `PlotItem` titles or a small header row.
 
 **Layout (`pos`, computed once):** input at `x=0`, hidden at `x=1`, output at `x=2`; each group's nodes spread
 evenly on `y`. Node index map: `0..3` input, `4..35` hidden, `36..40` output. `adj` built once from the three
