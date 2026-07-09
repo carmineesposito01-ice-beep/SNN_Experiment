@@ -5,9 +5,12 @@ un veicolo (gap, velocità, Δv, velocità del leader), **identifica i 5 paramet
 di car-following **ACC-IIDM** `[v0, T, s0, a, b]` — con l'obiettivo di essere eseguita su
 **FPGA** (Zynq-7020 / PYNQ-Z1) grazie a pesi potenze-di-due (moltiplicazione → bit-shift, 0 DSP).
 
-> 🚀 **Riprendere dopo una pausa:** leggi `document/SESSION_RESUME.md` (5 min) e, per il track
-> EventProp/principale, il master `document/EVENTPROP_STATUS.md`.
-> Ogni cartella ha il suo `README.md`: questo file è la **mappa** dell'intera repository.
+> 🚀 **Riprendere dopo una pausa:** `document/SESSION_RESUME.md` (5 min) + il master del track
+> principale `document/EVENTPROP_STATUS.md`; per ri-allinearsi in modo deterministico
+> `document/RESUME_PROCEDURE.md`.
+> 📚 **Navigazione:** `document/GLOSSARY.md` (termini e codici) · `WORKFLOW.md` · `TIMELINE.md` · `FUTURE_WORK.md`.
+> 🎤 **Presentazione:** deck in [`presentation/`](presentation/). 📄 **Report finali:** [`report/`](report/).
+> Ogni cartella ha il suo `README.md`: **questo file è la mappa** dell'intera repository.
 
 ---
 
@@ -38,6 +41,10 @@ Input(4)  →  HiddenLayer_ALIF(32)  →  OutputLayer_LI(5)  →  σ + bounds  �
 I 4 **champion** validati: `Raffaello`, `Leonardo` (BPTT) · `Donatello`, `Michelangelo` (EventProp).
 Candidato al deploy: **Donatello** (contrattivo ρ<1, 0 neuroni morti, migliore accuratezza).
 Dettagli e numeri: `report/VALIDATION_REPORT_v3` e `report/FPGA_REPORT`.
+
+> **Dati (sintetici):** traiettorie ACC-IIDM di 120 s generate a runtime — mix highway/urban/truck/mixed
+> + free-flow/launch, cut-in ~20%, perdita pacchetti V2X ~2%, rumore di percezione OU, T(t) stocastico.
+> Costanti in `config.py`; dettaglio discorsivo in `report/HOW_IT_WORKS_v3` §14.
 
 ## 3. Mappa della repository
 
@@ -77,19 +84,33 @@ repo** (cwd = root). Sono raggruppati per famiglia di studio:
 ## 5. Come si usa
 
 ```bash
-# addestramento (da root; device auto in config.py)
-python train.py --epochs 20 --tag A1 --scheduler cosine
+# addestramento (da root; device CUDA/CPU auto in config.py)
+python train.py --epochs 20 --tag A1 --scheduler cosine --optimizer adam
+#   default: --scheduler plateau, --optimizer adam. Opzioni principali:
+#   --n_train/--n_val, --lr/--max_lr, --grad_clip, --lambda_{data,phys,ou,bc,sr},
+#   --eventprop_* (gradiente esatto), --resume <ckpt>.  Elenco: python train.py --help
 
-# valutazione post-training
+# valutazione post-training su un test set
 python eval_report.py --checkpoint checkpoints/<tag>/best_model.pt --n_test 500
 
-# rigenerare la terna di report (md + pdf, in report/)
-python scripts/build_how_it_works_v3.py
-python scripts/build_validation_report_v3.py
-python scripts/build_fpga_report.py
+# rigenerare la terna di report (md + pdf → report/)
+python scripts/build_how_it_works_v3.py       # teoria (nessun dato richiesto)
+python scripts/build_validation_report_v3.py  # legge results/evaluate/v3_TURTLE_POWER!!!/
+python scripts/build_fpga_report.py           # legge results/evaluate/FPGA/
 ```
 
-## 6. Track paralleli (git worktree)
+**Output per run** in `checkpoints/<tag>/` (non versionato): `best_model.pt`, `last_model.pt`,
+`training_log.csv` (metriche per-epoca), `config_snapshot.json` (iperparametri), `plots/` (diagnostici).
+
+## 6. Target hardware
+
+FPGA **Zynq-7020 / PYNQ-Z1** (220 DSP48E1, 140 BRAM). Grazie ai pesi potenze-di-due
+(moltiplicazione → shift), il design usa **0 DSP** e **<1 BRAM** (<1% del budget), entro un
+deadline di controllo di **100 ms** (V2X a 10 Hz). Il deploy su silicio è ancora un obiettivo: la
+Fase A pre-silicio è completata (profilo in `report/FPGA_REPORT`), mentre le Fasi B/C (HDL/board)
+sono il lavoro del worktree `Simulink_Importer` (§7).
+
+## 7. Track paralleli (git worktree)
 
 Il progetto avanza su più tracce isolate (vedi memoria `cf-fsnn-parallel-tracks`):
 
@@ -98,7 +119,7 @@ Il progetto avanza su più tracce isolate (vedi memoria `cf-fsnn-parallel-tracks
 - **worktree `Simulink_Importer`** — import checkpoint → Simulink → HDL (fase FPGA; nel worktree
   vivono `document/HDL_PHASE.md` e `document/SESSION_RESUME.md` propri).
 
-## 7. Riferimenti principali
+## 8. Riferimenti principali
 
 - Treiber & Kesting, *Traffic Flow Dynamics: Data, Models and Simulation*, 2ª ed., Springer 2013
   (IDM/IIDM, CAH/ACC, calibrazione, string stability, diagramma fondamentale).
