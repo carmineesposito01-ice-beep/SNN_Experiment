@@ -142,9 +142,18 @@ The core already computes these but shows none of them:
   guarded save/restore (fallback Overview); View/Layout menus; firing-% → status bar. Spec
   `docs/superpowers/specs/2026-07-08-simulator-dockable-shell-design.md`, plan
   `docs/superpowers/plans/2026-07-08-simulator-dockable-shell.md`; 57 tests green in `cf_sim`, core golden untouched.
+- **NetViz interludes — ✅ DONE (2026-07-08, between Ph2 and Ph3).** (a) Network **state map** (input/hidden/output
+  groups, v_mem heat + spike overlay) + **SpikeRate** trend dock, replacing the illegible time-raster (spec
+  `2026-07-08-network-state-map-design.md`); (b) that heat-grid then **replaced by a node-link graph**
+  (`pg.GraphItem`: layered colored circles + faint weight-skeleton + per-tick **active-pathway** highlighting of
+  edges out of firing neurons — reveals sparse "tragitti" in the spiking net) — spec `2026-07-08-network-graph-design.md`.
 - **Phase 3 — Time backbone + live metric docks.** Wire ring buffer + `ReplayLog` into a global
   time cursor (pause/scrub, shortcuts); add trajectory, safety strip, per-neuron/input-encoding
   inspector, event timeline (click→seek).
+  - **BACKLOG (deferred, user 2026-07-08): instantaneous energy / SynOps dock.** Completes the SpikeRate
+    view. Energy/tick ≈ Σ(fan-out of firing neurons) — derivable from `spikes` + the NetGraph topology
+    (already extracted for the graph edges). TBD how to surface: a number in the SpikeRate dock, or its own
+    small dock. Design when we get to Phase 3a/b.
 - **Phase 4 — Post-run seal (one episode) + float-vs-fixed A/B + optional export.** Fixed-point SW
   model path; same-seed overlay; generic CSV/PNG.
 - **Phase 5 (ambitions).** GT sliders / live UKF re-identification, video/GIF, scenario form editor,
