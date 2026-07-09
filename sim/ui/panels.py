@@ -174,6 +174,10 @@ class NeuronGraphPanel(QWidget):
         self._plot.setMenuEnabled(False)
         layout.addWidget(self._plot)
         self._lut = pg.colormap.get("viridis").getLookupTable(0.0, 1.0, 256)
+        self._brush_lut = [pg.mkBrush(int(r), int(g), int(b)) for r, g, b in self._lut[:, :3]]  # 256 brushes, once
+        self._null_pen = pg.mkPen(None)                  # reused pens -> no per-frame QPen/QBrush allocation
+        self._spike_pen = pg.mkPen("#ffffff", width=2.0)
+        self._active_pen = pg.mkPen("#ffffff", width=2.2)
         self._skeleton = pg.GraphItem()
         self._highlight = pg.GraphItem()
         self._active = pg.GraphItem()
@@ -192,7 +196,7 @@ class NeuronGraphPanel(QWidget):
         v = np.asarray(vals, dtype=np.float64).reshape(-1)
         vmin, vmax = float(np.nanmin(v)), float(np.nanmax(v))
         idx = np.clip(((v - vmin) / (vmax - vmin + 1e-9) * 255).astype(int), 0, 255)
-        return [pg.mkBrush(int(r), int(g), int(b)) for r, g, b in self._lut[idx][:, :3]]
+        return [self._brush_lut[int(k)] for k in idx]           # index shared brushes (same RGB, no alloc)
 
     def set_topology(self, w_in, w_rec, w_out):
         w_in = np.asarray(w_in, dtype=np.float64)
@@ -239,9 +243,13 @@ class NeuronGraphPanel(QWidget):
         self._e_rec = np.array(e_rec, dtype=int)
         self._e_out = np.array(e_out, dtype=int)
         self._active.setData(pos=self._pos, adj=np.empty((0, 2), dtype=int),
-                             pen=pg.mkPen("#ffffff", width=2.2), size=0)
+                             pen=self._active_pen, size=0)
         self._add_labels()
         self.highlight(None)
+        vb = self._plot.getViewBox()                     # layout is static -> freeze view, kill per-frame autorange
+        vb.autoRange()
+        vb.disableAutoRange()
+        vb.setMouseEnabled(x=False, y=False)             # node clicks still work (item-level), zoom/pan off
 
     def _text(self, s, x, y, anchor, color):
         t = pg.TextItem(s, color=color, anchor=anchor)
@@ -274,15 +282,15 @@ class NeuronGraphPanel(QWidget):
                                np.asarray(f.v_mem, dtype=np.float64).reshape(-1)[:self._n_hid],
                                np.asarray(f.params, dtype=np.float64).reshape(-1)[:self._n_out]])
         spk = np.asarray(f.spikes, dtype=np.float64).reshape(-1)[:self._n_hid] > 0
-        pens = [pg.mkPen(None)] * len(vals)
+        pens = [self._null_pen] * len(vals)
         for j in range(self._n_hid):
             if spk[j]:
-                pens[self._n_in + j] = pg.mkPen("#ffffff", width=2.0)
+                pens[self._n_in + j] = self._spike_pen
         self._last_vals = vals
         self._nodes.setData(pos=self._pos, brush=self._brushes(vals), pen=pens, size=13)
         mask = spk[self._rec_out_src]
         self._active.setData(pos=self._pos, adj=self._rec_out_adj[mask],
-                             pen=pg.mkPen("#ffffff", width=2.2), size=0)
+                             pen=self._active_pen, size=0)
 
     def _on_node_click(self, scatter, points):
         if not points:

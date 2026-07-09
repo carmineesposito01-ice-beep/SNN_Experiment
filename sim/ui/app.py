@@ -29,6 +29,7 @@ from sim.ui.topdown import TopDownView
 from utils.champion_io import load_champion
 
 _UI_FPS_MS = 33
+_REDRAW_MS = 66           # throttle the heavy 14-panel repaint to ~15fps while running (physics/Road stay 30fps)
 _MAX_FRAME_DT = 0.1        # clamp real-time elapsed so a lagged frame can't cascade into a huge step-batch
 _PARAMS_GT = np.array([30.0, 1.5, 2.0, 1.5, 1.5])
 
@@ -126,6 +127,8 @@ class SimApp(QMainWindow):
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._on_timer)
         self._clock = QElapsedTimer()
+        self._redraw_clock = QElapsedTimer()
+        self._redraw_clock.start()
 
         self.select_scenario(0)
         self._selector.currentIndexChanged.connect(self.select_scenario)
@@ -242,14 +245,17 @@ class SimApp(QMainWindow):
             self._last_result = results[-1]
             self._src_probe, self._src_traj = self._probe, self._traj   # live advanced -> scrub source = live
             for r in results:                                           # integrate EVERY tick (speed>1 -> many)
-                self._topdown.update_frame(r)
+                self._topdown.update_frame(r)                           # Road stays smooth at full rate
                 self._traj.record(r)
-            self._redraw_series(self._probe, self._traj)
-            if self._run_btn.isChecked():                 # live: slider tracks the head
-                self._cursor_slider.blockSignals(True)
-                self._cursor_slider.setRange(0, max(0, self._buf_len() - 1))
-                self._cursor_slider.setValue(max(0, self._buf_len() - 1))
-                self._cursor_slider.blockSignals(False)
+            running = self._run_btn.isChecked()
+            if (not running) or self._redraw_clock.elapsed() >= _REDRAW_MS:   # throttle the heavy repaint while live
+                self._redraw_series(self._probe, self._traj)
+                self._redraw_clock.restart()
+                if running:                               # live: slider tracks the head
+                    self._cursor_slider.blockSignals(True)
+                    self._cursor_slider.setRange(0, max(0, self._buf_len() - 1))
+                    self._cursor_slider.setValue(max(0, self._buf_len() - 1))
+                    self._cursor_slider.blockSignals(False)
         self._refresh_status()
 
     def _redraw_series(self, probe, traj):
