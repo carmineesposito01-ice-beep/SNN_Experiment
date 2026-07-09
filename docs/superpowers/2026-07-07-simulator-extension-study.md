@@ -144,9 +144,10 @@ The core already computes these but shows none of them:
   `docs/superpowers/plans/2026-07-08-simulator-dockable-shell.md`; 57 tests green in `cf_sim`, core golden untouched.
 - **NetViz interludes — ✅ DONE (2026-07-08, between Ph2 and Ph3).** (a) Network **state map** (input/hidden/output
   groups, v_mem heat + spike overlay) + **SpikeRate** trend dock, replacing the illegible time-raster (spec
-  `2026-07-08-network-state-map-design.md`); (b) that heat-grid then **replaced by a node-link graph**
-  (`pg.GraphItem`: layered colored circles + faint weight-skeleton + per-tick **active-pathway** highlighting of
-  edges out of firing neurons — reveals sparse "tragitti" in the spiking net) — spec `2026-07-08-network-graph-design.md`.
+  `2026-07-08-network-state-map-design.md`); (b) that heat-grid then **replaced by a node-link graph** — ✅ **DONE** (commits up to `c4bdde7`)
+  (`pg.GraphItem`: layered colored circles + faint weight-skeleton + per-tick **white active-pathway** highlighting
+  of edges out of firing neurons — reveals sparse "tragitti" in the spiking net; input/output nodes labelled) —
+  spec `2026-07-08-network-graph-design.md`, plan `2026-07-08-network-graph.md`.
 - **Phase 3 — Time backbone + live metric docks.** Wire ring buffer + `ReplayLog` into a global
   time cursor (pause/scrub, shortcuts); add trajectory, safety strip, per-neuron/input-encoding
   inspector, event timeline (click→seek).

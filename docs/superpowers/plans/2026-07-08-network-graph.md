@@ -1,5 +1,7 @@
 # Network Graph (node-link) Implementation Plan
 
+> **STATUS: ✅ COMPLETE (2026-07-08).** Executed inline in `cf_sim` (TDD). T1 read_weights, T2 NeuronGraphPanel, T3 app wiring — commits up to `c4bdde7` (pushed). 65 tests green; golden bit-identity preserved. Render-verified on the real `windows` platform (white active pathways + input/output labels).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: superpowers:executing-plans (inline). Steps use checkbox (`- [ ]`) syntax.
 > Runs in **`cf_sim`** (offscreen for Qt). Spec: `docs/superpowers/specs/2026-07-08-network-graph-design.md`. pyqtgraph 0.14 API pre-verified: `GraphItem.setData(pos, adj, pen=<per-edge record array>, size=0)` (edges-only), `pen=mkPen('#fff')` + empty `adj` for the active overlay, `ScatterPlotItem.setData(brush=[...], pen=[...])` (per-node fill+ring), `TextItem`.
 
