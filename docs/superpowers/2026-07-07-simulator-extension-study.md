@@ -148,9 +148,13 @@ The core already computes these but shows none of them:
   (`pg.GraphItem`: layered colored circles + faint weight-skeleton + per-tick **white active-pathway** highlighting
   of edges out of firing neurons — reveals sparse "tragitti" in the spiking net; input/output nodes labelled) —
   spec `2026-07-08-network-graph-design.md`, plan `2026-07-08-network-graph.md`.
-- **Phase 3 — Time backbone + live metric docks.** Wire ring buffer + `ReplayLog` into a global
-  time cursor (pause/scrub, shortcuts); add trajectory, safety strip, per-neuron/input-encoding
-  inspector, event timeline (click→seek).
+- **Phase 3 — Time backbone + live metric docks.**
+  - **3a metric docks — ✅ DONE (2026-07-08, commits up to `da9ed27`):** `Trajectory` (gap/speeds/accel) +
+    `Safety` (TTC/DRAC/time-headway, threshold refs), fed by a UI-layer `TrajectoryBuffer` of `StepResult`
+    (probe untouched) + pure `metrics.py`; 11 docks, presets updated (Guida = driving story). Spec/plan
+    `2026-07-08-trajectory-safety-panels*`. 72 tests green.
+  - **3b (pending):** wire ring buffer + `ReplayLog` into a global time cursor (pause/scrub, shortcuts);
+    per-neuron/input-encoding inspector, event timeline (click→seek).
   - **BACKLOG (deferred, user 2026-07-08): instantaneous energy / SynOps dock.** Completes the SpikeRate
     view. Energy/tick ≈ Σ(fan-out of firing neurons) — derivable from `spikes` + the NetGraph topology
     (already extracted for the graph edges). TBD how to surface: a number in the SpikeRate dock, or its own

@@ -1,5 +1,7 @@
 # Trajectory + Safety Panels Implementation Plan (Extension Phase 3a)
 
+> **STATUS: ✅ COMPLETE (2026-07-08).** Executed inline in `cf_sim` (TDD). T1 buffer+metrics, T2 panels, T3 wiring — commits up to `da9ed27` (pushed). 72 tests green; core untouched (buffer is UI-layer). Render-verified (Guida preset: TTC drops + DRAC spikes on brake).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: superpowers:executing-plans (inline). Steps use checkbox (`- [ ]`) syntax.
 > Runs in **`cf_sim`** (offscreen for Qt). Spec: `docs/superpowers/specs/2026-07-08-trajectory-safety-panels-design.md`. All pyqtgraph API here is already used elsewhere (GraphicsLayoutWidget X-linked plots, InfiniteLine, downsampling/clip).
 
