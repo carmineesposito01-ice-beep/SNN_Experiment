@@ -270,6 +270,18 @@ def test_simapp_champion_selector_lists_and_swaps(qapp):
     assert win.loop.stepper.st.t >= 5
 
 
+def test_simapp_mode_toggle(qapp):
+    win = SimApp(CHAMP)
+    assert win._mode_stack.count() == 2                  # Live + Meso/Macro
+    assert win._mode_stack.currentIndex() == 0           # starts Live
+    win._run_btn.setChecked(True)
+    win.set_mode(1)                                       # switch to analysis
+    assert win._mode_stack.currentIndex() == 1
+    assert not win._run_btn.isChecked()                  # entering analysis pauses live
+    win.set_mode(0)
+    assert win._mode_stack.currentIndex() == 0
+
+
 def test_simapp_has_synops_dock(qapp):
     win = SimApp(CHAMP)
     assert "SynOps" in win._docks and len(win._docks) == 14

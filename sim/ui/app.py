@@ -7,7 +7,7 @@ import numpy as np
 from PySide6.QtCore import QElapsedTimer, Qt, QTimer
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (QComboBox, QHBoxLayout, QLabel, QMainWindow, QPushButton,
-                               QSlider, QVBoxLayout, QWidget)
+                               QSlider, QStackedWidget, QVBoxLayout, QWidget)
 from pyqtgraph.dockarea import Dock, DockArea
 
 from config import DT
@@ -23,6 +23,7 @@ from sim.ui.loop import SimLoop
 from sim.ui.panels import (PARAM_COLORS, PARAM_NAMES, PARAM_UNITS, EventTimelinePanel,
                            NeuronGraphPanel, NeuronInspectorPanel, ParamPanel, SafetyPanel,
                            SpikeRatePanel, SynOpsPanel, TrajectoryPanel, VmemPanel)
+from sim.ui.meso_page import MesoMacroPage
 from sim.ui.reconstruct import reconstruct_spliced
 from sim.ui.trajectory import TrajectoryBuffer
 from sim.ui.topdown import TopDownView
@@ -130,7 +131,19 @@ class SimApp(QMainWindow):
         root.addLayout(controls)
         root.addWidget(self._area, stretch=1)
         container = QWidget(); container.setLayout(root)
-        self.setCentralWidget(container)
+        self._meso_page = MesoMacroPage()
+        self._meso_page._on_run_platoon = self._run_platoon
+        self._meso_page._on_run_ring = self._run_ring
+        self._mode_stack = QStackedWidget()
+        self._mode_stack.addWidget(container)          # page 0: Live cockpit
+        self._mode_stack.addWidget(self._meso_page)    # page 1: Meso/Macro analysis
+        self._mode_sel = QComboBox(); self._mode_sel.addItems(["Live", "Meso/Macro"])
+        self._mode_sel.currentIndexChanged.connect(self.set_mode)
+        outer = QVBoxLayout(); outer.setContentsMargins(0, 0, 0, 0)
+        outer.addWidget(self._mode_sel)
+        outer.addWidget(self._mode_stack, stretch=1)
+        shell = QWidget(); shell.setLayout(outer)
+        self.setCentralWidget(shell)
         self._status = self.statusBar()
 
         self._build_menus()
@@ -234,6 +247,22 @@ class SimApp(QMainWindow):
             self._champ_selector.blockSignals(False)
         self._apply_champion_topology()
         self.select_scenario(self._current_idx)   # rebuild stepper/probe with the new backend + refresh header
+
+    def set_mode(self, idx: int):
+        idx = int(idx)
+        if idx == 1:
+            self._run_btn.setChecked(False)       # pause the live sim when entering analysis mode
+        self._mode_stack.setCurrentIndex(idx)
+        if self._mode_sel.currentIndex() != idx:
+            self._mode_sel.blockSignals(True)
+            self._mode_sel.setCurrentIndex(idx)
+            self._mode_sel.blockSignals(False)
+
+    def _run_platoon(self):
+        pass        # wired in T3 (string-stability + space-time)
+
+    def _run_ring(self):
+        pass        # wired in T4 (fundamental diagram + per-vehicle params)
 
     def select_scenario(self, idx: int):
         self._current_idx = int(idx)
