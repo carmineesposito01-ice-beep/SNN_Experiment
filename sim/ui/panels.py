@@ -6,6 +6,8 @@ import pyqtgraph as pg
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QVBoxLayout, QWidget
 
+from sim.ui import metrics
+
 PARAM_NAMES = ["v0", "T", "s0", "a", "b"]
 PARAM_UNITS = ["m/s", "s", "m", "m/s^2", "m/s^2"]
 PARAM_COLORS = ["#d1495b", "#2a7fb8", "#7b3fa0", "#e8871e", "#2e8b57"]
@@ -214,3 +216,79 @@ class ParamPanel(QWidget):
             self._last = float(pm[-1, self._index])
             self._curve.setData(pm[:, self._index])
             self._plot.setTitle(f"{self._name} = {self._last:.2f} {self._unit}")
+
+
+class TrajectoryPanel(QWidget):
+    """gap / speeds (ego, leader, Δv) / accel over time — 3 X-linked sub-plots."""
+    def __init__(self):
+        super().__init__()
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        self._glw = pg.GraphicsLayoutWidget()
+        layout.addWidget(self._glw)
+        self._pg = self._glw.addPlot(row=0, col=0)
+        self._pv = self._glw.addPlot(row=1, col=0)
+        self._pa = self._glw.addPlot(row=2, col=0)
+        self._pg.setLabel("left", "gap", units="m")
+        self._pv.setLabel("left", "speed", units="m/s")
+        self._pa.setLabel("left", "accel", units="m/s^2")
+        self._pa.setLabel("bottom", "time", units="steps")
+        for p in (self._pg, self._pv, self._pa):
+            p.setDownsampling(auto=True, mode="peak")
+            p.setClipToView(True)
+            p.showGrid(x=False, y=True, alpha=0.2)
+        self._pv.setXLink(self._pg)
+        self._pa.setXLink(self._pg)
+        self._c_s = self._pg.plot(pen=pg.mkPen("#2e8b57", width=2))
+        self._c_v = self._pv.plot(pen=pg.mkPen("#2a7fb8", width=2))
+        self._c_vl = self._pv.plot(pen=pg.mkPen("#d1495b", width=2))
+        self._c_dv = self._pv.plot(pen=pg.mkPen("#e8871e", width=1, style=Qt.DashLine))
+        self._c_a = self._pa.plot(pen=pg.mkPen("#7b3fa0", width=2))
+
+    def update_frame(self, traj):
+        a = traj.arrays()
+        if a["t"].size == 0:
+            return
+        self._c_s.setData(a["s"])
+        self._c_v.setData(a["v"])
+        self._c_vl.setData(a["vl"])
+        self._c_dv.setData(a["dv"])
+        self._c_a.setData(a["a_ego"])
+
+
+_SAFETY_CAP = 30.0
+
+
+class SafetyPanel(QWidget):
+    """TTC + time-headway (s) / DRAC (m/s^2), with dashed threshold reference lines."""
+    def __init__(self):
+        super().__init__()
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        self._glw = pg.GraphicsLayoutWidget()
+        layout.addWidget(self._glw)
+        self._pt = self._glw.addPlot(row=0, col=0)
+        self._pd = self._glw.addPlot(row=1, col=0)
+        self._pt.setLabel("left", "time", units="s")
+        self._pd.setLabel("left", "DRAC", units="m/s^2")
+        self._pd.setLabel("bottom", "time", units="steps")
+        for p in (self._pt, self._pd):
+            p.setDownsampling(auto=True, mode="peak")
+            p.setClipToView(True)
+            p.showGrid(x=False, y=True, alpha=0.2)
+        self._pd.setXLink(self._pt)
+        self._c_ttc = self._pt.plot(pen=pg.mkPen("#d1495b", width=2))
+        self._c_th = self._pt.plot(pen=pg.mkPen("#2a7fb8", width=1, style=Qt.DashLine))
+        self._c_drac = self._pd.plot(pen=pg.mkPen("#e8871e", width=2))
+        self._ttc_ref = pg.InfiniteLine(pos=1.5, angle=0, pen=pg.mkPen("#9a9a9a", style=Qt.DashLine))
+        self._drac_ref = pg.InfiniteLine(pos=3.35, angle=0, pen=pg.mkPen("#9a9a9a", style=Qt.DashLine))
+        self._pt.addItem(self._ttc_ref)
+        self._pd.addItem(self._drac_ref)
+
+    def update_frame(self, traj):
+        a = traj.arrays()
+        if a["t"].size == 0:
+            return
+        self._c_ttc.setData(np.clip(metrics.ttc(a["s"], a["dv"]), 0, _SAFETY_CAP))
+        self._c_th.setData(np.clip(metrics.time_headway(a["s"], a["v"]), 0, _SAFETY_CAP))
+        self._c_drac.setData(metrics.drac(a["s"], a["dv"]))

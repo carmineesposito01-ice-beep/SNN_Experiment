@@ -89,3 +89,32 @@ def test_spike_rate_panel_series(qapp):
     panel.update_frame(p)
     y = panel._curve.getData()[1]
     assert abs(float(y[-1]) - 25.0) < 1e-6             # 2/8 hidden firing = 25 %
+
+
+# --- Phase 3a: trajectory + safety ---
+from sim.state import StepResult                       # noqa: E402
+from sim.ui.panels import SafetyPanel, TrajectoryPanel  # noqa: E402
+from sim.ui.trajectory import TrajectoryBuffer          # noqa: E402
+
+
+def _traj(n=6):
+    tb = TrajectoryBuffer()
+    for t in range(n):
+        tb.record(StepResult(t=t, s=20.0 - t, v=15.0, vl=13.0, dv=2.0, a_ego=-0.5,
+                             params=np.zeros(5), collided=False))
+    return tb
+
+
+def test_trajectory_panel_updates(qapp):
+    p = TrajectoryPanel()
+    p.update_frame(_traj())
+    assert p._c_s.getData()[1] is not None and float(p._c_s.getData()[1][0]) == 20.0
+
+
+def test_safety_panel_updates_and_refs(qapp):
+    p = SafetyPanel()
+    p.update_frame(_traj())
+    ttc0 = p._c_ttc.getData()[1]
+    assert ttc0 is not None and abs(float(ttc0[0]) - 10.0) < 1e-6      # s=20, dv=2 -> TTC 10 s
+    assert p._ttc_ref.isVisible() and abs(p._ttc_ref.value() - 1.5) < 1e-6
+    assert p._drac_ref.isVisible() and abs(p._drac_ref.value() - 3.35) < 1e-6
