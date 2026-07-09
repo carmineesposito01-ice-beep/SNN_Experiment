@@ -160,3 +160,17 @@ def test_topdown_render_at_reconstructs(qapp):
     assert abs(view.ego_x_m() - float(np.cumsum(vs)[2] * DT)) < 1e-6
     view.render_at(tb, -1)                       # head
     assert abs(view.ego_x_m() - float(np.sum(vs) * DT)) < 1e-6
+
+
+def test_simapp_scrub_cursor(qapp):
+    win = SimApp(CHAMP)
+    win.select_scenario(0)
+    win._advance(0.5)                                  # ~5 buffered ticks
+    win._run_btn.setChecked(False)                     # ensure paused
+    win._render_at_cursor(2)
+    assert win._cursor == 2
+    assert win._params[0]._cursors[0].isVisible()      # cursor line shown on a time-series panel
+    win._step_cursor(1)
+    assert win._cursor == 3
+    win._step_cursor(999)                              # clamps to head
+    assert win._cursor == len(win._probe.frames()) - 1

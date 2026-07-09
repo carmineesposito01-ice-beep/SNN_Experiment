@@ -42,6 +42,7 @@ class SimApp(QMainWindow):
         self._current_idx = 0
         self._speed = 1
         self._last_result = None
+        self._cursor = None
 
         self._topdown = TopDownView()
         self._netstate = NeuronGraphPanel()
@@ -57,6 +58,7 @@ class SimApp(QMainWindow):
         # param can be a hidden tab, whose stale range would corrupt SpikeRate's axis. A unified time
         # cursor is a Phase-3b (scrub) concern; here each time-series autoranges to its own data.
         self._live_panels = [self._netstate, self._spikerate, self._vmem, *self._params]
+        self._ts_panels = [*self._params, self._vmem, self._spikerate, self._trajectory, self._safety]
         _topo = SoftwareBackend(self._champ.model)   # static topology for the node-link graph (once)
         _topo.reset()
         _w = _topo.read_weights()
@@ -85,9 +87,14 @@ class SimApp(QMainWindow):
         self._speed_slider = QSlider(Qt.Horizontal); self._speed_slider.setRange(1, 8)
         self._speed_slider.setValue(1); self._speed_slider.setFixedWidth(90)
         self._speed_slider.valueChanged.connect(self._on_speed)
+        self._cursor_slider = QSlider(Qt.Horizontal); self._cursor_slider.setEnabled(False)
+        self._cursor_slider.setFixedWidth(160)
+        self._cursor_slider.valueChanged.connect(self._on_cursor)
+        self._cursor_readout = QLabel("live")
         controls = QHBoxLayout()
         for w in (self._selector, self._run_btn, self._step_btn, self._reset_btn,
-                  self._brake_btn, QLabel("speed"), self._speed_slider):
+                  self._brake_btn, QLabel("speed"), self._speed_slider,
+                  QLabel("t"), self._cursor_slider, self._cursor_readout):
             controls.addWidget(w)
 
         self._header = QLabel()
@@ -220,6 +227,11 @@ class SimApp(QMainWindow):
                 p.update_frame(self._probe)
             self._trajectory.update_frame(self._traj)
             self._safety.update_frame(self._traj)
+            if self._run_btn.isChecked():                 # live: slider tracks the head
+                self._cursor_slider.blockSignals(True)
+                self._cursor_slider.setRange(0, max(0, self._buf_len() - 1))
+                self._cursor_slider.setValue(max(0, self._buf_len() - 1))
+                self._cursor_slider.blockSignals(False)
         self._refresh_status()
 
     def status_text(self) -> str:
@@ -241,11 +253,67 @@ class SimApp(QMainWindow):
         self._speed = int(v)
 
     def _on_run_toggled(self, running: bool):
-        if running:
+        if running:                                       # live: hide cursors, disable slider
+            self._cursor = None
+            self._cursor_slider.setEnabled(False)
+            for p in self._ts_panels:
+                p.set_cursor(None)
+            self._cursor_readout.setText("live")
             self._clock.restart()
             self._timer.start(_UI_FPS_MS)
-        else:
+        else:                                             # paused: enable scrub over the buffer
             self._timer.stop()
+            n = self._buf_len()
+            self._cursor_slider.setEnabled(n > 0)
+            self._cursor_slider.blockSignals(True)
+            self._cursor_slider.setRange(0, max(0, n - 1))
+            self._cursor_slider.setValue(max(0, n - 1))
+            self._cursor_slider.blockSignals(False)
+
+    def _buf_len(self):
+        return len(self._probe.frames())
+
+    def _render_at_cursor(self, idx):
+        frames = self._probe.frames()
+        if not frames:
+            return
+        idx = max(0, min(int(idx), len(frames) - 1))
+        self._cursor = idx
+        for p in self._ts_panels:
+            p.set_cursor(idx)
+        self._netstate.update_frame(self._probe, idx)
+        self._topdown.render_at(self._traj, idx)
+        self._cursor_readout.setText(f"t={frames[idx].t} ({frames[idx].t * DT:.1f}s)")
+
+    def _on_cursor(self, v):
+        if not self._run_btn.isChecked():
+            self._render_at_cursor(v)
+
+    def _step_cursor(self, d):
+        if self._run_btn.isChecked() or self._buf_len() == 0:
+            return
+        cur = self._cursor if self._cursor is not None else self._buf_len() - 1
+        new = max(0, min(cur + d, self._buf_len() - 1))
+        self._render_at_cursor(new)
+        self._cursor_slider.blockSignals(True)
+        self._cursor_slider.setRange(0, max(0, self._buf_len() - 1))
+        self._cursor_slider.setValue(new)
+        self._cursor_slider.blockSignals(False)
+
+    def keyPressEvent(self, event):
+        k = event.key()
+        if k == Qt.Key_Space:
+            self._run_btn.toggle()
+        elif k == Qt.Key_Left:
+            self._step_cursor(-1)
+        elif k == Qt.Key_Right:
+            self._step_cursor(1)
+        elif k == Qt.Key_Home and not self._run_btn.isChecked():
+            self._on_cursor(0)
+        elif k == Qt.Key_End and not self._run_btn.isChecked():
+            self._on_cursor(self._buf_len() - 1)
+        else:
+            super().keyPressEvent(event)
 
     def _clamp_frame_dt(self, elapsed: float) -> float:
         return min(float(elapsed), _MAX_FRAME_DT)   # avoid the spiral of death under load
