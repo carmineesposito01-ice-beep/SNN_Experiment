@@ -45,3 +45,15 @@ def test_probe_sample_every():
                   np.zeros(5))
     assert [f.t for f in pr.frames()] == [0, 2, 4, 6, 8]
     assert pr.spikes_matrix().shape == (5, 3)
+
+
+def test_probe_getters_memoized_and_invalidated():
+    pr = AttributeProbe(capacity=10)
+    pr.record(0, {"spikes": np.zeros(3), "v_mem": np.zeros(3), "v_th_eff": np.ones(3)}, np.zeros(5))
+    m1, m2 = pr.spikes_matrix(), pr.spikes_matrix()
+    assert m1 is m2 and pr.params_matrix() is pr.params_matrix()   # cache hit, no rebuild between records
+    assert not m1.flags.writeable                                  # hardened read-only
+    assert np.array_equal(m1, np.zeros((1, 3)))
+    pr.record(1, {"spikes": np.ones(3), "v_mem": np.zeros(3), "v_th_eff": np.ones(3)}, np.zeros(5))
+    m3 = pr.spikes_matrix()
+    assert m3 is not m1 and m3.shape == (2, 3) and m3[-1].sum() == 3   # invalidated + recomputed

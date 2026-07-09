@@ -33,6 +33,16 @@ def test_trajectory_buffer_empty():
     assert a["t"].size == 0 and a["s"].size == 0
 
 
+def test_trajectory_arrays_memoized():
+    tb = TrajectoryBuffer()
+    tb.record(_r(0, 20))
+    a1 = tb.arrays()
+    assert tb.arrays() is a1                                # cache hit between records (Trajectory+Safety share)
+    tb.record(_r(1, 19))
+    a2 = tb.arrays()
+    assert a2 is not a1 and a2["s"].tolist() == [20, 19]    # invalidated + recomputed
+
+
 def test_metrics_values():
     assert float(metrics.ttc(20, 2)) == 10.0                 # s/dv
     assert np.isinf(float(metrics.ttc(20, -1)))              # opening -> inf

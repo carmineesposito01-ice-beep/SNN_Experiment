@@ -28,6 +28,7 @@ class AttributeProbe:
         self.sample_every = sample_every
         self._buf = deque(maxlen=capacity)
         self._count = 0
+        self._cache = {}       # {name: (version, value)} memo keyed on _count (see _memo)
 
     def record(self, t, probe, params):
         if self._count % self.sample_every == 0:
@@ -42,12 +43,31 @@ class AttributeProbe:
             ))
         self._count += 1
 
+    def _memo(self, name, build):
+        """Cache build() keyed on _count (bumped every record()). Within one redraw no record()
+        runs, so the 5 ParamPanels / 2 spike consumers sharing this probe hit the cache instead of
+        rebuilding the same array. Read-only memo: record()'s body is unchanged."""
+        hit = self._cache.get(name)
+        if hit is not None and hit[0] == self._count:
+            return hit[1]
+        val = build()
+        self._cache[name] = (self._count, val)
+        return val
+
     def frames(self):
-        return list(self._buf)
+        return self._memo("frames", lambda: list(self._buf))
 
     def spikes_matrix(self):
         """(frames, H) raster of last-tick spikes; empty (0,0) if no frames."""
-        return np.stack([f.spikes for f in self._buf]) if self._buf else np.empty((0, 0))
+        def build():
+            m = np.stack([f.spikes for f in self._buf]) if self._buf else np.empty((0, 0))
+            m.flags.writeable = False       # hardened: consumers only read
+            return m
+        return self._memo("spikes", build)
 
     def params_matrix(self):
-        return np.stack([f.params for f in self._buf]) if self._buf else np.empty((0, 5))
+        def build():
+            m = np.stack([f.params for f in self._buf]) if self._buf else np.empty((0, 5))
+            m.flags.writeable = False
+            return m
+        return self._memo("params", build)

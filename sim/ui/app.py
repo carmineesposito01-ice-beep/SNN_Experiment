@@ -278,8 +278,8 @@ class SimApp(QMainWindow):
         leader = r.vl if r is not None else float(self.loop.stepper.v_leader[0])
         gap = r.s if r is not None else st.s
         state = "COLLIDED" if st.collided else "ok"
-        sm = self._probe.spikes_matrix()
-        firing = f"{float(sm[-1].mean()) * 100:.1f}%" if sm.size else "--"
+        frames = self._probe.frames()          # O(1) tail read (memoized) instead of stacking the buffer
+        firing = f"{float(frames[-1].spikes.mean()) * 100:.1f}%" if frames else "--"
         return (f"t={st.t} ({st.t * DT:.1f}s)   |   ego {ego:.1f} m/s   |   leader {leader:.1f} m/s"
                 f"   |   gap {gap:.1f} m   |   firing {firing}   |   {state}")
 
