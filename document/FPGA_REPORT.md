@@ -9,23 +9,7 @@
 ---
 
 
-## In una pagina: cos'è e come si legge
-
-Questo report è la valutazione di idoneità FPGA dei 4 champion (2 BPTT: Raffaello, Leonardo; 2 EventProp: Donatello, Michelangelo) PRIMA di toccare il silicio. È la Fase A "software_now": ogni numero 🟢 è calcolato dai tensori e dal forward reali della rete (non da un datasheet), tramite le 5 librerie di profilazione. Le figure marcate 🟡/🔴 (datapath HDL, area, termico) sono STIME di progetto, da confermare solo con la sintesi Vivado e la misura su board (Fasi B/C).
-
-Come si legge: la sezione 0 è il cruscotto (radar + tabella di numeri reali) con il verdetto di deploy; le sezioni 1-8 lo fondano dimensione per dimensione (pesi po2, fixed-point, spiking, energia, timing, risorse, SEU, I/O); la 9 è termica (stime). Contesto e teoria della rete: HOW_IT_WORKS_v3 §16. I risultati di validazione della guida (sicurezza, traffico, accuratezza): VALIDATION_REPORT_v3 (di cui §9 è il sommario FPGA che rimanda qui).
-
-> **Nota.** Due verità che attraversano tutto il report: (1) i champion sparano ~13-21%, non sono iper-sparsi; (2) il vantaggio energetico (~5.11-8.38×) viene dal costo AC<MAC e da 0 DSP, non dalla sparsità. L'edge FPGA degli EventProp è ρ<1 (contrattivo) + 0 neuroni morti.
-
-| Champion | Metodo | Checkpoint | ρ(U·V) | spike % | energia × (worst) | footprint |
-|---|---|---|---|---|---|---|
-| Raffaello | BPTT | R33_C2_A1_T12_fix | 2.99 | 13.9% | 8.38× | 400 B |
-| Leonardo | BPTT | LS3_PEAK_R0_launch_d03 | 1.16 | 12.6% | 8.38× | 400 B |
-| Donatello | EventProp | PE_t05_gp0002 | 0.05 | 20.8% | 5.11× | 656 B |
-| Michelangelo | EventProp | A_lr1e2_t06_r16 | 0.39 | 15.5% | 5.11× | 656 B |
-
-
-## Indice
+## Sommario
 
 | Sezione | Contenuto |
 |---|---|
@@ -40,6 +24,22 @@ Come si legge: la sezione 0 è il cruscotto (radar + tabella di numeri reali) co
 | 8 | I/O e Hardware-in-the-Loop: canale V2X e code |
 | 9 | Termico: derating (stime pre-sintesi) |
 | — | Verdetto e prossimi passi · Riferimenti · Mappa dei file |
+
+
+## In una pagina: cos'è e come si legge
+
+Questo report è la valutazione di idoneità FPGA dei 4 champion (2 BPTT: Raffaello, Leonardo; 2 EventProp: Donatello, Michelangelo) PRIMA di toccare il silicio. È la Fase A "software_now": ogni numero 🟢 è calcolato dai tensori e dal forward reali della rete (non da un datasheet), tramite le 5 librerie di profilazione. Le figure marcate 🟡/🔴 (datapath HDL, area, termico) sono STIME di progetto, da confermare solo con la sintesi Vivado e la misura su board (Fasi B/C).
+
+Come si legge: la sezione 0 è il cruscotto (radar + tabella di numeri reali) con il verdetto di deploy; le sezioni 1-8 lo fondano dimensione per dimensione (pesi po2, fixed-point, spiking, energia, timing, risorse, SEU, I/O); la 9 è termica (stime). Contesto e teoria della rete: HOW_IT_WORKS_v3 §16. I risultati di validazione della guida (sicurezza, traffico, accuratezza): VALIDATION_REPORT_v3 (di cui §9 è il sommario FPGA che rimanda qui).
+
+> **Nota.** Due verità che attraversano tutto il report: (1) i champion sparano ~13-21%, non sono iper-sparsi; (2) il vantaggio energetico (~5.11-8.38×) viene dal costo AC<MAC e da 0 DSP, non dalla sparsità. L'edge FPGA degli EventProp è ρ<1 (contrattivo) + 0 neuroni morti.
+
+| Champion | Metodo | Checkpoint | ρ(U·V) | spike % | energia × (worst) | footprint |
+|---|---|---|---|---|---|---|
+| Raffaello | BPTT | R33_C2_A1_T12_fix | 2.99 | 13.9% | 8.38× | 400 B |
+| Leonardo | BPTT | LS3_PEAK_R0_launch_d03 | 1.16 | 12.6% | 8.38× | 400 B |
+| Donatello | EventProp | PE_t05_gp0002 | 0.05 | 20.8% | 5.11× | 656 B |
+| Michelangelo | EventProp | A_lr1e2_t06_r16 | 0.39 | 15.5% | 5.11× | 656 B |
 
 
 ## 0. Readiness: la scorecard di idoneità FPGA

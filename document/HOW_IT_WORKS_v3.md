@@ -8,7 +8,7 @@
 ---
 
 
-### Indice
+## Sommario
 
 | Sezione | Contenuto |
 |---|---|
@@ -106,8 +106,8 @@ I modelli di neurone formano una gerarchia di semplificazione progressiva: scend
 
 CF_FSNN usa il neurone ALIF (Adaptive Leaky Integrate-and-Fire): un LIF con una variabile di adattamento — una fatica che alza temporaneamente la soglia a ogni spike e poi decade (Bellec et al. 2018). La soglia effettiva è la somma della soglia base e della fatica; la fatica decade con lo stesso bit-shift della membrana e cresce di thresh_jump a ogni spike; dopo lo spike il potenziale subisce un reset sottrattivo. Le equazioni implementate (core/neurons.py) sono:
 
-![Equazione 4.1 — Dinamica ALIF per tick. θ_base = soglia base (apprendibile, init 1.5); F = fatica/adattamento; θ_jump = incremento di soglia per spike (apprendibile, init 0.5); S ∈ {0,1} = spike; 𝟏[·] = indicatore (funzione a gradino). Il reset è sottrattivo: non azzera il potenziale.](figures_howitworks_v3/eq_alif.png)
-*Equazione 4.1 — Dinamica ALIF per tick. θ_base = soglia base (apprendibile, init 1.5); F = fatica/adattamento; θ_jump = incremento di soglia per spike (apprendibile, init 0.5); S ∈ {0,1} = spike; 𝟏[·] = indicatore (funzione a gradino). Il reset è sottrattivo: non azzera il potenziale.*
+![Equazione 4.1 — Dinamica ALIF per tick. θ_base = soglia base (apprendibile, init 1.5); F = fatica/adattamento; θ_jump = incremento di soglia per spike (apprendibile, init 0.5); S ∈ {0,1} = spike; 1[·] = indicatore (funzione a gradino). Il reset è sottrattivo: non azzera il potenziale.](figures_howitworks_v3/eq_alif.png)
+*Equazione 4.1 — Dinamica ALIF per tick. θ_base = soglia base (apprendibile, init 1.5); F = fatica/adattamento; θ_jump = incremento di soglia per spike (apprendibile, init 0.5); S ∈ {0,1} = spike; 1[·] = indicatore (funzione a gradino). Il reset è sottrattivo: non azzera il potenziale.*
 
 La scelta di ALIF rispetto al LIF puro poggia su tre ragioni, tutte di addestrabilità o hardware: (a) il car-following è un problema temporale che beneficia di una memoria a due scale — veloce nella membrana, lenta nella fatica; (b) la fatica regola la sparsità del firing e stabilizza l'addestramento: nei test del progetto, azzerare thresh_jump porta il training a divergere, mentre valori troppo alti causano underfit, con un ottimo empirico intorno a 0.5 (da cui l'inizializzazione); (c) aggiunge solo due stati per neurone, restando economica su FPGA.
 
@@ -312,8 +312,8 @@ Il resto della configurazione riproduce condizioni realistiche: un mix di scenar
 
 È il cuore del co-design hardware. I pesi sinaptici sono vincolati a potenze di due, con esponente clampato in [−4, 1] e i pesi sotto 2⁻⁵ azzerati, per 13 livelli complessivi {±1/16 … ±2, 0}. Su FPGA, moltiplicare per 2ᵏ è un semplice bit-shift (un ciclo, dell'ordine di 10 LUT) invece di una moltiplicazione vera (più cicli, dell'ordine di 100 LUT):
 
-![Equazione 15.1 — Quantizzatore po2 e suo gradiente (core/hardware.py). w = peso in virgola mobile; l'esponente arrotondato è clampato in [−4, 1]; 𝟏[|w| > 2⁻⁵] azzera i pesi piccoli (banda morta). In backward il gradiente attraversa la quantizzazione come identità (STE).](figures_howitworks_v3/eq_po2.png)
-*Equazione 15.1 — Quantizzatore po2 e suo gradiente (core/hardware.py). w = peso in virgola mobile; l'esponente arrotondato è clampato in [−4, 1]; 𝟏[|w| > 2⁻⁵] azzera i pesi piccoli (banda morta). In backward il gradiente attraversa la quantizzazione come identità (STE).*
+![Equazione 15.1 — Quantizzatore po2 e suo gradiente (core/hardware.py). w = peso in virgola mobile; l'esponente arrotondato è clampato in [−4, 1]; 1[|w| > 2⁻⁵] azzera i pesi piccoli (banda morta). In backward il gradiente attraversa la quantizzazione come identità (STE).](figures_howitworks_v3/eq_po2.png)
+*Equazione 15.1 — Quantizzatore po2 e suo gradiente (core/hardware.py). w = peso in virgola mobile; l'esponente arrotondato è clampato in [−4, 1]; 1[|w| > 2⁻⁵] azzera i pesi piccoli (banda morta). In backward il gradiente attraversa la quantizzazione come identità (STE).*
 
 ![Figura 15.1 — I 13 livelli po2 con la banda morta |w| < 2⁻⁵ (sx) e il risparmio su FPGA: la moltiplicazione diventa uno shift (dx).](figures_howitworks_v3/po2.png)
 *Figura 15.1 — I 13 livelli po2 con la banda morta |w| < 2⁻⁵ (sx) e il risparmio su FPGA: la moltiplicazione diventa uno shift (dx).*

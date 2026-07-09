@@ -466,7 +466,10 @@ def fig_triangle():
 # Unicode nel corpo; qui si rendono solo quelle con frazioni/radici/matrici,
 # cosi' da risultare leggibili anche nel PDF (reportlab non supporta LaTeX).
 # ---------------------------------------------------------------------------
-def fig_eq(name, lines, fs=15, color='#12233a'):
+EQ_DPI = 200  # equazioni: risoluzione fissa; nel PDF vanno a dimensione proporzionale al testo
+
+
+def fig_eq(name, lines, fs=11, color='#12233a'):
     """Renderizza una o piu' righe di equazione (mathtext) in un PNG 'tight'."""
     n = len(lines)
     fig = plt.figure(figsize=(9.2, 0.52 * n + 0.22))
@@ -474,7 +477,7 @@ def fig_eq(name, lines, fs=15, color='#12233a'):
         fig.text(0.5, 1.0 - (i + 0.5) / n, '$' + ln + '$',
                  ha='center', va='center', fontsize=fs, color=color)
     p = os.path.join(FIGDIR, name)
-    fig.savefig(p, dpi=150, bbox_inches='tight', pad_inches=0.18, facecolor='white')
+    fig.savefig(p, dpi=EQ_DPI, bbox_inches='tight', pad_inches=0.08, facecolor='white')
     plt.close(fig)
     return p
 
@@ -557,8 +560,8 @@ def build_doc():
         ],
     }))
 
-    A(('h2', 'Indice'))
-    A(('table', (
+    A(('toc', (
+        'Sommario',
         ['Sezione', 'Contenuto'],
         [
             ['Parte I', 'Cos\'è una SNN e come si addestra'],
@@ -703,7 +706,7 @@ def build_doc():
     A(('img', (F['eq_alif'], 'Equazione 4.1 — Dinamica ALIF per tick. θ_base = soglia base '
                              '(apprendibile, init 1.5); F = fatica/adattamento; θ_jump = incremento di '
                              'soglia per spike (apprendibile, init 0.5); S ∈ {0,1} = spike; '
-                             '𝟏[·] = indicatore (funzione a gradino). Il reset è sottrattivo: non azzera '
+                             '1[·] = indicatore (funzione a gradino). Il reset è sottrattivo: non azzera '
                              'il potenziale.')))
     A(('p', 'La scelta di ALIF rispetto al LIF puro poggia su tre ragioni, tutte di addestrabilità o '
            'hardware: (a) il car-following è un problema temporale che beneficia di una memoria a due '
@@ -1063,7 +1066,7 @@ def build_doc():
            'di 10 LUT) invece di una moltiplicazione vera (più cicli, dell\'ordine di 100 LUT):'))
     A(('img', (F['eq_po2'], 'Equazione 15.1 — Quantizzatore po2 e suo gradiente (core/hardware.py). '
                             'w = peso in virgola mobile; l\'esponente arrotondato è clampato in [−4, 1]; '
-                            '𝟏[|w| > 2⁻⁵] azzera i pesi piccoli (banda morta). In backward il gradiente '
+                            '1[|w| > 2⁻⁵] azzera i pesi piccoli (banda morta). In backward il gradiente '
                             'attraversa la quantizzazione come identità (STE).')))
     A(('img', (F['po2'], 'Figura 15.1 — I 13 livelli po2 con la banda morta |w| < 2⁻⁵ (sx) e il '
                          'risparmio su FPGA: la moltiplicazione diventa uno shift (dx).')))
@@ -1220,6 +1223,14 @@ def render_md(doc, outpath):
             for r in rows:
                 L.append('| ' + ' | '.join(str(x) for x in r) + ' |')
             L.append('')
+        elif kind == 'toc':
+            title, headers, rows = b
+            L.append(f"\n## {title}\n")
+            L.append('| ' + ' | '.join(headers) + ' |')
+            L.append('|' + '|'.join(['---'] * len(headers)) + '|')
+            for r in rows:
+                L.append('| ' + ' | '.join(str(x) for x in r) + ' |')
+            L.append('')
         elif kind == 'img':
             path, capt = b
             rel = os.path.relpath(path, DOCDIR).replace('\\', '/')
@@ -1241,6 +1252,7 @@ def render_pdf(doc, outpath):
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
     from reportlab.platypus import (SimpleDocTemplate, Paragraph, Spacer, Image,
                                     Table, TableStyle, PageBreak, HRFlowable)
+    from reportlab.platypus.tableofcontents import TableOfContents
     from reportlab.pdfbase import pdfmetrics
     from reportlab.pdfbase.ttfonts import TTFont
     from reportlab.lib.utils import ImageReader
@@ -1277,6 +1289,17 @@ def render_pdf(doc, outpath):
     def add_image(path, caption):
         img = ImageReader(path)
         iw, ih = img.getSize()
+        if os.path.basename(path).startswith('eq_'):
+            # equazioni: dimensione naturale (proporzionale al testo), centrate, non a piena pagina
+            w = iw * 72.0 / EQ_DPI
+            h = ih * 72.0 / EQ_DPI
+            if w > usable_w:
+                h *= usable_w / w; w = usable_w
+            story.append(Spacer(1, 3))
+            eqim = Image(path, width=w, height=h); eqim.hAlign = 'CENTER'
+            story.append(eqim)
+            story.append(Paragraph(esc(caption), cap))
+            return
         w = usable_w
         h = w * ih / iw
         max_h = 12.0 * cm
@@ -1304,6 +1327,26 @@ def render_pdf(doc, outpath):
             ('TOPPADDING', (0, 0), (-1, -1), 3), ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
         ]))
         story.append(Spacer(1, 2)); story.append(t); story.append(Spacer(1, 8))
+
+    toc = TableOfContents()
+    toc.levelStyles = [
+        ParagraphStyle('toc0', fontName='DJ-B', fontSize=10.5, leading=18,
+                       textColor=colors.HexColor('#1a3c6e')),
+        ParagraphStyle('toc1', fontName='DJ', fontSize=9.5, leading=14, leftIndent=16),
+        ParagraphStyle('toc2', fontName='DJ', fontSize=9, leading=13, leftIndent=32,
+                       textColor=colors.HexColor('#555555')),
+    ]
+
+    class TOCDoc(SimpleDocTemplate):
+        def afterFlowable(self, flowable):
+            if flowable.__class__.__name__ == 'Paragraph':
+                txt = flowable.getPlainText()
+                if txt in ('Sommario', 'Indice'):
+                    return
+                lvl = {'h1': 0, 'h2': 1, 'h3': 2}.get(flowable.style.name)
+                if lvl is not None:
+                    safe = txt.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+                    self.notify('TOCEntry', (lvl, safe, self.page))
 
     for kind, *rest in doc:
         b = rest[0] if rest else None
@@ -1335,6 +1378,11 @@ def render_pdf(doc, outpath):
             story.append(Paragraph('<b>Nota.</b> ' + esc(b), callout))
         elif kind == 'table':
             make_table(*b)
+        elif kind == 'toc':
+            title, headers, rows = b
+            story.append(Paragraph(esc(title), h1))
+            story.append(HRFlowable(width='100%', thickness=0.9, color=colors.HexColor('#c5d3e2'), spaceAfter=8))
+            story.append(toc)
         elif kind == 'img':
             add_image(*b)
 
@@ -1346,9 +1394,9 @@ def render_pdf(doc, outpath):
         canvas.drawRightString(A4[0] - 2 * cm, 1.1 * cm, f'pag. {docx.page}')
         canvas.restoreState()
 
-    pdf = SimpleDocTemplate(outpath, pagesize=A4, topMargin=1.8 * cm, bottomMargin=1.8 * cm,
-                            leftMargin=1.8 * cm, rightMargin=1.8 * cm, title='CF_FSNN Come Funziona v3')
-    pdf.build(story, onFirstPage=footer, onLaterPages=footer)
+    pdf = TOCDoc(outpath, pagesize=A4, topMargin=1.8 * cm, bottomMargin=1.8 * cm,
+                 leftMargin=1.8 * cm, rightMargin=1.8 * cm, title='CF_FSNN Come Funziona v3')
+    pdf.multiBuild(story, onFirstPage=footer, onLaterPages=footer)
     print('  scritto', outpath)
 
 

@@ -29,7 +29,10 @@ EVAL = os.path.join(ROOT, 'results', 'evaluate', 'FPGA')
 os.makedirs(FIGDIR, exist_ok=True)
 
 
-def fig_eq(name, lines, fs=15, color='#12233a'):
+EQ_DPI = 200  # equazioni: risoluzione fissa; nel PDF vanno a dimensione proporzionale al testo
+
+
+def fig_eq(name, lines, fs=11, color='#12233a'):
     """Renderizza una o più righe di equazione (mathtext) in un PNG 'tight'.
     Nessun carattere accentato dentro la formula (le legende vanno in didascalia)."""
     n = len(lines)
@@ -38,7 +41,7 @@ def fig_eq(name, lines, fs=15, color='#12233a'):
         fig.text(0.5, 1.0 - (i + 0.5) / n, '$' + ln + '$',
                  ha='center', va='center', fontsize=fs, color=color)
     p = os.path.join(FIGDIR, name)
-    fig.savefig(p, dpi=150, bbox_inches='tight', pad_inches=0.18, facecolor='white')
+    fig.savefig(p, dpi=EQ_DPI, bbox_inches='tight', pad_inches=0.08, facecolor='white')
     plt.close(fig)
     return p
 
@@ -331,6 +334,24 @@ def build_doc():
         ],
     }))
 
+    A(('toc', (
+        'Sommario',
+        ['Sezione', 'Contenuto'],
+        [
+            ['0', 'Readiness: la scorecard di idoneità FPGA'],
+            ['1', 'Pesi Power-of-Two: il moltiplicatore che sparisce'],
+            ['2', 'Fixed-point: formato Qm.n e robustezza alla quantizzazione'],
+            ['3', 'Dinamica spiking: sparsità reale e salute della rete'],
+            ['4', 'Energia: il vantaggio AC<MAC'],
+            ['5', 'Timing / WCET: margine sul deadline e jitter zero'],
+            ['6', 'Risorse e DSE: 0 DSP, <1% BRAM'],
+            ['7', 'SEU / ISO 26262: robustezza ai bit-flip e TMR mirato'],
+            ['8', 'I/O e Hardware-in-the-Loop: canale V2X e code'],
+            ['9', 'Termico: derating (stime pre-sintesi)'],
+            ['—', 'Verdetto e prossimi passi · Riferimenti · Mappa dei file'],
+        ],
+    )))
+
     # Intro
     A(('h1', 'In una pagina: cos\'è e come si legge'))
     A(('p', 'Questo report è la valutazione di idoneità FPGA dei 4 champion (2 BPTT: Raffaello, '
@@ -359,24 +380,6 @@ def build_doc():
                          en(c, 'advantage_worstcase_x', '%.2f') + '×',
                          sc(c, 'footprint_B', '%.0f') + ' B'])
         A(('table', (['Champion', 'Metodo', 'Checkpoint', 'ρ(U·V)', 'spike %', 'energia × (worst)', 'footprint'], rows)))
-
-    A(('h1', 'Indice'))
-    A(('table', (
-        ['Sezione', 'Contenuto'],
-        [
-            ['0', 'Readiness: la scorecard di idoneità FPGA'],
-            ['1', 'Pesi Power-of-Two: il moltiplicatore che sparisce'],
-            ['2', 'Fixed-point: formato Qm.n e robustezza alla quantizzazione'],
-            ['3', 'Dinamica spiking: sparsità reale e salute della rete'],
-            ['4', 'Energia: il vantaggio AC<MAC'],
-            ['5', 'Timing / WCET: margine sul deadline e jitter zero'],
-            ['6', 'Risorse e DSE: 0 DSP, <1% BRAM'],
-            ['7', 'SEU / ISO 26262: robustezza ai bit-flip e TMR mirato'],
-            ['8', 'I/O e Hardware-in-the-Loop: canale V2X e code'],
-            ['9', 'Termico: derating (stime pre-sintesi)'],
-            ['—', 'Verdetto e prossimi passi · Riferimenti · Mappa dei file'],
-        ],
-    )))
 
     # Sezioni
     for section in SECTION_ORDER:
@@ -465,6 +468,14 @@ def render_md(doc, outpath):
             for r in rows:
                 L.append('| ' + ' | '.join(str(x) for x in r) + ' |')
             L.append('')
+        elif kind == 'toc':
+            title, headers, rows = b
+            L.append(f"\n## {title}\n")
+            L.append('| ' + ' | '.join(headers) + ' |')
+            L.append('|' + '|'.join(['---'] * len(headers)) + '|')
+            for r in rows:
+                L.append('| ' + ' | '.join(str(x) for x in r) + ' |')
+            L.append('')
         elif kind == 'img':
             path, capt = b
             rel = os.path.relpath(path, DOCDIR).replace('\\', '/')
@@ -486,6 +497,7 @@ def render_pdf(doc, outpath):
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
     from reportlab.platypus import (SimpleDocTemplate, Paragraph, Spacer, Image,
                                     Table, TableStyle, PageBreak, HRFlowable)
+    from reportlab.platypus.tableofcontents import TableOfContents
     from reportlab.pdfbase import pdfmetrics
     from reportlab.pdfbase.ttfonts import TTFont
     from reportlab.lib.utils import ImageReader
@@ -518,6 +530,17 @@ def render_pdf(doc, outpath):
     def add_image(path, caption):
         img = ImageReader(path)
         iw, ih = img.getSize()
+        if os.path.basename(path).startswith('eq_'):
+            # equazioni: dimensione naturale (proporzionale al testo), centrate, non a piena pagina
+            w = iw * 72.0 / EQ_DPI
+            h = ih * 72.0 / EQ_DPI
+            if w > usable_w:
+                h *= usable_w / w; w = usable_w
+            story.append(Spacer(1, 3))
+            eqim = Image(path, width=w, height=h); eqim.hAlign = 'CENTER'
+            story.append(eqim)
+            story.append(Paragraph(esc(caption), cap))
+            return
         w = usable_w
         h = w * ih / iw
         max_h = 12.5 * cm
@@ -546,6 +569,26 @@ def render_pdf(doc, outpath):
         ]))
         story.append(Spacer(1, 2)); story.append(t); story.append(Spacer(1, 8))
 
+    toc = TableOfContents()
+    toc.levelStyles = [
+        ParagraphStyle('toc0', fontName='DJ-B', fontSize=10.5, leading=18,
+                       textColor=colors.HexColor('#1a3c6e')),
+        ParagraphStyle('toc1', fontName='DJ', fontSize=9.5, leading=14, leftIndent=16),
+        ParagraphStyle('toc2', fontName='DJ', fontSize=9, leading=13, leftIndent=32,
+                       textColor=colors.HexColor('#555555')),
+    ]
+
+    class TOCDoc(SimpleDocTemplate):
+        def afterFlowable(self, flowable):
+            if flowable.__class__.__name__ == 'Paragraph':
+                txt = flowable.getPlainText()
+                if txt in ('Sommario', 'Indice'):
+                    return
+                lvl = {'h1': 0, 'h2': 1, 'h3': 2}.get(flowable.style.name)
+                if lvl is not None:
+                    safe = txt.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+                    self.notify('TOCEntry', (lvl, safe, self.page))
+
     for kind, *rest in doc:
         b = rest[0] if rest else None
         if kind == 'cover':
@@ -573,6 +616,11 @@ def render_pdf(doc, outpath):
             story.append(Paragraph('<b>Nota.</b> ' + esc(b), callout))
         elif kind == 'table':
             make_table(*b)
+        elif kind == 'toc':
+            title, headers, rows = b
+            story.append(Paragraph(esc(title), h1))
+            story.append(HRFlowable(width='100%', thickness=0.9, color=colors.HexColor('#c5d3e2'), spaceAfter=8))
+            story.append(toc)
         elif kind == 'img':
             add_image(*b)
 
@@ -584,9 +632,9 @@ def render_pdf(doc, outpath):
         canvas.drawRightString(A4[0] - 2 * cm, 1.1 * cm, f'pag. {docx.page}')
         canvas.restoreState()
 
-    pdf = SimpleDocTemplate(outpath, pagesize=A4, topMargin=1.8 * cm, bottomMargin=1.8 * cm,
+    pdf = TOCDoc(outpath, pagesize=A4, topMargin=1.8 * cm, bottomMargin=1.8 * cm,
                             leftMargin=1.8 * cm, rightMargin=1.8 * cm, title='CF_FSNN Report FPGA Fase A')
-    pdf.build(story, onFirstPage=footer, onLaterPages=footer)
+    pdf.multiBuild(story, onFirstPage=footer, onLaterPages=footer)
     print('  scritto', outpath)
 
 

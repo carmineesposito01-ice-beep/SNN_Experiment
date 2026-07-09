@@ -10,7 +10,7 @@
 ---
 
 
-## Indice
+## Sommario
 
 | Sezione | Contenuto |
 |---|---|
@@ -111,8 +111,8 @@ Scenari avversari: following, stop&go, hard-brake, cut-in (realistico ed evitabi
 | head_to_tail_gain | ampiezza coda / testa nel plotone | string stability (<1 = stabile) |
 | ρ(U·V), dead_frac | raggio spettrale ricorrenza; neuroni morti | salute e stabilità hardware |
 
-![Equazione 3.1 — Principali surrogate safety measures (indicatori continui di rischio). s = gap [m]; Δv = velocità di avvicinamento (v−v_leader) [m/s]; τ = soglia di time-to-collision; 𝟏[·] = indicatore. TTC = time-to-collision; DRAC = deceleration rate to avoid a crash; TET = tempo esposto a TTC sotto soglia.](figures_validation_v3/eq_ssm.png)
-*Equazione 3.1 — Principali surrogate safety measures (indicatori continui di rischio). s = gap [m]; Δv = velocità di avvicinamento (v−v_leader) [m/s]; τ = soglia di time-to-collision; 𝟏[·] = indicatore. TTC = time-to-collision; DRAC = deceleration rate to avoid a crash; TET = tempo esposto a TTC sotto soglia.*
+![Equazione 3.1 — Principali surrogate safety measures (indicatori continui di rischio). s = gap [m]; Δv = velocità di avvicinamento (v−v_leader) [m/s]; τ = soglia di time-to-collision; 1[·] = indicatore. TTC = time-to-collision; DRAC = deceleration rate to avoid a crash; TET = tempo esposto a TTC sotto soglia.](figures_validation_v3/eq_ssm.png)
+*Equazione 3.1 — Principali surrogate safety measures (indicatori continui di rischio). s = gap [m]; Δv = velocità di avvicinamento (v−v_leader) [m/s]; τ = soglia di time-to-collision; 1[·] = indicatore. TTC = time-to-collision; DRAC = deceleration rate to avoid a crash; TET = tempo esposto a TTC sotto soglia.*
 
 
 ## 4. Identificazione dei parametri (Tier 0/4)
