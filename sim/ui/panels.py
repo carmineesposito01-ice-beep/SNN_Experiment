@@ -12,6 +12,7 @@ PARAM_NAMES = ["v0", "T", "s0", "a", "b"]
 PARAM_UNITS = ["m/s", "s", "m", "m/s^2", "m/s^2"]
 PARAM_COLORS = ["#d1495b", "#2a7fb8", "#7b3fa0", "#e8871e", "#2e8b57"]
 _N_SAMPLE = 4
+_AXIS_LBL = {"font-size": "9pt"}   # compact axis labels so stacked short sub-plots don't overlap
 
 
 def _add_cursor(plot):
@@ -473,14 +474,16 @@ class TrajectoryPanel(QWidget):
         self._pg = self._glw.addPlot(row=0, col=0)
         self._pv = self._glw.addPlot(row=1, col=0)
         self._pa = self._glw.addPlot(row=2, col=0)
-        self._pg.setLabel("left", "gap", units="m")
-        self._pv.setLabel("left", "speed", units="m/s")
-        self._pa.setLabel("left", "accel", units="m/s^2")
-        self._pa.setLabel("bottom", "time", units="steps")
+        self._pg.setLabel("left", "gap", units="m", **_AXIS_LBL)
+        self._pv.setLabel("left", "speed", units="m/s", **_AXIS_LBL)
+        self._pa.setLabel("left", "accel", units="m/s²", **_AXIS_LBL)
+        self._pa.setLabel("bottom", "time", units="steps", **_AXIS_LBL)
+        self._pa.getAxis("left").enableAutoSIPrefix(False)   # accel ~0.05 -> keep m/s², not milli "mm/s²"
         for p in (self._pg, self._pv, self._pa):
             p.setDownsampling(auto=True, mode="peak")
             p.setClipToView(True)
             p.showGrid(x=False, y=True, alpha=0.2)
+            p.getAxis("left").setWidth(46)                   # fixed, narrow axis gutter -> labels don't collide
         self._pv.setXLink(self._pg)
         self._pa.setXLink(self._pg)
         self._c_s = self._pg.plot(pen=pg.mkPen("#2e8b57", width=2))
@@ -519,13 +522,15 @@ class SafetyPanel(QWidget):
         layout.addWidget(self._glw)
         self._pt = self._glw.addPlot(row=0, col=0)
         self._pd = self._glw.addPlot(row=1, col=0)
-        self._pt.setLabel("left", "time", units="s")
-        self._pd.setLabel("left", "DRAC", units="m/s^2")
-        self._pd.setLabel("bottom", "time", units="steps")
+        self._pt.setLabel("left", "TTC/head", units="s", **_AXIS_LBL)
+        self._pd.setLabel("left", "DRAC", units="m/s²", **_AXIS_LBL)
+        self._pd.setLabel("bottom", "time", units="steps", **_AXIS_LBL)
+        self._pd.getAxis("left").enableAutoSIPrefix(False)
         for p in (self._pt, self._pd):
             p.setDownsampling(auto=True, mode="peak")
             p.setClipToView(True)
             p.showGrid(x=False, y=True, alpha=0.2)
+            p.getAxis("left").setWidth(46)
         self._pd.setXLink(self._pt)
         self._c_ttc = self._pt.plot(pen=pg.mkPen("#d1495b", width=2))
         self._c_th = self._pt.plot(pen=pg.mkPen("#2a7fb8", width=1, style=Qt.DashLine))
