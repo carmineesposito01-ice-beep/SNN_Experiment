@@ -76,6 +76,10 @@ def test_dense_mac_is_param_count():
     assert metrics.dense_mac(4, 32, 5, 8) == 128 + 512 + 160     # 800
 
 
+def test_ann_mac_dense_rnn():
+    assert metrics.ann_mac(4, 32, 5) == 128 + 1024 + 160         # dense recurrent RNN (full H*H) = 1312
+
+
 def test_synops_series_matches_scalar():
     sm = np.array([[0, 0, 0], [1, 0, 1]])                # H=3
     st, dy = metrics.synops_series(sm, 2, 3, 1, 2)

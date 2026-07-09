@@ -286,20 +286,21 @@ def test_inspector_clear_none(qapp):
 from sim.ui.panels import SynOpsPanel   # noqa: E402
 
 
-def test_synops_panel_ref_and_total(qapp):
+def test_synops_panel_energy(qapp):
     panel = SynOpsPanel()
     assert panel._plot.parent() is panel                          # plot is actually placed in the widget
     panel.set_model(4, 32, 5, 8)
-    assert panel._dense == 800                                    # dense-MAC reference value
+    assert abs(panel._ann_pj - (128 + 1024 + 160) * 4.6) < 1e-6   # dense-ANN energy reference (pJ)
     p = AttributeProbe(capacity=10)
     for t in range(3):
         spk = np.zeros(32); spk[:5] = 1                           # 5 firing
         p.record(t, {"spikes": spk, "v_mem": np.zeros(32), "v_th_eff": np.ones(32)}, np.zeros(5))
     panel.update_frame(p)
+    ops = 128 + (5 * 8 + 32 * 8 + 5 * 5)                          # 449 SynOps
     y = panel._total_c.getData()[1]
-    assert float(y[-1]) == 128 + (5 * 8 + 32 * 8 + 5 * 5)         # static 128 + dynamic 321 = 449
+    assert abs(float(y[-1]) - ops * 0.9) < 1e-6                    # SNN energy = SynOps × E_AC
     ref = panel._ref_c.getData()[1]
-    assert ref is not None and bool(np.all(ref == 800))          # flat dense-MAC reference line
+    assert ref is not None and bool(np.all(np.abs(ref - (128 + 1024 + 160) * 4.6) < 1e-6))
 
 
 def test_synops_panel_cursor(qapp):

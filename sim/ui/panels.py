@@ -57,14 +57,16 @@ class SpikeRatePanel(QWidget):
 
 class SynOpsPanel(QWidget):
     """Per-tick synaptic ops: static (fc, always-on) + dynamic (spike-driven), vs the dense-MAC
-    equivalent (parameter count). SynOps ~ MACs (not sparse) -> the win is AC<MAC, not sparsity."""
+    per-tick ENERGY (pJ): SNN accumulate cost (SynOps x E_AC, static + dynamic) vs a dense ANN
+    (MACs x E_MAC). The ~15x win is AC<MAC (0 DSP), NOT sparsity — SynOps ~ the MAC count."""
     def __init__(self):
         super().__init__()
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        self._plot = pg.PlotWidget(title="SynOps / tick (AC)")
+        self._plot = pg.PlotWidget(title="energia / tick — SNN (AC) vs ANN densa")
         self._plot.setLabel("bottom", "time", units="steps")
-        self._plot.setLabel("left", "SynOps")
+        self._plot.setLabel("left", "energia (pJ)")
+        self._plot.getPlotItem().getAxis("left").enableAutoSIPrefix(False)   # raw pJ, not "kpJ"/"nJ"
         self._plot.setDownsampling(auto=True, mode="peak")   # render only what's visible/needed
         self._plot.setClipToView(True)
         # Stacked areas without FillBetweenItem: total (amber, filled to 0) then static (teal,
@@ -79,14 +81,14 @@ class SynOpsPanel(QWidget):
         layout.addWidget(self._plot)
         self._cursors = [_add_cursor(self._plot.getPlotItem())]
         self._dims = None
-        self._dense = None
+        self._ann_pj = None                              # dense-ANN energy reference (pJ), constant
 
     def set_cursor(self, x):
         _set_cursor(self._cursors, x)
 
     def set_model(self, n_in, n_hid, n_out, rank):
         self._dims = (int(n_in), int(n_hid), int(n_out), int(rank))
-        self._dense = metrics.dense_mac(*self._dims)
+        self._ann_pj = metrics.ann_mac(int(n_in), int(n_hid), int(n_out)) * metrics.E_MAC_PJ
 
     def update_frame(self, probe):
         if self._dims is None:
@@ -95,13 +97,14 @@ class SynOpsPanel(QWidget):
         if not sm.size:
             return
         static, dynamic = metrics.synops_series(sm, *self._dims)
-        total = static + dynamic
-        self._static_c.setData(static)
-        self._total_c.setData(total)
-        self._ref_c.setData(np.full(total.size, float(self._dense)))
-        cur = float(total[-1])
-        pct = 100.0 * cur / self._dense if self._dense else 0.0
-        self._plot.setTitle(f"SynOps/tick = {int(cur)} · {pct:.0f}% del dense-MAC ({self._dense})")
+        static_pj = static * metrics.E_AC_PJ             # SNN energy = SynOps × E_AC (accumulate)
+        total_pj = (static + dynamic) * metrics.E_AC_PJ
+        self._static_c.setData(static_pj)
+        self._total_c.setData(total_pj)
+        self._ref_c.setData(np.full(total_pj.size, float(self._ann_pj)))
+        cur = float(total_pj[-1])
+        adv = self._ann_pj / cur if cur else 0.0
+        self._plot.setTitle(f"{cur:.0f} pJ/tick (SNN, AC) · ANN densa {self._ann_pj:.0f} pJ · {adv:.1f}× meno energia")
 
 
 class EventTimelinePanel(QWidget):

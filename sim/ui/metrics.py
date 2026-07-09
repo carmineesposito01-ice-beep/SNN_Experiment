@@ -41,5 +41,15 @@ def synops_series(spikes_matrix, n_in, n_hid, n_out, rank):
 
 
 def dense_mac(n_in, n_hid, n_out, rank):
-    """Clock-driven dense-MAC equivalent per tick (every synapse every tick = param count)."""
+    """Clock-driven dense-MAC equivalent per tick for THIS (low-rank) net = param count."""
     return int(n_in * n_hid + 2 * rank * n_hid + n_hid * n_out)
+
+
+# Per-synaptic-op energy (Horowitz 45nm; from snn_showcase / scripts/fpga_figures.py: E_MAC, E_AC)
+E_AC_PJ = 0.9      # accumulate — SNN spike-driven op (po2 shift-add on FPGA, 0 DSP)
+E_MAC_PJ = 4.6     # multiply-accumulate — dense ANN op
+
+
+def ann_mac(n_in, n_hid, n_out):
+    """Dense-ANN-equivalent MACs/tick: a same-size dense recurrent RNN (FULL H*H recurrent)."""
+    return int(n_in * n_hid + n_hid * n_hid + n_hid * n_out)

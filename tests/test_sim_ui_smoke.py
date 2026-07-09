@@ -258,7 +258,8 @@ def test_simapp_step_after_reconstruct_reverts_source(qapp):
 def test_simapp_has_synops_dock(qapp):
     win = SimApp(CHAMP)
     assert "SynOps" in win._docks and len(win._docks) == 14
-    assert win._synops._dims == (4, 32, 5, 8) and win._synops._dense == 800   # R33 baseline
+    assert win._synops._dims == (4, 32, 5, 8)
+    assert abs(win._synops._ann_pj - (128 + 1024 + 160) * 4.6) < 1e-6          # R33 dense-ANN energy (pJ)
     win.select_scenario(0)
     win._advance(0.5)
     y = win._synops._total_c.getData()[1]
