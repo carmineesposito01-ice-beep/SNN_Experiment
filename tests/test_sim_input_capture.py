@@ -42,3 +42,17 @@ def test_eventprop_backend_read_probe_has_input():
     b.infer(torch.zeros(1, IN_DIM))
     d = b.read_probe()
     assert "input" in d and np.asarray(d["input"]).reshape(-1).shape[0] == IN_DIM
+
+
+def test_baseline_read_weights_shapes():
+    b = SoftwareBackend(load_champion(BASELINE).model)
+    b.reset()
+    w = b.read_weights()
+    assert w["w_in"].shape == (32, 4) and w["w_rec"].shape == (32, 32) and w["w_out"].shape == (5, 32)
+
+
+def test_eventprop_read_weights_shapes():
+    b = SoftwareBackend(load_champion(EVENTPROP).model)
+    b.reset()
+    w = b.read_weights()
+    assert w["w_in"].shape == (32, 4) and w["w_rec"].shape == (32, 32) and w["w_out"].shape == (5, 32)

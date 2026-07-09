@@ -80,3 +80,11 @@ class EventPropStepper:
             "v_th_eff": v_th.detach().cpu().numpy().reshape(-1),
             "input": self._last_x,
         }
+
+    def read_weights(self) -> dict:
+        w_in = sum(self._w_masked[d] for d in range(self.max_delay))
+        return {
+            "w_in": w_in.detach().cpu().numpy(),
+            "w_rec": self._rec_full.detach().cpu().numpy(),
+            "w_out": self._w_out.detach().cpu().numpy(),
+        }

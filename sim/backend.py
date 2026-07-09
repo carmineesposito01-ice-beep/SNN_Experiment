@@ -56,6 +56,18 @@ class SoftwareBackend:
         v_th = (cell.base_threshold + cell.fatigue.clamp(min=0)).detach().cpu().numpy().reshape(-1)
         return {"spikes": spikes, "v_mem": v_mem, "v_th_eff": v_th, "input": self._last_input}
 
+    def read_weights(self) -> dict:
+        """Static topology for the node-link graph: input->hidden, recurrent, hidden->output.
+        Baseline reads the layers; eventprop delegates to the stepper."""
+        if self._eventprop:
+            return self._stepper.read_weights()
+        lh = self.model.layer_hidden
+        return {
+            "w_in": lh.fc_weight.detach().cpu().numpy(),
+            "w_rec": (lh.rec_U @ lh.rec_V).detach().cpu().numpy(),
+            "w_out": self.model.layer_out.fc_weight.detach().cpu().numpy(),
+        }
+
 
 class FpgaBackend:
     """Stub -- realized in Fase 3 (PYNQ overlay + AXI/DMA). Same seam."""
