@@ -156,8 +156,16 @@ The core already computes these but shows none of them:
   - **3b.1 time-scrub core — ✅ DONE (2026-07-08, commits up to `0d09894`):** pause/scrub a global cursor
     over the ring buffer — cursor line on all time-series docks, `NeuronGraphPanel` at `t`, `TopDownView`
     reconstructed to `t`; slider + `Space`/`←`/`→`/`Home`/`End`. Spec/plan `2026-07-08-scrub-core*`. 77 tests green.
-  - **3b.2 (pending):** event-timeline dock (marks from `injector.log()`, click→seek).
-  - **3b.3 (pending):** per-neuron / input-encoding inspector; ReplayLog re-run beyond the 500-tick buffer.
+  - **3b.2 event-timeline + 3b.3 inspector + replay-beyond-buffer — ✅ DONE (2026-07-09, commits up to `5f05882`):**
+    (1) `reconstruct_history` (`sim/ui/reconstruct.py`) deterministically re-runs the episode from the
+    `ReplayLog` into full-length `AttributeProbe`/`TrajectoryBuffer` (same types → panels unchanged),
+    **bit-identical** to the live run (golden-tested on the buffer overlap). On pause, if the ring buffer
+    wrapped, the app swaps its `_src_probe/_src_traj` scrub source to the reconstructed full episode → scrub
+    the whole 0..N run, not just the last 500 ticks. (2) `EventTimelinePanel` (dock "Events") — clickable
+    `brake_leader` marks (store the absolute tick), click → pause+seek. (3) `NeuronInspectorPanel` (dock
+    "Inspector") — selected neuron's `v_mem`/threshold/spike scope over the source + dominant-connection
+    readout; `NeuronGraphPanel.sigNeuronClicked`/`highlight` colour its fan-in/out edges. 13 docks; presets
+    updated (Neuro-debug foregrounds Inspector+Events). Spec/plan `2026-07-09-scrub-events-inspector*`. 83 sim tests green; core frozen (reconstruct read-only).
   - **BACKLOG (deferred, user 2026-07-08): instantaneous energy / SynOps dock.** Completes the SpikeRate
     view. Energy/tick ≈ Σ(fan-out of firing neurons) — derivable from `spikes` + the NetGraph topology
     (already extracted for the graph edges). TBD how to surface: a number in the SpikeRate dock, or its own

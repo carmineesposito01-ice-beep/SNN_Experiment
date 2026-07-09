@@ -2,6 +2,8 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+**Status:** ✅ COMPLETE (2026-07-09, commits `b8a406c`..`5f05882`). 83 sim tests green; core bit-identical; render-verified on real `windows` Qt.
+
 **Goal:** Add whole-episode scrub (reconstruct beyond the 500-tick buffer), a clickable event-timeline dock, and a per-neuron inspector dock with graph highlighting — all on top of the 3b.1 scrub cursor.
 
 **Architecture:** A read-only `reconstruct_history` re-runs the episode from the `ReplayLog` into full-length `AttributeProbe`/`TrajectoryBuffer` of the *same types*, so the existing panels render it unchanged; the app gains a `_src_probe/_src_traj` "scrub source" that is the live ring buffer while running and the reconstructed full history when paused-and-wrapped. Two new `panels.py` widgets (`EventTimelinePanel`, `NeuronInspectorPanel`) plus `sigNeuronClicked`/`highlight` on `NeuronGraphPanel` deliver the events + inspector UX.
