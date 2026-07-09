@@ -47,3 +47,28 @@ def test_metrics_vectorised():
     s = np.array([20.0, 10.0])
     dv = np.array([2.0, -1.0])
     assert np.allclose(metrics.ttc(s, dv), [10.0, np.inf])
+
+
+# --- SynOps / energy metrics ---
+def test_synops_static_dynamic():
+    row = np.zeros(32); row[[0, 1, 2]] = 1
+    static, dynamic = metrics.synops(row, 4, 32, 5, 8)
+    assert static == 128                                  # IN*H
+    assert dynamic == 3 * 8 + 32 * 8 + 3 * 5              # rec_V + rec_U + out = 24+256+15 = 295
+
+
+def test_synops_zero_firing_no_dynamic():
+    static, dynamic = metrics.synops(np.zeros(32), 4, 32, 5, 8)
+    assert static == 128 and dynamic == 0                # no spike -> rec_U gate off too
+
+
+def test_dense_mac_is_param_count():
+    assert metrics.dense_mac(4, 32, 5, 8) == 128 + 512 + 160     # 800
+
+
+def test_synops_series_matches_scalar():
+    sm = np.array([[0, 0, 0], [1, 0, 1]])                # H=3
+    st, dy = metrics.synops_series(sm, 2, 3, 1, 2)
+    assert list(st) == [6, 6]                            # IN*H = 2*3
+    assert dy[0] == 0
+    assert dy[1] == 2 * 2 + 3 * 2 + 2 * 1                # s=2: rec_V 4 + rec_U 6 + out 2 = 12
