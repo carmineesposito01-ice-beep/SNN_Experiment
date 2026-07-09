@@ -174,6 +174,13 @@ The core already computes these but shows none of them:
     rank from an additive `read_weights["rank"]` = `rec_V.shape[0]` (**NOT `np.linalg.matrix_rank` — SVD
     triggers OMP #15** via numpy's own OpenMP, distinct from the Qt/libomp shim). Spec/plan
     `2026-07-09-synops-energy-dock*`. **92 sim tests green; core bit-identical.** **Phase 3 CLOSED.**
+  - **Phase 3 close-out QA + perf — ✅ DONE (2026-07-09, commit `02efefc`, report `2026-07-09-phase3-qa-perf-report.md`):**
+    2 review subagents (Python-quality + perf) + real frame-budget measurement. Perf: live frame is
+    **paint-bound** (pyqtgraph repaint of visible plots; NetState graph heaviest) — presets are the
+    mitigation; step (10.7 ms) and reconstruct (7.7 s) are frozen-core-bound. Fixed: top-down integrates
+    every tick (speed>1 drift), scrub source reverts on Step, reconstruct cached+signalled, Home/End
+    slider sync, `synops` DRY, `load_layout` logging, Safety named constants. Deferred+documented:
+    `__init__` SRP split, data-prep version-cache, visibility gating, reconstruct prefix-splice.
 - **Phase 4 — Post-run seal (one episode) + float-vs-fixed A/B + optional export.** Fixed-point SW
   model path; same-seed overlay; generic CSV/PNG.
 - **Phase 5 (ambitions).** GT sliders / live UKF re-identification, video/GIF, scenario form editor,
