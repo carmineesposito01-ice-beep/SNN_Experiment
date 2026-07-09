@@ -1,5 +1,7 @@
 # Time-Scrub Core Implementation Plan (Extension Phase 3b.1)
 
+> **STATUS: ✅ COMPLETE (2026-07-08).** Executed inline in `cf_sim` (TDD). T1 cursor lines + index-aware graph, T2 render_at, T3 app wiring — commits up to `0d09894` (pushed). 77 tests green; core untouched. Render-verified: paused at t=35, cursor line on every plot + net-graph/road reconstructed to t=35.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: superpowers:executing-plans (inline). Steps use checkbox (`- [ ]`) syntax.
 > Runs in **`cf_sim`** (offscreen for Qt). Spec: `docs/superpowers/specs/2026-07-08-scrub-core-design.md`. All in `sim/ui/*`; golden core untouched.
 

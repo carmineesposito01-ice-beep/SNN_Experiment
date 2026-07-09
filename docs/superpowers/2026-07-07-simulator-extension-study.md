@@ -153,8 +153,11 @@ The core already computes these but shows none of them:
     `Safety` (TTC/DRAC/time-headway, threshold refs), fed by a UI-layer `TrajectoryBuffer` of `StepResult`
     (probe untouched) + pure `metrics.py`; 11 docks, presets updated (Guida = driving story). Spec/plan
     `2026-07-08-trajectory-safety-panels*`. 72 tests green.
-  - **3b (pending):** wire ring buffer + `ReplayLog` into a global time cursor (pause/scrub, shortcuts);
-    per-neuron/input-encoding inspector, event timeline (click→seek).
+  - **3b.1 time-scrub core — ✅ DONE (2026-07-08, commits up to `0d09894`):** pause/scrub a global cursor
+    over the ring buffer — cursor line on all time-series docks, `NeuronGraphPanel` at `t`, `TopDownView`
+    reconstructed to `t`; slider + `Space`/`←`/`→`/`Home`/`End`. Spec/plan `2026-07-08-scrub-core*`. 77 tests green.
+  - **3b.2 (pending):** event-timeline dock (marks from `injector.log()`, click→seek).
+  - **3b.3 (pending):** per-neuron / input-encoding inspector; ReplayLog re-run beyond the 500-tick buffer.
   - **BACKLOG (deferred, user 2026-07-08): instantaneous energy / SynOps dock.** Completes the SpikeRate
     view. Energy/tick ≈ Σ(fan-out of firing neurons) — derivable from `spikes` + the NetGraph topology
     (already extracted for the graph edges). TBD how to surface: a number in the SpikeRate dock, or its own
