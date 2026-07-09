@@ -61,6 +61,28 @@ rebuilds) is real but a <3 % slice of a paint-bound frame.
 - **`NeuronGraphPanel._add_labels`** not idempotent (dormant — `set_topology` called once).
 - **PEP8**: semicolon-chained statements in the constructor (style only).
 
+## Optimization session (2026-07-09, commits `4aec6cf`..`<synops-energy pending>`)
+
+Driven by a 5-agent workflow (3 paint/data-prep/scene lenses → synthesis → adversarial batch verify;
+20 candidates → 9 ranked → verified). Implemented the verified, golden-safe wins (measured before→after):
+
+- **#5 NetState freeze + LUT/pen reuse** — `disableAutoRange()`/`setMouseEnabled(False)` (layout static) +
+  256-brush viridis LUT + singleton pens (no per-frame QPen/QBrush alloc). Per-paint: Overview 189→133 ms,
+  Neuro-debug 209→173 ms, Guida 90→72 ms, Identificazione 93→70 ms.
+- **#3 Throttle the heavy `_redraw_series` to ~15 fps** while running (physics + Road stay 30 fps; Step/pause
+  unthrottled). Halves the heavy-repaint load; the sim/Road no longer stutter behind the plots.
+- **#6 Version-memoized probe getters** (`_count` key, `record()` untouched) + `TrajectoryBuffer.arrays()` +
+  `status_text` reads the last frame. Dedupes params_matrix×5 / spikes_matrix×3 / arrays×2 per redraw.
+- **#7 EventTimeline** — skip the whole rebuild when unchanged (empty log / paused) + `TextItem` pool.
+- **#8 Prefix-splice deep-scrub reconstruct** — re-run only the pre-buffer prefix (`episode−500` ticks) and
+  splice with the live buffer. **7.7 s → 0.74 s (~10×)**; `spliced == full` regression test ships with it.
+
+**Deferred (verifier-flagged low value):** #4 visibility-gating (Qt already skips hidden paints → marginal,
+stale-data risk), #9 thin-skeleton toggle (subsumed by #1). **Available if wanted:** #1 rasterize the
+NetState skeleton (~1100 edges) into a one-time `ImageItem` blit — the biggest remaining per-paint cut on
+NetState-visible presets (Overview/Neuro-debug), but M-effort + fiddly image/extent alignment; not needed
+for the felt-slowdown fix which #3+#5 deliver.
+
 ## Test / golden status
 
 All sim tests green (~95); the frozen core stays **bit-identical** (stepper/backend/eventprop
