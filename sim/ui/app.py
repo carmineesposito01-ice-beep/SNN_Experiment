@@ -22,7 +22,7 @@ from sim.ui.layout import (DOCK_ORDER, LAYOUT_PATH, PRESETS, apply_overview, loa
 from sim.ui.loop import SimLoop
 from sim.ui.panels import (PARAM_COLORS, PARAM_NAMES, PARAM_UNITS, EventTimelinePanel,
                            NeuronGraphPanel, NeuronInspectorPanel, ParamPanel, SafetyPanel,
-                           SpikeRatePanel, TrajectoryPanel, VmemPanel)
+                           SpikeRatePanel, SynOpsPanel, TrajectoryPanel, VmemPanel)
 from sim.ui.reconstruct import reconstruct_history
 from sim.ui.trajectory import TrajectoryBuffer
 from sim.ui.topdown import TopDownView
@@ -55,6 +55,7 @@ class SimApp(QMainWindow):
         self._safety = SafetyPanel()
         self._timeline = EventTimelinePanel()
         self._inspector = NeuronInspectorPanel()
+        self._synops = SynOpsPanel()
         self._params = [ParamPanel(i, n, u, c)
                         for i, (n, u, c) in enumerate(zip(PARAM_NAMES, PARAM_UNITS, PARAM_COLORS))]
         for p in self._params[1:]:
@@ -63,12 +64,14 @@ class SimApp(QMainWindow):
         # param can be a hidden tab, whose stale range would corrupt SpikeRate's axis. A unified time
         # cursor is a Phase-3b (scrub) concern; here each time-series autoranges to its own data.
         self._ts_panels = [*self._params, self._vmem, self._spikerate, self._trajectory,
-                           self._safety, self._timeline, self._inspector]
+                           self._safety, self._timeline, self._inspector, self._synops]
         _topo = SoftwareBackend(self._champ.model)   # static topology for the node-link graph (once)
         _topo.reset()
         _w = _topo.read_weights()
         self._netstate.set_topology(_w["w_in"], _w["w_rec"], _w["w_out"])
         self._inspector.set_topology(_w["w_in"], _w["w_rec"], _w["w_out"])
+        self._synops.set_model(_w["w_in"].shape[1], _w["w_in"].shape[0],
+                               _w["w_out"].shape[0], _w["rank"])
         self._timeline.set_on_seek(self._seek_to)
         self._netstate.sigNeuronClicked.connect(self._on_neuron_selected)
         self._src_probe = None
@@ -76,7 +79,7 @@ class SimApp(QMainWindow):
 
         widgets = {"Road": self._topdown, "NetState": self._netstate, "SpikeRate": self._spikerate,
                    "v_mem": self._vmem, "Trajectory": self._trajectory, "Safety": self._safety,
-                   "Events": self._timeline, "Inspector": self._inspector,
+                   "Events": self._timeline, "Inspector": self._inspector, "SynOps": self._synops,
                    "v0": self._params[0], "T": self._params[1],
                    "s0": self._params[2], "a": self._params[3], "b": self._params[4]}
         self._area = DockArea()
@@ -251,6 +254,7 @@ class SimApp(QMainWindow):
             p.update_frame(probe)
         self._vmem.update_frame(probe)
         self._spikerate.update_frame(probe)
+        self._synops.update_frame(probe)
         self._trajectory.update_frame(traj)
         self._safety.update_frame(traj)
         self._netstate.update_frame(probe)                # head; scrub overrides via _render_at_cursor

@@ -7,7 +7,7 @@ import json
 import os
 
 DOCK_ORDER = ["Road", "NetState", "SpikeRate", "v_mem", "Trajectory", "Safety",
-              "Events", "Inspector", "v0", "T", "s0", "a", "b"]
+              "Events", "Inspector", "SynOps", "v0", "T", "s0", "a", "b"]
 _PARAMS = ["v0", "T", "s0", "a", "b"]
 LAYOUT_PATH = os.path.expanduser(os.path.join("~", ".cf_fsnn_sim", "layout.json"))
 
@@ -55,10 +55,11 @@ def apply_overview(area, docks):
     _show(area, docks, "SpikeRate", "right", "NetState")   # last: split NetState's row -> NetState | SpikeRate
     _show(area, docks, "Inspector", "right", "SpikeRate")
     _show(area, docks, "Events", "bottom", "Safety")
+    _show(area, docks, "SynOps", "bottom", "SpikeRate")
 
 
 def apply_guida(area, docks):
-    for d in ("NetState", "SpikeRate", "v_mem", "Inspector", "Events"):
+    for d in ("NetState", "SpikeRate", "v_mem", "Inspector", "Events", "SynOps"):
         _hide(docks, d)
     _show(area, docks, "Road", "top")
     _show(area, docks, "Trajectory", "bottom", "Road")   # driving story: road + trajectory + safety
@@ -69,7 +70,7 @@ def apply_guida(area, docks):
 
 
 def apply_identificazione(area, docks):
-    for d in ("v_mem", "NetState", "SpikeRate", "Trajectory", "Safety", "Inspector"):
+    for d in ("v_mem", "NetState", "SpikeRate", "Trajectory", "Safety", "Inspector", "SynOps"):
         _hide(docks, d)
     _show(area, docks, "Road", "top")
     _show(area, docks, "v0", "bottom", "Road")
@@ -85,6 +86,7 @@ def apply_neuro_debug(area, docks):
     _show(area, docks, "SpikeRate", "right", "NetState")
     _show(area, docks, "v_mem", "bottom", "NetState")
     _show(area, docks, "Inspector", "right", "v_mem")
+    _show(area, docks, "SynOps", "bottom", "SpikeRate")
     _show(area, docks, "Road", "bottom", "v_mem")
     _show(area, docks, "Events", "bottom", "Road")
     _show(area, docks, "v0", "right", "SpikeRate")

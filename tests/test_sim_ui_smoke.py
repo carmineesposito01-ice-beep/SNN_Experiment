@@ -177,10 +177,10 @@ def test_simapp_scrub_cursor(qapp):
 
 
 # --- Phase 3b (rest): deep-scrub + events + inspector ---
-def test_simapp_builds_13_docks(qapp):
+def test_simapp_builds_all_docks(qapp):
     win = SimApp(CHAMP)
-    assert "Events" in win._docks and "Inspector" in win._docks
-    assert len(win._docks) == 13
+    assert {"Events", "Inspector", "SynOps"} <= set(win._docks)
+    assert len(win._docks) == 14
 
 
 def test_simapp_deep_scrub_reconstructs_beyond_buffer(qapp):
@@ -220,3 +220,14 @@ def test_simapp_resume_reverts_to_live_source(qapp):
     win._on_run_toggled(True)                    # resume
     win._timer.stop()                            # headless: don't leave a live timer running
     assert win._src_probe is win._probe and win._src_traj is win._traj
+
+
+# --- Phase 3 close: SynOps / energy dock ---
+def test_simapp_has_synops_dock(qapp):
+    win = SimApp(CHAMP)
+    assert "SynOps" in win._docks and len(win._docks) == 14
+    assert win._synops._dims == (4, 32, 5, 8) and win._synops._dense == 800   # R33 baseline
+    win.select_scenario(0)
+    win._advance(0.5)
+    y = win._synops._total_c.getData()[1]
+    assert y is not None and y.size > 0 and float(y[-1]) >= 128               # >= static floor
