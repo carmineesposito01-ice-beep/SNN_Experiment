@@ -9,7 +9,7 @@ contengono il modello (quello è in `core/`) ma tutto ciò che lo circonda.
 |---|---|
 | `simulator/` | Il simulatore closed-loop: `engine.py` (dinamica), `metrics.py` (metriche operative/sicurezza), `plots.py`, `anim.py` (animazioni scenari). |
 | `closed_loop_eval.py` | Valutazione ad anello chiuso con plant/attrito/canale V2X realistici, contro l'oracolo. |
-| `platoon_eval.py` | Valutazione mesoscopica (plotone, string stability). |
+| `platoon_eval.py` | Valutazione mesoscopica (plotone, string stability) e macroscopica (simulazione ad anello, diagramma fondamentale). |
 | `identifiability.py` | Identificabilità dei parametri: matrice di Fisher (FIM), condizionamento, equifinalità, sensibilità causale, naturalisticità (distanza KS). |
 | `snn_showcase.py` | "Vetrina" di un episodio (identificazione + guida + spiking) e stime accessorie. |
 | `plot_diagnostics.py` | Grafici diagnostici di training (loss, gradienti, spike-rate, scatter parametri). |
@@ -25,6 +25,6 @@ contengono il modello (quello è in `core/`) ma tutto ciò che lo circonda.
 | `latency_model.py` | Conteggio operazioni per tick → WCET/timing (deadline 100 ms). |
 | `seu_inject.py` | Fault-injection software dei Single-Event-Upset (bit-flip nei pesi po2). |
 | `io_hil.py` | Modello del canale V2X e delle code (PDR/latenza/AoI, hold-last handler). |
-| `champion_io.py` | Caricamento robusto dei checkpoint champion (schema-detection). |
+| `champion_io.py` | Caricamento robusto dei checkpoint champion (schema-detection), condiviso con il simulatore e l'importer Simulink. |
 
 Questi profilatori alimentano `scripts/fpga_figures.py` e quindi `report/FPGA_REPORT`.

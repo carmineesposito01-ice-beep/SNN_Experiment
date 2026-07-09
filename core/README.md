@@ -12,6 +12,12 @@ gradiente esatto e l'ottimizzatore dedicato. Teoria completa in `report/HOW_IT_W
 | `prodigy_event.py` | `ProdigyEvent`: variante parameter-free di Prodigy adattata a EventProp (stima di `d` su gradiente EMA + throttle + ProbeUp). |
 | `__init__.py` | Export del package. |
 
+> Oltre alla baseline, `network.py` contiene le **varianti architetturali** confrontate negli
+> studi — `CF_FSNN_Net_Stacked`, `_StackedSkip`, `_MultiRate`, `_WTA`, `_Attn` — e le versioni per
+> l'addestramento a gradiente esatto (`CF_FSNN_Net_EventProp_Full`), tutte selezionabili con la
+> factory `build_model(variant=…)`. Gli snapshot self-contained sono in
+> [`../Arch_Tested/`](../Arch_Tested/).
+
 ## Note di co-design
 
 - Le quantità sono **hardware-friendly per costruzione**: leak = shift, moltiplicazione = shift
