@@ -1,11 +1,11 @@
-# CF_FSNN - Report di Validazione (v3)
+# CF_FSNN - Report di Validazione
 
 > **Chiusura dello studio EventProp: 4 champion (2 BPTT + 2 EventProp) a confronto con l'oracolo, su un evaluate esaustivo a 6-tier**
 
 > Champion validati: Raffaello, Leonardo (BPTT) · Donatello, Michelangelo (EventProp)  
 > Riferimento: Master Splinter (oracolo = ACC-IIDM coi parametri veri)  
 > Sorgente dei dati: results/evaluate/v3_TURTLE_POWER!!! (15 dimensioni)  
-> Documento della terna CF_FSNN — gemello di HOW_IT_WORKS_v3 (la rete) e FPGA_REPORT (il profilo hardware)  
+> Documento della terna: HOW_IT_WORKS_v3 (la rete), FPGA_REPORT (il profilo hardware)  e questo (risultati)  
 
 ---
 
@@ -31,9 +31,9 @@
 
 ## 1. Sommario esecutivo
 
-CF_FSNN è una rete neurale spiking (SNN, ~860-1400 parametri secondo il rango della ricorrenza, target FPGA PYNQ-Z1) che osserva un veicolo follower via V2X (gap, velocità, delta-v, velocità leader) e ne identifica i 5 parametri del modello di car-following ACC-IIDM: [v0, T, s0, a, b] (Treiber & Kesting, Ch.12). Questo documento è il report di CHIUSURA dello studio EventProp: mette a confronto i 4 champion emersi dallo studio - due addestrati con BPTT+surrogate gradient (Raffaello, Leonardo) e due con EventProp, il gradiente aggiunto esatto (Donatello, Michelangelo) - più l'oracolo, su una validazione closed-loop esaustiva a 6 livelli (15 dimensioni: dall'accuratezza alla sicurezza, al traffico, al profilo hardware FPGA).
+CF_FSNN è una rete neurale spiking (SNN, ~860-1400 parametri, a seconda del rango della ricorrenza, target FPGA PYNQ-Z1) che osserva un veicolo follower via V2X (gap, velocità, delta-v, velocità leader) e ne identifica i 5 parametri del modello di car-following ACC-IIDM: [v0, T, s0, a, b] (Treiber & Kesting, Ch.12). Questo documento è il report di CHIUSURA dello studio EventProp: mette a confronto i 4 champion emersi dallo studio - due addestrati con BPTT+surrogate gradient (Raffaello, Leonardo) e due con EventProp, il gradiente aggiunto esatto (Donatello, Michelangelo) - più l'oracolo, su una validazione closed-loop esaustiva a 6 livelli (15 dimensioni: dall'accuratezza alla sicurezza, al traffico, al profilo hardware FPGA).
 
-Verdetto. Tutti e 4 i champion guidano in sicurezza: in anello chiuso il loro tasso di collisione è allineato a quello dell'oracolo, con TTC pari o superiori e margini di frenata comparabili (guidano più cauti, non meno). Le collisioni residue non sono un difetto della rete ma un limite fisico: geometrie di cut-in inevitabili e fondo ghiacciato fanno collidere anche l'oracolo. Sul piano hardware emerge un discriminante netto: i due champion EventProp sono contrattivi (raggio spettrale della ricorrenza ρ<1) e non hanno neuroni morti, mentre i due BPTT sono espansivi (ρ>1) con ~31% di neuroni morti. Contrattivo = stato limitato in aritmetica a virgola fissa = sicuro su FPGA. Sommato alla migliore accuratezza, questo indica **Donatello (EventProp)** come candidato al deploy: ρ=0.05, accuratezza 84.75%, 0 neuroni morti. Avvertenza importante: tutti i risultati qui riportati sono in SIMULAZIONE closed-loop (plant e oracolo simulati); il deploy su FPGA è progettato ma NON ancora validato in hardware - la conversione in HDL è un problema aperto (sezione 11).
+Verdetto. Tutti e 4 i champion guidano in sicurezza: in anello chiuso il loro tasso di collisione è allineato a quello dell'oracolo, con TTC pari o superiori e margini di frenata comparabili (guidatori più conservativi, non meno). Le collisioni residue non sono un difetto della rete ma un limite fisico: geometrie di cut-in inevitabili e fondo ghiacciato che fanno collidere anche l'oracolo. Sul piano hardware emerge un discriminante netto: i due champion EventProp sono contrattivi (raggio spettrale della ricorrenza ρ<1) e non hanno neuroni morti, mentre i due BPTT sono espansivi (ρ>1) con ~31% di neuroni morti. Contrattivo = stato limitato in aritmetica a virgola fissa = sicuro su FPGA. Sommato alla migliore accuratezza, questo indica **Donatello (EventProp)** come candidato al deploy: ρ=0.05, accuratezza 84.75%, 0 neuroni morti. Avvertenza importante: tutti i risultati qui riportati sono in SIMULAZIONE closed-loop (plant e oracolo simulati); il deploy su FPGA è progettato ma NON ancora validato in hardware - la conversione in HDL è un problema aperto (sezione 11).
 
 | Asse | Risultato | Lettura |
 |---|---|---|
@@ -59,46 +59,46 @@ Architettura: input(4) -> strato nascosto ALIF (neuroni spiking con soglia adatt
 
 ### 2.2 EventProp vs BPTT: un fronte di Pareto
 
-Lo studio ha mappato e chiuso il confronto tra due modi di calcolare il gradiente attraverso i tick della SNN: BPTT con surrogate gradient (si "ammorbidisce" la soglia non-differenziabile dello spike) contro EventProp (adjoint esatto sugli istanti di spike). Il risultato è un fronte di Pareto, non un vincitore secco: il champion BPTT vince di poco sulla fisica pura (~5.5%), ma EventProp vince su NRMSE, su STABILITA' (raggio spettrale ρ 0.05-0.39 negli EventProp contro 1.16-2.99 nei BPTT champion — le famiglie BPTT storiche scartate toccavano ~22) e su FPGA-friendliness; ed entrambi guidano in sicurezza. Il presente evaluate quantifica quel fronte su tutte le dimensioni che contano per un deploy neuromorfico.
+Lo studio ha mappato e chiuso il confronto tra due modi di calcolare il gradiente attraverso i tick della SNN: BPTT con surrogate gradient (si "ammorbidisce" la soglia non-differenziabile dello spike) contro EventProp (adjoint esatto sugli istanti di spike). Il risultato è un fronte di Pareto, non un vincitore secco: il champion BPTT vince di poco sulla fisica pura (~5.5%), ma EventProp vince su NRMSE, su STABILITA' (raggio spettrale ρ 0.05-0.39 negli EventProp contro 1.16-2.99 nei BPTT champion — le famiglie BPTT storiche scartate toccavano ~22) e su FPGA-friendliness; ed entrambi guidano in sicurezza. Il presente evaluate quantifica quel fronte su tutte le dimensioni che contano per il deploy di riferimento.
 
 > **Nota.** ρ(U·V) è il raggio spettrale della ricorrenza low-rank: ρ<1 = mappa contrattiva (stato limitato, quantizzazione sicura in virgola fissa), ρ>1 = espansiva (rischio saturazione/overflow). I FONDAMENTI teorici sono in HOW_IT_WORKS_v3 §11; qui il RISULTATO: EventProp produce reti contrattive per costruzione (confermato sui champion, §9.3) - un vantaggio strutturale sul silicio.
 
 
 ### 2.3 I 4 champion e l'oracolo
 
-Il confronto usa 4 champion più l'oracolo. Tutti i champion condividono la stessa struttura (input(4) → ALIF(32) → LI(5)); differiscono per metodo e ricetta di addestramento e per il rango della ricorrenza (8 nei BPTT, 16 negli EventProp). L'oracolo (nome in codice "Master Splinter") NON è una rete: è il modello ACC-IIDM con i parametri veri, e serve da limite superiore di riferimento. I nomi sono un tema (le Tartarughe Ninja); la run porta l'etichetta "TURTLE POWER!!!".
+Il confronto usa 4 champion più l'oracolo. Tutti i champion condividono la stessa struttura (input(4) → ALIF(32) → LI(5)); differiscono per metodo e ricetta di addestramento e per il rango della ricorrenza (8 nei BPTT, 16 negli EventProp). L'oracolo (nome in codice "Master Splinter") NON è una rete: è il modello ACC-IIDM con i parametri veri, e serve da riferimento. I nomi sono un tema (le Tartarughe Ninja), ovviamente.
 
 | Champion | Checkpoint | Metodo | Accuratezza | ρ(U·V) | Carattere |
 |---|---|---|---|---|---|
-| Raffaello | R33_C2_A1_T12_fix | BPTT | 69.34% | 2.99 | Prodigy, aggressivo |
-| Leonardo | LS3_PEAK_R0_launch_d03 | BPTT | 77.53% | 1.16 | BPTT, conservativo |
-| Donatello | PE_t05_gp0002 | EventProp | 84.75% | 0.05 | EventProp, best-NRMSE |
-| Michelangelo | A_lr1e2_t06_r16 | EventProp | 79.18% | 0.39 | EventProp, best-Adam |
+| Raffaello | R33_C2_A1_T12_fix | BPTT(Prodigy) | 69.34% | 2.99 | aggressivo |
+| Leonardo | LS3_PEAK_R0_launch_d03 | BPTT(Prodigy) | 77.53% | 1.16 | conservativo |
+| Donatello | PE_t05_gp0002 | EventProp(ProdigyEvent) | 84.75% | 0.05 | equilibrato, best-NRMSE |
+| Michelangelo | A_lr1e2_t06_r16 | EventProp(AdamW) | 79.18% | 0.39 | conservativo |
 | Master Splinter | parametri veri | oracolo (ACC-IIDM) | 100% | - | riferimento |
 
 
 ## 3. Metodologia: l'evaluate a 6-tier
 
-L'evaluate è passato da validazione "data-driven" a "physics/network-driven": misura non solo quanto la rete indovina i numeri, ma come si comporta quando quei numeri GUIDANO davvero un'auto, sotto plant fisico realistico e canale V2X imperfetto, e che aspetto ha la rete come futuro circuito. Le 15 dimensioni sono organizzate in 6 tier:
+L'evaluate determina non solo quanto la rete indovina i numeri, ma come si comporta quando quei numeri GUIDANO davvero un'auto, sotto plant fisico realistico e canale V2X imperfetto, e che aspetto ha la rete come futuro circuito. Le 15 dimensioni sono organizzate in 6 tier:
 
 | Tier | Dimensioni (sezioni della run) | Cosa misura |
 |---|---|---|
-| T0 reporting | 00 Scorecard, 01 Accuratezza | identificazione, distribuzioni, metriche continue |
-| T1 sicurezza+coda | 02 Sicurezza, 09 Traiettorie, 10 Reachability, 11 Breakdown | SSM estese, scenari di coda, curva di rottura |
-| T2 plant+canale | 06 V2X, 07 VehicleDynamics | attuatore/attrito/pendenza, PDR/latenza/AoI |
-| T3 traffico | 03 String, 12 Mesoscopico, 13 Macroscopico | string stability, plotone, diagramma fondamentale |
-| T4 identificabilità | 04 Identifiability | FIM, equifinalità, causale, naturalisticità |
-| T5 FPGA | 05 Quantizzazione, 08 Energia/Spiking | Qm.n/po2, energia, salute della rete, ρ |
+| T0 - Reporting | 00 Scorecard, 01 Accuratezza | identificazione, distribuzioni, metriche continue |
+| T1 - Safety | 02 Sicurezza, 09 Traiettorie, 10 Reachability, 11 Breakdown | SSM estese, scenari di coda, curva di rottura |
+| T2 - Robustezza | 06 V2X, 07 VehicleDynamics | attuatore/attrito/pendenza, PDR/latenza/AoI |
+| T3 - Traffico | 03 String, 12 Mesoscopico, 13 Macroscopico | string stability, plotone, diagramma fondamentale |
+| T4 - Identificabilità | 04 Identifiability | FIM, equifinalità, causale, naturalisticità |
+| T5 - FPGA-Friendly | 05 Quantizzazione, 08 Energia/Spiking | Qm.n/po2, energia, salute della rete, ρ |
 
 
 ### 3.1 Il simulatore closed-loop e l'oracolo
 
-A ogni passo (Dt=0.1 s) la rete riceve lo stato osservato dell'ego, predice [v0, T, s0, a, b], e questi parametri alimentano il controllore ACC-IIDM che calcola l'accelerazione; l'ego avanza e il ciclo si ripete (guida ad anello chiuso, non identificazione offline). L'oracolo gira lo stesso loop coi parametri veri: confrontarli isola l'effetto dell'errore di identificazione sul comportamento.
+A ogni passo (Dt=0.1 s) la rete riceve lo stato osservato dell'ego, predice [v0, T, s0, a, b], e questi parametri alimentano il controllore ACC-IIDM che calcola l'accelerazione; l'ego avanza e il ciclo si ripete (guida ad anello chiuso). L'oracolo gira lo stesso loop coi parametri veri: confrontarli isola l'effetto dell'errore di identificazione sul comportamento.
 
 
 ### 3.2 Scenari e metriche
 
-Scenari avversari: following, stop&go, hard-brake, cut-in (realistico ed evitabile), aggressive cut-in, panic-stop, sinusoidale; l'accuratezza è inoltre stratificata su 6 famiglie (highway, urban, launch, freeflow, truck, mixed). Le metriche di sicurezza usano indicatori CONTINUI (surrogate safety measures) che non saturano come il solo tasso di collisione:
+Scenari avversari: following, stop&go, hard-brake, cut-in (realistico ed evitabile), aggressive cut-in (non evitabile), panic-stop, sinusoidale; l'accuratezza è inoltre stratificata su 6 famiglie (highway, urban, launch, freeflow, truck, mixed). Le metriche di sicurezza:
 
 | Metrica | Definizione | Cosa cattura |
 |---|---|---|
@@ -138,7 +138,7 @@ Donatello (EventProp) è il più accurato (84.75%, NRMSE media 0.152), seguito d
 
 ### 4.2 Dove ogni parametro diventa osservabile (stratificazione)
 
-La NRMSE stratificata per famiglia di scenario mostra QUANDO ciascun parametro è osservabile: v0 richiede tratti di free-flow/highway (Raffaello lo sbaglia proprio in urban, dove v0 non è eccitato), a emerge nei transitori di accelerazione (launch), b nelle frenate. È la firma della stessa non-identificabilità strutturale del modello car-following già nota dallo studio.
+La NRMSE stratificata per famiglia di scenario mostra QUANDO ciascun parametro è osservabile: **v0** richiede tratti di free-flow/highway (Raffaello lo sbaglia proprio in urban, dove **v0** non è eccitato), **a** emerge nei transitori di accelerazione (launch), **b** nelle frenate. È la firma della stessa non-identificabilità strutturale del modello car-following già nota dall'appendice del file **HOW_IT_WORKS**.
 
 ![Figura 4.2 - NRMSE per parametro x famiglia di scenario, per ciascun champion. Le celle più scure segnano dove un parametro resta poco osservabile (es. v0 in urban per Raffaello, b in freeflow per quasi tutti).](figures_validation_v3/nrmse_stratified.png)
 *Figura 4.2 - NRMSE per parametro x famiglia di scenario, per ciascun champion. Le celle più scure segnano dove un parametro resta poco osservabile (es. v0 in urban per Raffaello, b in freeflow per quasi tutti).*
@@ -174,7 +174,7 @@ La sensibilità causale (risposta delle predizioni a interventi controllati sul 
 
 ### 5.1 Verdetto: sicuri come l'oracolo
 
-In anello chiuso i 4 champion collidono quanto l'oracolo: il tasso di collisione va da 6.67% (Raffaello) a 7.56% (Donatello), contro 7.56% dell'oracolo. Il residuo non è la rete: deriva da geometrie di cut-in fisicamente inevitabili (vedi curva di rottura, 6.3) in cui anche l'oracolo collide. Sul TTC minimo tutti e 4 i champion sono pari o superiori all'oracolo (5.576 s), quindi più cauti. Sul margine di frenata minimo Leonardo (7.63 m) e Michelangelo (7.59 m) superano l'oracolo (7.56 m), mentre Raffaello (7.31 m) e Donatello (7.26 m) restano appena sotto: differenza piccola, che non intacca il tasso di collisione (allineato all'oracolo). Nota: Leonardo mostra un picco isolato di DRAC (97.45 m/s2) in un singolo scenario - un caso-limite da tenere d'occhio, non un pattern.
+In anello chiuso i 4 champion collidono quanto l'oracolo: il tasso di collisione va da 6.67% (Raffaello) a 7.56% (Donatello), contro 7.56% dell'oracolo. Il residuo non è la rete: deriva da geometrie di cut-in fisicamente inevitabili (vedi curva di rottura, 6.3) in cui anche l'oracolo collide. Sul TTC minimo tutti e 4 i champion sono pari o superiori all'oracolo (5.576 s), quindi più cauti. Sul margine di frenata minimo Leonardo (7.63 m) e Michelangelo (7.59 m) superano l'oracolo (7.56 m), mentre Raffaello (7.31 m) e Donatello (7.26 m) restano appena sotto: differenza piccola, che non intacca il tasso di collisione (allineato all'oracolo).
 
 | Sorgente | collis. | brake margin | min TTC | min gap | impact dv | max DRAC | rms jerk |
 |---|---|---|---|---|---|---|---|
@@ -216,7 +216,7 @@ Il modo più diretto di osservare la guida è la traiettoria in anello chiuso: g
 
 ### 6.1 Plant: asciutto, bagnato, ghiaccio
 
-Ripetendo gli scenari sotto attrito degradato, la collisione sale con la strada, non con la rete: da ~8.15% su asciutto a ~26.67% su bagnato fino a ~59.26% su ghiaccio - e l'oracolo si comporta uguale (63.70% su ghiaccio). Il ~60% di collisioni su ghiaccio è un limite fisico (coefficiente d'attrito troppo basso per fermarsi in tempo), non un errore della SNN; anzi, su ghiaccio i champion mantengono un margine di frenata leggermente migliore dell'oracolo.
+Ripetendo gli scenari sotto attrito degradato, la collisione sale con il peggioramento delle condizioni stradali, non con la rete: da ~8.15% su asciutto a ~26.67% su bagnato fino a ~59.26% su ghiaccio - e l'oracolo si comporta nello stesso modo (63.70% su ghiaccio). Il ~60% di collisioni su ghiaccio è un limite fisico (coefficiente d'attrito troppo basso per fermarsi in tempo), non un errore della SNN; anzi, su ghiaccio i champion mantengono un margine di frenata leggermente migliore dell'oracolo.
 
 ![Figura 6.1 - Collisione e margine di frenata su asciutto/bagnato/ghiaccio. La degradazione è guidata dall'attrito ed è identica tra champion e oracolo.](figures_validation_v3/plant.png)
 *Figura 6.1 - Collisione e margine di frenata su asciutto/bagnato/ghiaccio. La degradazione è guidata dall'attrito ed è identica tra champion e oracolo.*
@@ -285,12 +285,12 @@ Il canale V2X è modellato in modo realistico: probabilità di consegna (PDR), l
 
 ## 9. Profilo FPGA: quantizzazione, energia, salute della rete (Tier 5)
 
-> **Nota.** Questa sezione è il SOMMARIO del profilo FPGA nel contesto dell'evaluate a 6-tier: i tre findings chiave (quantizzazione fixed-point, energia, discriminante di stabilità). Il profilo hardware COMPLETO — readiness/scorecard, pesi po2, fixed-point, spiking, energia, timing/WCET, risorse/DSE, SEU, I/O-HIL, thermal (45 figure su 10 sezioni) — è nel documento dedicato FPGA_REPORT (Fase A pre-silicio).
+> **Nota.** Questa sezione è il SOMMARIO del profilo FPGA nel contesto dell'evaluate a 6-tier: i tre findings chiave (quantizzazione fixed-point, energia, discriminante di stabilità). Il profilo hardware COMPLETO — readiness/scorecard, pesi po2, fixed-point, spiking, energia, timing/WCET, risorse/DSE, SEU, I/O-HIL, thermal (45 figure su 10 sezioni) — è nel documento dedicato FPGA_REPORT (solo Fase A pre-silicio).
 
 
 ### 9.1 Quantizzazione: fixed-point e potenze-di-due
 
-La rete tollera una quantizzazione aggressiva. In virgola fissa l'errore di identificazione resta praticamente invariato fino a 2 bit di parte frazionaria (es. Donatello: 1.480 in float -> 1.478 a 2 bit). Con pesi a potenze-di-due (po2, che trasformano la moltiplicazione in uno shift-add) l'errore è insensibile al numero di bit (dipende dall'esponente, non dalla mantissa) e, soprattutto, viene ASSORBITO dal training: il "peso di 2" è già quello nativo. L'ablazione dei pesi mostra delta_qat_absorbed <= 0 per 3 champion su 4 (accendere po2 non peggiora, anzi migliora), mentre Raffaello subisce un piccolo aumento (+0.16).
+La rete tollera una quantizzazione aggressiva. In virgola fissa l'errore di identificazione resta praticamente invariato fino a 2 bit di parte frazionaria (es. Donatello: 1.480 in float -> 1.478 a 2 bit). Con pesi a potenze-di-due (po2, che trasformano la moltiplicazione in uno shift-add) l'errore è insensibile al numero di bit (dipende dall'esponente, non dalla mantissa) e, soprattutto, viene ASSORBITO dal training: il "peso di 2" è già quello nativo. L'ablazione dei pesi mostra delta_qat_absorbed <= 0 per 3 champion su 4 (il po2 non peggiora, anzi migliora), mentre Raffaello subisce un piccolo aumento (+0.16).
 
 ![Figura 9.1 - Sinistra: errore vs bit in fixed-point (piatto fino a 2 bit); le x segnano la variante po2. Destra: il QAT assorbe i pesi po2 (barre verdi = po2 non peggiora l'errore).](figures_validation_v3/val_quant.png)
 *Figura 9.1 - Sinistra: errore vs bit in fixed-point (piatto fino a 2 bit); le x segnano la variante po2. Destra: il QAT assorbe i pesi po2 (barre verdi = po2 non peggiora l'errore).*

@@ -550,12 +550,12 @@ def build_doc():
     A = D.append
 
     A(('cover', {
-        'title': 'CF_FSNN — Come Funziona (v3)',
-        'subtitle': 'Una rete neuronale spiking per l\'identificazione di un controllore di '
-                    'car-following: teoria delle SNN, addestramento (BPTT+surrogate, EventProp, STDP), '
+        'title': 'CF_FSNN — Come Funziona',
+        'subtitle': 'Una rete neuronale spiking per la predizione di parametri di '
+                    'car following: teoria delle SNN, addestramento (BPTT+surrogate, EventProp, STDP), '
                     'architettura del progetto, approccio PINN e co-design per FPGA',
         'meta': [
-            'Documento della terna CF_FSNN — gemello di VALIDATION_REPORT_v3 (i risultati) e FPGA_REPORT (il profilo hardware)',
+            'Questo documento fa parte di una terna (HOW_IT_WORKS(concetti della rete) - VALIDATION_REPORT(risultati campioni) - FPGA_REPORT(profilo hardware **parziale**)',
             'Contenuto fondato sul codice sorgente: core/network.py, core/neurons.py, core/hardware.py, core/eventprop.py, train.py',
         ],
     }))
@@ -616,11 +616,6 @@ def build_doc():
     A(('callout', 'Filo conduttore. Ogni decisione di progetto vive in un triangolo con tre vertici in '
                   'tensione: bio-realismo, addestrabilità, efficienza hardware. Guadagnare su un vertice '
                   'costa sugli altri; la §17 rilegge tutte le scelte come punti in questo spazio.'))
-    A(('callout', 'Documenti gemelli. Questo documento spiega la rete. VALIDATION_REPORT_v3 riporta i '
-                  'risultati — i quattro champion, il verdetto di deploy, le dimensioni di validazione — '
-                  'e FPGA_REPORT ne profila l\'implementazione hardware. Le grandezze introdotte qui '
-                  '(ρ(U·V), ALIF, po2, EventProp, sparsità) sono usate là dandole per acquisite.'))
-
     A(('h2', '1. Le tre generazioni di reti neurali'))
     A(('p', 'La SNN è la "terza generazione" di rete neurale (Maass 1997). La prima generazione è il '
            'neurone a soglia di McCulloch & Pitts (1943): unità con uscita binaria, senza nonlinearità '
@@ -630,13 +625,13 @@ def build_doc():
            'tempo continuo: il tempo non è un semplice indice di strato, ma parte della rappresentazione. '
            'Un singolo spike temporizzato può, in linea di principio, codificare più informazione di un '
            'valore rate-based, e su hardware neuromorfico l\'energia scala con gli eventi.'))
-    A(('callout', 'Un equivoco da evitare: "terza generazione" non significa "più accurata", ma un asse '
-                  'di ottimizzazione diverso — energia, latenza, idoneità al silicio — spesso pagato con '
-                  'un po\' di accuratezza. Su GPU, per questo stesso compito, un MLP sarebbe più semplice '
+    A(('callout', 'Un equivoco da evitare: "terza generazione" non significa "migliore/più accurata". L\'asse '
+                  'di ottimizzazione è diverso — energia, latenza, idoneità al silicio — spesso pagati '
+                  'su altri aspetti. Su GPU, per questo stesso compito, un MLP sarebbe più semplice '
                   'e preciso; il valore della SNN sta nel target FPGA.'))
 
     A(('h2', '2. ANN vs SNN su assi multipli'))
-    A(('p', 'Il confronto non si riduce a un solo asse ("le SNN sono più efficienti"): le due famiglie '
+    A(('p', 'Come detto, il confronto non si riduce a un solo asse ("le SNN sono più efficienti"): le due famiglie '
            'differiscono su almeno sei assi indipendenti, ciascuno con una conseguenza concreta per '
            'CF_FSNN.'))
     A(('table', (
@@ -719,13 +714,13 @@ def build_doc():
                   'adattiva aggiunge una dinamica da trattare nell\'adjoint) sia la conversione in HDL, '
                   'perché gli strumenti standard di conversione (FINN; Umuroglu et al. 2017) non '
                   'supportano il neurone ALIF (§16). Inoltre una soglia iniziale troppo alta negli strati '
-                  'non di ingresso può spegnere i neuroni: la taratura conta.'))
+                  'non di ingresso può spegnere i neuroni: in breve, la loro taratura conta.'))
 
     A(('h2', '5. Codifica neurale: input continuo, spiking interno'))
     A(('p', 'Come entrano ed escono i numeri da una rete a impulsi? Esistono molti schemi di codifica '
            '(rate coding = conteggio di spike in una finestra; codifica temporale = tempi precisi degli '
            'spike; time-to-first-spike; popolazione; fase; burst). In CF_FSNN, però, l\'input non è '
-           'codificato in spike — è l\'equivoco più frequente da prevenire. I quattro segnali V2X, '
+           'codificato in spike — è l\'equivoco da prevenire. I quattro segnali V2X, '
            'normalizzati in [0,1], entrano come corrente diretta iniettata nel potenziale, non come '
            'treni di impulsi Poisson o a latenza. Solo lo strato nascosto ALIF genera spike; lo strato '
            'di uscita è un integratore continuo (LI, Leaky Integrator) senza spike. La rete è quindi '
@@ -796,8 +791,8 @@ def build_doc():
     A(('p', 'Il surrogate produce un gradiente approssimato — la sua forma dipende dal kernel — e quindi '
            'distorto (biased): è proprio questo il movente per studiare EventProp (§8). La ricetta di '
            'produzione, con le patologie che previene: ALIF + soft reset + surrogate + Adam '
-           '(Kingma & Ba 2015) + gradient clipping a norma 1.0 (indispensabile per il BPTT su SNN) + '
-           'poche epoche. Senza clipping il gradiente esplode; se lo spike rate collassa a zero (neuroni '
+           '(Kingma & Ba 2015) + gradient clipping a norma 1.0 (indispensabile per il BPTT su SNN). '
+           'Senza clipping il gradiente esplode; se lo spike rate collassa a zero (neuroni '
            'morti) il gradiente sparisce, da cui il regolatore L_sr (§12). Un segnale diagnostico '
            'ricorrente: reti da 864 a 9605 parametri si arrestano tutte sullo stesso plateau di errore, '
            'indizio che il collo di bottiglia non è la capacità ma il gradiente e l\'identificabilità.'))
@@ -811,12 +806,11 @@ def build_doc():
            'errore dipende dalla distorsione del surrogate, un gradiente esatto dovrebbe superarlo.'))
     A(('img', (F['eventprop'], 'Figura 8.1 — EventProp. A sinistra: memoria O(#spike) contro O(T·N) del '
                                'BPTT. A destra: la variabile aggiunta λ è propagata all\'indietro e '
-                               '"salta" solo agli istanti di spike; ai crossing marginali il termine '
-                               '1/denom può divergere.')))
+                               '"salta" solo agli istanti di spike.')))
     A(('p', 'La fragilità di EventProp è numerica: il salto dell\'adjoint contiene un fattore 1/denom '
            'con denom ≈ (drive − soglia); se uno spike è marginale (il potenziale supera la soglia di '
            'pochissimo) denom tende a zero e il gradiente diverge. Nel progetto questo è governato non '
-           'tanto da clamp numerici di sicurezza, quanto da un vincolo spettrale: un termine di loss che '
+           'tanto da clamp numerici di sicurezza, quanto da un **vincolo spettrale**: un termine di loss che '
            'mantiene il raggio spettrale della ricorrenza ρ(U·V) sotto una soglia (§11). La causa '
            'profonda dell\'instabilità era proprio ρ che cresceva facendo divergere l\'adjoint; '
            'vincolarlo rende EventProp contrattivo per costruzione. L\'adjoint completo della soglia '
@@ -825,7 +819,7 @@ def build_doc():
     A(('callout', 'Cosa EventProp non risolve: non tocca l\'identificabilità/equifinalità (§9) né '
                   'garantisce di uscire dai minimi locali. Fornisce il gradiente giusto, non un '
                   'paesaggio migliore. In CF_FSNN è oggetto di uno studio dedicato (registrato in '
-                  'EVENTPROP_STATUS.md); l\'addestramento di produzione resta BPTT+surrogate. '
+                  'EVENTPROP_STATUS.md). '
                   'Concettualmente è un ponte tra le regole locali (STDP) e il gradiente globale (BPTT).'))
 
     A(('h2', '9. Metodo 3 — STDP e il limite di identificabilità sloppy'))
@@ -838,6 +832,7 @@ def build_doc():
            'modo di propagare l\'informazione "l\'accelerazione ricostruita è errata di 4.2 m/s²" fino '
            'ai pesi. Non è inutile — è ottima per feature non supervisionate e apprendimento on-chip — '
            'ma è fuori scopo qui.'))
+    A(('h3', 'Appendice - Identificabilità'))
     A(('p', 'Questa è anche la sede naturale per un concetto spesso trascurato: l\'identificabilità '
            'sloppy. Dai soli dati di car-following, i parametri a e b entrano quasi esclusivamente '
            'attraverso il prodotto √(a·b) nel gap desiderato s*:'))
@@ -880,10 +875,11 @@ def build_doc():
     A(('img', (F['arch'], 'Figura 10.1 — Architettura baseline (864 parametri). Lo strato nascosto ALIF '
                           'combina pesi po2, ritardi assonali e una ricorrenza a basso rango U·V; '
                           'l\'uscita è un integratore continuo, decodificato nei cinque parametri fisici.')))
-    A(('p', 'Ricorrenza a basso rango. Invece di una matrice ricorrente piena 32×32 (1024 pesi), la '
-           'ricorrenza è fattorizzata come prodotto di due matrici, U(32×8) e V(8×32), per 512 pesi '
+    A(('h3', 'Ricorrenza a basso rango'))
+    A(('p', 'Per quanto riguarda i pesi della ricorrenza interna, invece di una matrice piena 32×32 (1024 pesi), la '
+           'ricorrenza è fattorizzata come prodotto di due matrici, U(32×8) e V(8×32), per un totale di 512 pesi memorizzati '
            '(metà), con inizializzazione ortogonale (gain 0.2). Applicata al vettore di spike del tick '
-           'precedente, produce la corrente ricorrente:'))
+           'precedente, la corrente ricorrente prodotta:'))
     A(('img', (F['eq_recur'], 'Equazione 10.1 — Corrente ricorrente (core/network.py). S = vettore di '
                               'spike dello strato nascosto (32) al tick precedente; U, V = fattori della '
                               'ricorrenza; Q(·) = quantizzazione po2 (U e V sono quantizzate '
@@ -979,10 +975,8 @@ def build_doc():
                   'di ciascun termine resti confrontabile (per esempio λ_phys·L_phys ≈ 0.1·0.2 ≈ 0.02). '
                   'L\'unico peso con una motivazione scritta è λ_sr = 0.5, calibrato su questo criterio '
                   'dopo un addestramento in cui la rete degenerava verso uno spike rate troppo basso; il '
-                  'target 0.15 è il centro di una zona di firing sana (~10–25%) per una SNN. I valori '
-                  'λ_phys, λ_OU, λ_bc non derivano da uno sweep completato né da un '
-                  'valore di letteratura: uno sweep dedicato era pianificato ma non è stato eseguito, e '
-                  'un\'ablazione mostra che azzerare i termini fisici sposta la validazione in modo '
+                  'target 0.15 è il centro di una zona di firing sana (~10–25%) per una SNN. '
+                  'Un\'ablazione mostra che azzerare i termini fisici sposta la validazione in modo '
                   'trascurabile — i termini PINN pesano poco sull\'accelerazione, pur restando utili '
                   'come vincoli di plausibilità.'))
 
@@ -1027,7 +1021,7 @@ def build_doc():
         ],
     )))
     A(('p', 'A valle, una provvista anti-crash limita l\'accelerazione all\'intervallo [−9, a] m/s².'))
-    A(('callout', 'Due dettagli del codice, spesso trascurati. Primo: la rete predice solo cinque dei '
+    A(('callout', 'Due dettagli del codice da non trascurare. Primo: la rete predice solo cinque dei '
                   'sette parametri — coolness (c = 0.99) e l\'esponente δ (= 4) sono fissi. Secondo: '
                   's_safe è il gap clampato a un minimo di 2.0 m, non 0.5 m; è una scelta di controllo '
                   'del gradiente (con 0.5, in autostrada, il termine v/s_safe raggiungeva ~76 e la '
@@ -1035,7 +1029,7 @@ def build_doc():
                   'di dati.'))
 
     A(('h2', '14. Il generatore di dati sintetici'))
-    A(('p', 'I dati non provengono da auto reali (costose da strumentare): sono traiettorie sintetiche '
+    A(('p', 'I dati non provengono da auto reali: sono traiettorie sintetiche '
            'generate con lo stesso modello ACC-IIDM. Ogni traiettoria dura 120 s (di cui 20 s di warmup '
            'esclusi dalla loss), cioè circa 1000 passi utili da 0.1 s; il dataset comprende 5000 '
            'traiettorie di training, 500 di validazione, 500 di test. Per ogni passo si registrano '
@@ -1054,8 +1048,7 @@ def build_doc():
            '(highway 50%, urban 30%, truck 10%, mixed 10%, con l\'aggiunta di free-flow e launch per '
            'rendere osservabili v0 e a); profili del leader (costante, sinusoidale, stop-and-go, free, '
            'launch); cut-in nel 20% dei casi (un secondo veicolo si inserisce, gap → 5–15 m); perdita di '
-           'pacchetti V2X ~2% (i frame persi escono da L_data ma restano in L_phys). Una variante "wide" '
-           'campiona uniformemente i cinque parametri per ampliare la copertura. Le proporzioni degli '
+           'pacchetti V2X ~2% (i frame persi escono da L_data ma restano in L_phys). Le proporzioni degli '
            'scenari e le probabilità sono scelte di configurazione, calibrate per coprire i regimi che '
            'rendono osservabili i diversi parametri (§9), non derivate da un dataset naturalistico.'))
 
@@ -1075,7 +1068,7 @@ def build_doc():
            'i pesi quantizzati, nel backward il gradiente attraversa la quantizzazione come se fosse '
            'l\'identità e aggiorna i pesi in virgola mobile. La quantizzazione è quindi forward-only '
            'durante l\'addestramento: per questo — in modo controintuitivo — il po2 pesa solo ~0.2% sul '
-           'plateau di errore, e l\'affermazione "quantizzare rovina tutto" qui non regge. La coerenza '
+           'plateau di errore. La coerenza '
            'hardware è totale: anche il leak di membrana è un bit-shift (fattore 7/8) e il reset è '
            'sottrattivo, senza divisori.'))
 
@@ -1390,7 +1383,7 @@ def render_pdf(doc, outpath):
         canvas.saveState()
         canvas.setFont('DJ', 7.5)
         canvas.setFillColor(colors.HexColor('#888888'))
-        canvas.drawString(2 * cm, 1.1 * cm, 'CF_FSNN — Come Funziona (v3)')
+        canvas.drawString(2 * cm, 1.1 * cm, 'CF_FSNN — Come Funziona')
         canvas.drawRightString(A4[0] - 2 * cm, 1.1 * cm, f'pag. {docx.page}')
         canvas.restoreState()
 

@@ -38,10 +38,12 @@ ORACLE = 'Master Splinter'
 SRC = CHAMP + [ORACLE]
 METHOD = {'Raffaello': 'BPTT', 'Leonardo': 'BPTT',
           'Donatello': 'EventProp', 'Michelangelo': 'EventProp'}
+METHOD_OPT = {'Raffaello': 'BPTT(Prodigy)', 'Leonardo': 'BPTT(Prodigy)',
+              'Donatello': 'EventProp(ProdigyEvent)', 'Michelangelo': 'EventProp(AdamW)'}
 CKPT = {'Raffaello': 'R33_C2_A1_T12_fix', 'Leonardo': 'LS3_PEAK_R0_launch_d03',
         'Donatello': 'PE_t05_gp0002', 'Michelangelo': 'A_lr1e2_t06_r16'}
-CHARACTER = {'Raffaello': 'Prodigy, aggressivo', 'Leonardo': 'BPTT, conservativo',
-             'Donatello': 'EventProp, best-NRMSE', 'Michelangelo': 'EventProp, best-Adam'}
+CHARACTER = {'Raffaello': 'aggressivo', 'Leonardo': 'conservativo',
+             'Donatello': 'equilibrato, best-NRMSE', 'Michelangelo': 'conservativo'}
 COLOR = {'Raffaello': '#d1495b', 'Leonardo': '#2a7fb8', 'Donatello': '#7b3fa0',
          'Michelangelo': '#e8871e', 'Master Splinter': '#7f7f7f'}
 PN = ['v0', 'T', 's0', 'a', 'b']
@@ -348,14 +350,14 @@ def build_doc():
 
     # ---- COVER ----
     A(('cover', {
-        'title': 'CF_FSNN - Report di Validazione (v3)',
+        'title': 'CF_FSNN - Report di Validazione',
         'subtitle': 'Chiusura dello studio EventProp: 4 champion (2 BPTT + 2 EventProp) '
                     'a confronto con l\'oracolo, su un evaluate esaustivo a 6-tier',
         'meta': [
             'Champion validati: Raffaello, Leonardo (BPTT) · Donatello, Michelangelo (EventProp)',
             'Riferimento: Master Splinter (oracolo = ACC-IIDM coi parametri veri)',
             'Sorgente dei dati: results/evaluate/v3_TURTLE_POWER!!! (15 dimensioni)',
-            'Documento della terna CF_FSNN — gemello di HOW_IT_WORKS_v3 (la rete) e FPGA_REPORT (il profilo hardware)',
+            'Documento della terna: HOW_IT_WORKS_v3 (la rete), FPGA_REPORT (il profilo hardware)  e questo (risultati)',
         ],
     }))
 
@@ -381,7 +383,7 @@ def build_doc():
 
     # ---- 1. SOMMARIO ESECUTIVO ----
     A(('h1', '1. Sommario esecutivo'))
-    A(('p', 'CF_FSNN è una rete neurale spiking (SNN, ~860-1400 parametri secondo il rango della ricorrenza, target FPGA PYNQ-Z1) '
+    A(('p', 'CF_FSNN è una rete neurale spiking (SNN, ~860-1400 parametri, a seconda del rango della ricorrenza, target FPGA PYNQ-Z1) '
            'che osserva un veicolo follower via V2X (gap, velocità, delta-v, velocità leader) '
            'e ne identifica i 5 parametri del modello di car-following ACC-IIDM: [v0, T, s0, a, b] '
            '(Treiber & Kesting, Ch.12). Questo documento è il report di CHIUSURA dello studio '
@@ -392,9 +394,9 @@ def build_doc():
            'al traffico, al profilo hardware FPGA).'))
     A(('p', 'Verdetto. Tutti e 4 i champion guidano in sicurezza: in anello chiuso il loro tasso '
            'di collisione è allineato a quello dell\'oracolo, con TTC pari o superiori e margini '
-           'di frenata comparabili (guidano più cauti, non meno). Le collisioni residue non sono un difetto '
+           'di frenata comparabili (guidatori più conservativi, non meno). Le collisioni residue non sono un difetto '
            'della rete ma un limite fisico: geometrie di cut-in inevitabili e fondo ghiacciato '
-           'fanno collidere anche l\'oracolo. Sul piano hardware emerge un discriminante netto: '
+           'che fanno collidere anche l\'oracolo. Sul piano hardware emerge un discriminante netto: '
            'i due champion EventProp sono contrattivi (raggio spettrale della ricorrenza ρ<1) e '
            'non hanno neuroni morti, mentre i due BPTT sono espansivi (ρ>1) con ~31% di neuroni '
            'morti. Contrattivo = stato limitato in aritmetica a virgola fissa = sicuro su FPGA. '
@@ -458,7 +460,7 @@ def build_doc():
            '(raggio spettrale ρ 0.05-0.39 negli EventProp contro 1.16-2.99 nei BPTT champion — le '
            'famiglie BPTT storiche scartate toccavano ~22) e '
            'su FPGA-friendliness; ed entrambi guidano in sicurezza. Il presente evaluate quantifica '
-           'quel fronte su tutte le dimensioni che contano per un deploy neuromorfico.'))
+           'quel fronte su tutte le dimensioni che contano per il deploy di riferimento.'))
     A(('callout', 'ρ(U·V) è il raggio spettrale della ricorrenza low-rank: ρ<1 = mappa contrattiva '
                   '(stato limitato, quantizzazione sicura in virgola fissa), ρ>1 = espansiva (rischio '
                   'saturazione/overflow). I FONDAMENTI teorici sono in HOW_IT_WORKS_v3 §11; qui il '
@@ -469,46 +471,42 @@ def build_doc():
            'struttura (input(4) → ALIF(32) → LI(5)); differiscono per metodo e ricetta di addestramento '
            'e per il rango della ricorrenza (8 nei BPTT, 16 negli EventProp). L\'oracolo (nome in codice '
            '"Master Splinter") NON è una rete: è il modello ACC-IIDM con i parametri veri, e '
-           'serve da limite superiore di riferimento. I nomi sono un tema (le Tartarughe Ninja); '
-           'la run porta l\'etichetta "TURTLE POWER!!!".'))
+           'serve da riferimento. I nomi sono un tema (le Tartarughe Ninja), ovviamente.'))
     A(('table', (
         ['Champion', 'Checkpoint', 'Metodo', 'Accuratezza', 'ρ(U·V)', 'Carattere'],
-        [[ch, CKPT[ch], METHOD[ch], f'{f2(ACC.loc[ch,"accuracy_pct"])}%',
+        [[ch, CKPT[ch], METHOD_OPT[ch], f'{f2(ACC.loc[ch,"accuracy_pct"])}%',
           f2(EN.loc[ch, 'spectral_radius']), CHARACTER[ch]] for ch in CHAMP]
         + [[ORACLE, 'parametri veri', 'oracolo (ACC-IIDM)', '100%', '-', 'riferimento']],
     )))
 
     # ---- 3. METODOLOGIA ----
     A(('h1', '3. Metodologia: l\'evaluate a 6-tier'))
-    A(('p', 'L\'evaluate è passato da validazione "data-driven" a "physics/network-driven": '
-           'misura non solo quanto la rete indovina i numeri, ma come si comporta quando quei '
+    A(('p', 'L\'evaluate determina non solo quanto la rete indovina i numeri, ma come si comporta quando quei '
            'numeri GUIDANO davvero un\'auto, sotto plant fisico realistico e canale V2X imperfetto, '
            'e che aspetto ha la rete come futuro circuito. Le 15 dimensioni sono organizzate in '
            '6 tier:'))
     A(('table', (
         ['Tier', 'Dimensioni (sezioni della run)', 'Cosa misura'],
         [
-            ['T0 reporting', '00 Scorecard, 01 Accuratezza', 'identificazione, distribuzioni, metriche continue'],
-            ['T1 sicurezza+coda', '02 Sicurezza, 09 Traiettorie, 10 Reachability, 11 Breakdown',
+            ['T0 - Reporting', '00 Scorecard, 01 Accuratezza', 'identificazione, distribuzioni, metriche continue'],
+            ['T1 - Safety', '02 Sicurezza, 09 Traiettorie, 10 Reachability, 11 Breakdown',
              'SSM estese, scenari di coda, curva di rottura'],
-            ['T2 plant+canale', '06 V2X, 07 VehicleDynamics', 'attuatore/attrito/pendenza, PDR/latenza/AoI'],
-            ['T3 traffico', '03 String, 12 Mesoscopico, 13 Macroscopico', 'string stability, plotone, diagramma fondamentale'],
-            ['T4 identificabilità', '04 Identifiability', 'FIM, equifinalità, causale, naturalisticità'],
-            ['T5 FPGA', '05 Quantizzazione, 08 Energia/Spiking', 'Qm.n/po2, energia, salute della rete, ρ'],
+            ['T2 - Robustezza', '06 V2X, 07 VehicleDynamics', 'attuatore/attrito/pendenza, PDR/latenza/AoI'],
+            ['T3 - Traffico', '03 String, 12 Mesoscopico, 13 Macroscopico', 'string stability, plotone, diagramma fondamentale'],
+            ['T4 - Identificabilità', '04 Identifiability', 'FIM, equifinalità, causale, naturalisticità'],
+            ['T5 - FPGA-Friendly', '05 Quantizzazione, 08 Energia/Spiking', 'Qm.n/po2, energia, salute della rete, ρ'],
         ],
     )))
     A(('h2', '3.1 Il simulatore closed-loop e l\'oracolo'))
     A(('p', 'A ogni passo (Dt=0.1 s) la rete riceve lo stato osservato dell\'ego, predice '
            '[v0, T, s0, a, b], e questi parametri alimentano il controllore ACC-IIDM che calcola '
-           'l\'accelerazione; l\'ego avanza e il ciclo si ripete (guida ad anello chiuso, non '
-           'identificazione offline). L\'oracolo gira lo stesso loop coi parametri veri: '
+           'l\'accelerazione; l\'ego avanza e il ciclo si ripete (guida ad anello chiuso). '
+           'L\'oracolo gira lo stesso loop coi parametri veri: '
            'confrontarli isola l\'effetto dell\'errore di identificazione sul comportamento.'))
     A(('h2', '3.2 Scenari e metriche'))
     A(('p', 'Scenari avversari: following, stop&go, hard-brake, cut-in (realistico ed evitabile), '
-           'aggressive cut-in, panic-stop, sinusoidale; l\'accuratezza è inoltre stratificata su '
-           '6 famiglie (highway, urban, launch, freeflow, truck, mixed). Le metriche di sicurezza '
-           'usano indicatori CONTINUI (surrogate safety measures) che non saturano come il solo '
-           'tasso di collisione:'))
+           'aggressive cut-in (non evitabile), panic-stop, sinusoidale; l\'accuratezza è inoltre stratificata su '
+           '6 famiglie (highway, urban, launch, freeflow, truck, mixed). Le metriche di sicurezza:'))
     A(('table', (
         ['Metrica', 'Definizione', 'Cosa cattura'],
         [
@@ -553,10 +551,10 @@ def build_doc():
                       'La linea tratteggiata a 100% è l\'oracolo.')))
     A(('h2', '4.2 Dove ogni parametro diventa osservabile (stratificazione)'))
     A(('p', 'La NRMSE stratificata per famiglia di scenario mostra QUANDO ciascun parametro è '
-           'osservabile: v0 richiede tratti di free-flow/highway (Raffaello lo sbaglia proprio in '
-           'urban, dove v0 non è eccitato), a emerge nei transitori di accelerazione (launch), b '
+           'osservabile: **v0** richiede tratti di free-flow/highway (Raffaello lo sbaglia proprio in '
+           'urban, dove **v0** non è eccitato), **a** emerge nei transitori di accelerazione (launch), **b** '
            'nelle frenate. È la firma della stessa non-identificabilità strutturale del modello '
-           'car-following già nota dallo studio.'))
+           'car-following già nota dall\'appendice del file **HOW_IT_WORKS**.'))
     A(('img', (R['nrmse_stratified.png'],
                'Figura 4.2 - NRMSE per parametro x famiglia di scenario, per ciascun champion. '
                'Le celle più scure segnano dove un parametro resta poco osservabile (es. v0 in '
@@ -613,9 +611,7 @@ def build_doc():
            f'({f2(SAF.loc[ORACLE,"brake_margin_min"])} m), mentre Raffaello '
            f'({f2(SAF.loc["Raffaello","brake_margin_min"])} m) e Donatello '
            f'({f2(SAF.loc["Donatello","brake_margin_min"])} m) restano appena sotto: differenza '
-           f'piccola, che non intacca il tasso di collisione (allineato all\'oracolo). Nota: Leonardo '
-           f'mostra un picco isolato di DRAC ({f2(SAF.loc["Leonardo","max_DRAC"])} m/s2) in un singolo '
-           f'scenario - un caso-limite da tenere d\'occhio, non un pattern.'))
+           f'piccola, che non intacca il tasso di collisione (allineato all\'oracolo).'))
     A(('table', (
         ['Sorgente', 'collis.', 'brake margin', 'min TTC', 'min gap', 'impact dv', 'max DRAC', 'rms jerk'],
         [[s, f'{f2(SAF.loc[s,"collision_rate"]*100)}%', f3(SAF.loc[s, 'brake_margin_min']),
@@ -654,11 +650,11 @@ def build_doc():
     # ---- 6. ROBUSTEZZA FISICA ----
     A(('h1', '6. Robustezza fisica e curva di rottura (Tier 1)'))
     A(('h2', '6.1 Plant: asciutto, bagnato, ghiaccio'))
-    A(('p', f'Ripetendo gli scenari sotto attrito degradato, la collisione sale con la strada, non '
+    A(('p', f'Ripetendo gli scenari sotto attrito degradato, la collisione sale con il peggioramento delle condizioni stradali, non '
            f'con la rete: da ~{f2(PLANT.loc["Donatello","collision_ideale"]*100)}% su asciutto a '
            f'~{f2(PLANT.loc["Donatello","collision_bagnato"]*100)}% su bagnato fino a '
            f'~{f2(PLANT.loc["Donatello","collision_ghiaccio"]*100)}% su ghiaccio - e l\'oracolo si '
-           f'comporta uguale ({f2(PLANT.loc[ORACLE,"collision_ghiaccio"]*100)}% su ghiaccio). Il '
+           f'comporta nello stesso modo ({f2(PLANT.loc[ORACLE,"collision_ghiaccio"]*100)}% su ghiaccio). Il '
            f'~60% di collisioni su ghiaccio è un limite fisico (coefficiente d\'attrito troppo basso '
            f'per fermarsi in tempo), non un errore della SNN; anzi, su ghiaccio i champion mantengono '
            f'un margine di frenata leggermente migliore dell\'oracolo.'))
@@ -749,7 +745,7 @@ def build_doc():
                   'i tre findings chiave (quantizzazione fixed-point, energia, discriminante di stabilità). '
                   'Il profilo hardware COMPLETO — readiness/scorecard, pesi po2, fixed-point, spiking, energia, '
                   'timing/WCET, risorse/DSE, SEU, I/O-HIL, thermal (45 figure su 10 sezioni) — è nel documento '
-                  'dedicato FPGA_REPORT (Fase A pre-silicio).'))
+                  'dedicato FPGA_REPORT (solo Fase A pre-silicio).'))
     A(('h2', '9.1 Quantizzazione: fixed-point e potenze-di-due'))
     A(('p', f'La rete tollera una quantizzazione aggressiva. In virgola fissa l\'errore di '
            f'identificazione resta praticamente invariato fino a 2 bit di parte frazionaria '
@@ -759,7 +755,7 @@ def build_doc():
            f'shift-add) l\'errore è insensibile al numero di bit (dipende dall\'esponente, non dalla '
            f'mantissa) e, soprattutto, viene ASSORBITO dal training: il "peso di 2" è già quello '
            f'nativo. L\'ablazione dei pesi mostra delta_qat_absorbed <= 0 per 3 champion su 4 '
-           f'(accendere po2 non peggiora, anzi migliora), mentre Raffaello subisce un piccolo '
+           f'(il po2 non peggiora, anzi migliora), mentre Raffaello subisce un piccolo '
            f'aumento (+{f2(QAB.loc["Raffaello","delta_qat_absorbed"])}).'))
     A(('img', (F_QUANT, 'Figura 9.1 - Sinistra: errore vs bit in fixed-point (piatto fino a 2 bit); '
                         'le x segnano la variante po2. Destra: il QAT assorbe i pesi po2 (barre verdi '
@@ -1103,7 +1099,7 @@ def render_pdf(doc, outpath):
         canvas.saveState()
         canvas.setFont('DJ', 7.5)
         canvas.setFillColor(colors.HexColor('#888888'))
-        canvas.drawString(2 * cm, 1.1 * cm, 'CF_FSNN — Report di Validazione (v3)')
+        canvas.drawString(2 * cm, 1.1 * cm, 'CF_FSNN — Report di Validazione')
         canvas.drawRightString(A4[0] - 2 * cm, 1.1 * cm, f'pag. {docx.page}')
         canvas.restoreState()
 

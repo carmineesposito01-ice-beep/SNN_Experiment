@@ -2,7 +2,7 @@
 
 > **Profilo di idoneità FPGA (Zynq-7020 / PYNQ-Z1) dei 4 champion, pre-silicio — 45 figure su 10 sezioni (dati reali dove 🟢, stime dove 🟡/🔴)**
 
-> Documento della terna CF_FSNN — gemelli: HOW_IT_WORKS_v3 (teoria) · VALIDATION_REPORT_v3 (risultati)  
+> Documento della terna CF_FSNN: HOW_IT_WORKS_v3 (teoria) · VALIDATION_REPORT_v3 (risultati) e questo.  
 > Fase A "software_now": profilazione software pre-silicio (le Fasi B/C = HDL/board)  
 > Sorgente figure: scripts/fpga_figures.py (librerie weight/state/latency/seu/io) · risultati: results/evaluate/FPGA/  
 
@@ -28,7 +28,7 @@
 
 ## In una pagina: cos'è e come si legge
 
-Questo report è la valutazione di idoneità FPGA dei 4 champion (2 BPTT: Raffaello, Leonardo; 2 EventProp: Donatello, Michelangelo) PRIMA di toccare il silicio. È la Fase A "software_now": ogni numero 🟢 è calcolato dai tensori e dal forward reali della rete (non da un datasheet), tramite le 5 librerie di profilazione. Le figure marcate 🟡/🔴 (datapath HDL, area, termico) sono STIME di progetto, da confermare solo con la sintesi Vivado e la misura su board (Fasi B/C).
+Questo report è la valutazione di idoneità FPGA dei 4 champion (2 BPTT: Raffaello, Leonardo; 2 EventProp: Donatello, Michelangelo) PRIMA di toccare il silicio. È la Fase A "software_now": ogni numero 🟢 è calcolato dai tensori e dal forward reali della rete. Le figure marcate 🟡/🔴 (datapath HDL, area, termico) sono STIME di progetto, da confermare con la sintesi Vivado e la misura su board (Fasi B/C).
 
 Come si legge: la sezione 0 è il cruscotto (radar + tabella di numeri reali) con il verdetto di deploy; le sezioni 1-8 lo fondano dimensione per dimensione (pesi po2, fixed-point, spiking, energia, timing, risorse, SEU, I/O); la 9 è termica (stime). Contesto e teoria della rete: HOW_IT_WORKS_v3 §16. I risultati di validazione della guida (sicurezza, traffico, accuratezza): VALIDATION_REPORT_v3 (di cui §9 è il sommario FPGA che rimanda qui).
 
@@ -51,13 +51,13 @@ Il candidato al deploy è **Donatello** (EventProp): ρ minimo (0.051), errore d
 ![I numeri reali dietro il radar, una colonna per asse + footprint (la colonna energia usa il vantaggio nel caso tipico; la tabella in testa al report usa il worst-case). Colorazione per rango (verde = migliore dei 4 su quella metrica, nessuna soglia arbitraria). Candidato deploy: Donatello (ρ minimo 0.05, quant robusto).](figures_fpga/00_Readiness__deploy_verdict.png)
 *I numeri reali dietro il radar, una colonna per asse + footprint (la colonna energia usa il vantaggio nel caso tipico; la tabella in testa al report usa il worst-case). Colorazione per rango (verde = migliore dei 4 su quella metrica, nessuna soglia arbitraria). Candidato deploy: Donatello (ρ minimo 0.05, quant robusto).*
 
-![Radar di FPGA-readiness per champion (small-multiples). Ogni asse 0-1 con ANCORA esplicita fra parentesi (1 = ideale FPGA): ρ<1 (contrattivo), Fix-pt (quant po2 senza errore), Sparsità (poco firing), Energia (≥15× vs ANN), Timing (util≈0), SEU (0 bit critici). I valori numerici reali sono nella tabella successiva.](figures_fpga/00_Readiness__readiness_radar.png)
-*Radar di FPGA-readiness per champion (small-multiples). Ogni asse 0-1 con ANCORA esplicita fra parentesi (1 = ideale FPGA): ρ<1 (contrattivo), Fix-pt (quant po2 senza errore), Sparsità (poco firing), Energia (≥15× vs ANN), Timing (util≈0), SEU (0 bit critici). I valori numerici reali sono nella tabella successiva.*
+![Radar di FPGA-readiness per champion (small-multiples). Ogni asse 0-1 con ANCORA esplicita fra parentesi (1 = ideale FPGA): ρ<1 (contrattivo), Fix-pt (quant po2 senza errore), Sparsità (firing minore), Energia (≥15× vs ANN), Timing (util≈0), SEU (0 bit critici). I valori numerici reali sono nella tabella successiva.](figures_fpga/00_Readiness__readiness_radar.png)
+*Radar di FPGA-readiness per champion (small-multiples). Ogni asse 0-1 con ANCORA esplicita fra parentesi (1 = ideale FPGA): ρ<1 (contrattivo), Fix-pt (quant po2 senza errore), Sparsità (firing minore), Energia (≥15× vs ANN), Timing (util≈0), SEU (0 bit critici). I valori numerici reali sono nella tabella successiva.*
 
 
 ## 1. Pesi Power-of-Two: il moltiplicatore che sparisce
 
-Il cuore del co-design è la quantizzazione po2 (schema e razionale in HOW_IT_WORKS_v3 §15; quantizzazione logaritmica dei pesi, Miyashita et al. 2016). Qui il lato hardware misurato: il moltiplicatore diventa un bit-shift → **0 DSP**; e l'istogramma po2_alphabet mostra la sparsità dei pesi (sinapsi a valore 0 = eliminabili dal connettoma) — da non confondere coi neuroni morti (attività, §3): sono sinapsi che semplicemente non esistono in hardware.
+Il cuore del co-design è la quantizzazione po2 (schema e razionale in HOW_IT_WORKS_v3 §15; quantizzazione logaritmica dei pesi, Miyashita et al. 2016). Qui il lato hardware misurato: il moltiplicatore diventa un bit-shift → **0 DSP**; e l'istogramma po2_alphabet mostra la sparsità dei pesi (sinapsi a valore 0 = eliminabili dal connettoma) — da non confondere coi neuroni morti (attività, §3): sono sinapsi che semplicemente non esisteranno in hardware.
 
 Il footprint dei pesi è di 400-656 byte per champion (rank-8 vs rank-16): trascurabile vs la BRAM (§6). Il raggio spettrale ρ(U·V) (definizione in HOW §11) separa EventProp (contrattivo, ρ<1) da BPTT (espansivo, ρ>1): è il discriminante che rende gli EventProp sicuri in aritmetica a virgola fissa.
 

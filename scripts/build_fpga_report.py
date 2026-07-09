@@ -102,7 +102,7 @@ DON_ADV = en('Donatello', 'advantage_worstcase_x', '%.2f') if ENP is not None el
 # --- figure: copia le PNG della sezione in figures_fpga/ + caption -----------
 # caption curate per nome-file (stem). Fallback: nome prettificato.
 CAP = {
-    'readiness_radar': 'Radar di FPGA-readiness per champion (small-multiples). Ogni asse 0-1 con ANCORA esplicita fra parentesi (1 = ideale FPGA): ρ<1 (contrattivo), Fix-pt (quant po2 senza errore), Sparsità (poco firing), Energia (≥15× vs ANN), Timing (util≈0), SEU (0 bit critici). I valori numerici reali sono nella tabella successiva.',
+    'readiness_radar': 'Radar di FPGA-readiness per champion (small-multiples). Ogni asse 0-1 con ANCORA esplicita fra parentesi (1 = ideale FPGA): ρ<1 (contrattivo), Fix-pt (quant po2 senza errore), Sparsità (firing minore), Energia (≥15× vs ANN), Timing (util≈0), SEU (0 bit critici). I valori numerici reali sono nella tabella successiva.',
     'deploy_verdict': 'I numeri reali dietro il radar, una colonna per asse + footprint (la colonna energia usa il vantaggio nel caso tipico; la tabella in testa al report usa il worst-case). Colorazione per rango (verde = migliore dei 4 su quella metrica, nessuna soglia arbitraria). Candidato deploy: Donatello (ρ minimo 0.05, quant robusto).',
     'po2_alphabet': 'Alfabeto po2 dei pesi (13 valori sign·2^k) per champion. "pesi a 0 = sinapsi eliminabili" è la potatura strutturale del connettoma (sinapsi a peso 0), NON neuroni morti. Il moltiplicatore è UNO di 13 valori → barrel-shifter, 0 DSP.',
     'resource_occupancy': 'Occupazione stimata del budget Zynq-7020 (LUT/FF/BRAM/DSP) per champion. BRAM reale (footprint pesi); LUT/FF stima; DSP = 0 (po2 → shift-add).',
@@ -185,7 +185,7 @@ SEC_PROSE = {
         'moltiplicatore diventa un bit-shift → **0 DSP**; e '
         'l\'istogramma po2_alphabet mostra la sparsità dei pesi (sinapsi a valore 0 = eliminabili dal '
         'connettoma) — da non confondere coi neuroni morti (attività, §3): sono sinapsi che '
-        'semplicemente non esistono in hardware.',
+        'semplicemente non esisteranno in hardware.',
         'Il footprint dei pesi è di 400-656 byte per champion (rank-8 vs rank-16): trascurabile vs '
         'la BRAM (§6). Il raggio spettrale ρ(U·V) (definizione in HOW §11) separa EventProp '
         '(contrattivo, ρ<1) da BPTT (espansivo, ρ>1): è il discriminante che rende gli EventProp sicuri '
@@ -328,7 +328,7 @@ def build_doc():
         'title': 'CF_FSNN — Report FPGA (Fase A)',
         'subtitle': 'Profilo di idoneità FPGA (Zynq-7020 / PYNQ-Z1) dei 4 champion, pre-silicio — 45 figure su 10 sezioni (dati reali dove 🟢, stime dove 🟡/🔴)',
         'meta': [
-            'Documento della terna CF_FSNN — gemelli: HOW_IT_WORKS_v3 (teoria) · VALIDATION_REPORT_v3 (risultati)',
+            'Documento della terna CF_FSNN: HOW_IT_WORKS_v3 (teoria) · VALIDATION_REPORT_v3 (risultati) e questo.',
             'Fase A "software_now": profilazione software pre-silicio (le Fasi B/C = HDL/board)',
             'Sorgente figure: scripts/fpga_figures.py (librerie weight/state/latency/seu/io) · risultati: results/evaluate/FPGA/',
         ],
@@ -356,9 +356,9 @@ def build_doc():
     A(('h1', 'In una pagina: cos\'è e come si legge'))
     A(('p', 'Questo report è la valutazione di idoneità FPGA dei 4 champion (2 BPTT: Raffaello, '
             'Leonardo; 2 EventProp: Donatello, Michelangelo) PRIMA di toccare il silicio. È la Fase A '
-            '"software_now": ogni numero 🟢 è calcolato dai tensori e dal forward reali della rete '
-            '(non da un datasheet), tramite le 5 librerie di profilazione. Le figure marcate 🟡/🔴 '
-            '(datapath HDL, area, termico) sono STIME di progetto, da confermare solo con la sintesi '
+            '"software_now": ogni numero 🟢 è calcolato dai tensori e dal forward reali della rete. '
+            'Le figure marcate 🟡/🔴 '
+            '(datapath HDL, area, termico) sono STIME di progetto, da confermare con la sintesi '
             'Vivado e la misura su board (Fasi B/C).'))
     A(('p', 'Come si legge: la sezione 0 è il cruscotto (radar + tabella di numeri reali) con il '
             'verdetto di deploy; le sezioni 1-8 lo fondano dimensione per dimensione (pesi po2, '
