@@ -23,11 +23,10 @@ def time_headway(s, v):
 # --- SynOps / energy model (FPGA scorecard: static fc vs dynamic spike-driven; AC<MAC not sparsity) ---
 def synops(spikes_row, n_in, n_hid, n_out, rank):
     """(static, dynamic) SynOps for one tick. static = fc input (always-on);
-    dynamic = spike-driven rec_V (s*rank) + rec_U (H*rank if any spike) + out (s*OUT)."""
-    s = int(np.count_nonzero(np.asarray(spikes_row) > 0))
-    static = int(n_in * n_hid)
-    dynamic = int(s * rank + (n_hid * rank if s else 0) + s * n_out)
-    return static, dynamic
+    dynamic = spike-driven rec_V (s*rank) + rec_U (H*rank if any spike) + out (s*OUT).
+    Delegates to synops_series (single source of truth for the formula)."""
+    static, dynamic = synops_series(np.asarray(spikes_row)[None, :], n_in, n_hid, n_out, rank)
+    return int(static[0]), int(dynamic[0])
 
 
 def synops_series(spikes_matrix, n_in, n_hid, n_out, rank):

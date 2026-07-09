@@ -64,6 +64,8 @@ class SynOpsPanel(QWidget):
         self._plot = pg.PlotWidget(title="SynOps / tick (AC)")
         self._plot.setLabel("bottom", "time", units="steps")
         self._plot.setLabel("left", "SynOps")
+        self._plot.setDownsampling(auto=True, mode="peak")   # render only what's visible/needed
+        self._plot.setClipToView(True)
         # Stacked areas without FillBetweenItem: total (amber, filled to 0) then static (teal,
         # filled to 0) drawn on top -> the amber shows only in the static..total band (= dynamic).
         self._total_c = self._plot.plot(pen=pg.mkPen("#ffffff", width=1.5),
@@ -503,6 +505,8 @@ class TrajectoryPanel(QWidget):
 
 
 _SAFETY_CAP = 30.0
+_TTC_REF_S = 1.5       # TTC alert threshold (s), standard car-following safety surrogate
+_DRAC_REF = 3.35       # DRAC alert threshold (m/s^2), comfortable-deceleration limit
 
 
 class SafetyPanel(QWidget):
@@ -526,8 +530,8 @@ class SafetyPanel(QWidget):
         self._c_ttc = self._pt.plot(pen=pg.mkPen("#d1495b", width=2))
         self._c_th = self._pt.plot(pen=pg.mkPen("#2a7fb8", width=1, style=Qt.DashLine))
         self._c_drac = self._pd.plot(pen=pg.mkPen("#e8871e", width=2))
-        self._ttc_ref = pg.InfiniteLine(pos=1.5, angle=0, pen=pg.mkPen("#9a9a9a", style=Qt.DashLine))
-        self._drac_ref = pg.InfiniteLine(pos=3.35, angle=0, pen=pg.mkPen("#9a9a9a", style=Qt.DashLine))
+        self._ttc_ref = pg.InfiniteLine(pos=_TTC_REF_S, angle=0, pen=pg.mkPen("#9a9a9a", style=Qt.DashLine))
+        self._drac_ref = pg.InfiniteLine(pos=_DRAC_REF, angle=0, pen=pg.mkPen("#9a9a9a", style=Qt.DashLine))
         self._pt.addItem(self._ttc_ref)
         self._pd.addItem(self._drac_ref)
         self._cursors = [_add_cursor(p) for p in (self._pt, self._pd)]

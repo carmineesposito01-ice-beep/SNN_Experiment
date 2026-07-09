@@ -4,6 +4,7 @@ visible_docks() derives the ground-truth set of placed docks from saveState() (Q
 is unreliable headless). Presets arrange programmatically (moveDock/close) so they never depend on the
 fragile saveState format; only the user's custom layout uses saveState/restoreState, guarded."""
 import json
+import logging
 import os
 
 DOCK_ORDER = ["Road", "NetState", "SpikeRate", "v_mem", "Trajectory", "Safety",
@@ -112,6 +113,11 @@ def load_layout(area, docks, path=LAYOUT_PATH):
             state = json.load(f)
         area.restoreState(state)
         return True
-    except Exception:
+    except FileNotFoundError:
+        apply_overview(area, docks)                      # expected on first run — no saved layout yet
+        return False
+    except Exception:                                    # corrupt JSON or pyqtgraph 0.14 restoreState bug
+        logging.getLogger(__name__).warning(
+            "layout restore from %s failed; falling back to Overview", path, exc_info=True)
         apply_overview(area, docks)
         return False

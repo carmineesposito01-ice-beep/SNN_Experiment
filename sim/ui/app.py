@@ -76,6 +76,7 @@ class SimApp(QMainWindow):
         self._netstate.sigNeuronClicked.connect(self._on_neuron_selected)
         self._src_probe = None
         self._src_traj = None
+        self._recon_key = None      # cache key for the last deep-scrub reconstruction
 
         widgets = {"Road": self._topdown, "NetState": self._netstate, "SpikeRate": self._spikerate,
                    "v_mem": self._vmem, "Trajectory": self._trajectory, "Safety": self._safety,
@@ -208,6 +209,7 @@ class SimApp(QMainWindow):
         self._traj = TrajectoryBuffer()
         self._src_probe = self._probe                     # scrub source: live buffer while running
         self._src_traj = self._traj
+        self._recon_key = None                            # invalidate the reconstruction cache
         backend = SoftwareBackend(self._champ.model)
         stepper = SimStepper.from_scenario(backend, sc, injector=self._injector)
         self.loop = SimLoop(stepper, self._probe, dt_fixed=DT)
@@ -238,8 +240,9 @@ class SimApp(QMainWindow):
     def _paint(self, results):
         if results:
             self._last_result = results[-1]
-            self._topdown.update_frame(results[-1])
-            for r in results:
+            self._src_probe, self._src_traj = self._probe, self._traj   # live advanced -> scrub source = live
+            for r in results:                                           # integrate EVERY tick (speed>1 -> many)
+                self._topdown.update_frame(r)
                 self._traj.record(r)
             self._redraw_series(self._probe, self._traj)
             if self._run_btn.isChecked():                 # live: slider tracks the head
@@ -294,9 +297,7 @@ class SimApp(QMainWindow):
             self._timer.stop()
             frames = self._probe.frames()
             if frames and frames[-1].t + 1 > self._probe.capacity:   # buffer wrapped -> reconstruct
-                rlog = ReplayLog.from_injector(self._current_idx, self._injector)
-                self._src_probe, self._src_traj = reconstruct_history(
-                    self._champ, self._scenarios[self._current_idx], rlog, frames[-1].t)
+                self._src_probe, self._src_traj = self._reconstruct(frames[-1].t)
             else:
                 self._src_probe, self._src_traj = self._probe, self._traj
             self._redraw_series(self._src_probe, self._src_traj)
@@ -341,6 +342,20 @@ class SimApp(QMainWindow):
         if self._cursor is not None:
             self._inspector.set_cursor(self._cursor)
 
+    def _reconstruct(self, upto):
+        """Cached full-episode reconstruction for deep-scrub. Re-running the SNN is ~10 ms/step
+        (frozen core) so a whole episode costs seconds; cache by (scenario, tick, #events) so
+        repeated pause/resume is instant, and flag the one-off compute in the status bar."""
+        key = (self._current_idx, int(upto), len(self._injector.log()))
+        if self._recon_key == key:
+            return self._recon_probe, self._recon_traj
+        self._status.showMessage("ricostruzione episodio…")
+        self._status.repaint()
+        rlog = ReplayLog.from_injector(self._current_idx, self._injector)
+        probe, traj = reconstruct_history(self._champ, self._scenarios[self._current_idx], rlog, upto)
+        self._recon_key, self._recon_probe, self._recon_traj = key, probe, traj
+        return probe, traj
+
     def _on_cursor(self, v):
         if not self._run_btn.isChecked():
             self._render_at_cursor(v)
@@ -365,9 +380,9 @@ class SimApp(QMainWindow):
         elif k == Qt.Key_Right:
             self._step_cursor(1)
         elif k == Qt.Key_Home and not self._run_btn.isChecked():
-            self._on_cursor(0)
+            self._cursor_slider.setValue(0)                       # setValue -> valueChanged -> render + syncs slider
         elif k == Qt.Key_End and not self._run_btn.isChecked():
-            self._on_cursor(self._buf_len() - 1)
+            self._cursor_slider.setValue(self._buf_len() - 1)
         else:
             super().keyPressEvent(event)
 

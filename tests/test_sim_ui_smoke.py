@@ -223,6 +223,38 @@ def test_simapp_resume_reverts_to_live_source(qapp):
 
 
 # --- Phase 3 close: SynOps / energy dock ---
+def test_simapp_reconstruct_is_cached(qapp):
+    win = SimApp(CHAMP)
+    win.select_scenario(0)
+    win._advance(60.0)                           # wrap the buffer -> pause reconstructs
+    win._on_run_toggled(False)                   # cache miss (builds the full episode)
+    p1, t1 = win._src_probe, win._src_traj
+    win._on_run_toggled(True)                    # resume (no advance in headless test)
+    win._timer.stop()
+    win._on_run_toggled(False)                   # same (scenario, tick, #events) -> cache hit
+    assert win._src_probe is p1 and win._src_traj is t1     # reused, not recomputed (no 7 s freeze)
+
+
+def test_simapp_topdown_integrates_all_ticks_at_speed(qapp):
+    from config import DT
+    win = SimApp(CHAMP)
+    win.select_scenario(0)
+    win._speed = 4                               # >1 -> loop.tick returns MANY results per _paint
+    win._advance(0.4)                            # 0.4*4 = 1.6 s -> ~16 steps in one _paint call
+    expected = float(np.cumsum(win._traj.arrays()["v"])[-1] * DT)
+    assert abs(win._topdown.ego_x_m() - expected) < 1e-6   # ego integrated every tick, not just results[-1]
+
+
+def test_simapp_step_after_reconstruct_reverts_source(qapp):
+    win = SimApp(CHAMP)
+    win.select_scenario(0)
+    win._advance(60.0)
+    win._on_run_toggled(False)                   # pause -> deep-scrub source = reconstructed episode
+    assert win._src_probe is not win._probe
+    win.step_once()                              # advancing the live sim must revert the source to live
+    assert win._src_probe is win._probe and win._src_traj is win._traj
+
+
 def test_simapp_has_synops_dock(qapp):
     win = SimApp(CHAMP)
     assert "SynOps" in win._docks and len(win._docks) == 14
