@@ -118,3 +118,36 @@ def test_safety_panel_updates_and_refs(qapp):
     assert ttc0 is not None and abs(float(ttc0[0]) - 10.0) < 1e-6      # s=20, dv=2 -> TTC 10 s
     assert p._ttc_ref.isVisible() and abs(p._ttc_ref.value() - 1.5) < 1e-6
     assert p._drac_ref.isVisible() and abs(p._drac_ref.value() - 3.35) < 1e-6
+
+
+# --- Phase 3b.1: scrub cursor + index-aware graph ---
+def test_param_panel_cursor(qapp):
+    p = ParamPanel(0, "v0", "m/s", "#d1495b")
+    p.set_cursor(7)
+    assert p._cursors[0].isVisible() and abs(p._cursors[0].value() - 7.0) < 1e-6
+    p.set_cursor(None)
+    assert not p._cursors[0].isVisible()
+
+
+def test_trajectory_panel_cursor_all_subplots(qapp):
+    p = TrajectoryPanel()
+    p.set_cursor(3)
+    assert len(p._cursors) == 3 and all(c.isVisible() for c in p._cursors)
+
+
+def test_neuron_graph_index_aware(qapp):
+    H, IN, OUT = 6, 4, 5
+    rng = np.random.default_rng(1)
+    panel = NeuronGraphPanel()
+    panel.set_topology(rng.standard_normal((H, IN)), rng.standard_normal((H, H)),
+                       rng.standard_normal((OUT, H)))
+    pr = AttributeProbe(capacity=10)
+    pr.record(0, {"spikes": np.zeros(H), "v_mem": np.zeros(H), "v_th_eff": np.ones(H),
+                  "input": np.zeros(IN)}, np.zeros(OUT))
+    pr.record(1, {"spikes": np.ones(H), "v_mem": np.linspace(1, 2, H), "v_th_eff": np.ones(H),
+                  "input": np.ones(IN)}, np.ones(OUT))
+    panel.update_frame(pr, index=0)
+    v0 = panel._last_vals.copy()
+    panel.update_frame(pr, index=1)
+    assert not np.allclose(v0, panel._last_vals)              # different tick -> different state
+    panel.update_frame(pr, index=99)                          # out-of-range clamps, no raise

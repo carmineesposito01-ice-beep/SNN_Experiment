@@ -14,6 +14,22 @@ PARAM_COLORS = ["#d1495b", "#2a7fb8", "#7b3fa0", "#e8871e", "#2e8b57"]
 _N_SAMPLE = 4
 
 
+def _add_cursor(plot):
+    ln = pg.InfiniteLine(angle=90, movable=False, pen=pg.mkPen("#ffffff", width=1, style=Qt.DashLine))
+    ln.setVisible(False)
+    plot.addItem(ln)
+    return ln
+
+
+def _set_cursor(cursors, x):
+    for c in cursors:
+        if x is None:
+            c.setVisible(False)
+        else:
+            c.setPos(float(x))
+            c.setVisible(True)
+
+
 class SpikeRatePanel(QWidget):
     """Firing-rate trend: % of hidden neurons spiking per tick, over the buffer."""
     def __init__(self):
@@ -27,6 +43,10 @@ class SpikeRatePanel(QWidget):
         self._plot.setClipToView(True)
         self._curve = self._plot.plot(pen=pg.mkPen("#e8871e", width=2))
         layout.addWidget(self._plot)
+        self._cursors = [_add_cursor(self._plot.getPlotItem())]
+
+    def set_cursor(self, x):
+        _set_cursor(self._cursors, x)
 
     def update_frame(self, probe):
         sm = probe.spikes_matrix()          # (frames, H)
@@ -56,6 +76,7 @@ class NeuronGraphPanel(QWidget):
         for it in (self._skeleton, self._active, self._nodes):
             self._plot.addItem(it)
         self._pos = None
+        self._last_vals = None
         self._n_in = self._n_hid = self._n_out = 0
         self._rec_out_adj = None      # (E,2) recurrent + output edges (spike-carrying)
         self._rec_out_src = None      # (E,) source hidden index of each such edge
@@ -129,11 +150,13 @@ class NeuronGraphPanel(QWidget):
         self._text("hidden · 32 ALIF", 1.2, top, (0.5, 1.0), "#c9a0e8")
         self._text("output · parametri", 2.6, top, (0.5, 1.0), "#88d6a0")
 
-    def update_frame(self, probe):
+    def update_frame(self, probe, index=-1):
         frames = probe.frames()
         if not frames or self._pos is None:
             return
-        f = frames[-1]
+        n = len(frames)
+        i = index if index >= 0 else n + index
+        f = frames[max(0, min(i, n - 1))]
         inp = (np.asarray(f.input, dtype=np.float64).reshape(-1)
                if (f.input is not None and np.size(f.input)) else np.zeros(self._n_in))
         vals = np.concatenate([inp[:self._n_in],
@@ -144,6 +167,7 @@ class NeuronGraphPanel(QWidget):
         for j in range(self._n_hid):
             if spk[j]:
                 pens[self._n_in + j] = pg.mkPen("#ffffff", width=2.0)
+        self._last_vals = vals
         self._nodes.setData(pos=self._pos, brush=self._brushes(vals), pen=pens, size=13)
         mask = spk[self._rec_out_src]
         self._active.setData(pos=self._pos, adj=self._rec_out_adj[mask],
@@ -164,6 +188,10 @@ class VmemPanel(QWidget):
         self._vth_curves = [self._plot.plot(pen=pg.mkPen("#e8871e", width=1, style=Qt.DashLine))
                             for _ in range(_N_SAMPLE)]
         layout.addWidget(self._plot)
+        self._cursors = [_add_cursor(self._plot.getPlotItem())]
+
+    def set_cursor(self, x):
+        _set_cursor(self._cursors, x)
 
     def update_frame(self, probe):
         frames = probe.frames()
@@ -195,6 +223,10 @@ class ParamPanel(QWidget):
         self._gt.setVisible(False)
         self._plot.addItem(self._gt)
         layout.addWidget(self._plot)
+        self._cursors = [_add_cursor(self._plot.getPlotItem())]
+
+    def set_cursor(self, x):
+        _set_cursor(self._cursors, x)
 
     @property
     def plot_item(self):
@@ -244,6 +276,10 @@ class TrajectoryPanel(QWidget):
         self._c_vl = self._pv.plot(pen=pg.mkPen("#d1495b", width=2))
         self._c_dv = self._pv.plot(pen=pg.mkPen("#e8871e", width=1, style=Qt.DashLine))
         self._c_a = self._pa.plot(pen=pg.mkPen("#7b3fa0", width=2))
+        self._cursors = [_add_cursor(p) for p in (self._pg, self._pv, self._pa)]
+
+    def set_cursor(self, x):
+        _set_cursor(self._cursors, x)
 
     def update_frame(self, traj):
         a = traj.arrays()
@@ -284,6 +320,10 @@ class SafetyPanel(QWidget):
         self._drac_ref = pg.InfiniteLine(pos=3.35, angle=0, pen=pg.mkPen("#9a9a9a", style=Qt.DashLine))
         self._pt.addItem(self._ttc_ref)
         self._pd.addItem(self._drac_ref)
+        self._cursors = [_add_cursor(p) for p in (self._pt, self._pd)]
+
+    def set_cursor(self, x):
+        _set_cursor(self._cursors, x)
 
     def update_frame(self, traj):
         a = traj.arrays()
