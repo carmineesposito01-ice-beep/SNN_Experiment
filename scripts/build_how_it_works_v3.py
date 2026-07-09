@@ -10,7 +10,7 @@ low-rank, delay, decode, po2); l'approccio PINN; hardware/FPGA; pro/contro.
 Stile: emula scripts/build_validation_report_v3.py (reportlab, unica sorgente -> md+pdf).
 I diagrammi CONCETTUALI sono disegnati in matplotlib (riproducibili senza checkpoint).
 
-FONDATO SUL CODICE LIVE (non sul vecchio HOW_IT_WORKS.md v1, obsoleto):
+FONDATO SUL CODICE LIVE:
  - decode: param = lo + (hi-lo)*sigmoid((raw-offset)/tau)   [F5 rimosso, R29]
  - s_safe = clamp(s, min=2.0)  [non 0.5]
  - IIDM: v_free=a*(1-(v/v0)^4); regimi free/car-following; CAH=min(a_l,a)-relu(dv)^2/(2s)
@@ -30,7 +30,7 @@ from matplotlib.patches import FancyBboxPatch, FancyArrowPatch
 import numpy as np
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DOCDIR = os.path.join(ROOT, 'document')
+DOCDIR = os.path.join(ROOT, 'report')
 FIGDIR = os.path.join(DOCDIR, 'figures_howitworks_v3')
 os.makedirs(FIGDIR, exist_ok=True)
 

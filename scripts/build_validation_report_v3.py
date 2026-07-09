@@ -9,7 +9,7 @@ piena coscienza (a) dei 4 champion e del fronte di Pareto EventProp/BPTT,
 (quantizzazione, energia, discriminante di stabilita' rho), e (d) del candidato
 al deploy.
 
-Stile: emula scripts/build_validation_report.py (reportlab, unica sorgente -> md+pdf).
+Stile: reportlab da unica sorgente -> md+pdf (font DejaVu; blocchi cover/h1/h2/p/callout/table/img/eq/toc).
 Le figure-CHIAVE (accuratezza, discriminante FPGA, sicurezza, quantizzazione, V2X)
 sono RICOSTRUITE dai CSV dei risultati (riproducibili senza checkpoint); le figure
 di dettaglio (identificabilita', traffico, raster, showcase) sono RIUSATE dai PNG
@@ -27,7 +27,7 @@ import numpy as np
 import pandas as pd
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DOCDIR = os.path.join(ROOT, 'document')
+DOCDIR = os.path.join(ROOT, 'report')
 FIGDIR = os.path.join(DOCDIR, 'figures_validation_v3')
 EVAL = os.path.join(ROOT, 'results', 'evaluate', 'v3_TURTLE_POWER!!!')
 os.makedirs(FIGDIR, exist_ok=True)

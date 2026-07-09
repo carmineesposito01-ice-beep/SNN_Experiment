@@ -23,7 +23,7 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DOCDIR = os.path.join(ROOT, 'document')
+DOCDIR = os.path.join(ROOT, 'report')
 FIGDIR = os.path.join(DOCDIR, 'figures_fpga')
 EVAL = os.path.join(ROOT, 'results', 'evaluate', 'FPGA')
 os.makedirs(FIGDIR, exist_ok=True)
