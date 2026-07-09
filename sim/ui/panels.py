@@ -3,8 +3,8 @@ VmemPanel (v_mem sample traces + effective threshold), ParamPanel (one identifie
 units with an optional dashed ground-truth reference line and the live value in the title)."""
 import numpy as np
 import pyqtgraph as pg
-from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QVBoxLayout, QWidget
+from PySide6.QtCore import Qt, Signal
+from PySide6.QtWidgets import QLabel, QVBoxLayout, QWidget
 
 from sim.ui import metrics
 
@@ -112,6 +112,8 @@ _INPUT_NAMES = ["s", "v", "Δv", "vl"]   # order from _norm_obs: gap, ego speed,
 class NeuronGraphPanel(QWidget):
     """Node-link view of the SNN (input | hidden | output): coloured circles (viridis(activation)),
     a faint weight-skeleton (opacity ~ |weight|), and WHITE active pathways out of firing neurons."""
+    sigNeuronClicked = Signal(int)
+
     def __init__(self):
         super().__init__()
         layout = QVBoxLayout(self)
@@ -123,15 +125,18 @@ class NeuronGraphPanel(QWidget):
         layout.addWidget(self._plot)
         self._lut = pg.colormap.get("viridis").getLookupTable(0.0, 1.0, 256)
         self._skeleton = pg.GraphItem()
+        self._highlight = pg.GraphItem()
         self._active = pg.GraphItem()
         self._nodes = pg.ScatterPlotItem()
-        for it in (self._skeleton, self._active, self._nodes):
+        for it in (self._skeleton, self._highlight, self._active, self._nodes):
             self._plot.addItem(it)
+        self._nodes.sigClicked.connect(self._on_node_click)
         self._pos = None
         self._last_vals = None
         self._n_in = self._n_hid = self._n_out = 0
         self._rec_out_adj = None      # (E,2) recurrent + output edges (spike-carrying)
         self._rec_out_src = None      # (E,) source hidden index of each such edge
+        self._e_in = self._e_rec = self._e_out = None    # raw edge arrays for highlight()
 
     def _brushes(self, vals):
         v = np.asarray(vals, dtype=np.float64).reshape(-1)
@@ -180,9 +185,13 @@ class NeuronGraphPanel(QWidget):
 
         self._rec_out_adj = np.array(e_rec + e_out, dtype=int)
         self._rec_out_src = np.array(src_rec + src_out, dtype=int)
+        self._e_in = np.array(e_in, dtype=int)
+        self._e_rec = np.array(e_rec, dtype=int)
+        self._e_out = np.array(e_out, dtype=int)
         self._active.setData(pos=self._pos, adj=np.empty((0, 2), dtype=int),
                              pen=pg.mkPen("#ffffff", width=2.2), size=0)
         self._add_labels()
+        self.highlight(None)
 
     def _text(self, s, x, y, anchor, color):
         t = pg.TextItem(s, color=color, anchor=anchor)
@@ -224,6 +233,33 @@ class NeuronGraphPanel(QWidget):
         mask = spk[self._rec_out_src]
         self._active.setData(pos=self._pos, adj=self._rec_out_adj[mask],
                              pen=pg.mkPen("#ffffff", width=2.2), size=0)
+
+    def _on_node_click(self, scatter, points):
+        if not points:
+            return
+        node = points[0].index()
+        if self._n_in <= node < self._n_in + self._n_hid:
+            self.sigNeuronClicked.emit(node - self._n_in)
+
+    def highlight(self, i):
+        if i is None or self._pos is None or self._e_in is None:
+            self._highlight.setData(pos=(self._pos if self._pos is not None else np.zeros((1, 2))),
+                                    adj=np.empty((0, 2), dtype=int), pen=pg.mkPen(None), size=0)
+            return
+        node = self._n_in + int(i)
+        allin = np.vstack([self._e_in, self._e_rec])
+        allout = np.vstack([self._e_rec, self._e_out])
+        fanin = allin[allin[:, 1] == node]
+        fanout = allout[allout[:, 0] == node]
+        adj = np.vstack([fanin, fanout]).astype(int)
+        pens = np.zeros(len(adj), dtype=[('red', np.ubyte), ('green', np.ubyte),
+                                         ('blue', np.ubyte), ('alpha', np.ubyte), ('width', float)])
+        ni = len(fanin)
+        pens['red'][:ni], pens['green'][:ni], pens['blue'][:ni] = 0x8f, 0xb7, 0xe0   # fan-in blue
+        pens['red'][ni:], pens['green'][ni:], pens['blue'][ni:] = 0x88, 0xd6, 0xa0   # fan-out green
+        pens['alpha'][:] = 255
+        pens['width'][:] = 2.0
+        self._highlight.setData(pos=self._pos, adj=adj, pen=pens, size=0)
 
 
 class VmemPanel(QWidget):

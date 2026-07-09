@@ -189,3 +189,54 @@ def test_event_timeline_has_cursor(qapp):
     assert panel._cursors[0].isVisible() and abs(panel._cursors[0].value() - 4.0) < 1e-6
     panel.set_cursor(None)
     assert not panel._cursors[0].isVisible()
+
+
+# --- Phase 3b (rest): graph click + highlight ---
+def test_neuron_graph_highlight_fan_in_out(qapp):
+    H, IN, OUT = 6, 4, 5
+    rng = np.random.default_rng(2)
+    panel = NeuronGraphPanel()
+    panel.set_topology(rng.standard_normal((H, IN)), rng.standard_normal((H, H)),
+                       rng.standard_normal((OUT, H)))
+    panel.highlight(2)
+    node = IN + 2
+    adj = panel._highlight.adjacency
+    assert adj.shape[0] == IN + (H - 1) + (H - 1) + OUT      # fan-in(in+rec) + fan-out(rec+out)
+    assert np.all((adj[:, 1] == node) | (adj[:, 0] == node))
+    panel.highlight(None)
+    hl = panel._highlight.adjacency
+    assert hl is None or hl.shape[0] == 0        # pyqtgraph normalizes an empty overlay to None
+
+
+def test_neuron_graph_click_emits_hidden_index(qapp):
+    H, IN, OUT = 6, 4, 5
+    rng = np.random.default_rng(3)
+    panel = NeuronGraphPanel()
+    panel.set_topology(rng.standard_normal((H, IN)), rng.standard_normal((H, H)),
+                       rng.standard_normal((OUT, H)))
+    got = []
+    panel.sigNeuronClicked.connect(lambda i: got.append(i))
+
+    class _Spot:
+        def index(self_):
+            return IN + 3                                   # node index of hidden neuron 3
+
+    panel._on_node_click(panel._nodes, [_Spot()])
+    assert got == [3]
+
+
+def test_neuron_graph_click_ignores_non_hidden(qapp):
+    H, IN, OUT = 6, 4, 5
+    rng = np.random.default_rng(4)
+    panel = NeuronGraphPanel()
+    panel.set_topology(rng.standard_normal((H, IN)), rng.standard_normal((H, H)),
+                       rng.standard_normal((OUT, H)))
+    got = []
+    panel.sigNeuronClicked.connect(lambda i: got.append(i))
+
+    class _Spot:
+        def index(self_):
+            return 0                                        # an input node
+
+    panel._on_node_click(panel._nodes, [_Spot()])
+    assert got == []                                        # input/output clicks are no-ops
