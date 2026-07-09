@@ -59,7 +59,7 @@ fonti, **25 sono archiviate localmente** e 12 sono solo-link.
 | Greenshields (1935). A study of traffic capacity. | [PDF](riferimenti_report/car_following_traffico/Greenshields_1935_traffic_capacity.pdf) | Highway Research Board 14 |
 | Treiber, Hennecke, Helbing (2000). Congested traffic states… (IDM). | [PDF](riferimenti_report/car_following_traffico/Treiber_2000_IDM.pdf) | arXiv:cond-mat/0002177 |
 | Kesting, Treiber, Helbing (2010). Enhanced intelligent driver model (ACC/CAH). | [PDF](riferimenti_report/car_following_traffico/Kesting_2010_enhanced_IDM.pdf) | arXiv:0912.3613 |
-| Treiber & Kesting (2013). Traffic Flow Dynamics: Data, Models and Simulation. | — (libro Springer) | [doi.org/10.1007/978-3-642-32460-4](https://doi.org/10.1007/978-3-642-32460-4) |
+| Treiber & Kesting (2025). Traffic Flow Dynamics: Data, Models and Simulation. | — (libro Springer) | [doi.org/10.1007/978-3-642-32460-4](https://doi.org/10.1007/978-3-642-32460-4) |
 | Hayward (1972). Near-miss determination through a scale of danger (TTC). | — (scan TRB) | [trid.trb.org/View/115323](https://trid.trb.org/View/115323) |
 
 ### Metodi, PINN e ottimizzazione — `metodi_ottimizzazione/`

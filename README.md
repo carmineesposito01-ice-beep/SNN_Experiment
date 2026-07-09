@@ -112,7 +112,7 @@ Il progetto avanza su più tracce isolate (vedi memoria `cf-fsnn-parallel-tracks
 
 ## 8. Riferimenti principali
 
-- Treiber & Kesting, *Traffic Flow Dynamics: Data, Models and Simulation*, Springer 2013
+- Treiber & Kesting, *Traffic Flow Dynamics: Data, Models and Simulation*, Springer 2025
   (IDM/IIDM, CAH/ACC, calibrazione, string stability, diagramma fondamentale).
 - Wunderlich & Pehle 2021 (EventProp) · Neftci et al. 2019 (surrogate gradient) ·
   Bellec et al. 2018 (ALIF/LSNN) · Raissi et al. 2019 (PINN) · Horowitz 2014 (energia AC/MAC).

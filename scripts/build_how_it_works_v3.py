@@ -846,7 +846,7 @@ def build_doc():
            'agisce sui dati e sugli scenari (aggiungere free-flow e launch ha portato l\'NRMSE di v0 da '
            '0.50 a 0.22). L\'NRMSE (Normalized Root-Mean-Square Error) è l\'errore quadratico medio '
            'normalizzato sul range del parametro (0 = perfetto): l\'obiettivo di riferimento per la '
-           'calibrazione dei modelli di traffico è dell\'ordine di 0.20 (Treiber & Kesting 2013).'))
+           'calibrazione dei modelli di traffico è dell\'ordine di 0.20 (Treiber & Kesting 2025).'))
     A(('img', (F['sloppy'], 'Figura 9.1 — La valle piatta dell\'identificabilità. Nel piano (a, b) la '
                             'loss ha una valle lungo √(a·b) = costante: tutti quei punti spiegano '
                             'ugualmente bene la stessa guida. La rete scivola lungo la valle e non '
@@ -983,7 +983,7 @@ def build_doc():
     A(('h2', '13. Il modello fisico ACC-IIDM (il bersaglio del PINN)'))
     A(('p', 'La rete identifica i parametri di un controllore ACC costruito sull\'IIDM (Improved '
            'Intelligent Driver Model) con blend CAH (Constant-Acceleration Heuristic), nella '
-           'formulazione di Treiber & Kesting (2013, cap. 11–12; cfr. Treiber et al. 2000 per l\'IDM di '
+           'formulazione di Treiber & Kesting (2025, cap. 11–12; cfr. Treiber et al. 2000 per l\'IDM di '
            'base e Kesting et al. 2010 per la variante ACC/CAH). Di seguito le equazioni come '
            'implementate nel codice (core/network.py, data/generator.py).'))
     A(('p', 'Il punto di partenza è il gap desiderato s* (Eq. 9.1). Da esso si definiscono il gap '
@@ -1122,7 +1122,7 @@ def build_doc():
            'po2 (§15) → PowerOf2Quantize; PINN (§12) → pinn_loss.'))
     A(('p', 'Lo stato attuale, in modo dichiarato: il plateau di validazione (val_data, l\'errore fisico '
            'sull\'accelerazione) è ~0.19–0.20, allineato al riferimento di calibrazione ~0.20 '
-           '(Treiber & Kesting 2013), con un record a 0.1926; l\'accuratezza di identificazione per '
+           '(Treiber & Kesting 2025), con un record a 0.1926; l\'accuratezza di identificazione per '
            'champion è riportata in VALIDATION_REPORT_v3 §4.1. Due cause strutturali sono diagnosticate — l\'identificabilità '
            'sloppy di a/b e la qualità del gradiente SNN; l\'esito del confronto BPTT vs EventProp '
            '(fronte di Pareto) e il verdetto di sicurezza sono nel report gemello (VALIDATION_REPORT_v3 '
@@ -1167,7 +1167,7 @@ def build_doc():
             ['Brette, R., Gerstner, W. (2005). Adaptive exponential integrate-and-fire model as an effective description of neuronal activity. J. Neurophysiology 94, 3637–3642.', 'AdEx (§4)'],
             ['Kesting, A., Treiber, M., Helbing, D. (2010). Enhanced intelligent driver model to access the impact of driving strategies on traffic capacity. Phil. Trans. R. Soc. A 368, 4585–4605.', 'ACC / CAH (§13)'],
             ['Bengio, Y., Léonard, N., Courville, A. (2013). Estimating or propagating gradients through stochastic neurons for conditional computation. arXiv:1308.3432.', 'Straight-Through Estimator (§7, §15)'],
-            ['Treiber, M., Kesting, A. (2013). Traffic Flow Dynamics: Data, Models and Simulation. Springer.', 'IIDM, CAH, calibrazione (§9, §13)'],
+            ['Treiber, M., Kesting, A. (2025). Traffic Flow Dynamics: Data, Models and Simulation. Springer.', 'IIDM, CAH, calibrazione (§9, §13)'],
             ['Gerstner, W., Kistler, W.M., Naud, R., Paninski, L. (2014). Neuronal Dynamics: From Single Neurons to Networks and Models of Cognition. Cambridge University Press.', 'LIF / ALIF (§0, §3)'],
             ['Horowitz, M. (2014). Computing\'s energy problem (and what we can do about it). IEEE Int. Solid-State Circuits Conf. (ISSCC), 10–14.', 'Energia AC/MAC (§2, §16)'],
             ['Diehl, P.U., Neil, D., Binas, J., Cook, M., Liu, S.-C., Pfeiffer, M. (2015). Fast-classifying, high-accuracy spiking deep networks through weight and threshold balancing. IJCNN.', 'Conversione ANN→SNN (§9-bis)'],

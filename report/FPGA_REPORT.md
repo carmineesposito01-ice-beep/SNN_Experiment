@@ -274,7 +274,7 @@ Sul profilo pre-silicio il candidato al deploy è **Donatello** (EventProp): ric
 | Kleinrock, L. (1975). Queueing Systems, Volume 1: Theory. Wiley. | Coda M/M/1/K (§8) |
 | JEDEC JESD89A (2006). Measurement and Reporting of Alpha Particle and Terrestrial Cosmic Ray-Induced Soft Errors in Semiconductor Devices. JEDEC. | Soft error / SEU (§7) |
 | Kaul, S., Yates, R., Gruteser, M. (2012). Real-time status: how often should one update? IEEE INFOCOM, 2731–2735. | Age-of-Information (§8) |
-| Treiber, M., Kesting, A. (2013). Traffic Flow Dynamics: Data, Models and Simulation. Springer. | Controllore ACC-IIDM (§5) |
+| Treiber, M., Kesting, A. (2025). Traffic Flow Dynamics: Data, Models and Simulation. Springer. | Controllore ACC-IIDM (§5) |
 | Horowitz, M. (2014). Computing's energy problem (and what we can do about it). IEEE Int. Solid-State Circuits Conf. (ISSCC), 10–14. | Energia AC/MAC (§4) |
 | Miyashita, D., Lee, E.H., Murmann, B. (2016). Convolutional neural networks using logarithmic data representation. arXiv:1603.01025. | Quantizzazione logaritmica / po2 (§1, §2) |
 | Xilinx (2018). Zynq-7000 SoC Data Sheet: Overview (DS190). Xilinx. | Budget Zynq-7020: BRAM, Tj (§6, §9) |

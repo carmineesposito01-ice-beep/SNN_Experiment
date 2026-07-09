@@ -285,7 +285,7 @@ class Deep_RSNN_V5(nn.Module):
 # ===========================================================
 # CF_FSNN_Net — Car-Following SNN con training PINN
 # Adattamento di FSNN_V5 per ACC-IDM (con base IIDM) + V2X + PYNQ-Z1
-# Modello fisico: Ch12 Sez.12.4 Treiber & Kesting 2013
+# Modello fisico: Ch12 Sez.12.4 Treiber & Kesting 2025
 # ===========================================================
 import math as _math
 

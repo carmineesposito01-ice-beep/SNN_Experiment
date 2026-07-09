@@ -375,7 +375,7 @@ Le figure-chiave di questo report (accuratezza, discriminante FPGA, sicurezza, q
 | ISO 2631-1 (1997). Mechanical vibration and shock — Evaluation of human exposure to whole-body vibration. ISO, Ginevra. | Soglia comfort/jerk (§5.1) |
 | Transtrum, M.K., Machta, B.B., Sethna, J.P. (2011). Geometry of nonlinear least squares with applications to sloppy models and optimization. Physical Review E 83, 036701. | FIM, modelli sloppy (§4.3) |
 | Kaul, S., Yates, R., Gruteser, M. (2012). Real-time status: how often should one update? IEEE INFOCOM, 2731–2735. | Age-of-Information (§8.1) |
-| Treiber, M., Kesting, A. (2013). Traffic Flow Dynamics: Data, Models and Simulation. Springer. | ACC-IIDM, calibrazione, string stability (§1, §4, §7) |
+| Treiber, M., Kesting, A. (2025). Traffic Flow Dynamics: Data, Models and Simulation. Springer. | ACC-IIDM, calibrazione, string stability (§1, §4, §7) |
 | Horowitz, M. (2014). Computing's energy problem (and what we can do about it). IEEE Int. Solid-State Circuits Conf. (ISSCC), 10–14. | Energia AC/MAC (§9.2) |
 | Bellec, G., Salaj, D., Subramoney, A., Legenstein, R., Maass, W. (2018). Long short-term memory and learning-to-learn in networks of spiking neurons. Advances in Neural Information Processing Systems (NeurIPS) 31. | Neurone ALIF (§2.1) |
 | Neftci, E.O., Mostafa, H., Zenke, F. (2019). Surrogate gradient learning in spiking neural networks. IEEE Signal Processing Magazine 36(6), 51–63. | BPTT+surrogate (§2.2) |
