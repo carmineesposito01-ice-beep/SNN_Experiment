@@ -5,9 +5,6 @@ un veicolo (gap, velocità, Δv, velocità del leader), **identifica i 5 paramet
 di car-following **ACC-IIDM** `[v0, T, s0, a, b]` — con l'obiettivo di essere eseguita su
 **FPGA** (Zynq-7020 / PYNQ-Z1) grazie a pesi potenze-di-due (moltiplicazione → bit-shift, 0 DSP).
 
-> 🚀 **Riprendere dopo una pausa:** `document/SESSION_RESUME.md` (5 min) + il master del track
-> principale `document/EVENTPROP_STATUS.md`; per ri-allinearsi in modo deterministico
-> `document/RESUME_PROCEDURE.md`.
 > 📚 **Navigazione:** `document/GLOSSARY.md` (termini e codici) · `WORKFLOW.md` · `TIMELINE.md` · `FUTURE_WORK.md`.
 > 🎤 **Presentazione:** deck in [`presentation/`](presentation/). 📄 **Report finali:** [`report/`](report/).
 > Ogni cartella ha il suo `README.md`: **questo file è la mappa** dell'intera repository.
@@ -18,7 +15,7 @@ di car-following **ACC-IIDM** `[v0, T, s0, a, b]` — con l'obiettivo di essere 
 
 Un problema **inverso**: non si prevede la traiettoria, si stimano i *cinque numeri* che la
 generano. La fisica (ACC-IIDM) fa da ponte tra ciò che la rete produce e ciò che è misurabile
-(l'accelerazione), tramite una **loss PINN**. La spiegazione completa è nella terna di report
+(l'accelerazione), tramite una **loss PINN**. La spiegazione completa è nei report
 in [`report/`](report/) — punto di partenza consigliato: `report/HOW_IT_WORKS_v3.pdf`.
 
 ## 2. Architettura (baseline)
@@ -50,8 +47,8 @@ Dettagli e numeri: `report/VALIDATION_REPORT_v3` e `report/FPGA_REPORT`.
 
 | Cartella | Contenuto | Dettagli |
 |---|---|---|
-| [`report/`](report/) | **I 3 deliverable finali** (la terna v3: teoria, risultati, profilo FPGA) + i generatori | `report/README.md` |
-| [`document/`](document/) | **Memoria** di progetto (`.md` di ripresa/studio/design) + `papers/` (paper esterni) | `document/README.md` |
+| [`report/`](report/) | **I report finali** del progetto (teoria, risultati, profilo hardware) + i generatori | `report/README.md` |
+| [`document/`](document/) | **Memoria** di progetto (`.md` di ripresa/studio/design) + `papers/` (riferimenti esterni e archivio delle fonti citate) | `document/README.md` |
 | [`core/`](core/) | Il modello: rete, neuroni, hardware (surrogate+po2), EventProp, ottimizzatore | `core/README.md` |
 | [`data/`](data/) | Generatore di traiettorie sintetiche ACC-IIDM | `data/README.md` |
 | [`utils/`](utils/) | Toolbox: simulatore closed-loop, quantizzazione, identificabilità, profilatori FPGA | `utils/README.md` |
@@ -63,22 +60,21 @@ Dettagli e numeri: `report/VALIDATION_REPORT_v3` e `report/FPGA_REPORT`.
 | [`presentation/`](presentation/) | Deck di presentazione (Quarto + reveal.js) | `presentation/README.md` |
 | [`opt_plots/`](opt_plots/), [`sweep_plots/`](sweep_plots/) | Archivi di grafici di ottimizzatore/sweep | i rispettivi README |
 | [`original_FSNN/`](original_FSNN/) | La FSNN originale di riferimento (pre-progetto) | `original_FSNN/README.md` |
-| **root** | Notebook di studio (48) + entry-point di codice (`train.py`, `config.py`, `eval_report.py`, …) | § 4 e § 5 |
+| **root** | Notebook di studio + entry-point di codice (`train.py`, `config.py`, `eval_report.py`, …) | § 4 e § 5 |
 
 > **Non versionati** (`.gitignore`): `checkpoints/`, `dataset/`, `logs/`, `__pycache__/`, `*.pt`
 > (eccezione: i 4 `champions/**`). I dati vengono rigenerati a runtime dal generatore.
 
 ## 4. Notebook (nella root)
 
-I 48 `*.ipynb` restano nella root perché **importano `core/`, `data/`, `utils/` e leggono
-`results/` con path relativi**: vanno quindi eseguiti con Jupyter **lanciato dalla root del
-repo** (cwd = root). Sono raggruppati per famiglia di studio:
+I `*.ipynb` nella root sono raggruppati per famiglia di studio (eseguibili con Jupyter avviato
+dalla root del repo):
 
 - `Training_File*` — addestramento base e sweep architetturali.
 - `Prodigy_*`, `Loss_Study_*`, `Dynamic_Study_*`, `EventProp_*` — gli studi (chiusi) dell'ottimizzatore,
   della loss, dei parametri dinamici a/b, di EventProp. Log e verdetti in `document/` e `results/`.
 - `Eval_v3_TURTLE_POWER.ipynb`, `Eval_FPGA.ipynb` — producono le run in `results/evaluate/` da cui
-  la terna di `report/` estrae numeri e figure.
+  i `report/` estraggono numeri e figure.
 - `Simulator_Visual.ipynb` — visualizzazione del simulatore closed-loop.
 
 ## 5. Come si usa
@@ -92,11 +88,6 @@ python train.py --epochs 20 --tag A1 --scheduler cosine --optimizer adam
 
 # valutazione post-training su un test set
 python eval_report.py --checkpoint checkpoints/<tag>/best_model.pt --n_test 500
-
-# rigenerare la terna di report (md + pdf → report/)
-python scripts/build_how_it_works_v3.py       # teoria (nessun dato richiesto)
-python scripts/build_validation_report_v3.py  # legge results/evaluate/v3_TURTLE_POWER!!!/
-python scripts/build_fpga_report.py           # legge results/evaluate/FPGA/
 ```
 
 **Output per run** in `checkpoints/<tag>/` (non versionato): `best_model.pt`, `last_model.pt`,
@@ -104,11 +95,11 @@ python scripts/build_fpga_report.py           # legge results/evaluate/FPGA/
 
 ## 6. Target hardware
 
-FPGA **Zynq-7020 / PYNQ-Z1** (220 DSP48E1, 140 BRAM). Grazie ai pesi potenze-di-due
-(moltiplicazione → shift), il design usa **0 DSP** e **<1 BRAM** (<1% del budget), entro un
-deadline di controllo di **100 ms** (V2X a 10 Hz). Il deploy su silicio è ancora un obiettivo: la
-Fase A pre-silicio è completata (profilo in `report/FPGA_REPORT`), mentre le Fasi B/C (HDL/board)
-sono il lavoro del worktree `Simulink_Importer` (§7).
+FPGA **Zynq-7020 / PYNQ-Z1** (220 DSP48E1, 140 BRAM). L'obiettivo di progetto è un'inferenza
+**senza moltiplicatori** — i pesi potenze-di-due riducono ogni prodotto a uno shift — entro il
+deadline di controllo imposto dal canale V2X a 10 Hz (**100 ms**). Il deploy su silicio è ancora
+un obiettivo: la Fase A pre-silicio è completata, mentre le Fasi B/C (HDL/board) sono il lavoro del
+worktree `Simulink_Importer` (§7). Il profilo hardware misurato è documentato in `report/FPGA_REPORT`.
 
 ## 7. Track paralleli (git worktree)
 
@@ -121,8 +112,10 @@ Il progetto avanza su più tracce isolate (vedi memoria `cf-fsnn-parallel-tracks
 
 ## 8. Riferimenti principali
 
-- Treiber & Kesting, *Traffic Flow Dynamics: Data, Models and Simulation*, 2ª ed., Springer 2013
+- Treiber & Kesting, *Traffic Flow Dynamics: Data, Models and Simulation*, Springer 2013
   (IDM/IIDM, CAH/ACC, calibrazione, string stability, diagramma fondamentale).
 - Wunderlich & Pehle 2021 (EventProp) · Neftci et al. 2019 (surrogate gradient) ·
   Bellec et al. 2018 (ALIF/LSNN) · Raissi et al. 2019 (PINN) · Horowitz 2014 (energia AC/MAC).
-- Bibliografie complete (fonti verificate) in coda a ciascun documento di `report/`.
+- Le bibliografie complete e verificate sono in coda a ciascun documento di [`report/`](report/);
+  i relativi PDF — scaricati dove liberamente disponibili, altrimenti con la fonte ufficiale — sono
+  archiviati in [`document/papers/`](document/papers/) (catalogo in `document/papers/README.md`).
