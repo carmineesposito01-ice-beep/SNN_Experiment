@@ -288,8 +288,9 @@ from sim.ui.panels import SynOpsPanel   # noqa: E402
 
 def test_synops_panel_ref_and_total(qapp):
     panel = SynOpsPanel()
+    assert panel._plot.parent() is panel                          # plot is actually placed in the widget
     panel.set_model(4, 32, 5, 8)
-    assert abs(panel._ref.value() - 800) < 1e-6                    # dense-MAC reference
+    assert panel._dense == 800                                    # dense-MAC reference value
     p = AttributeProbe(capacity=10)
     for t in range(3):
         spk = np.zeros(32); spk[:5] = 1                           # 5 firing
@@ -297,6 +298,8 @@ def test_synops_panel_ref_and_total(qapp):
     panel.update_frame(p)
     y = panel._total_c.getData()[1]
     assert float(y[-1]) == 128 + (5 * 8 + 32 * 8 + 5 * 5)         # static 128 + dynamic 321 = 449
+    ref = panel._ref_c.getData()[1]
+    assert ref is not None and bool(np.all(ref == 800))          # flat dense-MAC reference line
 
 
 def test_synops_panel_cursor(qapp):

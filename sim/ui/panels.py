@@ -64,18 +64,16 @@ class SynOpsPanel(QWidget):
         self._plot = pg.PlotWidget(title="SynOps / tick (AC)")
         self._plot.setLabel("bottom", "time", units="steps")
         self._plot.setLabel("left", "SynOps")
-        self._plot.setDownsampling(auto=True, mode="peak")
-        self._plot.setClipToView(True)
+        # Stacked areas without FillBetweenItem: total (amber, filled to 0) then static (teal,
+        # filled to 0) drawn on top -> the amber shows only in the static..total band (= dynamic).
+        self._total_c = self._plot.plot(pen=pg.mkPen("#ffffff", width=1.5),
+                                        fillLevel=0, brush=pg.mkBrush(239, 159, 39, 90))
         self._static_c = self._plot.plot(pen=pg.mkPen("#1d9e75", width=1),
-                                         fillLevel=0, brush=pg.mkBrush(29, 158, 117, 110))
-        self._total_c = self._plot.plot(pen=pg.mkPen("#ffffff", width=1.5))
-        self._fill_dyn = pg.FillBetweenItem(self._total_c, self._static_c,
-                                            brush=pg.mkBrush(239, 159, 39, 100))
-        self._plot.addItem(self._fill_dyn)
-        self._ref = pg.InfiniteLine(angle=0, movable=False,
-                                    pen=pg.mkPen("#9a9a9a", width=1.2, style=Qt.DashLine))
-        self._ref.setVisible(False)
-        self._plot.addItem(self._ref)
+                                         fillLevel=0, brush=pg.mkBrush(29, 158, 117, 150))
+        # dense-MAC reference as a FLAT CURVE (not an InfiniteLine) so the y-autorange includes it
+        # and it stays visible above the SynOps bars.
+        self._ref_c = self._plot.plot(pen=pg.mkPen("#9a9a9a", width=1.2, style=Qt.DashLine))
+        layout.addWidget(self._plot)
         self._cursors = [_add_cursor(self._plot.getPlotItem())]
         self._dims = None
         self._dense = None
@@ -86,9 +84,6 @@ class SynOpsPanel(QWidget):
     def set_model(self, n_in, n_hid, n_out, rank):
         self._dims = (int(n_in), int(n_hid), int(n_out), int(rank))
         self._dense = metrics.dense_mac(*self._dims)
-        self._ref.setPos(self._dense)
-        self._ref.setVisible(True)
-        self._plot.setYRange(0, self._dense * 1.05)
 
     def update_frame(self, probe):
         if self._dims is None:
@@ -100,6 +95,7 @@ class SynOpsPanel(QWidget):
         total = static + dynamic
         self._static_c.setData(static)
         self._total_c.setData(total)
+        self._ref_c.setData(np.full(total.size, float(self._dense)))
         cur = float(total[-1])
         pct = 100.0 * cur / self._dense if self._dense else 0.0
         self._plot.setTitle(f"SynOps/tick = {int(cur)} · {pct:.0f}% del dense-MAC ({self._dense})")
