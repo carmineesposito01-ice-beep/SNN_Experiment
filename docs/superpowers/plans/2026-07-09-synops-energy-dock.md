@@ -2,6 +2,8 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans. Steps use checkbox (`- [ ]`) syntax.
 
+**Status:** ✅ COMPLETE (2026-07-09, commits `5bdb68a`..`ec43026`). 92 sim tests green; core bit-identical; render-verified. Phase 3 closed. NB fix: `SynOpsPanel` initially omitted `layout.addWidget(self._plot)` (dock rendered blank) — caught by render, guarded by a test.
+
 **Goal:** A live "SynOps" dock — static (fc) + dynamic (spike-driven) synaptic ops per tick, with a dense-MAC reference — faithful to the FPGA scorecard (message: AC<MAC, not sparsity).
 
 **Architecture:** Pure metrics in `sim/ui/metrics.py`; `SynOpsPanel` in `panels.py`; rank exposed via an additive `read_weights["rank"]` (from `rec_V.shape[0]`, NOT `np.linalg.matrix_rank` — SVD triggers OMP Error #15 in `cf_sim`). Behavioral core frozen.

@@ -166,10 +166,14 @@ The core already computes these but shows none of them:
     "Inspector") — selected neuron's `v_mem`/threshold/spike scope over the source + dominant-connection
     readout; `NeuronGraphPanel.sigNeuronClicked`/`highlight` colour its fan-in/out edges. 13 docks; presets
     updated (Neuro-debug foregrounds Inspector+Events). Spec/plan `2026-07-09-scrub-events-inspector*`. 83 sim tests green; core frozen (reconstruct read-only).
-  - **BACKLOG (deferred, user 2026-07-08): instantaneous energy / SynOps dock.** Completes the SpikeRate
-    view. Energy/tick ≈ Σ(fan-out of firing neurons) — derivable from `spikes` + the NetGraph topology
-    (already extracted for the graph edges). TBD how to surface: a number in the SpikeRate dock, or its own
-    small dock. Design when we get to Phase 3a/b.
+  - **SynOps / energy dock — ✅ DONE (2026-07-09, commits up to `ec43026`):** dock "SynOps" (14 docks total)
+    — per-tick synaptic ops split into **static** (fc input, always-on = `IN·H`) + **dynamic** (spike-driven
+    `s·rank` rec_V + `H·rank` rec_U + `s·OUT` out), with a **dense-MAC reference** (`IN·H + 2·rank·H + H·OUT`
+    = param count). Faithful to the FPGA scorecard: the message is **AC<MAC (not sparsity)** — SynOps are
+    ~comparable to the dense-MAC ceiling (rendered ~58% for R33). Pure `metrics.synops/synops_series/dense_mac`;
+    rank from an additive `read_weights["rank"]` = `rec_V.shape[0]` (**NOT `np.linalg.matrix_rank` — SVD
+    triggers OMP #15** via numpy's own OpenMP, distinct from the Qt/libomp shim). Spec/plan
+    `2026-07-09-synops-energy-dock*`. **92 sim tests green; core bit-identical.** **Phase 3 CLOSED.**
 - **Phase 4 — Post-run seal (one episode) + float-vs-fixed A/B + optional export.** Fixed-point SW
   model path; same-seed overlay; generic CSV/PNG.
 - **Phase 5 (ambitions).** GT sliders / live UKF re-identification, video/GIF, scenario form editor,
