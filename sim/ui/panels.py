@@ -121,7 +121,8 @@ class EventTimelinePanel(QWidget):
                                          pen=pg.mkPen("#0e1116"), hoverable=True)
         self._marks.sigClicked.connect(self._on_click)
         self._plot.addItem(self._marks)
-        self._labels = []
+        self._pool = []                                    # reused TextItems (no per-frame teardown/rebuild)
+        self._sig = None                                   # (n_events, first_tick, last_tick) skip-guard
         self._on_seek = None
         self._cursors = [_add_cursor(self._plot.getPlotItem())]
 
@@ -131,24 +132,37 @@ class EventTimelinePanel(QWidget):
     def set_on_seek(self, cb):
         self._on_seek = cb
 
-    def _clear_labels(self):
-        for t in self._labels:
-            self._plot.removeItem(t)
-        self._labels = []
+    def _label(self, k, verb, idx):
+        if k < len(self._pool):
+            t = self._pool[k]
+            t.setText(verb); t.setPos(float(idx), 0.0); t.setVisible(True)
+        else:
+            t = pg.TextItem(verb, color="#EF9F27", anchor=(0.5, 1.4))
+            t.setPos(float(idx), 0.0)
+            self._plot.addItem(t)
+            self._pool.append(t)
 
     def update_events(self, log, frames):
-        self._clear_labels()
+        sig = (len(log), frames[0].t if frames else None, frames[-1].t if frames else None)
+        if sig == self._sig:
+            return                                         # nothing moved (paused / no new frame) -> skip
+        self._sig = sig
+        if not log:                                        # common pre-injection case: skip the whole rebuild
+            self._marks.setData([])
+            for t in self._pool:
+                t.setVisible(False)
+            return
         tick_to_idx = {f.t: i for i, f in enumerate(frames)}
-        spots = []
+        spots, k = [], 0
         for e in log:
             idx = tick_to_idx.get(e["tick"])
             if idx is None:
                 continue                                   # scrolled out of the source -> skip
             spots.append({"pos": (idx, 0.0), "data": e["tick"]})
-            lbl = pg.TextItem(e["verb"], color="#EF9F27", anchor=(0.5, 1.4))
-            lbl.setPos(float(idx), 0.0)
-            self._plot.addItem(lbl)
-            self._labels.append(lbl)
+            self._label(k, e["verb"], idx)
+            k += 1
+        for t in self._pool[k:]:
+            t.setVisible(False)
         self._marks.setData(spots)
 
     def _on_click(self, scatter, points):
