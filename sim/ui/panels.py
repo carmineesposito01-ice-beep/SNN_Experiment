@@ -32,69 +32,120 @@ class SpikeRatePanel(QWidget):
             self._curve.setData(sm.mean(axis=1) * 100.0)
 
 
-_GROUP_BORDERS = [("input", "#2a7fb8"), ("hidden", "#7b3fa0"), ("output", "#2e8b57")]
+_INPUT_NAMES = ["s", "v", "Δv", "vl"]   # order from _norm_obs: gap, ego speed, closing speed, leader speed
 
 
-class NeuronStatePanel(QWidget):
-    """Instantaneous neuron-state map at the latest tick: input | hidden | output groups with
-    coloured borders; hidden = v_mem heat (viridis) + white overlay on neurons that spiked this tick."""
+class NeuronGraphPanel(QWidget):
+    """Node-link view of the SNN (input | hidden | output): coloured circles (viridis(activation)),
+    a faint weight-skeleton (opacity ~ |weight|), and WHITE active pathways out of firing neurons."""
     def __init__(self):
         super().__init__()
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        self._glw = pg.GraphicsLayoutWidget()
-        layout.addWidget(self._glw)
-        self._cmap = pg.colormap.get("viridis")
-        self._lut = self._cmap.getLookupTable(0.0, 1.0, 256)
-        self._groups = {}     # name -> (plot, heat_img, overlay_img_or_None)
-        for col, (name, color) in enumerate(_GROUP_BORDERS):
-            p = self._glw.addPlot(row=0, col=col)   # groups side by side: input | hidden | output
-            p.setTitle(name)
-            p.hideAxis("left")
-            p.hideAxis("bottom")
-            p.getViewBox().setBorder(pg.mkPen(color, width=2))
-            heat = pg.ImageItem()
-            heat.setColorMap(self._cmap)
-            p.addItem(heat)
-            overlay = None
-            if name == "hidden":
-                overlay = pg.ImageItem()      # drawn on top of the heat
-                p.addItem(overlay)
-            self._groups[name] = (p, heat, overlay)
-        for c, factor in enumerate((1, 4, 1)):   # give the 32-neuron hidden grid the width
-            self._glw.ci.layout.setColumnStretchFactor(c, factor)
+        self._plot = pg.PlotWidget()
+        self._plot.hideAxis("left")
+        self._plot.hideAxis("bottom")
+        self._plot.setMenuEnabled(False)
+        layout.addWidget(self._plot)
+        self._lut = pg.colormap.get("viridis").getLookupTable(0.0, 1.0, 256)
+        self._skeleton = pg.GraphItem()
+        self._active = pg.GraphItem()
+        self._nodes = pg.ScatterPlotItem()
+        for it in (self._skeleton, self._active, self._nodes):
+            self._plot.addItem(it)
+        self._pos = None
+        self._n_in = self._n_hid = self._n_out = 0
+        self._rec_out_adj = None      # (E,2) recurrent + output edges (spike-carrying)
+        self._rec_out_src = None      # (E,) source hidden index of each such edge
 
-    def _set_strip(self, name, values):
-        _, heat, _ = self._groups[name]
-        heat.setImage(np.asarray(values, dtype=np.float64).reshape(1, -1), autoLevels=True)
-
-    def _set_hidden(self, v_mem, spikes):
-        _, heat, overlay = self._groups["hidden"]
-        v = np.asarray(v_mem, dtype=np.float64).reshape(-1)
-        H = v.size
-        rows = max(1, int(np.floor(np.sqrt(H))))
-        cols = int(np.ceil(H / rows))
+    def _brushes(self, vals):
+        v = np.asarray(vals, dtype=np.float64).reshape(-1)
         vmin, vmax = float(np.nanmin(v)), float(np.nanmax(v))
         idx = np.clip(((v - vmin) / (vmax - vmin + 1e-9) * 255).astype(int), 0, 255)
-        base = np.zeros((rows * cols, 4), dtype=np.ubyte)
-        base[:H, :3] = self._lut[idx][:, :3]
-        base[:H, 3] = 255
-        heat.setImage(base.reshape(rows, cols, 4))
-        ov = np.zeros((rows * cols, 4), dtype=np.ubyte)
-        spk = np.zeros(rows * cols, dtype=bool)
-        spk[:H] = np.asarray(spikes, dtype=np.float64).reshape(-1)[:H] > 0
-        ov[spk] = [255, 255, 255, 180]
-        overlay.setImage(ov.reshape(rows, cols, 4))
+        return [pg.mkBrush(int(r), int(g), int(b)) for r, g, b in self._lut[idx][:, :3]]
+
+    def set_topology(self, w_in, w_rec, w_out):
+        w_in = np.asarray(w_in, dtype=np.float64)
+        w_rec = np.asarray(w_rec, dtype=np.float64)
+        w_out = np.asarray(w_out, dtype=np.float64)
+        H, IN = w_in.shape
+        OUT = w_out.shape[0]
+        self._n_in, self._n_hid, self._n_out = IN, H, OUT
+
+        def yspread(n, span=32.0):
+            return np.linspace(0.0, span, n) if n > 1 else np.array([span / 2])
+
+        half = (H + 1) // 2
+        pin = [(0.0, y) for y in yspread(IN)]
+        phid = ([(1.0, y) for y in yspread(half)] + [(1.4, y) for y in yspread(H - half)])
+        pout = [(2.6, y) for y in yspread(OUT)]
+        self._pos = np.array(pin + phid + pout, dtype=float)
+        bi, bh, bo = 0, IN, IN + H
+
+        e_in = [(bi + i, bh + j) for j in range(H) for i in range(IN)]
+        w_e_in = [abs(w_in[j, i]) for j in range(H) for i in range(IN)]
+        e_rec = [(bh + i, bh + j) for i in range(H) for j in range(H) if i != j]
+        w_e_rec = [abs(w_rec[j, i]) for i in range(H) for j in range(H) if i != j]
+        src_rec = [i for i in range(H) for j in range(H) if i != j]
+        e_out = [(bh + j, bo + k) for j in range(H) for k in range(OUT)]
+        w_e_out = [abs(w_out[k, j]) for j in range(H) for k in range(OUT)]
+        src_out = [j for j in range(H) for k in range(OUT)]
+
+        all_adj = np.array(e_in + e_rec + e_out, dtype=int)
+        all_w = np.array(w_e_in + w_e_rec + w_e_out, dtype=float)
+        alpha = np.clip(all_w / (all_w.max() + 1e-9) * 55 + 6, 6, 61).astype(np.ubyte)
+        pens = np.zeros(len(all_adj), dtype=[('red', np.ubyte), ('green', np.ubyte),
+                                             ('blue', np.ubyte), ('alpha', np.ubyte), ('width', float)])
+        pens['red'][:] = 150
+        pens['green'][:] = 150
+        pens['blue'][:] = 150
+        pens['alpha'] = alpha
+        pens['width'] = 1.0
+        self._skeleton.setData(pos=self._pos, adj=all_adj, pen=pens, size=0)
+
+        self._rec_out_adj = np.array(e_rec + e_out, dtype=int)
+        self._rec_out_src = np.array(src_rec + src_out, dtype=int)
+        self._active.setData(pos=self._pos, adj=np.empty((0, 2), dtype=int),
+                             pen=pg.mkPen("#ffffff", width=2.2), size=0)
+        self._add_labels()
+
+    def _text(self, s, x, y, anchor, color):
+        t = pg.TextItem(s, color=color, anchor=anchor)
+        t.setPos(float(x), float(y))
+        self._plot.addItem(t)
+
+    def _add_labels(self):
+        for i in range(self._n_in):
+            self._text(_INPUT_NAMES[i] if i < len(_INPUT_NAMES) else f"in{i}",
+                       self._pos[i, 0], self._pos[i, 1], (1.2, 0.5), "#8fb7e0")
+        for k in range(self._n_out):
+            j = self._n_in + self._n_hid + k
+            self._text(PARAM_NAMES[k] if k < len(PARAM_NAMES) else f"out{k}",
+                       self._pos[j, 0], self._pos[j, 1], (-0.2, 0.5), "#88d6a0")
+        top = float(self._pos[:, 1].max()) + 2.5
+        self._text("input · osservazione", 0.0, top, (0.5, 1.0), "#8fb7e0")
+        self._text("hidden · 32 ALIF", 1.2, top, (0.5, 1.0), "#c9a0e8")
+        self._text("output · parametri", 2.6, top, (0.5, 1.0), "#88d6a0")
 
     def update_frame(self, probe):
         frames = probe.frames()
-        if not frames:
+        if not frames or self._pos is None:
             return
         f = frames[-1]
-        if f.input is not None and np.size(f.input):
-            self._set_strip("input", f.input)
-        self._set_hidden(f.v_mem, f.spikes)
-        self._set_strip("output", f.params)
+        inp = (np.asarray(f.input, dtype=np.float64).reshape(-1)
+               if (f.input is not None and np.size(f.input)) else np.zeros(self._n_in))
+        vals = np.concatenate([inp[:self._n_in],
+                               np.asarray(f.v_mem, dtype=np.float64).reshape(-1)[:self._n_hid],
+                               np.asarray(f.params, dtype=np.float64).reshape(-1)[:self._n_out]])
+        spk = np.asarray(f.spikes, dtype=np.float64).reshape(-1)[:self._n_hid] > 0
+        pens = [pg.mkPen(None)] * len(vals)
+        for j in range(self._n_hid):
+            if spk[j]:
+                pens[self._n_in + j] = pg.mkPen("#ffffff", width=2.0)
+        self._nodes.setData(pos=self._pos, brush=self._brushes(vals), pen=pens, size=13)
+        mask = spk[self._rec_out_src]
+        self._active.setData(pos=self._pos, adj=self._rec_out_adj[mask],
+                             pen=pg.mkPen("#ffffff", width=2.2), size=0)
 
 
 class VmemPanel(QWidget):

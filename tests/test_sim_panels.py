@@ -13,7 +13,7 @@ pytest.importorskip("pyqtgraph")
 
 from PySide6.QtWidgets import QApplication          # noqa: E402
 from sim.probe import AttributeProbe                # noqa: E402
-from sim.ui.panels import NeuronStatePanel, ParamPanel, SpikeRatePanel, VmemPanel  # noqa: E402
+from sim.ui.panels import NeuronGraphPanel, ParamPanel, SpikeRatePanel, VmemPanel  # noqa: E402
 
 
 @pytest.fixture(scope="module")
@@ -58,20 +58,26 @@ def test_line_panels_have_clip_to_view(qapp):
     assert ParamPanel(0, "v0", "m/s", "#d1495b")._plot.getPlotItem().clipToViewMode() is True
 
 
-def test_neuron_state_panel_groups_and_spike_overlay(qapp):
-    H = 6
-    spikes = np.array([1, 0, 1, 0, 0, 0], dtype=float)
-    p = AttributeProbe(capacity=10)
+def test_neuron_graph_topology_and_active_edges(qapp):
+    H, IN, OUT = 6, 4, 5
+    rng = np.random.default_rng(0)
+    w_in = rng.standard_normal((H, IN))
+    w_rec = rng.standard_normal((H, H))
+    w_out = rng.standard_normal((OUT, H))
+    panel = NeuronGraphPanel()
+    panel.set_topology(w_in, w_rec, w_out)
+    assert panel._pos.shape == (IN + H + OUT, 2)                       # 15 nodes
+    exp_edges = IN * H + (H * H - H) + OUT * H                          # in + recurrent(no self) + out
+    assert panel._skeleton.adjacency.shape[0] == exp_edges
+    spikes = np.zeros(H)
+    spikes[[0, 2]] = 1                                                  # hidden 0 and 2 fired
+    p = AttributeProbe(capacity=5)
     p.record(0, {"spikes": spikes, "v_mem": np.linspace(0, 1, H), "v_th_eff": np.ones(H),
-                 "input": np.array([0.1, 0.2, 0.3, 0.4])}, np.array([30., 1.5, 2., 1.5, 1.5]))
-    panel = NeuronStatePanel()
+                 "input": np.array([0.1, 0.2, 0.3, 0.4])}, np.arange(OUT, dtype=float))
     panel.update_frame(p)
-    assert set(panel._groups.keys()) == {"input", "hidden", "output"}
-    heat = panel._groups["hidden"][1].image            # RGBA grid covering >= H cells
-    assert heat.ndim == 3 and heat.shape[2] == 4 and heat.shape[0] * heat.shape[1] >= H
-    ov = panel._groups["hidden"][2].image              # spike overlay: alpha>0 exactly on spiked cells
-    assert int((ov[..., 3] > 0).sum()) == int(spikes.sum())
-    assert panel._groups["input"][1].image.shape[0] == 1 and panel._groups["input"][1].image.shape[1] == 4
+    active = panel._active.adjacency
+    assert active.shape[0] == int((panel._rec_out_src == 0).sum() + (panel._rec_out_src == 2).sum())
+    assert active.shape[0] > 0
 
 
 def test_spike_rate_panel_series(qapp):
