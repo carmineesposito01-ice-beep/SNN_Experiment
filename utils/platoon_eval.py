@@ -105,7 +105,9 @@ def platoon_metrics(rec, warmup_frac=0.3):
     monotone = bool(np.all(np.diff(gain) <= 1e-3))             # strict string stability?
     # convettivita': il minimo di velocita' (l'onda) si sposta verso indici crescenti (a monte)?
     tmin = np.argmin(v[w:], axis=0)                            # istante di min v per veicolo
-    upstream = bool(np.polyfit(np.arange(n), tmin, 1)[0] > 0)  # ritardo cresce con l'indice = onda a monte
+    xa = np.arange(n); xm = xa - xa.mean(); ym = tmin - tmin.mean()   # deg-1 slope WITHOUT np.polyfit:
+    denom = float((xm * xm).sum())                                    # numpy LAPACK lstsq aborts in cf_sim (OMP #15)
+    upstream = bool(denom > 0 and float((xm * ym).sum()) / denom > 0)  # delay grows with index = upstream wave
     return {
         'n_vehicles': n,
         'amp_leader': round(amp_leader, 3),

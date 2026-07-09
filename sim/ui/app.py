@@ -24,6 +24,7 @@ from sim.ui.panels import (PARAM_COLORS, PARAM_NAMES, PARAM_UNITS, EventTimeline
                            NeuronGraphPanel, NeuronInspectorPanel, ParamPanel, SafetyPanel,
                            SpikeRatePanel, SynOpsPanel, TrajectoryPanel, VmemPanel)
 from sim.ui.meso_page import MesoMacroPage
+from sim.ui.platoon import platoon_metrics, run_platoon
 from sim.ui.reconstruct import reconstruct_spliced
 from sim.ui.trajectory import TrajectoryBuffer
 from sim.ui.topdown import TopDownView
@@ -259,7 +260,16 @@ class SimApp(QMainWindow):
             self._mode_sel.blockSignals(False)
 
     def _run_platoon(self):
-        pass        # wired in T3 (string-stability + space-time)
+        n = self._meso_page.n_vehicles()
+        rec = run_platoon(self._champ, _PARAMS_GT, n, self._platoon_head_profile())
+        m = platoon_metrics(rec)
+        self._meso_page.string_stability.set_metrics(m)
+        self._meso_page.space_time.set_rec(rec)
+
+    @staticmethod
+    def _platoon_head_profile(T=300, v_set=21.0, amp=2.0, period=50.0):
+        t = np.arange(T)
+        return v_set + amp * np.sin(2.0 * np.pi * t / period)   # sinusoidal head perturbation
 
     def _run_ring(self):
         pass        # wired in T4 (fundamental diagram + per-vehicle params)

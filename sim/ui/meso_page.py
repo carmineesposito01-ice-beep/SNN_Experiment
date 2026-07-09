@@ -1,8 +1,10 @@
 """MesoMacroPage -- batch platoon/ring analysis view (string stability, space-time, fundamental
 diagram, per-vehicle params). Scaffold in T1; panels are wired in T3/T4. The analysis is on-demand
 (press Run), distinct from the live single-vehicle cockpit."""
-from PySide6.QtWidgets import (QHBoxLayout, QLabel, QPushButton, QSpinBox, QVBoxLayout, QWidget)
-from pyqtgraph import GraphicsLayoutWidget
+from PySide6.QtWidgets import (QGridLayout, QHBoxLayout, QLabel, QPushButton, QSpinBox,
+                               QVBoxLayout, QWidget)
+
+from sim.ui.meso_panels import SpaceTimePanel, StringStabilityPanel
 
 
 class MesoMacroPage(QWidget):
@@ -17,8 +19,12 @@ class MesoMacroPage(QWidget):
             controls.addWidget(w)
         controls.addStretch(1)
         root.addLayout(controls)
-        self._grid = GraphicsLayoutWidget()          # analysis panels added in T3/T4
-        root.addWidget(self._grid, stretch=1)
+        self._grid = QGridLayout()                   # T4 adds the macro panels at row 1
+        self.string_stability = StringStabilityPanel()
+        self.space_time = SpaceTimePanel()
+        self._grid.addWidget(self.string_stability, 0, 0)
+        self._grid.addWidget(self.space_time, 0, 1)
+        root.addLayout(self._grid, stretch=1)
         self._on_run_platoon = None
         self._on_run_ring = None
         self._run_platoon_btn.clicked.connect(lambda: self._on_run_platoon and self._on_run_platoon())

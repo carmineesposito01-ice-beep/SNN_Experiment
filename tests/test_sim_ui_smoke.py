@@ -282,6 +282,18 @@ def test_simapp_mode_toggle(qapp):
     assert win._mode_stack.currentIndex() == 0
 
 
+def test_simapp_run_platoon_populates_meso(qapp):
+    win = SimApp(CHAMP)
+    win.set_mode(1)
+    win._meso_page._n_spin.setValue(5)
+    win._run_platoon()
+    h = win._meso_page.string_stability._bars.opts["height"]
+    assert h is not None and len(h) == 5                  # one bar per vehicle
+    st = win._meso_page.space_time._curves
+    active = [c for c in st if c.getData()[0] is not None and len(c.getData()[0]) > 0]
+    assert len(active) == 5                               # 5 space-time trajectories
+
+
 def test_simapp_has_synops_dock(qapp):
     win = SimApp(CHAMP)
     assert "SynOps" in win._docks and len(win._docks) == 14
