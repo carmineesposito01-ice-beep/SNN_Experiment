@@ -54,6 +54,58 @@ class SpikeRatePanel(QWidget):
             self._curve.setData(sm.mean(axis=1) * 100.0)
 
 
+class EventTimelinePanel(QWidget):
+    """Injected events (injector.log()) as clickable marks on the source-index axis.
+    Marks store the ABSOLUTE tick; clicking calls the seek callback with that tick."""
+    def __init__(self):
+        super().__init__()
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        self._plot = pg.PlotWidget(title="events")
+        self._plot.hideAxis("left")
+        self._plot.setLabel("bottom", "time", units="steps")
+        self._plot.setMouseEnabled(x=True, y=False)
+        self._plot.setYRange(-1, 1)
+        layout.addWidget(self._plot)
+        self._marks = pg.ScatterPlotItem(symbol="t", size=14, brush=pg.mkBrush("#EF9F27"),
+                                         pen=pg.mkPen("#0e1116"), hoverable=True)
+        self._marks.sigClicked.connect(self._on_click)
+        self._plot.addItem(self._marks)
+        self._labels = []
+        self._on_seek = None
+        self._cursors = [_add_cursor(self._plot.getPlotItem())]
+
+    def set_cursor(self, x):
+        _set_cursor(self._cursors, x)
+
+    def set_on_seek(self, cb):
+        self._on_seek = cb
+
+    def _clear_labels(self):
+        for t in self._labels:
+            self._plot.removeItem(t)
+        self._labels = []
+
+    def update_events(self, log, frames):
+        self._clear_labels()
+        tick_to_idx = {f.t: i for i, f in enumerate(frames)}
+        spots = []
+        for e in log:
+            idx = tick_to_idx.get(e["tick"])
+            if idx is None:
+                continue                                   # scrolled out of the source -> skip
+            spots.append({"pos": (idx, 0.0), "data": e["tick"]})
+            lbl = pg.TextItem(e["verb"], color="#EF9F27", anchor=(0.5, 1.4))
+            lbl.setPos(float(idx), 0.0)
+            self._plot.addItem(lbl)
+            self._labels.append(lbl)
+        self._marks.setData(spots)
+
+    def _on_click(self, scatter, points):
+        if points and self._on_seek is not None:
+            self._on_seek(int(points[0].data()))
+
+
 _INPUT_NAMES = ["s", "v", "Δv", "vl"]   # order from _norm_obs: gap, ego speed, closing speed, leader speed
 
 

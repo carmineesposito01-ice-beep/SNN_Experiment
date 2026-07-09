@@ -151,3 +151,41 @@ def test_neuron_graph_index_aware(qapp):
     panel.update_frame(pr, index=1)
     assert not np.allclose(v0, panel._last_vals)              # different tick -> different state
     panel.update_frame(pr, index=99)                          # out-of-range clamps, no raise
+
+
+# --- Phase 3b (rest): event timeline ---
+from sim.ui.panels import EventTimelinePanel   # noqa: E402
+from sim.probe import ProbeFrame               # noqa: E402
+
+
+def _pf(ticks):
+    return [ProbeFrame(t=t, spikes=np.zeros(2), v_mem=np.zeros(2), v_th_eff=np.ones(2),
+                       params=np.zeros(5)) for t in ticks]
+
+
+def test_event_timeline_maps_ticks_and_drops_out_of_range(qapp):
+    panel = EventTimelinePanel()
+    frames = _pf(range(100, 200))                          # ticks 100..199 -> idx 0..99
+    log = [{"tick": 130, "verb": "brake_leader", "params": {}},
+           {"tick": 400, "verb": "brake_leader", "params": {}},   # dropped (out of range)
+           {"tick": 50,  "verb": "brake_leader", "params": {}}]   # dropped (out of range)
+    panel.update_events(log, frames)
+    xs = sorted(p.pos().x() for p in panel._marks.points())
+    assert xs == [30.0]                                    # only tick 130 -> idx 30
+
+
+def test_event_timeline_click_seeks_by_tick(qapp):
+    panel = EventTimelinePanel()
+    seen = []
+    panel.set_on_seek(lambda tick: seen.append(tick))
+    panel.update_events([{"tick": 105, "verb": "brake_leader", "params": {}}], _pf(range(100, 110)))
+    panel._on_click(panel._marks, list(panel._marks.points()))
+    assert seen == [105]                                   # seeks by absolute tick, not buffer index
+
+
+def test_event_timeline_has_cursor(qapp):
+    panel = EventTimelinePanel()
+    panel.set_cursor(4)
+    assert panel._cursors[0].isVisible() and abs(panel._cursors[0].value() - 4.0) < 1e-6
+    panel.set_cursor(None)
+    assert not panel._cursors[0].isVisible()
