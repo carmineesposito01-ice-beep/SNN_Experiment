@@ -137,3 +137,26 @@ def test_simapp_clamps_frame_dt(qapp):
     win = SimApp(CHAMP)
     assert win._clamp_frame_dt(5.0) == 0.1     # a lagged frame can't cascade into a huge step-batch
     assert win._clamp_frame_dt(0.02) == 0.02   # normal frames pass through
+
+
+# --- Phase 3b.1: time-scrub ---
+from sim.ui.trajectory import TrajectoryBuffer   # noqa: E402
+
+
+def _traj_seq(vs, ss):
+    tb = TrajectoryBuffer()
+    for i, (v, s) in enumerate(zip(vs, ss)):
+        tb.record(StepResult(t=i, s=s, v=v, vl=v - 1.0, dv=1.0, a_ego=0.0, params=np.zeros(5),
+                             collided=False))
+    return tb
+
+
+def test_topdown_render_at_reconstructs(qapp):
+    from config import DT
+    view = TopDownView()
+    vs = [10.0, 12.0, 8.0, 15.0]
+    tb = _traj_seq(vs, [30.0, 28.0, 26.0, 24.0])
+    view.render_at(tb, 2)
+    assert abs(view.ego_x_m() - float(np.cumsum(vs)[2] * DT)) < 1e-6
+    view.render_at(tb, -1)                       # head
+    assert abs(view.ego_x_m() - float(np.sum(vs) * DT)) < 1e-6

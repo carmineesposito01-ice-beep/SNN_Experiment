@@ -1,5 +1,6 @@
 """Top-down road view: ego pinned centre-screen while a dashed road + leader scroll past.
 Gap between ego and leader is drawn and coloured by time-to-collision (TTC)."""
+import numpy as np
 from PySide6.QtCore import QPointF, QRectF, Qt
 from PySide6.QtGui import QBrush, QColor, QFont, QPainter, QPen, QPolygonF
 from PySide6.QtWidgets import (QGraphicsLineItem, QGraphicsPolygonItem,
@@ -100,21 +101,34 @@ class TopDownView(QGraphicsView):
     def leader_x_m(self):
         return self._ego_x + VEH_LEN_M + self._last_s
 
-    def update_frame(self, r):
-        self._ego_x += r.v * DT                            # integrate ego position
-        self._last_s = r.s
+    def _place(self, ego_x, s, dv):
+        self._ego_x = ego_x
+        self._last_s = s
         ego_px = self._ego_x * PX_PER_M
         leader_px = self.leader_x_m() * PX_PER_M
         self._ego.setPos(ego_px, 0)
         self._leader.setPos(leader_px, 0)
         self._ego_label.setPos(ego_px - 12, -VEH_W_M * PX_PER_M - 8)
         self._leader_label.setPos(leader_px - 18, -VEH_W_M * PX_PER_M - 8)
-        col = QColor(_COL[ttc_color(r.s, r.dv)])
+        col = QColor(_COL[ttc_color(s, dv)])
         y = VEH_W_M * PX_PER_M + 4
         self._gap_line.setLine(ego_px + VEH_LEN_M / 2 * PX_PER_M, y,
                                leader_px - VEH_LEN_M / 2 * PX_PER_M, y)
         self._gap_line.setPen(QPen(col, 2, Qt.DashLine))
-        self._gap_text.setPlainText(f"s = {r.s:.1f} m")
+        self._gap_text.setPlainText(f"s = {s:.1f} m")
         self._gap_text.setDefaultTextColor(col)
         self._gap_text.setPos((ego_px + leader_px) / 2 - 22, y + 2)
         self.centerOn(ego_px, 0)                           # follow ego (pinned centre)
+
+    def update_frame(self, r):
+        self._place(self._ego_x + r.v * DT, r.s, r.dv)     # integrate ego position
+
+    def render_at(self, traj, index):
+        """Reconstruct ego/leader at buffer position `index` (for scrub): ego_x = Σ v·DT up to index."""
+        a = traj.arrays()
+        if a["t"].size == 0:
+            return
+        n = a["t"].size
+        i = index if index >= 0 else n + index
+        i = max(0, min(i, n - 1))
+        self._place(float(np.cumsum(a["v"])[i] * DT), float(a["s"][i]), float(a["dv"][i]))
