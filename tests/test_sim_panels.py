@@ -280,3 +280,26 @@ def test_inspector_clear_none(qapp):
     panel.set_neuron(1)
     panel.set_neuron(None)
     assert panel.neuron is None and panel._conn.text() == ""
+
+
+# --- Phase 3 close: SynOps / energy dock ---
+from sim.ui.panels import SynOpsPanel   # noqa: E402
+
+
+def test_synops_panel_ref_and_total(qapp):
+    panel = SynOpsPanel()
+    panel.set_model(4, 32, 5, 8)
+    assert abs(panel._ref.value() - 800) < 1e-6                    # dense-MAC reference
+    p = AttributeProbe(capacity=10)
+    for t in range(3):
+        spk = np.zeros(32); spk[:5] = 1                           # 5 firing
+        p.record(t, {"spikes": spk, "v_mem": np.zeros(32), "v_th_eff": np.ones(32)}, np.zeros(5))
+    panel.update_frame(p)
+    y = panel._total_c.getData()[1]
+    assert float(y[-1]) == 128 + (5 * 8 + 32 * 8 + 5 * 5)         # static 128 + dynamic 321 = 449
+
+
+def test_synops_panel_cursor(qapp):
+    panel = SynOpsPanel()
+    panel.set_cursor(6)
+    assert panel._cursors[0].isVisible() and abs(panel._cursors[0].value() - 6.0) < 1e-6

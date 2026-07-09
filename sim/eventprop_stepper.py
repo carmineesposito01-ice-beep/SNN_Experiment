@@ -87,4 +87,5 @@ class EventPropStepper:
             "w_in": w_in.detach().cpu().numpy(),
             "w_rec": self._rec_full.detach().cpu().numpy(),
             "w_out": self._w_out.detach().cpu().numpy(),
+            "rank": int(self.model.layer_hidden.rec_V.shape[0]),   # low-rank recurrent rank
         }

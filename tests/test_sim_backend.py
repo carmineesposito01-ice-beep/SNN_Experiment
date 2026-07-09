@@ -38,3 +38,20 @@ def test_make_backend_rejects_unknown_and_missing_model():
         make_backend("software")               # no model
     with pytest.raises(ValueError):
         make_backend("banana")
+
+
+def test_read_weights_exposes_rank():
+    be = SoftwareBackend(load_champion(CHAMP).model)
+    be.reset()
+    w = be.read_weights()
+    assert w["rank"] == 8                       # R33 rec_V (8,32) -> low-rank recurrent
+    assert w["w_in"].shape == (32, 4) and w["w_out"].shape == (5, 32)
+
+
+def test_read_weights_rank_eventprop():
+    champ = os.path.join(REPO, "champions", "PE_t05_gp0002", "best_model.pt")
+    if not os.path.exists(champ):
+        pytest.skip("eventprop champion not present")
+    be = SoftwareBackend(load_champion(champ).model)
+    be.reset()
+    assert be.read_weights()["rank"] > 0

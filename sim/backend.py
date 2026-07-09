@@ -66,6 +66,7 @@ class SoftwareBackend:
             "w_in": lh.fc_weight.detach().cpu().numpy(),
             "w_rec": (lh.rec_U @ lh.rec_V).detach().cpu().numpy(),
             "w_out": self.model.layer_out.fc_weight.detach().cpu().numpy(),
+            "rank": int(lh.rec_V.shape[0]),      # low-rank recurrent rank (rec_U@rec_V); NOT via SVD
         }
 
 

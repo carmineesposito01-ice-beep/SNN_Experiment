@@ -54,6 +54,57 @@ class SpikeRatePanel(QWidget):
             self._curve.setData(sm.mean(axis=1) * 100.0)
 
 
+class SynOpsPanel(QWidget):
+    """Per-tick synaptic ops: static (fc, always-on) + dynamic (spike-driven), vs the dense-MAC
+    equivalent (parameter count). SynOps ~ MACs (not sparse) -> the win is AC<MAC, not sparsity."""
+    def __init__(self):
+        super().__init__()
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        self._plot = pg.PlotWidget(title="SynOps / tick (AC)")
+        self._plot.setLabel("bottom", "time", units="steps")
+        self._plot.setLabel("left", "SynOps")
+        self._plot.setDownsampling(auto=True, mode="peak")
+        self._plot.setClipToView(True)
+        self._static_c = self._plot.plot(pen=pg.mkPen("#1d9e75", width=1),
+                                         fillLevel=0, brush=pg.mkBrush(29, 158, 117, 110))
+        self._total_c = self._plot.plot(pen=pg.mkPen("#ffffff", width=1.5))
+        self._fill_dyn = pg.FillBetweenItem(self._total_c, self._static_c,
+                                            brush=pg.mkBrush(239, 159, 39, 100))
+        self._plot.addItem(self._fill_dyn)
+        self._ref = pg.InfiniteLine(angle=0, movable=False,
+                                    pen=pg.mkPen("#9a9a9a", width=1.2, style=Qt.DashLine))
+        self._ref.setVisible(False)
+        self._plot.addItem(self._ref)
+        self._cursors = [_add_cursor(self._plot.getPlotItem())]
+        self._dims = None
+        self._dense = None
+
+    def set_cursor(self, x):
+        _set_cursor(self._cursors, x)
+
+    def set_model(self, n_in, n_hid, n_out, rank):
+        self._dims = (int(n_in), int(n_hid), int(n_out), int(rank))
+        self._dense = metrics.dense_mac(*self._dims)
+        self._ref.setPos(self._dense)
+        self._ref.setVisible(True)
+        self._plot.setYRange(0, self._dense * 1.05)
+
+    def update_frame(self, probe):
+        if self._dims is None:
+            return
+        sm = probe.spikes_matrix()
+        if not sm.size:
+            return
+        static, dynamic = metrics.synops_series(sm, *self._dims)
+        total = static + dynamic
+        self._static_c.setData(static)
+        self._total_c.setData(total)
+        cur = float(total[-1])
+        pct = 100.0 * cur / self._dense if self._dense else 0.0
+        self._plot.setTitle(f"SynOps/tick = {int(cur)} · {pct:.0f}% del dense-MAC ({self._dense})")
+
+
 class EventTimelinePanel(QWidget):
     """Injected events (injector.log()) as clickable marks on the source-index axis.
     Marks store the ABSOLUTE tick; clicking calls the seek callback with that tick."""
