@@ -1,4 +1,4 @@
-"""core/prodigy_event.py — ProdigyEvent: Prodigy adattato a EventProp (EventProp_Study).
+"""core/prodigy_event.py — ProdigyEvent: Prodigy adattato a EventProp.
 
 PROBLEMA (diagnosticato): Prodigy stima l'adattatore `d` (≈ distanza-dalla-soluzione) dalla
 COERENZA del gradiente col progresso accumulato. Il gradiente ESATTO di EventProp è sparso/
@@ -13,7 +13,7 @@ SOLUZIONE (2 meccanismi):
    CONGELA la crescita quando l'instabilità si accumula. Segnale oggettivo = trend della norma
    del gradiente PRE-clip: rapporto EMA-veloce / EMA-lenta (baseline del regime stabile). Il
    gradiente EventProp è spiky (CV~3) → si usa il TREND, non il singolo step. + gate spike-rate
-   (banda sana) come secondo segnale (idea utente: ricerca 2D verso il 'best point' a rate sano).
+   (banda sana) come secondo segnale: ricerca 2D verso il best point a spike-rate sano.
 """
 import math
 import torch

@@ -1,12 +1,12 @@
 import torch
 import torch.nn as nn
-from collections import deque    # F8: ring-buffer O(1) per delay assonali
+from collections import deque    # ring-buffer O(1) per delay assonali
 from core.hardware import po2_quantize
 from core.neurons import ALIFCell, LICell
 
 class HiddenLayer_ALIF(nn.Module):
     def __init__(self, in_features, out_features, rank=16, max_delay=3, bit_shift=3):
-        """R25: bit_shift esposto per ablation asse A5 (LIF leak τ vs default 3).
+        """bit_shift esposto per ablation del LIF leak τ (vs default 3).
         Propagato ad ALIFCell come scalare (uniform leak per tutti i neuroni)."""
         super().__init__()
         self.in_features = in_features
@@ -15,12 +15,11 @@ class HiddenLayer_ALIF(nn.Module):
 
         self.fc_weight = nn.Parameter(torch.Tensor(out_features, in_features))
         nn.init.xavier_uniform_(self.fc_weight)
-        # FIX-BUG-4 (2026-06-03): compensa penalty 1/max_delay della delay mask.
+        # Compensa la penalty 1/max_delay della delay mask.
         # In forward, current = Σ_d linear(x_buffer[d], w * (delays==d)). Ogni edge
         # contribuisce solo 1/max_delay del tempo → var(current) ridotta di
         # 1/max_delay rispetto a un fc layer normale. Scalare i pesi di
         # sqrt(max_delay) ripristina la varianza target di Xavier.
-        # Vedi document/BUGS_2026-06-03.md criticità #4.
         with torch.no_grad():
             self.fc_weight.mul_(max_delay ** 0.5)
         self.register_buffer('delays', torch.randint(0, max_delay, (out_features, in_features)))
@@ -34,7 +33,7 @@ class HiddenLayer_ALIF(nn.Module):
         self.cell = ALIFCell(out_features, bit_shift=bit_shift)
 
     def reset_state(self, batch_size, device):
-        # F8: deque(maxlen) come ring-buffer — appendleft() è O(1) vs list.insert() O(n).
+        # deque(maxlen) come ring-buffer — appendleft() è O(1) vs list.insert() O(n).
         # maxlen garantisce che il buffer non cresca oltre max_delay elementi.
         self.x_buffer = deque(
             [torch.zeros(batch_size, self.in_features, device=device)
@@ -47,7 +46,7 @@ class HiddenLayer_ALIF(nn.Module):
         if self.x_buffer is None:
             self.reset_state(x.size(0), x.device)
 
-        # F8: appendleft sposta l'input in testa e scarta automaticamente la coda
+        # appendleft sposta l'input in testa e scarta automaticamente la coda
         # (equivalente a insert(0, x) + pop() ma O(1) invece di O(max_delay)).
         self.x_buffer.appendleft(x)
 
@@ -71,11 +70,11 @@ class OutputLayer_LI(nn.Module):
         super().__init__()
         self.fc_weight = nn.Parameter(torch.Tensor(out_features, in_features))
         nn.init.xavier_uniform_(self.fc_weight)
-        # FIX-BUG-2 (2026-06-03): rimuovi bias per-riga indotto da xavier_uniform.
+        # Rimozione del bias per-riga indotto da xavier_uniform.
         # Con input spike binari {0,1} a firing rate basso, ogni riga senza
         # mean-subtraction crea un offset deterministico nel current → asimmetria
         # tra canali di output → combinata con sigmoid determina QUALE bound IDM
-        # viene saturato. Vedi document/BUGS_2026-06-03.md bug #2.
+        # viene saturato.
         with torch.no_grad():
             self.fc_weight.sub_(self.fc_weight.mean(dim=1, keepdim=True))
         self.cell = LICell(out_features)
@@ -203,12 +202,11 @@ class RSNN_HiddenLayer(nn.Module):
         # Pesi Feedforward (con ritardi come nella SNN standard)
         self.fc_weight = nn.Parameter(torch.Tensor(out_features, in_features))
         nn.init.xavier_uniform_(self.fc_weight)
-        # FIX-BUG-4 (2026-06-03): compensa penalty 1/max_delay della delay mask.
+        # Compensa la penalty 1/max_delay della delay mask.
         # In forward, current = Σ_d linear(x_buffer[d], w * (delays==d)). Ogni edge
         # contribuisce solo 1/max_delay del tempo → var(current) ridotta di
         # 1/max_delay rispetto a un fc layer normale. Scalare i pesi di
         # sqrt(max_delay) ripristina la varianza target di Xavier.
-        # Vedi document/BUGS_2026-06-03.md criticità #4.
         with torch.no_grad():
             self.fc_weight.mul_(max_delay ** 0.5)
         self.register_buffer('delays', torch.randint(0, max_delay, (out_features, in_features)))
@@ -287,7 +285,7 @@ class Deep_RSNN_V5(nn.Module):
 # ===========================================================
 # CF_FSNN_Net — Car-Following SNN con training PINN
 # Adattamento di FSNN_V5 per ACC-IDM (con base IIDM) + V2X + PYNQ-Z1
-# Modello fisico: Ch12 Sez.12.4 Treiber & Kesting 2025
+# Modello fisico: Ch12 Sez.12.4 Treiber & Kesting 2013
 # ===========================================================
 import math as _math
 
@@ -302,7 +300,7 @@ class CF_FSNN_Net(nn.Module):
 
     Connessione ACC-IDM ↔ ALIF (Ch12 Sez.12.4 + Ch13):
         max_delay=6  →  ritardo sinaptico hardware = 6 tick × (DT/TICKS_PER_STEP)
-                        = 6 × 0.01 s = 0.06 s (ritardo assonale FPGA — F11).
+                        = 6 × 0.01 s = 0.06 s (ritardo assonale FPGA).
                         Il tempo di reazione biologico Tr ∈ [0.1, 0.6] s è modellato
                         dal buffer delay, non dal singolo tick interno (Ch13).
         fatica ALIF  →  T(t) stocastico (processo IDM-2d su T, Ch12.6, banda [T1, T2])
@@ -331,10 +329,10 @@ class CF_FSNN_Net(nn.Module):
     def __init__(self, hidden_size=None, rank=None, max_delay=None, bit_shift=None):
         """
         Args:
-            hidden_size: override CF_HIDDEN_SIZE (None → usa config). Per STEP 2B sweep.
-            rank: override CF_RANK (None → usa config). Per STEP 2B sweep.
-            max_delay: override CF_MAX_DELAY (None → usa config). Per STEP 2E A5 variant.
-            bit_shift: override leak (None → default ALIFCell=3). R25 ablation asse A5/A6.
+            hidden_size: override CF_HIDDEN_SIZE (None → usa config). Per capacity sweep.
+            rank: override CF_RANK (None → usa config). Per capacity sweep.
+            max_delay: override CF_MAX_DELAY (None → usa config).
+            bit_shift: override leak (None → default ALIFCell=3). Per ablation del leak.
         """
         super().__init__()
         from config import (
@@ -343,9 +341,9 @@ class CF_FSNN_Net(nn.Module):
             IDM2D_T1, IDM2D_T2, IDM2D_TAU, DT,
         )
 
-        # STEP 2B: capacity override via kwargs (None → fallback su config).
-        # STEP 2E A5: max_delay override per variant max_delay_12.
-        # R25: bit_shift override per ablation asse A5/A6 (default 3 in ALIFCell).
+        # Capacity override via kwargs (None → fallback su config).
+        # max_delay override per la variante max_delay_12.
+        # bit_shift override per ablation del leak (default 3 in ALIFCell).
         hidden_size = hidden_size if hidden_size is not None else CF_HIDDEN_SIZE
         rank        = rank        if rank        is not None else CF_RANK
         max_delay   = max_delay   if max_delay   is not None else CF_MAX_DELAY
@@ -373,7 +371,7 @@ class CF_FSNN_Net(nn.Module):
         self.register_buffer('param_lo', bounds[:, 0])   # (5,)
         self.register_buffer('param_hi', bounds[:, 1])   # (5,)
 
-        # F5 — Pre-scaling per equalizzare il gradiente tra i 5 parametri.
+        # Pre-scaling per equalizzare il gradiente tra i 5 parametri.
         # Problema: d(decode_i)/d(raw_i) = (hi_i - lo_i) * σ'(raw_i).
         # I range differiscono: v0=37, T=2, s0=4, a=2.2, b=2.5.
         # Senza scaling il gradiente che arriva a raw_v0 è 37/2 = 18.5× più grande
@@ -383,15 +381,15 @@ class CF_FSNN_Net(nn.Module):
         ranges = bounds[:, 1] - bounds[:, 0]                  # (5,) = [37, 2, 4, 2.2, 2.5]
         self.register_buffer('decode_scale', ranges / ranges.max())  # (5,) normalizzato
 
-        # R29 — DecoderFix buffer:
+        # DecoderFix buffer:
         #   decode_offset (5,): sottratto a raw_logits PRIMA del sigmoid. Default 0
-        #     = backward-compat. Quando calibrato via calibrate_decode_offset() rimuove
-        #     l'asimmetria osservata empiricamente (v0_pred=37 ep1 invece di midpoint 27.5,
-        #     vedi document/BUGS_2026-06-03.md fix #2 incompleto).
+        #     = nessun offset. Quando calibrato via calibrate_decode_offset() rimuove
+        #     l'asimmetria osservata empiricamente (v0_pred=37 all'epoch 1 invece del
+        #     midpoint 27.5).
         #   logit_tau (5,): temperatura della sigmoid PER-CANALE. sigmoid(raw / tau).
         #     tau=1 = identità, tau>1 = sigmoid piu' "piatta" (zona lineare estesa),
-        #     tau<1 = sigmoid piu' "ripida". Default 1 = backward-compat. Annealed
-        #     via set_logit_tau() ad ogni epoch dal training loop (R29 DEC-1).
+        #     tau<1 = sigmoid piu' "ripida". Default 1 = identità. Annealed
+        #     via set_logit_tau() ad ogni epoch dal training loop.
         self.register_buffer('decode_offset', torch.zeros(5, dtype=torch.float32))
         self.register_buffer('logit_tau',     torch.ones(5, dtype=torch.float32))
 
@@ -413,23 +411,22 @@ class CF_FSNN_Net(nn.Module):
         off/tau: opzionali (batch, 5) per override PER-CAMPIONE (modulatore adattivo).
         returns: (batch, 5) in unità fisiche
 
-        FIX-BUG-1 (2026-06-03): rimosso F5 pre-scaling (raw_eq = raw / decode_scale).
-        decode_scale = [1.0, 0.054, 0.108, 0.0594, 0.0676] amplificava raw di 9-18×
-        per T/s0/a/b → raw_eq cadeva fuori dalla zona lineare di sigmoid →
+        Non si applica il pre-scaling (raw_eq = raw / decode_scale):
+        decode_scale = [1.0, 0.054, 0.108, 0.0594, 0.0676] amplificherebbe raw di 9-18×
+        per T/s0/a/b → raw_eq cadrebbe fuori dalla zona lineare di sigmoid →
         derivata ≈ 0 → gradient → 0 → params bloccati al random init.
-        Vedi document/BUGS_2026-06-03.md bug #1.
 
-        Il buffer `decode_scale` resta registrato per compat con eventuali
+        Il buffer `decode_scale` resta registrato per compatibilità con i
         checkpoint salvati, ma non è più usato.
 
-        R29 DEC-1/DEC-3 (2026-06-12): applica decode_offset + logit_tau.
+        Si applicano decode_offset e logit_tau:
           (raw - decode_offset[i]) / logit_tau[i] poi sigmoid.
-          Con default decode_offset=0, logit_tau=1: comportamento identico al pre-R29.
+          Con default decode_offset=0, logit_tau=1 il comportamento è l'identità.
         """
-        # R29 decode_offset/logit_tau: getattr-safe per varianti che NON li registrano
-        # (es. EventProp, pre-R29). Assenti -> offset 0 / tau 1 = comportamento pre-R29 identico.
+        # decode_offset/logit_tau: getattr-safe per varianti che NON li registrano
+        # (es. EventProp). Assenti -> offset 0 / tau 1 = comportamento identico.
         # off/tau opzionali (default None): se forniti, override PER-CAMPIONE (modulatore adattivo
-        # FiLM-lite). Con None = comportamento globale identico (backward-compat).
+        # FiLM-lite). Con None il comportamento globale è identico.
         if off is None:
             off = self.decode_offset if hasattr(self, 'decode_offset') else 0.0
         if tau is None:
@@ -438,20 +435,20 @@ class CF_FSNN_Net(nn.Module):
         return self.param_lo + (self.param_hi - self.param_lo) * torch.sigmoid(adj)
 
     # ----------------------------------------------------------
-    # R29 — Decoder calibration / tau scheduling
+    # Decoder calibration / tau scheduling
     # ----------------------------------------------------------
     @torch.no_grad()
     def calibrate_decode_offset(self, x_sample):
-        """R29 DEC-3 (init_bias_shift): centra raw output su 0.
+        """Centra il raw output su 0 (init bias shift).
 
         Misura il raw output medio (pre-sigmoid, post-LI) su un campione di input,
         poi imposta decode_offset = raw_mean. Dopo la calibrazione, _decode_params
         produce sigmoid(0) = 0.5 in media → params al midpoint dei bound al t=0.
 
-        Sostituisce il pattern fix-#2 (row-mean subtraction post Xavier) che era
-        incompleto: rimuoveva solo la componente DI BIAS pura dei pesi ma non
-        l'asimmetria emergente dall'interazione (spike rate non uniforme × pesi
-        per-riga × n_ticks accumulazione).
+        La sola row-mean subtraction post-Xavier è insufficiente: rimuove la
+        componente di bias pura dei pesi ma non l'asimmetria emergente
+        dall'interazione (spike rate non uniforme × pesi per-riga × n_ticks
+        accumulazione).
 
         x_sample: (batch, T, 4) input normalizzati (es. primo batch del train_loader).
         """
@@ -472,7 +469,7 @@ class CF_FSNN_Net(nn.Module):
             self.train()
 
     def set_logit_tau(self, tau):
-        """R29 DEC-1 (logit τ-annealing): aggiorna temperatura sigmoid.
+        """Aggiorna la temperatura sigmoid (logit τ-annealing).
 
         tau può essere:
           - float / 0-d tensor → applicato a tutti i 5 canali
@@ -553,7 +550,7 @@ class CF_FSNN_Net(nn.Module):
         s_star  = s0 + torch.relu(v * T + v * dv / (2.0 * sqrt_ab))
 
         # Accelerazione IDM: a · [1 − (v/v0)^delta − (s*/s)²]
-        # delta=4 hardcoded (F7): coerente con IDM_HWY/URB/TRK in config.py (tutti delta=4).
+        # delta=4 hardcoded: coerente con IDM_HWY/URB/TRK in config.py (tutti delta=4).
         # ATTENZIONE: se il generatore usa delta≠4, le formule divergono. Verificare config.
         s_safe  = s.clamp(min=0.5)
         v_ratio = (v / v0).clamp(max=10.0)
@@ -595,7 +592,7 @@ class CF_FSNN_Net(nn.Module):
 
         # ── IIDM base (ch12: regime free-flow separato dal car-following) ──
         # afree = a*(1-(v/v0)^delta): positivo se v<=v0, negativo se v>v0
-        # delta=4 hardcoded (F7): coerente con IDM_HWY/URB/TRK in config.py (tutti delta=4).
+        # delta=4 hardcoded: coerente con IDM_HWY/URB/TRK in config.py (tutti delta=4).
         # ATTENZIONE: se il generatore usa delta≠4, le formule divergono. Verificare config.
         v_free   = a * (1.0 - (v / v0).clamp(max=10.0) ** 4)
         z        = (s_star / s_safe).clamp(max=20.0)
@@ -632,7 +629,7 @@ class CF_FSNN_Net(nn.Module):
         del processo IDM-2d (Ch12 Eq. 12.19):
             E[T(t+Δt)] = α·T(t) + (1−α)·T_mean,   α = exp(−Δt / τ_OU)
 
-        NOTA SUL FLOOR (F6): il generatore usa un processo di salto Markoviano
+        NOTA SUL FLOOR: il generatore usa un processo di salto Markoviano
         per T (salta a U(T1,T2) con prob dt/tau ≈ 0.003 per step), non un OU
         continuo. Questa penalità penalizza quei salti come 'deviazioni OU'.
         Il floor irreducibile stimato è Var(U(T1,T2)) * prob_jump ≈ 1.8e-4.
@@ -652,7 +649,7 @@ class CF_FSNN_Net(nn.Module):
         """Come forward_sequence ma restituisce anche spike_rate del layer hidden.
 
         Usato da pinn_loss() per il logging diagnostico della spike activity.
-        Definito direttamente nella classe (F4: rimosso il monkey-patch da train.py).
+        Definito direttamente come metodo della classe.
 
         x_seq_norm: (batch, T, 4)
         returns:    (params_seq (batch, T, 5), spike_rate (batch, T))
@@ -677,10 +674,10 @@ class CF_FSNN_Net(nn.Module):
 
 
 # =================================================================
-# STEP 2E — Architecture Exploration variants
+# Architecture Exploration variants
 # =================================================================
 # Tutte le varianti ereditano `CF_FSNN_Net` per riusare:
-#   - _PARAM_BOUNDS, _decode_params, decode_scale (F5 pre-scaling)
+#   - _PARAM_BOUNDS, _decode_params, decode_scale (pre-scaling)
 #   - param_lo/param_hi buffers
 #   - acc_iidm_accel, idm_accel, ou_residual (fisica condivisa)
 # e override SOLO:
@@ -720,7 +717,7 @@ class _CF_FSNN_VariantBase(CF_FSNN_Net):
         self.CF_OUTPUT_SIZE = CF_OUTPUT_SIZE
         self.CF_MAX_DELAY   = CF_MAX_DELAY
 
-        # Decode bounds + F5 pre-scaling (identici al baseline)
+        # Decode bounds + pre-scaling (identici al baseline)
         bounds = torch.tensor(self._PARAM_BOUNDS, dtype=torch.float32)
         self.register_buffer('param_lo', bounds[:, 0])
         self.register_buffer('param_hi', bounds[:, 1])
@@ -729,13 +726,13 @@ class _CF_FSNN_VariantBase(CF_FSNN_Net):
 
 
 # -----------------------------------------------------------------
-# A2 / A4 — Stacked N-hidden ALIF
+# Stacked N-hidden ALIF
 # -----------------------------------------------------------------
 class CF_FSNN_Net_Stacked(_CF_FSNN_VariantBase):
     """N layer ALIF stacked + LI output (PINN-compatible).
 
     Args:
-        n_hidden: numero layer ALIF consecutivi (≥2 usato in A2=2, A4=3).
+        n_hidden: numero layer ALIF consecutivi (≥2; le varianti usano 2 o 3).
         hidden_sizes: lista (n_hidden,) di neuroni per layer.
         ranks: lista (n_hidden,) di rank low-rank per layer.
         max_delay: max axonal delay (default config).
@@ -766,11 +763,10 @@ class CF_FSNN_Net_Stacked(_CF_FSNN_VariantBase):
             in_dim = hidden_sizes[i]
         self.layers_hidden = nn.ModuleList(layers)
         self.layer_out = OutputLayer_LI(hidden_sizes[-1], self.CF_OUTPUT_SIZE)
-        # FIX-BUG-3 (2026-06-03): abbassa base_threshold per layer ALIF non-input.
+        # Abbassa base_threshold per i layer ALIF non-input.
         # In una cascata, layer i>0 riceve spike binari sparsi del layer i-1
         # → current piccolo → potential non raggiunge base_threshold=1.5 →
         # dead cascade. Threshold 1.0 garantisce propagazione del segnale.
-        # Vedi document/BUGS_2026-06-03.md criticità #3.
         for i, layer in enumerate(self.layers_hidden):
             if i > 0:
                 with torch.no_grad():
@@ -813,12 +809,12 @@ class CF_FSNN_Net_Stacked(_CF_FSNN_VariantBase):
 
 
 # -----------------------------------------------------------------
-# A3 — Stacked 2-hidden + MS-style membrane skip
+# Stacked 2-hidden + MS-style membrane skip
 # -----------------------------------------------------------------
 class CF_FSNN_Net_StackedSkip(_CF_FSNN_VariantBase):
-    """A2 + skip Po2-quantizzato dai spike del layer hidden 1 al membrane potential di LI.
+    """Stacked-2 + skip Po2-quantizzato dai spike del layer hidden 1 al membrane potential di LI.
 
-    Pattern MS-ResNet (Fang et al. 2021, SNN-expert ch05.11):
+    Pattern MS-ResNet (Fang et al. 2021):
         LI_pot += linear_po2(skip_weight, spikes_layer1)
 
     Forza l'informazione del primo layer a raggiungere l'output bypassando il secondo,
@@ -850,12 +846,11 @@ class CF_FSNN_Net_StackedSkip(_CF_FSNN_VariantBase):
         # Init scale piccolo: skip è additivo, non deve dominare
         with torch.no_grad():
             self.skip_weight.mul_(0.2)
-        # FIX-BUG-3 (2026-06-03): abbassa base_threshold per layer 1 (non-input).
+        # Abbassa base_threshold per il layer 1 (non-input).
         # layer_hidden_1 riceve spike binari sparsi da layer_hidden_0 → current
         # piccolo → potential non raggiunge base_threshold=1.5 → dead cascade.
-        # Threshold 1.0 garantisce propagazione. Skip Po2 NON sostituisce il fix:
+        # Threshold 1.0 garantisce propagazione. Lo skip Po2 NON sostituisce il fix:
         # bypassa solo l'output, layer_hidden_1 va comunque sbloccato.
-        # Vedi document/BUGS_2026-06-03.md criticità #3.
         with torch.no_grad():
             self.layer_hidden_1.cell.base_threshold.fill_(1.0)
 
@@ -897,7 +892,7 @@ class CF_FSNN_Net_StackedSkip(_CF_FSNN_VariantBase):
 
 
 # -----------------------------------------------------------------
-# A6 — Multi-rate ALIF (INNOVATION 1)
+# Multi-rate ALIF
 # -----------------------------------------------------------------
 class _HiddenLayer_ALIF_MultiRate(nn.Module):
     """Variante di HiddenLayer_ALIF dove il singolo ALIFCell ha bit_shift per-neurone.
@@ -914,12 +909,11 @@ class _HiddenLayer_ALIF_MultiRate(nn.Module):
 
         self.fc_weight = nn.Parameter(torch.Tensor(out_features, in_features))
         nn.init.xavier_uniform_(self.fc_weight)
-        # FIX-BUG-4 (2026-06-03): compensa penalty 1/max_delay della delay mask.
+        # Compensa la penalty 1/max_delay della delay mask.
         # In forward, current = Σ_d linear(x_buffer[d], w * (delays==d)). Ogni edge
         # contribuisce solo 1/max_delay del tempo → var(current) ridotta di
         # 1/max_delay rispetto a un fc layer normale. Scalare i pesi di
         # sqrt(max_delay) ripristina la varianza target di Xavier.
-        # Vedi document/BUGS_2026-06-03.md criticità #4.
         with torch.no_grad():
             self.fc_weight.mul_(max_delay ** 0.5)
         self.register_buffer('delays', torch.randint(0, max_delay, (out_features, in_features)))
@@ -1018,14 +1012,14 @@ class CF_FSNN_Net_MultiRate(_CF_FSNN_VariantBase):
 
 
 # -----------------------------------------------------------------
-# A7 — WTA inhibition pool
+# WTA inhibition pool
 # -----------------------------------------------------------------
 class CF_FSNN_Net_WTA(_CF_FSNN_VariantBase):
     """Baseline + 1 neurone inibitorio Po2-quantizzato (lateral inhibition).
 
     L'inibitore riceve dalla somma dei spike hidden (peso Po2) e ridistribuisce
     inibizione uniforme su tutti gli hidden al tick successivo (delay 1).
-    Forza sparsità e competizione (ch05.3 + ch05.6).
+    Forza sparsità e competizione.
     """
 
     def __init__(self, hidden_size=32, rank=8, max_delay=None, inh_strength=0.5):
@@ -1053,14 +1047,14 @@ class CF_FSNN_Net_WTA(_CF_FSNN_VariantBase):
         self.inh_state = torch.zeros(batch_size, 1, device=device)
 
     def _tick(self, x_norm):
-        # Iniezione inibizione del tick precedente: sottrae a TUTTI gli hidden
+        # Iniezione dell'inibizione del tick precedente: sottratta a TUTTI gli hidden
         # tramite la corrente esterna additiva (qui simulata con un boost negativo
-        # passato attraverso il primo input). Pattern KISS: inhibition ridotta sui spike.
-        # Implementazione semplice: applichiamo l'inibizione DIRETTAMENTE sulla soglia
-        # incrementale del ALIFCell — ma serve dispatch più invasivo. Approccio più pulito:
-        # inhibition come termine sottratto dalla corrente ricorrente. Lo facciamo iniettando
-        # un additivo negativo a x_norm prima del layer (= driving force ridotta).
-        # Però x_norm è (batch,4), hidden è (batch,32). Soluzione: aggiungiamo dopo il layer.
+        # passato attraverso il primo input). Inhibition ridotta sui spike.
+        # Applicare l'inibizione DIRETTAMENTE sulla soglia incrementale dell'ALIFCell
+        # richiederebbe dispatch più invasivo. Approccio più pulito: inhibition come
+        # termine sottratto dalla corrente ricorrente, iniettando un additivo negativo
+        # a x_norm prima del layer (= driving force ridotta). Poiché x_norm è (batch,4)
+        # e hidden è (batch,32), l'inibizione è aggiunta dopo il layer.
 
         spikes_h = self.layer_hidden(x_norm)
         # Sottrazione lateral inhibition (broadcast su hidden)
@@ -1073,7 +1067,7 @@ class CF_FSNN_Net_WTA(_CF_FSNN_VariantBase):
         # Update inh_state: collector Po2-quantizzato sui spike correnti
         inh_w_po2 = po2_quantize(self.inh_w_in)
         self.inh_state = torch.nn.functional.linear(spikes_h, inh_w_po2).detach()
-        # detach per evitare grafo BPTT esplodente sul collector (ch22)
+        # detach per evitare grafo BPTT esplodente sul collector
         return raw_out, spikes_h_inhibited
 
     def forward_step(self, x_norm):
@@ -1100,12 +1094,12 @@ class CF_FSNN_Net_WTA(_CF_FSNN_VariantBase):
 
 
 # -----------------------------------------------------------------
-# A8 — Spike-driven attention lite (INNOVATION 2)
+# Spike-driven attention lite
 # -----------------------------------------------------------------
 class CF_FSNN_Net_Attn(_CF_FSNN_VariantBase):
     """Baseline + spike attention lite (Q/K/V Po2, n_heads, no softmax).
 
-    Tra hidden ALIF e LI output inseriamo:
+    Tra hidden ALIF e LI output si inserisce:
         Q = po2_quant(Wq) @ spikes_h    shape (batch, hidden)
         K = po2_quant(Wk) @ spikes_h    shape (batch, hidden)
         V = po2_quant(Wv) @ spikes_h    shape (batch, hidden)
@@ -1113,7 +1107,7 @@ class CF_FSNN_Net_Attn(_CF_FSNN_VariantBase):
         attn  = score * V    (element-wise gating, no softmax)
         out   = LI(attn)
 
-    Pattern Spikformer-lite (ch05.11, ch21). Tutti i weight Po2 → FPGA-friendly.
+    Pattern Spikformer-lite. Tutti i weight Po2 → FPGA-friendly.
     """
 
     def __init__(self, hidden_size=32, rank=8, max_delay=None, n_heads=2):
@@ -1189,23 +1183,19 @@ class CF_FSNN_Net_Attn(_CF_FSNN_VariantBase):
 
 
 # =================================================================
-# STEP 2E — Factory build_model
+# Factory build_model
 # =================================================================
-# CLEANUP 2026-06-01 (audit utente): rimosse architetture "fake" che non
-# replicavano A1 fairly (F2.0=LIF puro stripped, F2.1=ALIF stripped, F2.2=LIF
-# rec full stripped). Mantenute solo due varianti EventProp ben definite:
+# Due varianti EventProp ben definite:
 #
-#   * CF_FSNN_Net_EventProp_LIF_Simple  -- F2.0b reference LIF semplice.
+#   * CF_FSNN_Net_EventProp_LIF_Simple  -- reference LIF semplice.
 #     Validazione "EventProp adjoint funziona" senza altri confounder.
 #     Pure LIF feedforward, NO Po2, NO delays, NO recurrence, NO ALIF.
 #
-#   * CF_FSNN_Net_EventProp_Full        -- LA TUA A1 con EventProp adjoint.
-#     Replica al 100% l'architettura A1 (Po2 + delays + n_ticks=10 +
-#     bit-shift leak + ALIF adaptive threshold + low-rank rec), cambia
-#     SOLO il training method (EventProp invece di BPTT+surrogate).
+#   * CF_FSNN_Net_EventProp_Full        -- architettura ALIF completa con
+#     EventProp adjoint. Replica al 100% l'architettura di produzione (Po2 + delays +
+#     n_ticks=10 + bit-shift leak + ALIF adaptive threshold + low-rank rec),
+#     cambia SOLO il training method (EventProp invece di BPTT+surrogate).
 #     Confronto fair vs baseline.
-#
-# Vedi document/EVENTPROP_DESIGN.md.
 
 from core.eventprop import (LIFLayer_EventProp, LIFLayer_BPTT_Simple,
                              ALIFLayer_EventProp_Full,
@@ -1264,10 +1254,10 @@ class CF_FSNN_Net_BPTT_LIF_Simple(CF_FSNN_Net):
 
 
 class CF_FSNN_Net_EventProp_LIF_Simple(CF_FSNN_Net):
-    """F2.0b reference: LIF puro EventProp -- NON replica A1.
+    """Reference LIF puro EventProp -- NON replica l'architettura completa.
 
     Usata SOLO come reference "EventProp funziona su LIF semplice".
-    Architettura stripped: NO Po2, NO delays, NO recurrence, NO ALIF, n_ticks=1.
+    Architettura ridotta: NO Po2, NO delays, NO recurrence, NO ALIF, n_ticks=1.
     """
 
     def __init__(self, hidden_size=None, rank=None, max_delay=None):
@@ -1315,7 +1305,7 @@ class CF_FSNN_Net_EventProp_LIF_Simple(CF_FSNN_Net):
 
 
 class CF_FSNN_Net_EventProp_Full(CF_FSNN_Net):
-    """LA TUA architettura A1 con EventProp adjoint.
+    """Architettura ALIF completa con EventProp adjoint.
 
     Replica EXACTLY CF_FSNN_Net + HiddenLayer_ALIF + ALIFCell + OutputLayer_LI:
       * Po2 quantization su TUTTI i pesi (STE backward)
@@ -1338,7 +1328,7 @@ class CF_FSNN_Net_EventProp_Full(CF_FSNN_Net):
       ESATTAMENTE come baseline. Fair-compare perfetto.
 
     Nota gradiente thresh_jump: l'adjoint completo richiederebbe lambda_fatigue
-    propagation. F2.1-full lo lascia a zero (treat as frozen) per semplicita'.
+    propagation. Questa variante lo lascia a zero (treat as frozen) per semplicità.
     Il base_threshold viene appreso via soft reset adjoint (vedi eventprop.py).
     """
 
@@ -1389,15 +1379,15 @@ class CF_FSNN_Net_EventProp_Full(CF_FSNN_Net):
             alpha=7.0/8.0,
         )
 
-        # Decode bounds + F5 pre-scaling (ereditati concettualmente da baseline)
+        # Decode bounds + pre-scaling (ereditati concettualmente da baseline)
         bounds = torch.tensor(self._PARAM_BOUNDS, dtype=torch.float32)
         self.register_buffer('param_lo', bounds[:, 0])
         self.register_buffer('param_hi', bounds[:, 1])
         ranges = bounds[:, 1] - bounds[:, 0]
         self.register_buffer('decode_scale', ranges / ranges.max())
-        # R29 DecoderFix per EventProp (prima ASSENTE -> decode saturava su T/s0):
+        # DecoderFix per EventProp (senza questi buffer il decode satura su T/s0):
         # decode_offset (centra raw pre-sigmoid) + logit_tau (pendenza sigmoid per-canale).
-        # Default 0 / 1 = comportamento attuale. Usati da _decode_params (ereditato, getattr-safe).
+        # Default 0 / 1 = identità. Usati da _decode_params (ereditato, getattr-safe).
         self.register_buffer('decode_offset', torch.zeros(5, dtype=torch.float32))
         self.register_buffer('logit_tau',     torch.ones(5, dtype=torch.float32))
 
@@ -1406,7 +1396,7 @@ class CF_FSNN_Net_EventProp_Full(CF_FSNN_Net):
         pass
 
     def calibrate_decode_offset(self, x_sample):
-        """R29 DEC-3 per EventProp: decode_offset = media del raw (pre-sigmoid) su un campione.
+        """Per EventProp: decode_offset = media del raw (pre-sigmoid) su un campione.
         Usa il forward EventProp (l'override di baseline assume layer per-timestep, incompatibile)."""
         was_training = self.training
         self.eval()
@@ -1456,41 +1446,41 @@ class CF_FSNN_Net_EventProp_Full(CF_FSNN_Net):
 
 
 # =================================================================
-# Factory build_model -- 3 variants only post-cleanup
+# Factory build_model
 # =================================================================
 
 # =================================================================
-# Factory build_model -- UNIFIED post-merge
+# Factory build_model (unificata)
 # =================================================================
-# Concentra le scelte di entrambi i branch:
-#   - Architecture_Exploration: 8 architecture variants (baseline + 7 nuove)
-#   - Training_Method_Exploration: 4 training method variants (baseline + 3 nuove)
-# baseline e' presente in entrambi -> singola entry
+# Raggruppa due famiglie di varianti:
+#   - architecture variants: 8 (baseline + 7)
+#   - training method variants: 4 (baseline + 3)
+# baseline e' presente in entrambe -> singola entry
 def build_model(variant: str = 'baseline', hidden_size=None, rank=None,
                 max_delay=None, bit_shift=None, **kwargs):
     """Factory unificata: 8 architecture + 3 EventProp variants + baseline.
 
     Args:
         variant: nome variante. Choices:
-          --- architecture variants (da Architecture_Exploration) ---
-          - 'baseline'             A1: ALIF + BPTT + surrogate (default, production)
-          - 'stacked_2'            A2: 2 hidden ALIF stacked
-          - 'stacked_2_skip'       A3: A2 + MS-style membrane skip
-          - 'stacked_3_thin'       A4: 3 hidden ALIF thin (24x3)
-          - 'max_delay_12'         A5: baseline + max_delay=12 (vs 6)
-          - 'multi_rate'           A6: bit_shifts=[2,3,4] multi-rate ALIF
-          - 'wta'                  A7: + lateral inhibition (1 inh neuron)
-          - 'attn'                 A8: spike attention lite (Q/K/V Po2, 2 heads)
-          --- training method variants (da Training_Method_Exploration) ---
+          --- architecture variants ---
+          - 'baseline'             ALIF + BPTT + surrogate (default, production)
+          - 'stacked_2'            2 hidden ALIF stacked
+          - 'stacked_2_skip'       stacked-2 + MS-style membrane skip
+          - 'stacked_3_thin'       3 hidden ALIF thin (24x3)
+          - 'max_delay_12'         baseline + max_delay=12 (vs 6)
+          - 'multi_rate'           bit_shifts=[2,3,4] multi-rate ALIF
+          - 'wta'                  + lateral inhibition (1 inh neuron)
+          - 'attn'                 spike attention lite (Q/K/V Po2, 2 heads)
+          --- training method variants ---
           - 'bptt_lif_simple'      LIF simple + BPTT + surrogate (288 params)
           - 'eventprop_lif_simple' LIF simple + EventProp adjoint (288 params)
-          - 'eventprop_alif_full'  A1 architecture + EventProp adjoint (864 params)
+          - 'eventprop_alif_full'  architettura ALIF completa + EventProp adjoint (864 params)
         hidden_size, rank, max_delay: override capacity (default config).
     """
     v = variant.lower()
     # --- baseline (shared) ---
     if v == 'baseline':
-        # R25: passa max_delay e bit_shift al baseline per ablation asse A4/A5/A6
+        # passa max_delay e bit_shift al baseline per le ablation su delay/leak
         return CF_FSNN_Net(hidden_size=hidden_size, rank=rank,
                             max_delay=max_delay, bit_shift=bit_shift)
     # --- Architecture variants ---

@@ -2,13 +2,13 @@
 core/eventprop.py -- EventProp adjoint per CF_FSNN
 ====================================================
 
-Implementazioni mantenute (post-pulizia 2026-06-01 dopo audit utente):
+Implementazioni disponibili:
 
-  * LIFLayer_EventProp       -- LIF feedforward semplice (F2.0b). Reference LIF
+  * LIFLayer_EventProp       -- LIF feedforward semplice. Reference LIF
                                 con tau_s synaptic, no delays, no Po2.
                                 Usata SOLO come reference "LIF puro che funziona".
 
-  * ALIFLayer_EventProp_Full -- LA TUA architettura A1 con EventProp adjoint:
+  * ALIFLayer_EventProp_Full -- architettura ALIF completa con EventProp adjoint:
                                 * Po2 quantization (STE in backward via PowerOf2Quantize)
                                 * max_delay=6 delayed synapses
                                 * n_ticks=10 internal ticks per sequence step
@@ -19,19 +19,12 @@ Implementazioni mantenute (post-pulizia 2026-06-01 dopo audit utente):
                                 Confronto fair vs CF_FSNN_Net baseline (stessa arch,
                                 solo training method diverso).
 
-  * LILayer_Standard         -- LI output con dt/tau leak (per F2.0b semplice).
+  * LILayer_Standard         -- LI output con dt/tau leak (variante LI semplice).
 
   * LILayer_BitShift_Po2     -- LI output con bit-shift leak (V/8) + Po2 quantization.
-                                Matcha baseline OutputLayer_LI per F2.1-full.
+                                Matcha baseline OutputLayer_LI.
 
 Pattern: torch.autograd.Function custom con manual_forward + manual_backward.
-Vedi document/EVENTPROP_DESIGN.md per math + decisioni progettuali.
-
-CLEANUP 2026-06-01:
-  * Rimosso LIFLayer_EventProp_Recurrent + wrapper (F2.2 era stripped, no Po2 no delays)
-  * Rimosso ALIFLayer_EventProp + wrapper (F2.1 stripped, no Po2 no delays)
-  Erano architetture "fake" che non replicavano A1 in modo fair. Sostituiti
-  da ALIFLayer_EventProp_Full che invece replica A1 al 100% architetturalmente.
 """
 
 import torch
@@ -42,7 +35,7 @@ from core.hardware import po2_quantize
 
 
 # ===========================================================
-# WrapperFunction generico (LIF F2.0b)
+# WrapperFunction generico (LIF feedforward)
 # ===========================================================
 
 class _EventPropWrapper(torch.autograd.Function):
@@ -63,11 +56,11 @@ class _EventPropWrapper(torch.autograd.Function):
 
 
 # ===========================================================
-# LIFLayer_EventProp -- F2.0b reference (LIF puro feedforward)
+# LIFLayer_EventProp -- reference (LIF puro feedforward)
 # ===========================================================
 
 class LIFLayer_EventProp(nn.Module):
-    """LIF semplice EventProp -- REFERENCE LIF (F2.0b).
+    """LIF semplice EventProp -- REFERENCE LIF.
 
     Discretizzazione:
         I[t] = (1 - dt/tau_s) * I[t-1] + W @ x[t-1]
@@ -82,7 +75,7 @@ class LIFLayer_EventProp(nn.Module):
         grad_input[t] = (lV[t+1] - lI[t+1]) @ W
 
     Args:
-        dt=1e-2, mu_init=0.5: defaults post F2.0 -> F2.0b fix (encoding stabile).
+        dt=1e-2, mu_init=0.5: defaults per encoding stabile.
 
     Reference uses: NO recurrence, NO delays, NO Po2, NO bias, NO adaptive threshold.
     """
@@ -238,7 +231,7 @@ class LIFLayer_BPTT_Simple(nn.Module):
 
 
 # ===========================================================
-# ALIFLayer_EventProp_Full -- la TUA A1 con EventProp adjoint
+# ALIFLayer_EventProp_Full -- architettura ALIF completa con EventProp adjoint
 # ===========================================================
 
 class _EventPropWrapperFull(torch.autograd.Function):
@@ -269,7 +262,7 @@ class _EventPropWrapperFull(torch.autograd.Function):
 
 
 class ALIFLayer_EventProp_Full(nn.Module):
-    """LA TUA architettura A1 (HiddenLayer_ALIF + ALIFCell) con EventProp.
+    """Architettura ALIF completa (HiddenLayer_ALIF + ALIFCell) con EventProp.
 
     Replica EXACTLY l'arch baseline:
       * Po2 quantization su fc_weight, rec_U, rec_V (STE backward via PowerOf2Quantize)
@@ -282,11 +275,11 @@ class ALIFLayer_EventProp_Full(nn.Module):
       * Low-rank recurrence rec_U(out,rank) @ rec_V(rank,out)
       * base_th, thresh_jump learnable (init 1.5, 0.5 -- matches baseline)
 
-    Gradient su base_th via path soft reset (matches baseline behavior P5: l'unico
+    Gradient su base_th via path soft reset (matches baseline behavior: l'unico
     path di grad per base_th è la via di reset, perché spike_fn non propaga grad
     al threshold). thresh_jump: gradiente complesso (via fatigue dynamics) - per
-    questa implementazione lo lasciamo a zero (treat as frozen). Future estensione
-    F2.2-bis includere lambda_fatigue completo.
+    questa implementazione è lasciato a zero (trattato come frozen). Estensione
+    futura: includere lambda_fatigue completo.
 
     Forward processa K = T_seq * n_ticks tick interni atomicamente. Per ogni
     sequence step t, x_seq[t] è REPLICATO n_ticks volte (matches baseline che
@@ -311,23 +304,23 @@ class ALIFLayer_EventProp_Full(nn.Module):
         self.alpha_m = alpha_m
         self.alpha_f = alpha_f
         self.eps = eps
-        # C8 (EventProp_Study): stabilizzazione del cascade adjoint sugli spike marginali
+        # Stabilizzazione del cascade adjoint sugli spike marginali
         # (denom = drive - V_th_eff -> 0 con fatigue). jump_clamp limita il termine di salto
-        # per-tick; lv_clamp bound l'adjoint accumulato. Senza, grad ~1e17 (fail storico 6/11).
+        # per-tick; lv_clamp bound l'adjoint accumulato. Senza, grad ~1e17 (divergenza).
         self.jump_clamp = jump_clamp
         self.lv_clamp = lv_clamp
-        self.denom_gate_scale = denom_gate_scale   # C8b: scala gate morbido (0 = off)
-        # Margine di spike (C9): spinge i singoli spike marginali (denom=drive-V_th piccolo)
+        self.denom_gate_scale = denom_gate_scale   # scala gate morbido (0 = off)
+        # Margine di spike: spinge i singoli spike marginali (denom=drive-V_th piccolo)
         # ad attraversare la soglia con margine -> 1/denom limitato PER COSTRUZIONE -> adjoint
         # stabile senza clamp, mantenendo la sparsita' (agisce sul margine, non sul numero di spike).
         self.lambda_margin = lambda_margin       # 0 = off (default)
         self.margin_target = margin_target       # soglia |denom| sotto cui uno spike e' "marginale"
-        # C10: correzione di scala del denom adjoint. Il bit-shift leak fa drive = (dt/tau)*I =
+        # Correzione di scala del denom adjoint. Il bit-shift leak fa drive = (dt/tau)*I =
         # (1-alpha_m)*I, quindi la corrente efficace e' I = drive/(1-alpha_m). Il denom EventProp
         # dovrebbe usare V'(t*) ~ I - V_th = drive/(1-alpha_m) - V_th, NON drive - V_th (16x troppo
         # piccolo -> 1/denom spurio -> guadagno adjoint per-spike >1). False = comportamento attuale.
         self.denom_leak_correct = denom_leak_correct
-        # C13: adjoint COMPLETO della soglia adattiva. f[k+1]=alpha_f*f[k]+s[k]*tj, V_th=base_th+f.
+        # Adjoint COMPLETO della soglia adattiva. f[k+1]=alpha_f*f[k]+s[k]*tj, V_th=base_th+f.
         # lambda_fatigue: lf[k] = gVth[k] + alpha_f*lf[k+1] (gVth = -s*lV = stesso termine di base_th);
         # grad_thresh_jump = sum_k s[k]*lf[k+1]. Sblocca i 32 param di thresh_jump (ora gradiente 0).
         # False = thresh_jump congelato (comportamento attuale).
@@ -342,9 +335,9 @@ class ALIFLayer_EventProp_Full(nn.Module):
         # Parameters (match baseline exactly)
         self.fc_weight = nn.Parameter(torch.Tensor(out_features, in_features))
         nn.init.xavier_uniform_(self.fc_weight)
-        # FIX-BUG-4 (2026-06-03): compensa penalty 1/max_delay della delay mask.
+        # Compensa penalty 1/max_delay della delay mask.
         # Stesso bug di HiddenLayer_ALIF: solo gli edge con (delays==d) contribuiscono
-        # al tick d → var(current) ridotta di 1/max_delay. Vedi BUGS_2026-06-03.md.
+        # al tick d → var(current) ridotta di 1/max_delay.
         with torch.no_grad():
             self.fc_weight.mul_(max_delay ** 0.5)
         # delays as buffer (non-learnable random integers in [0, max_delay))
@@ -464,7 +457,7 @@ class ALIFLayer_EventProp_Full(nn.Module):
 
         Calcola gradienti per: input, fc_weight, rec_U, rec_V, base_th, thresh_jump.
         Po2 STE: po2_quantize backward = identity → grad su raw weight = grad
-        computed using w_po2 (which is what we use for the recurrent feedback).
+        calcolato usando w_po2 (quello usato per il feedback ricorrente).
         """
         B, K, in_dim = x_repl.shape
         out_dim = self.out_features
@@ -487,9 +480,9 @@ class ALIFLayer_EventProp_Full(nn.Module):
         grad_base_th = torch.zeros(B, out_dim, device=device)
         # thresh_jump: gradient via fatigue dynamics complex, ignored for now (= 0)
 
-        # === Diagnostica denom + margine (C9) ===
+        # === Diagnostica denom + margine ===
         # denom agli spike = drive_eff - V_th_eff (cio' che l'adjoint divide per 1/denom).
-        # C10: drive_eff = drive/(1-alpha_m) se denom_leak_correct (corrente efficace post-leak),
+        # drive_eff = drive/(1-alpha_m) se denom_leak_correct (corrente efficace post-leak),
         # altrimenti drive grezzo (comportamento attuale).
         _drive_eff = drive / (1.0 - self.alpha_m) if self.denom_leak_correct else drive
         denom_all = _drive_eff - V_th_eff                     # (B, K, out)
@@ -506,7 +499,7 @@ class ALIFLayer_EventProp_Full(nn.Module):
         else:
             margin_term = None
 
-        # C13: adjoint del fatigue (lf) + accumulatore di grad_thresh_jump (per-sample)
+        # Adjoint del fatigue (lf) + accumulatore di grad_thresh_jump (per-sample)
         if self.full_threshold_adjoint:
             lf = torch.zeros(B, K, out_dim, device=device)
             gtj = torch.zeros(B, out_dim, device=device)
@@ -525,34 +518,34 @@ class ALIFLayer_EventProp_Full(nn.Module):
             total_grad_s = grad_output[:, k+1] + rec_feedback
 
             # Jump al spike time k+1 (formula EventProp: denom ≈ V'(t*) discretizzato).
-            # denom_all gia' calcolato sopra (con/senza correzione leak C10).
+            # denom_all gia' calcolato sopra (con/senza correzione leak).
             denom_raw = denom_all[:, k+1]
             denom = torch.where(denom_raw.abs() < self.eps,
                                 torch.sign(denom_raw + 1e-12) * self.eps, denom_raw)
             jump = s[:, k+1] * (lV[:, k+1] + total_grad_s) / denom
-            # C8b: gate MORBIDO sul denominatore. Gli spike marginali (denom_raw -> 0) danno un
+            # Gate MORBIDO sul denominatore. Gli spike marginali (denom_raw -> 0) danno un
             # jump inaffidabile (formula adjoint degenere); invece di clamparlo (= direzione
             # corrotta), lo ATTENUA con gate = denom_raw^2 / (denom_raw^2 + scale^2) in [0,1]:
             # ~0 per crossing marginali (|denom|<<scale), ~1 per crossing puliti. scale=0 = off.
             if self.denom_gate_scale > 0.0:
                 gate = denom_raw * denom_raw / (denom_raw * denom_raw + self.denom_gate_scale ** 2)
                 jump = jump * gate
-            # C8: taglia il jump per-tick (rete di sicurezza contro overflow residuo)
+            # Taglia il jump per-tick (rete di sicurezza contro overflow residuo)
             if self.jump_clamp is not None:
                 jump = torch.clamp(jump, -self.jump_clamp, self.jump_clamp)
 
             # Update adjoint: lV[k] = alpha_m * lV[k+1] + jump
             lV[:, k] = self.alpha_m * lV[:, k+1] + jump
-            # C8: bound l'adjoint accumulato -> rompe il cascade su 500 tick
+            # Bound l'adjoint accumulato -> rompe il cascade su 500 tick
             if self.lv_clamp is not None:
                 lV[:, k] = torch.clamp(lV[:, k], -self.lv_clamp, self.lv_clamp)
 
             # === Gradient accumulators ===
-            # NB: usiamo lolemacs-style indexing (lV[k+1] per il contributo at step k+1)
+            # L'indicizzazione è sfasata: lV[k+1] contribuisce allo step k+1
 
             # 1) grad_W via delays: drive[k+1] += Σ_d (mask_d * W_po2) @ x[k+1-d]
             #    grad_W_d += -lV[k+1] outer x[k+1-d] * mask_d
-            # Coefficiente di grad_W: adjoint lV[k+1] + termine di margine (C9, diretto sui pesi
+            # Coefficiente di grad_W: adjoint lV[k+1] + termine di margine (diretto sui pesi
             # input->drive). Il margine NON entra nella ricorsione di lV ne' in grad_input.
             coef_W = lV[:, k+1] if margin_term is None else (lV[:, k+1] + margin_term[:, k+1])
             for d in range(self.max_delay):
@@ -577,7 +570,7 @@ class ALIFLayer_EventProp_Full(nn.Module):
             gVth = -s[:, k+1] * lV[:, k+1]               # grad reset-path su V_th[k+1]
             grad_base_th = grad_base_th + gVth
 
-            # 4) C13: adjoint del fatigue. V_th[k+1] dipende da f[k+1] (= base_th + relu(f), deriv 1);
+            # 4) adjoint del fatigue. V_th[k+1] dipende da f[k+1] (= base_th + relu(f), deriv 1);
             #    f[k+1] = alpha_f*f[k] + s[k]*thresh_jump. lf[k+1] = gVth[k+1] + alpha_f*lf[k+2];
             #    grad_thresh_jump += s[k]*lf[k+1].
             if lf is not None:
@@ -598,7 +591,7 @@ class ALIFLayer_EventProp_Full(nn.Module):
         grad_rec_U = grad_rec_full_total @ rec_V.t()
         grad_rec_V = rec_U.t() @ grad_rec_full_total
 
-        # thresh_jump: zero se adjoint del fatigue disattivo (C13 off); altrimenti gtj sommato sul batch
+        # thresh_jump: zero se adjoint del fatigue disattivo; altrimenti gtj sommato sul batch
         if self.full_threshold_adjoint:
             grad_thresh_jump = gtj.sum(dim=0)
         else:
@@ -620,7 +613,7 @@ class ALIFLayer_EventProp_Full(nn.Module):
 # ===========================================================
 
 class LILayer_Standard(nn.Module):
-    """Output LI con dt/tau leak (per F2.0b semplice). Standard PyTorch autograd."""
+    """Output LI con dt/tau leak (variante LI semplice). Standard PyTorch autograd."""
 
     def __init__(self, in_features, out_features, tau=2e-2, dt=1e-2):
         super().__init__()
@@ -658,10 +651,10 @@ class LILayer_BitShift_Po2(nn.Module):
         self.alpha = alpha
         self.weight = nn.Parameter(torch.Tensor(out_features, in_features))
         nn.init.xavier_uniform_(self.weight)
-        # FIX-BUG-2 (2026-06-03): rimuovi bias per-riga indotto da xavier_uniform.
+        # Rimuovi bias per-riga indotto da xavier_uniform.
         # Stesso bug di OutputLayer_LI: con input spike binari {0,1} a firing rate
         # basso, row_mean ≠ 0 → bias deterministico per canale → asimmetria
-        # combinata con sigmoid in _decode_params. Vedi document/BUGS_2026-06-03.md.
+        # combinata con sigmoid in _decode_params.
         with torch.no_grad():
             self.weight.sub_(self.weight.mean(dim=1, keepdim=True))
 
