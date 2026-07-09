@@ -19,7 +19,7 @@ from sim.stepper import SimStepper
 from sim.ui.layout import (DOCK_ORDER, LAYOUT_PATH, PRESETS, apply_overview, load_layout,
                            save_layout, visible_docks)
 from sim.ui.loop import SimLoop
-from sim.ui.panels import (PARAM_COLORS, PARAM_NAMES, PARAM_UNITS, NeuronStatePanel, ParamPanel,
+from sim.ui.panels import (PARAM_COLORS, PARAM_NAMES, PARAM_UNITS, NeuronGraphPanel, ParamPanel,
                            SpikeRatePanel, VmemPanel)
 from sim.ui.topdown import TopDownView
 from utils.champion_io import load_champion
@@ -43,7 +43,7 @@ class SimApp(QMainWindow):
         self._last_result = None
 
         self._topdown = TopDownView()
-        self._netstate = NeuronStatePanel()
+        self._netstate = NeuronGraphPanel()
         self._spikerate = SpikeRatePanel()
         self._vmem = VmemPanel()
         self._params = [ParamPanel(i, n, u, c)
@@ -54,6 +54,10 @@ class SimApp(QMainWindow):
         # param can be a hidden tab, whose stale range would corrupt SpikeRate's axis. A unified time
         # cursor is a Phase-3b (scrub) concern; here each time-series autoranges to its own data.
         self._live_panels = [self._netstate, self._spikerate, self._vmem, *self._params]
+        _topo = SoftwareBackend(self._champ.model)   # static topology for the node-link graph (once)
+        _topo.reset()
+        _w = _topo.read_weights()
+        self._netstate.set_topology(_w["w_in"], _w["w_rec"], _w["w_out"])
 
         widgets = {"Road": self._topdown, "NetState": self._netstate, "SpikeRate": self._spikerate,
                    "v_mem": self._vmem, "v0": self._params[0], "T": self._params[1],
