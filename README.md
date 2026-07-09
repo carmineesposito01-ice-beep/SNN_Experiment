@@ -1,134 +1,107 @@
 # CF_FSNN — Car-Following Spiking Neural Network
 
-Physics-informed SNN for real-time identification of car-following parameters
-from V2X (V2V/V2I) signals, targeting deployment on PYNQ-Z1 FPGA.
+Rete neuronale **spiking** (SNN) *physics-informed* che, osservando via V2X la dinamica di
+un veicolo (gap, velocità, Δv, velocità del leader), **identifica i 5 parametri** del modello
+di car-following **ACC-IIDM** `[v0, T, s0, a, b]` — con l'obiettivo di essere eseguita su
+**FPGA** (Zynq-7020 / PYNQ-Z1) grazie a pesi potenze-di-due (moltiplicazione → bit-shift, 0 DSP).
 
-> 🚀 **Per riprendere a lavorarci dopo un break**: leggi `document/SESSION_RESUME.md` (5 min).
-> 📚 Documenti di navigazione: `SESSION_RESUME.md`, `GLOSSARY.md`, `WORKFLOW.md`, `TIMELINE.md`, `P_S.md`.
-> 🎤 **Presentazione** (aggiornamento lavori — SNN + PINN + EventProp): `presentation/cf_fsnn_thesis/`, render slim in `_output/deck_slim.html` (42 slide, tema scuro).
+> 🚀 **Riprendere dopo una pausa:** leggi `document/SESSION_RESUME.md` (5 min) e, per il track
+> EventProp/principale, il master `document/EVENTPROP_STATUS.md`.
+> Ogni cartella ha il suo `README.md`: questo file è la **mappa** dell'intera repository.
 
-## Architecture
+---
+
+## 1. Cos'è, in una riga
+
+Un problema **inverso**: non si prevede la traiettoria, si stimano i *cinque numeri* che la
+generano. La fisica (ACC-IIDM) fa da ponte tra ciò che la rete produce e ciò che è misurabile
+(l'accelerazione), tramite una **loss PINN**. La spiegazione completa è nella terna di report
+in [`report/`](report/) — punto di partenza consigliato: `report/HOW_IT_WORKS_v3.pdf`.
+
+## 2. Architettura (baseline)
 
 ```
-Input (4)  →  HiddenLayer_ALIF (32, rank=8, delay=6)  →  OutputLayer_LI (5)
-[s, v, Δv, v_l]   ALIF neurons + low-rank recurrence       [v₀, T, s₀, a, b]
+Input(4)  →  HiddenLayer_ALIF(32)  →  OutputLayer_LI(5)  →  σ + bounds  →  [v0, T, s0, a, b]
+[s,v,Δv,v_l]  ALIF spiking + ricorrenza          integratore
+              low-rank U·V + ritardi assonali     leaky
 ```
 
-- **864 total parameters** — fits in PYNQ-Z1 BRAM with Po2 quantization
-- **ACC-IDM (IIDM base)**: physical model used in both data generation and PINN loss
-- **PINN loss**: SRMSE + physics residual + OU mean-reversion + crash penalty
+- **~864 parametri** (baseline, rango ricorrenza 8); le varianti EventProp usano rango 16 (~1400).
+- **Neurone ALIF** (Adaptive LIF): leak a bit-shift (fattore 7/8), soglia adattiva, reset sottrattivo.
+- **Pesi Power-of-Two** (13 livelli): moltiplicazione → shift, **0 DSP** su FPGA.
+- **10 tick SNN interni** per ogni passo fisico (Δt = 0.1 s).
+- **Loss PINN a 5 componenti**: `L_data` (RMSE mascherata sull'accelerazione) + `L_phys` +
+  `L_OU` (mean-reversion di T) + `L_bc` (anti-crash) + `L_sr` (spike-rate); pesi λ = (1, 0.1, 0.05, 1, 0.5).
+- **Addestramento**: BPTT + surrogate gradient (produzione; γ = 1.0, fast-sigmoid, STE) via Adam/Prodigy;
+  **EventProp** (gradiente esatto via adjoint) come studio.
 
-## Physical Model: ACC-IDM with IIDM base
+I 4 **champion** validati: `Raffaello`, `Leonardo` (BPTT) · `Donatello`, `Michelangelo` (EventProp).
+Candidato al deploy: **Donatello** (contrattivo ρ<1, 0 neuroni morti, migliore accuratezza).
+Dettagli e numeri: `report/VALIDATION_REPORT_v3` e `report/FPGA_REPORT`.
 
-The Intelligent Driver Model extended with:
+## 3. Mappa della repository
 
-1. **IIDM base** — separates free-flow (z<1) and car-following (z≥1) regimes, eliminating IDM's near-v₀ speed bias
-2. **CAH** (Constant Acceleration Heuristic) — anticipatory braking response to leader behaviour
-3. **ACC blend** — `a = (1-c)·a_IIDM + c·(a_CAH + b·tanh((a_IIDM - a_CAH)/b))` with c=0.99
+| Cartella | Contenuto | Dettagli |
+|---|---|---|
+| [`report/`](report/) | **I 3 deliverable finali** (la terna v3: teoria, risultati, profilo FPGA) + i generatori | `report/README.md` |
+| [`document/`](document/) | **Memoria** di progetto (`.md` di ripresa/studio/design) + `papers/` (paper esterni) | `document/README.md` |
+| [`core/`](core/) | Il modello: rete, neuroni, hardware (surrogate+po2), EventProp, ottimizzatore | `core/README.md` |
+| [`data/`](data/) | Generatore di traiettorie sintetiche ACC-IIDM | `data/README.md` |
+| [`utils/`](utils/) | Toolbox: simulatore closed-loop, quantizzazione, identificabilità, profilatori FPGA | `utils/README.md` |
+| [`scripts/`](scripts/) | Generatori dei report, figure FPGA, script di studio e verifica, animazioni Manim | `scripts/README.md` |
+| [`tests/`](tests/) | Test pytest (I/O champion, tier-0 eval, profilatori/SEU FPGA) | `tests/README.md` |
+| [`results/`](results/) | Output degli esperimenti (per studio) + `evaluate/` (le run che alimentano i report) | `results/README.md` |
+| [`Arch_Tested/`](Arch_Tested/) | Snapshot self-contained delle architetture testate (uno per variante, con README) | `Arch_Tested/README.md` |
+| [`champions/`](champions/) | I 4 checkpoint champion frozen (~30 KB l'uno, versionati) | `champions/README.md` |
+| [`presentation/`](presentation/) | Deck di presentazione (Quarto + reveal.js) | `presentation/README.md` |
+| [`opt_plots/`](opt_plots/), [`sweep_plots/`](sweep_plots/) | Archivi di grafici di ottimizzatore/sweep | i rispettivi README |
+| [`original_FSNN/`](original_FSNN/) | La FSNN originale di riferimento (pre-progetto) | `original_FSNN/README.md` |
+| **root** | Notebook di studio (48) + entry-point di codice (`train.py`, `config.py`, `eval_report.py`, …) | § 4 e § 5 |
 
-Leader acceleration `a_l` is estimated from OU-filtered finite differences on `v_l` (τ=1s), replicating the real V2X chain without ground-truth leakage.
+> **Non versionati** (`.gitignore`): `checkpoints/`, `dataset/`, `logs/`, `__pycache__/`, `*.pt`
+> (eccezione: i 4 `champions/**`). I dati vengono rigenerati a runtime dal generatore.
 
-## Dataset (synthetic, ACC-IDM)
+## 4. Notebook (nella root)
 
-| Split | Trajectories | Duration | Scenarios |
-|-------|-------------|----------|-----------|
-| Train | 500 | 200s each | highway, urban, truck, mixed |
-| Val   | 100 | 200s each | same mix |
-| Test  | 200 | 200s each | held-out seed |
+I 48 `*.ipynb` restano nella root perché **importano `core/`, `data/`, `utils/` e leggono
+`results/` con path relativi**: vanno quindi eseguiti con Jupyter **lanciato dalla root del
+repo** (cwd = root). Sono raggruppati per famiglia di studio:
 
-- **IDM-2d** (Ch12.6): stochastic T(t) extension via Ornstein-Uhlenbeck (τ=30s, band [0.8, 1.6]s) — applied to ACC-IDM
-- **Cut-in UC2**: 20% of trajectories include an abrupt cut-in event (gap → 5–15m)
-- **V2X packet loss**: 2% (ETSI ITS-G5 simulation)
-- **OU perception noise** on s, v, a (Ch13 Treiber & Kesting)
+- `Training_File*` — addestramento base e sweep architetturali.
+- `Prodigy_*`, `Loss_Study_*`, `Dynamic_Study_*`, `EventProp_*` — gli studi (chiusi) dell'ottimizzatore,
+  della loss, dei parametri dinamici a/b, di EventProp. Log e verdetti in `document/` e `results/`.
+- `Eval_v3_TURTLE_POWER.ipynb`, `Eval_FPGA.ipynb` — producono le run in `results/evaluate/` da cui
+  la terna di `report/` estrae numeri e figure.
+- `Simulator_Visual.ipynb` — visualizzazione del simulatore closed-loop.
 
-## Training
+## 5. Come si usa
 
 ```bash
-# Quick test (1 epoch, CPU)
-python train.py --epochs 1 --tag QUICKTEST --n_train 50 --n_val 20
+# addestramento (da root; device auto in config.py)
+python train.py --epochs 20 --tag A1 --scheduler cosine
 
-# Stage A: baseline (20 epochs, plateau scheduler)
-python train.py --epochs 20 --scheduler plateau --tag A1_plateau
-
-# Stage B: OneCycleLR + Lion optimizer
-python train.py --epochs 50 --scheduler onecycle --optimizer lion \
-    --max_lr 5e-3 --tag B1_lion_onecycle
-
-# Stage C: resume from best checkpoint
-python train.py --epochs 100 --scheduler cosine --T0 10 \
-    --resume checkpoints/B1_lion_onecycle/best_model.pt --tag C1_cosine
-```
-
-### On Azure (GPU)
-The device is auto-detected via `config.py → DEVICE`. No code change needed:
-```bash
-python train.py --epochs 100 --scheduler onecycle --optimizer lion \
-    --batch_size 32 --max_lr 5e-3 --tag AZURE_v1
-```
-
-## Output (per run)
-
-```
-checkpoints/<tag>/
-  best_model.pt          # best val_loss checkpoint
-  last_model.pt          # last epoch checkpoint
-  training_log.csv       # 15 columns per epoch (loss components, LR, grad, spike)
-  config_snapshot.json   # full hyperparameter record
-  plots/
-    G1_loss_curve.png    # train/val total loss
-    G2_components.png    # loss components (data, phys, OU, bc)
-    G3_lr_schedule.png   # learning rate schedule
-    G4_grad_norm.png     # gradient norm (exploding/vanishing check)
-    G5_T_scatter.png     # T_pred vs T_true scatter (val set, best model)
-    G6_spike_rate.png    # hidden layer spike rate (target: 10–20%)
-    G7_violin_params.png # predicted parameter distributions vs physical bounds
-```
-
-## Evaluation (post-training)
-
-```bash
+# valutazione post-training
 python eval_report.py --checkpoint checkpoints/<tag>/best_model.pt --n_test 500
+
+# rigenerare la terna di report (md + pdf, in report/)
+python scripts/build_how_it_works_v3.py
+python scripts/build_validation_report_v3.py
+python scripts/build_fpga_report.py
 ```
 
-Produces:
-- PINN loss metrics on held-out test set (mean/std/min/max per component)
-- Per-parameter statistics with physical bounds compliance (%)
-- MAE, RMSE, Bias on T (time-gap estimation)
-- G5 and G7 plots saved in `checkpoints/<tag>/eval_plots/`
+## 6. Track paralleli (git worktree)
 
-## Hardware Target
+Il progetto avanza su più tracce isolate (vedi memoria `cf-fsnn-parallel-tracks`):
 
-- **PYNQ-Z1** (Xilinx Zynq-7020, 220 DSP48E1, 4.9MB BRAM)
-- **Po2 quantization**: weights ∈ {2⁻⁴, …, 2¹} → bit-shift multiply, zero DSP usage
-- **Inference**: 100ms per V2X frame (10Hz ETSI ITS-G5), fits in BRAM with ~3× margin
+- **`main` / EventProp_Study** — training a gradiente esatto (master: `document/EVENTPROP_STATUS.md`).
+- **worktree `Simulator`** — simulatore ACC-IIDM riusabile.
+- **worktree `Simulink_Importer`** — import checkpoint → Simulink → HDL (fase FPGA; nel worktree
+  vivono `document/HDL_PHASE.md` e `document/SESSION_RESUME.md` propri).
 
-## Project Structure
+## 7. Riferimenti principali
 
-```
-CF_FSNN/
-  config.py              # all hyperparameters
-  train.py               # training loop (PINN, TBPTT, schedulers, logging)
-  eval_report.py         # post-training evaluation on test set
-  core/
-    network.py           # CF_FSNN_Net (ALIF→LI), acc_iidm_accel()
-    neurons.py           # ALIFCell, LICell (surrogate gradient γ=0.3)
-    hardware.py          # po2_quantize()
-  data/
-    generator.py         # ACC-IDM synthetic data, cut-in UC2
-  utils/
-    plot_diagnostics.py  # G1–G7 diagnostic plots
-  document/
-    project_core_guidelines.md  # authoritative project reference
-    training_plan.md            # stage A/B/C training plan
-    correction.md               # model corrections vs IDM plain
-    optimization_ideas.md       # future optimisation roadmap
-```
-
-## References
-
-- Treiber & Kesting, *Traffic Flow Dynamics* 2nd ed. (Springer 2025)
-  - Ch12: IDM, IIDM, ACC-IDM, IDM-2D, stochastic extensions
-  - Ch13: Human driver model, OU noise, perception errors
-  - Ch17: PINN calibration, SRMSE as goodness-of-fit
-- Chen et al. (2023): Lion optimizer
-- ETSI EN 302 637-2: ITS-G5 V2X standard (10Hz, 2% packet loss)
+- Treiber & Kesting, *Traffic Flow Dynamics: Data, Models and Simulation*, 2ª ed., Springer 2013
+  (IDM/IIDM, CAH/ACC, calibrazione, string stability, diagramma fondamentale).
+- Wunderlich & Pehle 2021 (EventProp) · Neftci et al. 2019 (surrogate gradient) ·
+  Bellec et al. 2018 (ALIF/LSNN) · Raissi et al. 2019 (PINN) · Horowitz 2014 (energia AC/MAC).
+- Bibliografie complete (fonti verificate) in coda a ciascun documento di `report/`.
