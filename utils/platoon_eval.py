@@ -47,7 +47,7 @@ def _params_for(model, gap, v, dv, vl, pgt_t, n, device):
 # ===========================================================
 # MESO — plotone aperto (string stability ACC)
 # ===========================================================
-def simulate_platoon(model, params_gt, n_vehicles, v_leader_profile, device='cpu'):
+def simulate_platoon(model, params_gt, n_vehicles, v_leader_profile, device='cpu', forward=None):
     """N veicoli IN FILA. Veicolo 0 = testa (segue il profilo esterno); i segue i-1 (CAM da i-1).
 
     Ritorna dict: v,x,gap,a (T,N) + v_leader (T,) + collided.
@@ -64,7 +64,9 @@ def simulate_platoon(model, params_gt, n_vehicles, v_leader_profile, device='cpu
     x_head_leader = gap_eq + VEH_LEN
     alpha_al = float(np.exp(-DT / ACC_AL_TAU))
     a_l = np.zeros(n); vl_prev = np.full(n, v_set)
-    if model is not None:
+    if forward is not None:
+        forward.reset(n, device)               # family-aware batched forward owns its state
+    elif model is not None:
         model.eval(); model.reset_state(n, device)
     rec = {k: np.zeros((Tlen, n)) for k in ('v', 'x', 'gap', 'a')}
     collided = False
@@ -74,7 +76,8 @@ def simulate_platoon(model, params_gt, n_vehicles, v_leader_profile, device='cpu
             xlead = np.empty(n); xlead[0] = x_head_leader; xlead[1:] = x[:-1]
             gap = xlead - x - VEH_LEN
             dv = v - vlead
-            params = _params_for(model, gap, v, dv, vlead, pgt_t, n, device)
+            params = (forward.infer(gap, v, dv, vlead) if forward is not None
+                      else _params_for(model, gap, v, dv, vlead, pgt_t, n, device))
             a_l_raw = (vlead - vl_prev) / DT
             a_l = alpha_al * a_l + (1.0 - alpha_al) * a_l_raw; vl_prev = vlead.copy()
             acc = _accel(gap, v, dv, a_l, params)
@@ -135,7 +138,8 @@ def _min_ttc(gap, v, vlead):
 # ===========================================================
 # MACRO — anello chiuso (diagramma fondamentale)
 # ===========================================================
-def simulate_ring(model, params_gt, n_vehicles, ring_length, n_steps, device='cpu', perturb=0.1):
+def simulate_ring(model, params_gt, n_vehicles, ring_length, n_steps, device='cpu', perturb=0.1,
+                  forward=None):
     """N veicoli su ANELLO di lunghezza L (m). i segue i-1; veicolo 0 segue N-1 (+L, wrap).
 
     Densita' rho = N/L. Stato iniziale uniforme + piccola perturbazione. Ritorna v,x (T,N).
@@ -153,7 +157,9 @@ def simulate_ring(model, params_gt, n_vehicles, ring_length, n_steps, device='cp
     v += rng.normal(0, perturb * max(v_eq, 1.0), n)            # perturbazione
     alpha_al = float(np.exp(-DT / ACC_AL_TAU))
     a_l = np.zeros(n); vl_prev = v.copy()
-    if model is not None:
+    if forward is not None:
+        forward.reset(n, device)               # family-aware batched forward owns its state
+    elif model is not None:
         model.eval(); model.reset_state(n, device)
     rec_v = np.zeros((n_steps, n)); rec_x = np.zeros((n_steps, n))
     with torch.no_grad():
@@ -167,7 +173,8 @@ def simulate_ring(model, params_gt, n_vehicles, ring_length, n_steps, device='cp
             vlead[order] = v[lead]
             gap = np.maximum(gap, 0.1)
             dv = v - vlead
-            params = _params_for(model, gap, v, dv, vlead, pgt_t, n, device)
+            params = (forward.infer(gap, v, dv, vlead) if forward is not None
+                      else _params_for(model, gap, v, dv, vlead, pgt_t, n, device))
             a_l_raw = (vlead - vl_prev) / DT
             a_l = alpha_al * a_l + (1.0 - alpha_al) * a_l_raw; vl_prev = vlead.copy()
             acc = _accel(gap, v, dv, a_l, params)
