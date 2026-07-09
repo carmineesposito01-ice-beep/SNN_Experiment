@@ -262,6 +262,81 @@ class NeuronGraphPanel(QWidget):
         self._highlight.setData(pos=self._pos, adj=adj, pen=pens, size=0)
 
 
+class NeuronInspectorPanel(QWidget):
+    """Selected hidden neuron: v_mem + effective threshold + spike marks over the source
+    history, plus a readout of its dominant input/output connections (from topology weights)."""
+    def __init__(self):
+        super().__init__()
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        self._title = QLabel("Inspector · (nessun neurone)")
+        self._title.setContentsMargins(6, 3, 6, 0)
+        self._plot = pg.PlotWidget()
+        self._plot.setLabel("bottom", "time", units="steps")
+        self._plot.setLabel("left", "v_mem")
+        self._plot.setDownsampling(auto=True, mode="peak")
+        self._plot.setClipToView(True)
+        self._vmem = self._plot.plot(pen=pg.mkPen("#8fd6ff", width=2))
+        self._vth = self._plot.plot(pen=pg.mkPen("#e8871e", width=1, style=Qt.DashLine))
+        self._spk = pg.ScatterPlotItem(symbol="t", size=8, brush=pg.mkBrush("#ffffff"),
+                                       pen=pg.mkPen(None))
+        self._plot.addItem(self._spk)
+        self._conn = QLabel("")
+        self._conn.setContentsMargins(6, 0, 6, 4)
+        layout.addWidget(self._title)
+        layout.addWidget(self._plot, stretch=1)
+        layout.addWidget(self._conn)
+        self._cursors = [_add_cursor(self._plot.getPlotItem())]
+        self._w_in = self._w_out = None
+        self._i = None
+
+    @property
+    def neuron(self):
+        return self._i
+
+    def set_cursor(self, x):
+        _set_cursor(self._cursors, x)
+
+    def set_topology(self, w_in, w_rec, w_out):
+        self._w_in = np.asarray(w_in, dtype=np.float64)      # (H, IN)
+        self._w_out = np.asarray(w_out, dtype=np.float64)    # (OUT, H)
+
+    def set_neuron(self, i):
+        if i is None:
+            self._i = None
+            self._title.setText("Inspector · (nessun neurone)")
+            self._conn.setText("")
+            self._vmem.setData([]); self._vth.setData([]); self._spk.setData([])
+            return
+        self._i = int(i)
+        self._title.setText(f"Inspector · hidden #{self._i}")
+        self._conn.setText(self._dominant_text(self._i))
+
+    def _dominant_text(self, i, k=2):
+        if self._w_in is None:
+            return ""
+        win, wout = np.abs(self._w_in[i]), np.abs(self._w_out[:, i])
+        ins = ", ".join(f"{_INPUT_NAMES[j] if j < len(_INPUT_NAMES) else j}·{win[j]:.2f}"
+                        for j in np.argsort(win)[::-1][:k])
+        outs = ", ".join(f"{PARAM_NAMES[j] if j < len(PARAM_NAMES) else j}·{wout[j]:.2f}"
+                         for j in np.argsort(wout)[::-1][:k])
+        return f"in: {ins}   →   out: {outs}"
+
+    def update_frame(self, probe):
+        if self._i is None:
+            return
+        frames = probe.frames()
+        if not frames:
+            return
+        vm = np.array([f.v_mem[self._i] for f in frames])
+        vth = np.array([f.v_th_eff[self._i] for f in frames])
+        spk = np.array([f.spikes[self._i] for f in frames]) > 0
+        self._vmem.setData(vm)
+        self._vth.setData(vth)
+        idx = np.nonzero(spk)[0]
+        self._spk.setData([{"pos": (float(x), float(vm[x]))} for x in idx])
+
+
 class VmemPanel(QWidget):
     def __init__(self):
         super().__init__()

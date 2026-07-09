@@ -240,3 +240,43 @@ def test_neuron_graph_click_ignores_non_hidden(qapp):
 
     panel._on_node_click(panel._nodes, [_Spot()])
     assert got == []                                        # input/output clicks are no-ops
+
+
+# --- Phase 3b (rest): neuron inspector ---
+from sim.ui.panels import NeuronInspectorPanel   # noqa: E402
+
+
+def test_inspector_dominant_connections(qapp):
+    H, IN, OUT = 6, 4, 5
+    w_in = np.zeros((H, IN)); w_in[3, 2] = 5.0; w_in[3, 0] = 3.0     # #3 driven by input 2 (Δv) then 0 (s)
+    w_out = np.zeros((OUT, H)); w_out[4, 3] = 7.0; w_out[3, 3] = 4.0  # #3 drives out 4 (b) then 3 (a)
+    panel = NeuronInspectorPanel()
+    panel.set_topology(w_in, np.zeros((H, H)), w_out)
+    panel.set_neuron(3)
+    txt = panel._conn.text()
+    assert "#3" in panel._title.text()
+    assert txt.index("Δv") < txt.index("s")     # input 2 ranked before input 0
+    assert txt.index("b") < txt.index("a")      # out 4 (b) ranked before out 3 (a)
+
+
+def test_inspector_traces_selected_neuron(qapp):
+    panel = NeuronInspectorPanel()
+    panel.set_topology(np.zeros((6, 4)), np.zeros((6, 6)), np.zeros((5, 6)))
+    panel.set_neuron(2)
+    pr = AttributeProbe(capacity=10)
+    for t in range(4):
+        spk = np.zeros(6); spk[2] = 1.0 if t == 2 else 0.0
+        pr.record(t, {"spikes": spk, "v_mem": np.full(6, float(t)), "v_th_eff": np.ones(6)},
+                  np.zeros(5))
+    panel.update_frame(pr)
+    y = panel._vmem.getData()[1]
+    assert list(y) == [0.0, 1.0, 2.0, 3.0]      # neuron 2's v_mem over the buffer
+    assert len(panel._spk.points()) == 1        # one spike, at t=2
+
+
+def test_inspector_clear_none(qapp):
+    panel = NeuronInspectorPanel()
+    panel.set_topology(np.zeros((6, 4)), np.zeros((6, 6)), np.zeros((5, 6)))
+    panel.set_neuron(1)
+    panel.set_neuron(None)
+    assert panel.neuron is None and panel._conn.text() == ""
