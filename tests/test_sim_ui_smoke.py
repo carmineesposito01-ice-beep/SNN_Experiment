@@ -255,6 +255,21 @@ def test_simapp_step_after_reconstruct_reverts_source(qapp):
     assert win._src_probe is win._probe and win._src_traj is win._traj
 
 
+def test_simapp_champion_selector_lists_and_swaps(qapp):
+    win = SimApp(CHAMP)
+    names = [n for n, _ in win._champions]
+    assert "Raffaello" in names and len(win._champions) >= 2      # registry built from champions/ dir
+    assert win._champ_name == "Raffaello"                          # launched with R33
+    r8 = win._synops._dims[3]                                      # baseline rank
+    don = names.index("Donatello") if "Donatello" in names else 1
+    win.select_champion(don)
+    assert win._champ_name == names[don]
+    assert win._synops._dims[3] > 0                                # topology rebuilt for the new family
+    win.select_scenario(0)
+    win._advance(0.5)                                              # runs with the swapped champion, no raise
+    assert win.loop.stepper.st.t >= 5
+
+
 def test_simapp_has_synops_dock(qapp):
     win = SimApp(CHAMP)
     assert "SynOps" in win._docks and len(win._docks) == 14

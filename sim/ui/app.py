@@ -32,14 +32,25 @@ _UI_FPS_MS = 33
 _REDRAW_MS = 66           # throttle the heavy 14-panel repaint to ~15fps while running (physics/Road stay 30fps)
 _MAX_FRAME_DT = 0.1        # clamp real-time elapsed so a lagged frame can't cascade into a huge step-batch
 _PARAMS_GT = np.array([30.0, 1.5, 2.0, 1.5, 1.5])
+_CHAMPIONS = [            # (nickname, dir, method) — mapping from scripts/build_fpga_report.py
+    ("Raffaello", "R33_C2_A1_T12_fix", "BPTT"),
+    ("Leonardo", "LS3_PEAK_R0_launch_d03", "BPTT"),
+    ("Donatello", "PE_t05_gp0002", "EventProp"),
+    ("Michelangelo", "A_lr1e2_t06_r16", "EventProp"),
+]
 
 
 class SimApp(QMainWindow):
     def __init__(self, champion_path, layout_path=None):
         super().__init__()
         self.setWindowTitle("CF_FSNN Simulator")
-        self._champ_name = os.path.basename(os.path.dirname(champion_path))
+        self._champ_root = os.path.dirname(os.path.dirname(champion_path))
+        self._champions = [(nick, d) for nick, d, _ in _CHAMPIONS
+                           if os.path.isfile(os.path.join(self._champ_root, d, "best_model.pt"))]
+        _launched = os.path.basename(os.path.dirname(champion_path))
+        self._champ_idx = next((i for i, (_, d) in enumerate(self._champions) if d == _launched), 0)
         self._champ = load_champion(champion_path)
+        self._champ_name = self._champions[self._champ_idx][0] if self._champions else _launched
         self._scenarios = scenario_library(_PARAMS_GT, N=600,
                                             rng=np.random.default_rng(0), include_tail=True)
         self._scenarios.append(self._manual(_PARAMS_GT))
@@ -66,13 +77,7 @@ class SimApp(QMainWindow):
         # cursor is a Phase-3b (scrub) concern; here each time-series autoranges to its own data.
         self._ts_panels = [*self._params, self._vmem, self._spikerate, self._trajectory,
                            self._safety, self._timeline, self._inspector, self._synops]
-        _topo = SoftwareBackend(self._champ.model)   # static topology for the node-link graph (once)
-        _topo.reset()
-        _w = _topo.read_weights()
-        self._netstate.set_topology(_w["w_in"], _w["w_rec"], _w["w_out"])
-        self._inspector.set_topology(_w["w_in"], _w["w_rec"], _w["w_out"])
-        self._synops.set_model(_w["w_in"].shape[1], _w["w_in"].shape[0],
-                               _w["w_out"].shape[0], _w["rank"])
+        self._apply_champion_topology()              # topology into NetState/Inspector/SynOps (re-run on swap)
         self._timeline.set_on_seek(self._seek_to)
         self._netstate.sigNeuronClicked.connect(self._on_neuron_selected)
         self._src_probe = None
@@ -93,6 +98,11 @@ class SimApp(QMainWindow):
             self._docks[name] = d
         apply_overview(self._area, self._docks)   # place all docks so restoreState can find them
 
+        self._champ_selector = QComboBox()
+        self._champ_selector.addItems([nick for nick, _ in self._champions])
+        if self._champions:
+            self._champ_selector.setCurrentIndex(self._champ_idx)
+        self._champ_selector.currentIndexChanged.connect(self.select_champion)
         self._selector = QComboBox()
         self._selector.addItems([s.name for s in self._scenarios])
         self._run_btn = QPushButton("Run"); self._run_btn.setCheckable(True)
@@ -108,7 +118,8 @@ class SimApp(QMainWindow):
         self._cursor_slider.valueChanged.connect(self._on_cursor)
         self._cursor_readout = QLabel("live")
         controls = QHBoxLayout()
-        for w in (self._selector, self._run_btn, self._step_btn, self._reset_btn,
+        for w in (QLabel("champion"), self._champ_selector, self._selector,
+                  self._run_btn, self._step_btn, self._reset_btn,
                   self._brake_btn, QLabel("speed"), self._speed_slider,
                   QLabel("t"), self._cursor_slider, self._cursor_readout):
             controls.addWidget(w)
@@ -199,6 +210,30 @@ class SimApp(QMainWindow):
 
     def scenario_count(self) -> int:
         return len(self._scenarios)
+
+    def _apply_champion_topology(self):
+        """Push the current champion's weights into the topology-driven docks (NetState / Inspector /
+        SynOps). Re-run on every champion swap: families differ (BPTT rank-8, EventProp rank-16)."""
+        topo = SoftwareBackend(self._champ.model)
+        topo.reset()
+        w = topo.read_weights()
+        self._netstate.set_topology(w["w_in"], w["w_rec"], w["w_out"])
+        self._inspector.set_topology(w["w_in"], w["w_rec"], w["w_out"])
+        self._synops.set_model(w["w_in"].shape[1], w["w_in"].shape[0], w["w_out"].shape[0], w["rank"])
+
+    def select_champion(self, idx: int):
+        if not self._champions:
+            return
+        self._champ_idx = max(0, min(int(idx), len(self._champions) - 1))
+        nick, dirname = self._champions[self._champ_idx]
+        self._champ = load_champion(os.path.join(self._champ_root, dirname, "best_model.pt"))
+        self._champ_name = nick
+        if self._champ_selector.currentIndex() != self._champ_idx:
+            self._champ_selector.blockSignals(True)
+            self._champ_selector.setCurrentIndex(self._champ_idx)
+            self._champ_selector.blockSignals(False)
+        self._apply_champion_topology()
+        self.select_scenario(self._current_idx)   # rebuild stepper/probe with the new backend + refresh header
 
     def select_scenario(self, idx: int):
         self._current_idx = int(idx)
