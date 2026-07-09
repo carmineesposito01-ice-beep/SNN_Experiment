@@ -14,7 +14,7 @@ from sim.events import EventInjector                   # noqa: E402
 from sim.replay import ReplayLog                       # noqa: E402
 from sim.scenario import manual_scenario               # noqa: E402
 from sim.ui.trajectory import TrajectoryBuffer         # noqa: E402
-from sim.ui.reconstruct import reconstruct_history     # noqa: E402
+from sim.ui.reconstruct import reconstruct_history, reconstruct_spliced   # noqa: E402
 from utils.champion_io import load_champion            # noqa: E402
 
 CHAMP = os.path.join(REPO, "champions", "R33_C2_A1_T12_fix", "best_model.pt")
@@ -67,3 +67,37 @@ def test_reconstruct_respects_upto():
     rlog = ReplayLog.from_injector(0, EventInjector())
     rprobe, rtraj = reconstruct_history(champion, scenario, rlog, upto=9)
     assert len(rprobe.frames()) == 10 and len(rtraj) == 10
+
+
+def test_reconstruct_spliced_equals_full():
+    # prefix-splice (re-run only pre-buffer ticks + reuse the live buffer) must be bit-identical
+    champion = load_champion(CHAMP)
+    scenario = _short_scenario(40)
+    inj = EventInjector()
+    inj.enqueue(5, "brake_leader", target_v=15.0, duration=10)
+    live_probe, live_traj = _live_run(champion, scenario, inj, n=40, capacity=12)   # buffer wraps -> holds last 12
+    assert len(live_probe.frames()) == 12 and live_probe.frames()[-1].t == 39
+    rlog = ReplayLog.from_injector(0, inj)
+    full_p, full_t = reconstruct_history(champion, scenario, rlog, upto=39)
+    spl_p, spl_t = reconstruct_spliced(champion, scenario, rlog, 39, live_probe, live_traj)
+    fp, sp = full_p.frames(), spl_p.frames()
+    assert len(sp) == len(fp) == 40
+    for a, b in zip(fp, sp):
+        assert a.t == b.t
+        np.testing.assert_array_equal(a.spikes, b.spikes)
+        np.testing.assert_array_equal(a.v_mem, b.v_mem)
+        np.testing.assert_array_equal(a.v_th_eff, b.v_th_eff)
+        np.testing.assert_array_equal(a.params, b.params)
+        np.testing.assert_array_equal(a.input, b.input)
+    np.testing.assert_array_equal(full_t.arrays()["s"], spl_t.arrays()["s"])
+    np.testing.assert_array_equal(full_t.arrays()["a_ego"], spl_t.arrays()["a_ego"])
+
+
+def test_reconstruct_spliced_falls_back_when_tail_mismatch():
+    # if the live tail does not reach `upto`, splice must fall back to a full reconstruct
+    champion = load_champion(CHAMP)
+    scenario = _short_scenario(40)
+    rlog = ReplayLog.from_injector(0, EventInjector())
+    live_probe, live_traj = _live_run(champion, scenario, EventInjector(), n=20, capacity=12)  # tail t=19, not 39
+    spl_p, _ = reconstruct_spliced(champion, scenario, rlog, 39, live_probe, live_traj)
+    assert len(spl_p.frames()) == 40 and spl_p.frames()[-1].t == 39

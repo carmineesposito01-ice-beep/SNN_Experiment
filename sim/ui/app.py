@@ -23,7 +23,7 @@ from sim.ui.loop import SimLoop
 from sim.ui.panels import (PARAM_COLORS, PARAM_NAMES, PARAM_UNITS, EventTimelinePanel,
                            NeuronGraphPanel, NeuronInspectorPanel, ParamPanel, SafetyPanel,
                            SpikeRatePanel, SynOpsPanel, TrajectoryPanel, VmemPanel)
-from sim.ui.reconstruct import reconstruct_history
+from sim.ui.reconstruct import reconstruct_spliced
 from sim.ui.trajectory import TrajectoryBuffer
 from sim.ui.topdown import TopDownView
 from utils.champion_io import load_champion
@@ -358,7 +358,8 @@ class SimApp(QMainWindow):
         self._status.showMessage("ricostruzione episodio…")
         self._status.repaint()
         rlog = ReplayLog.from_injector(self._current_idx, self._injector)
-        probe, traj = reconstruct_history(self._champ, self._scenarios[self._current_idx], rlog, upto)
+        probe, traj = reconstruct_spliced(self._champ, self._scenarios[self._current_idx], rlog, upto,
+                                          self._probe, self._traj)
         self._recon_key, self._recon_probe, self._recon_traj = key, probe, traj
         return probe, traj
 

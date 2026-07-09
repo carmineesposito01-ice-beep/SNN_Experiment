@@ -71,3 +71,12 @@ class AttributeProbe:
             m.flags.writeable = False
             return m
         return self._memo("params", build)
+
+    @classmethod
+    def from_frames(cls, frames, capacity):
+        """Build a probe directly from existing ProbeFrames (deep-scrub splice). No re-run,
+        record() not involved -> frozen-core-safe."""
+        p = cls(capacity=capacity)
+        p._buf.extend(frames)
+        p._count = len(frames)
+        return p

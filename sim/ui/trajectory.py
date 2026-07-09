@@ -30,3 +30,13 @@ class TrajectoryBuffer:
             out = {k: np.array([getattr(r, k) for r in self._buf], dtype=float) for k in _FIELDS}
         self._cache, self._cache_ver = out, self._version
         return out
+
+    def results(self):
+        return list(self._buf)
+
+    @classmethod
+    def from_results(cls, results, capacity):
+        tb = cls(capacity=capacity)
+        tb._buf.extend(results)
+        tb._version = len(results)
+        return tb
