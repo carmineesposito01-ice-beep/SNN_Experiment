@@ -13,14 +13,17 @@ from pyqtgraph.dockarea import Dock, DockArea
 from config import DT
 from sim.backend import SoftwareBackend
 from sim.events import EventInjector
+from sim.replay import ReplayLog
 from sim.probe import AttributeProbe
 from sim.scenario import manual_scenario, scenario_library
 from sim.stepper import SimStepper
 from sim.ui.layout import (DOCK_ORDER, LAYOUT_PATH, PRESETS, apply_overview, load_layout,
                            save_layout, visible_docks)
 from sim.ui.loop import SimLoop
-from sim.ui.panels import (PARAM_COLORS, PARAM_NAMES, PARAM_UNITS, NeuronGraphPanel, ParamPanel,
-                           SafetyPanel, SpikeRatePanel, TrajectoryPanel, VmemPanel)
+from sim.ui.panels import (PARAM_COLORS, PARAM_NAMES, PARAM_UNITS, EventTimelinePanel,
+                           NeuronGraphPanel, NeuronInspectorPanel, ParamPanel, SafetyPanel,
+                           SpikeRatePanel, TrajectoryPanel, VmemPanel)
+from sim.ui.reconstruct import reconstruct_history
 from sim.ui.trajectory import TrajectoryBuffer
 from sim.ui.topdown import TopDownView
 from utils.champion_io import load_champion
@@ -50,6 +53,8 @@ class SimApp(QMainWindow):
         self._vmem = VmemPanel()
         self._trajectory = TrajectoryPanel()
         self._safety = SafetyPanel()
+        self._timeline = EventTimelinePanel()
+        self._inspector = NeuronInspectorPanel()
         self._params = [ParamPanel(i, n, u, c)
                         for i, (n, u, c) in enumerate(zip(PARAM_NAMES, PARAM_UNITS, PARAM_COLORS))]
         for p in self._params[1:]:
@@ -57,15 +62,21 @@ class SimApp(QMainWindow):
         # NB: SpikeRate is intentionally NOT X-linked to the params — in tab-stacked presets a linked
         # param can be a hidden tab, whose stale range would corrupt SpikeRate's axis. A unified time
         # cursor is a Phase-3b (scrub) concern; here each time-series autoranges to its own data.
-        self._live_panels = [self._netstate, self._spikerate, self._vmem, *self._params]
-        self._ts_panels = [*self._params, self._vmem, self._spikerate, self._trajectory, self._safety]
+        self._ts_panels = [*self._params, self._vmem, self._spikerate, self._trajectory,
+                           self._safety, self._timeline, self._inspector]
         _topo = SoftwareBackend(self._champ.model)   # static topology for the node-link graph (once)
         _topo.reset()
         _w = _topo.read_weights()
         self._netstate.set_topology(_w["w_in"], _w["w_rec"], _w["w_out"])
+        self._inspector.set_topology(_w["w_in"], _w["w_rec"], _w["w_out"])
+        self._timeline.set_on_seek(self._seek_to)
+        self._netstate.sigNeuronClicked.connect(self._on_neuron_selected)
+        self._src_probe = None
+        self._src_traj = None
 
         widgets = {"Road": self._topdown, "NetState": self._netstate, "SpikeRate": self._spikerate,
                    "v_mem": self._vmem, "Trajectory": self._trajectory, "Safety": self._safety,
+                   "Events": self._timeline, "Inspector": self._inspector,
                    "v0": self._params[0], "T": self._params[1],
                    "s0": self._params[2], "a": self._params[3], "b": self._params[4]}
         self._area = DockArea()
@@ -192,6 +203,8 @@ class SimApp(QMainWindow):
         self._injector = EventInjector()
         self._probe = AttributeProbe(capacity=500, sample_every=1)
         self._traj = TrajectoryBuffer()
+        self._src_probe = self._probe                     # scrub source: live buffer while running
+        self._src_traj = self._traj
         backend = SoftwareBackend(self._champ.model)
         stepper = SimStepper.from_scenario(backend, sc, injector=self._injector)
         self.loop = SimLoop(stepper, self._probe, dt_fixed=DT)
@@ -199,6 +212,8 @@ class SimApp(QMainWindow):
         self._header.setText(f"champion: {self._champ_name}    |    scenario: {sc.name}")
         for i, p in enumerate(self._params):
             p.set_ground_truth(float(sc.params_gt[i]))
+        self._inspector.set_neuron(None)                  # clear selection + graph highlight on scenario change
+        self._netstate.highlight(None)
         self._refresh_status()
 
     def reset_run(self):
@@ -223,16 +238,25 @@ class SimApp(QMainWindow):
             self._topdown.update_frame(results[-1])
             for r in results:
                 self._traj.record(r)
-            for p in self._live_panels:
-                p.update_frame(self._probe)
-            self._trajectory.update_frame(self._traj)
-            self._safety.update_frame(self._traj)
+            self._redraw_series(self._probe, self._traj)
             if self._run_btn.isChecked():                 # live: slider tracks the head
                 self._cursor_slider.blockSignals(True)
                 self._cursor_slider.setRange(0, max(0, self._buf_len() - 1))
                 self._cursor_slider.setValue(max(0, self._buf_len() - 1))
                 self._cursor_slider.blockSignals(False)
         self._refresh_status()
+
+    def _redraw_series(self, probe, traj):
+        for p in self._params:
+            p.update_frame(probe)
+        self._vmem.update_frame(probe)
+        self._spikerate.update_frame(probe)
+        self._trajectory.update_frame(traj)
+        self._safety.update_frame(traj)
+        self._netstate.update_frame(probe)                # head; scrub overrides via _render_at_cursor
+        self._timeline.update_events(self._injector.log(), probe.frames())
+        if self._inspector.neuron is not None:
+            self._inspector.update_frame(probe)
 
     def status_text(self) -> str:
         st = self.loop.stepper.st
@@ -255,15 +279,24 @@ class SimApp(QMainWindow):
     def _on_run_toggled(self, running: bool):
         if running:                                       # live: hide cursors, disable slider
             self._cursor = None
+            self._src_probe, self._src_traj = self._probe, self._traj
             self._cursor_slider.setEnabled(False)
             for p in self._ts_panels:
                 p.set_cursor(None)
             self._cursor_readout.setText("live")
             self._clock.restart()
             self._timer.start(_UI_FPS_MS)
-        else:                                             # paused: enable scrub over the buffer
+        else:                                             # paused: scrub over the whole episode
             self._timer.stop()
-            n = self._buf_len()
+            frames = self._probe.frames()
+            if frames and frames[-1].t + 1 > self._probe.capacity:   # buffer wrapped -> reconstruct
+                rlog = ReplayLog.from_injector(self._current_idx, self._injector)
+                self._src_probe, self._src_traj = reconstruct_history(
+                    self._champ, self._scenarios[self._current_idx], rlog, frames[-1].t)
+            else:
+                self._src_probe, self._src_traj = self._probe, self._traj
+            self._redraw_series(self._src_probe, self._src_traj)
+            n = len(self._src_probe.frames())
             self._cursor_slider.setEnabled(n > 0)
             self._cursor_slider.blockSignals(True)
             self._cursor_slider.setRange(0, max(0, n - 1))
@@ -271,19 +304,38 @@ class SimApp(QMainWindow):
             self._cursor_slider.blockSignals(False)
 
     def _buf_len(self):
-        return len(self._probe.frames())
+        return len(self._src_probe.frames()) if self._src_probe is not None else 0
 
     def _render_at_cursor(self, idx):
-        frames = self._probe.frames()
+        frames = self._src_probe.frames()
         if not frames:
             return
         idx = max(0, min(int(idx), len(frames) - 1))
         self._cursor = idx
         for p in self._ts_panels:
             p.set_cursor(idx)
-        self._netstate.update_frame(self._probe, idx)
-        self._topdown.render_at(self._traj, idx)
+        self._netstate.update_frame(self._src_probe, idx)
+        self._topdown.render_at(self._src_traj, idx)
         self._cursor_readout.setText(f"t={frames[idx].t} ({frames[idx].t * DT:.1f}s)")
+
+    def _seek_to(self, tick):
+        if self._run_btn.isChecked():
+            self._run_btn.setChecked(False)               # pause -> builds the scrub source
+        frames = self._src_probe.frames()
+        idx = next((i for i, f in enumerate(frames) if f.t == tick), None)
+        if idx is None:
+            return
+        self._render_at_cursor(idx)
+        self._cursor_slider.blockSignals(True)
+        self._cursor_slider.setValue(idx)
+        self._cursor_slider.blockSignals(False)
+
+    def _on_neuron_selected(self, i):
+        self._inspector.set_neuron(i)
+        self._netstate.highlight(i)
+        self._inspector.update_frame(self._src_probe)
+        if self._cursor is not None:
+            self._inspector.set_cursor(self._cursor)
 
     def _on_cursor(self, v):
         if not self._run_btn.isChecked():

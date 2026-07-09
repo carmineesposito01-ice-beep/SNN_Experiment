@@ -7,7 +7,7 @@ import json
 import os
 
 DOCK_ORDER = ["Road", "NetState", "SpikeRate", "v_mem", "Trajectory", "Safety",
-              "v0", "T", "s0", "a", "b"]
+              "Events", "Inspector", "v0", "T", "s0", "a", "b"]
 _PARAMS = ["v0", "T", "s0", "a", "b"]
 LAYOUT_PATH = os.path.expanduser(os.path.join("~", ".cf_fsnn_sim", "layout.json"))
 
@@ -53,10 +53,12 @@ def apply_overview(area, docks):
     for prev, n in zip(["v0", "T", "s0", "a"], ["T", "s0", "a", "b"]):
         _show(area, docks, n, "right", prev)
     _show(area, docks, "SpikeRate", "right", "NetState")   # last: split NetState's row -> NetState | SpikeRate
+    _show(area, docks, "Inspector", "right", "SpikeRate")
+    _show(area, docks, "Events", "bottom", "Safety")
 
 
 def apply_guida(area, docks):
-    for d in ("NetState", "SpikeRate", "v_mem"):
+    for d in ("NetState", "SpikeRate", "v_mem", "Inspector", "Events"):
         _hide(docks, d)
     _show(area, docks, "Road", "top")
     _show(area, docks, "Trajectory", "bottom", "Road")   # driving story: road + trajectory + safety
@@ -67,12 +69,13 @@ def apply_guida(area, docks):
 
 
 def apply_identificazione(area, docks):
-    for d in ("v_mem", "NetState", "SpikeRate", "Trajectory", "Safety"):
+    for d in ("v_mem", "NetState", "SpikeRate", "Trajectory", "Safety", "Inspector"):
         _hide(docks, d)
     _show(area, docks, "Road", "top")
     _show(area, docks, "v0", "bottom", "Road")
     for prev, n in zip(["v0", "T", "s0", "a"], ["T", "s0", "a", "b"]):
         _show(area, docks, n, "bottom", prev)   # 5 params stacked, dominant
+    _show(area, docks, "Events", "bottom", "b")   # event marks next to the params
 
 
 def apply_neuro_debug(area, docks):
@@ -81,7 +84,9 @@ def apply_neuro_debug(area, docks):
     _show(area, docks, "NetState", "left")
     _show(area, docks, "SpikeRate", "right", "NetState")
     _show(area, docks, "v_mem", "bottom", "NetState")
+    _show(area, docks, "Inspector", "right", "v_mem")
     _show(area, docks, "Road", "bottom", "v_mem")
+    _show(area, docks, "Events", "bottom", "Road")
     _show(area, docks, "v0", "right", "SpikeRate")
     for n in ["T", "s0", "a", "b"]:
         _show(area, docks, n, "above", "v0")   # params tab-stacked, compact

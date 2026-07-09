@@ -174,3 +174,49 @@ def test_simapp_scrub_cursor(qapp):
     assert win._cursor == 3
     win._step_cursor(999)                              # clamps to head
     assert win._cursor == len(win._probe.frames()) - 1
+
+
+# --- Phase 3b (rest): deep-scrub + events + inspector ---
+def test_simapp_builds_13_docks(qapp):
+    win = SimApp(CHAMP)
+    assert "Events" in win._docks and "Inspector" in win._docks
+    assert len(win._docks) == 13
+
+
+def test_simapp_deep_scrub_reconstructs_beyond_buffer(qapp):
+    win = SimApp(CHAMP)
+    win.select_scenario(0)                       # scenario 0: gentle following, runs to completion
+    win._advance(60.0)                           # whole episode -> buffer (500) wraps
+    assert win.loop.stepper.st.t > win._probe.capacity
+    win._on_run_toggled(False)                   # pause -> reconstruct full episode
+    n = len(win._src_probe.frames())
+    assert n == win.loop.stepper.st.t            # full episode reconstructed
+    assert n > len(win._probe.frames())          # more than the live ring buffer
+    win._render_at_cursor(0)                     # scrub to tick 0 (outside the live buffer)
+    assert win._cursor == 0 and win._cursor_readout.text().startswith("t=0")
+
+
+def test_simapp_event_click_and_neuron_select(qapp):
+    win = SimApp(CHAMP)
+    win.select_scenario(0)
+    win._advance(0.5)
+    win.inject_brake()
+    win._advance(0.5)
+    win._on_run_toggled(False)                   # pause
+    log = win._injector.log()
+    assert log
+    win._seek_to(log[0]["tick"])                 # click the brake mark -> seek to its tick
+    assert win._src_probe.frames()[win._cursor].t == log[0]["tick"]
+    win._on_neuron_selected(1)                   # select hidden neuron 1
+    assert win._inspector.neuron == 1
+    assert win._netstate._highlight.adjacency.shape[0] > 0
+
+
+def test_simapp_resume_reverts_to_live_source(qapp):
+    win = SimApp(CHAMP)
+    win.select_scenario(0)
+    win._advance(0.5)
+    win._on_run_toggled(False)                   # pause
+    win._on_run_toggled(True)                    # resume
+    win._timer.stop()                            # headless: don't leave a live timer running
+    assert win._src_probe is win._probe and win._src_traj is win._traj
