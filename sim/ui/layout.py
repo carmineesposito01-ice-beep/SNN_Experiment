@@ -6,7 +6,8 @@ fragile saveState format; only the user's custom layout uses saveState/restoreSt
 import json
 import os
 
-DOCK_ORDER = ["Road", "NetState", "SpikeRate", "v_mem", "v0", "T", "s0", "a", "b"]
+DOCK_ORDER = ["Road", "NetState", "SpikeRate", "v_mem", "Trajectory", "Safety",
+              "v0", "T", "s0", "a", "b"]
 _PARAMS = ["v0", "T", "s0", "a", "b"]
 LAYOUT_PATH = os.path.expanduser(os.path.join("~", ".cf_fsnn_sim", "layout.json"))
 
@@ -46,6 +47,8 @@ def apply_overview(area, docks):
     _show(area, docks, "Road", "top")
     _show(area, docks, "NetState", "bottom", "Road")
     _show(area, docks, "v_mem", "bottom", "NetState")
+    _show(area, docks, "Trajectory", "right", "v_mem")
+    _show(area, docks, "Safety", "right", "Trajectory")
     _show(area, docks, "v0", "bottom", "v_mem")
     for prev, n in zip(["v0", "T", "s0", "a"], ["T", "s0", "a", "b"]):
         _show(area, docks, n, "right", prev)
@@ -53,19 +56,19 @@ def apply_overview(area, docks):
 
 
 def apply_guida(area, docks):
-    _hide(docks, "NetState")
-    _hide(docks, "SpikeRate")
-    _show(area, docks, "Road", "left")
-    _show(area, docks, "v_mem", "right", "Road")
-    _show(area, docks, "v0", "bottom", "v_mem")
+    for d in ("NetState", "SpikeRate", "v_mem"):
+        _hide(docks, d)
+    _show(area, docks, "Road", "top")
+    _show(area, docks, "Trajectory", "bottom", "Road")   # driving story: road + trajectory + safety
+    _show(area, docks, "Safety", "right", "Trajectory")
+    _show(area, docks, "v0", "bottom", "Trajectory")
     for n in ["T", "s0", "a", "b"]:
         _show(area, docks, n, "above", "v0")   # tab-stack params together
 
 
 def apply_identificazione(area, docks):
-    _hide(docks, "v_mem")
-    _hide(docks, "NetState")
-    _hide(docks, "SpikeRate")
+    for d in ("v_mem", "NetState", "SpikeRate", "Trajectory", "Safety"):
+        _hide(docks, d)
     _show(area, docks, "Road", "top")
     _show(area, docks, "v0", "bottom", "Road")
     for prev, n in zip(["v0", "T", "s0", "a"], ["T", "s0", "a", "b"]):
@@ -73,6 +76,8 @@ def apply_identificazione(area, docks):
 
 
 def apply_neuro_debug(area, docks):
+    _hide(docks, "Trajectory")
+    _hide(docks, "Safety")
     _show(area, docks, "NetState", "left")
     _show(area, docks, "SpikeRate", "right", "NetState")
     _show(area, docks, "v_mem", "bottom", "NetState")

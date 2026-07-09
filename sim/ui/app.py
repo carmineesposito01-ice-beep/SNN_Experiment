@@ -20,7 +20,8 @@ from sim.ui.layout import (DOCK_ORDER, LAYOUT_PATH, PRESETS, apply_overview, loa
                            save_layout, visible_docks)
 from sim.ui.loop import SimLoop
 from sim.ui.panels import (PARAM_COLORS, PARAM_NAMES, PARAM_UNITS, NeuronGraphPanel, ParamPanel,
-                           SpikeRatePanel, VmemPanel)
+                           SafetyPanel, SpikeRatePanel, TrajectoryPanel, VmemPanel)
+from sim.ui.trajectory import TrajectoryBuffer
 from sim.ui.topdown import TopDownView
 from utils.champion_io import load_champion
 
@@ -46,6 +47,8 @@ class SimApp(QMainWindow):
         self._netstate = NeuronGraphPanel()
         self._spikerate = SpikeRatePanel()
         self._vmem = VmemPanel()
+        self._trajectory = TrajectoryPanel()
+        self._safety = SafetyPanel()
         self._params = [ParamPanel(i, n, u, c)
                         for i, (n, u, c) in enumerate(zip(PARAM_NAMES, PARAM_UNITS, PARAM_COLORS))]
         for p in self._params[1:]:
@@ -60,7 +63,8 @@ class SimApp(QMainWindow):
         self._netstate.set_topology(_w["w_in"], _w["w_rec"], _w["w_out"])
 
         widgets = {"Road": self._topdown, "NetState": self._netstate, "SpikeRate": self._spikerate,
-                   "v_mem": self._vmem, "v0": self._params[0], "T": self._params[1],
+                   "v_mem": self._vmem, "Trajectory": self._trajectory, "Safety": self._safety,
+                   "v0": self._params[0], "T": self._params[1],
                    "s0": self._params[2], "a": self._params[3], "b": self._params[4]}
         self._area = DockArea()
         self._docks = {}
@@ -180,6 +184,7 @@ class SimApp(QMainWindow):
         sc = self._scenarios[self._current_idx]
         self._injector = EventInjector()
         self._probe = AttributeProbe(capacity=500, sample_every=1)
+        self._traj = TrajectoryBuffer()
         backend = SoftwareBackend(self._champ.model)
         stepper = SimStepper.from_scenario(backend, sc, injector=self._injector)
         self.loop = SimLoop(stepper, self._probe, dt_fixed=DT)
@@ -209,8 +214,12 @@ class SimApp(QMainWindow):
         if results:
             self._last_result = results[-1]
             self._topdown.update_frame(results[-1])
+            for r in results:
+                self._traj.record(r)
             for p in self._live_panels:
                 p.update_frame(self._probe)
+            self._trajectory.update_frame(self._traj)
+            self._safety.update_frame(self._traj)
         self._refresh_status()
 
     def status_text(self) -> str:

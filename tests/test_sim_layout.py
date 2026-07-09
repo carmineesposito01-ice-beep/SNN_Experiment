@@ -52,6 +52,13 @@ def test_neuro_debug_shows_netstate_and_spikerate(qapp):
     assert {"NetState", "SpikeRate", "v_mem"} <= visible_docks(area)
 
 
+def test_guida_shows_trajectory_and_safety(qapp):
+    from sim.ui.layout import apply_guida
+    area, docks = _build_area()
+    apply_guida(area, docks)
+    assert {"Road", "Trajectory", "Safety"} <= visible_docks(area)
+
+
 def test_preset_then_overview_restores_all(qapp):
     area, docks = _build_area()
     apply_identificazione(area, docks)   # hides v_mem
