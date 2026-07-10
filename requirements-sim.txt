@@ -1,0 +1,13 @@
+# CF_FSNN Simulator — pip dependency FALLBACK (live GUI). CPU-only.
+#
+# PRIMARY path is conda (run_simulator.bat + environment.yml): on Windows the pip PySide6 wheel needs a
+# system MSVC redistributable to load Qt6Core, whereas conda-forge bundles it. Use this file ONLY if the
+# Microsoft Visual C++ redistributable (x64) is already installed on the machine.
+#   python -m venv .venv-sim
+#   .venv-sim\Scripts\pip install -r requirements-sim.txt
+#   .venv-sim\Scripts\python scripts\run_simulator.py [champion.pt]
+# On Windows `pip install torch` pulls the CPU wheel by default (no CUDA index needed).
+torch>=2.0
+numpy>=1.24
+PySide6>=6.6,<6.12
+pyqtgraph>=0.13,<0.15

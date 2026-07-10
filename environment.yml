@@ -1,0 +1,22 @@
+# CF_FSNN Simulator — conda environment (reproduces the working `cf_sim` env).
+#
+# Why conda and not a plain pip venv: on Windows the pip PySide6 wheel fails to load Qt6Core
+# ("DLL load failed") unless a recent Microsoft Visual C++ redistributable is installed system-wide.
+# conda-forge's PySide6 bundles its own Qt + runtime, so it loads out of the box.
+#
+# Create + launch:  run_simulator.bat        (creates this env on first run, then launches)
+# Manual:           conda env create -f environment.yml
+#                   conda run -n cf_sim python scripts/run_simulator.py [champion.pt]
+name: cf_sim
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.13
+  - pyside6        # 6.11 — conda-forge build loads Qt correctly (pip wheel needs a system MSVC runtime)
+  - pyqtgraph      # 0.14
+  - numpy
+  - pytest
+  - pip
+  - pip:
+      - torch      # CPU wheel by default on Windows; runs the SNN forward
