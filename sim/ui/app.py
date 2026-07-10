@@ -103,6 +103,7 @@ class SimApp(QMainWindow):
             d.addWidget(widgets[name])
             d.sigClosed.connect(lambda *_, n=name: self._on_dock_closed(n))
             d.label.installEventFilter(self)      # double-click the title bar -> maximize / restore
+            d.label.setToolTip("doppio-click: massimizza / ripristina")   # make the gesture discoverable
             self._docks[name] = d
         self._maximized = None                    # name of the currently maximized dock, or None
         self._pre_max_state = None                # DockArea state saved before maximizing (for restore)
@@ -342,23 +343,33 @@ class SimApp(QMainWindow):
             self._mode_sel.setCurrentIndex(idx)
             self._mode_sel.blockSignals(False)
 
-    def _busy(self, msg, btn):
-        """These batch sims run the frozen SNN synchronously on the GUI thread (platoon ~600 steps,
-        ring sweep ~7000+), which would look like a hang. Show a wait cursor + status + disable the
-        button so the user knows work is happening; always undone in _done_busy (try/finally)."""
-        self._status.showMessage(msg)
-        btn.setEnabled(False)
-        QApplication.setOverrideCursor(Qt.WaitCursor)
-        self._status.repaint(); btn.repaint()
+    def _busy_controls(self):
+        return (self._meso_page._run_platoon_btn, self._meso_page._run_ring_btn, self._mode_sel)
 
-    def _done_busy(self, btn):
+    def _busy(self, msg):
+        """These batch sims run the frozen SNN synchronously on the GUI thread. Disable EVERY control
+        that could re-enter a batch sim (both meso buttons + the mode selector) so a click can't nest
+        a second run, show a wait cursor + status; always undone in _done_busy (try/finally)."""
+        self._status.showMessage(msg)
+        for w in self._busy_controls():
+            w.setEnabled(False)
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+        self._status.repaint()
+
+    def _done_busy(self):
         QApplication.restoreOverrideCursor()
-        btn.setEnabled(True)
+        for w in self._busy_controls():
+            w.setEnabled(True)
         self._status.showMessage("fatto", 3000)
 
+    def _ring_progress(self, i, total):
+        # bounded progress + a pump between density points; every re-entry control is disabled (see _busy)
+        # so processEvents cannot nest a second sim -- it only lets the window repaint instead of hanging.
+        self._status.showMessage(f"ring sweep {i + 1}/{total}…")
+        QApplication.processEvents()
+
     def _run_platoon(self):
-        btn = self._meso_page._run_platoon_btn
-        self._busy("calcolo platoon…", btn)
+        self._busy("calcolo platoon…")
         try:
             n = self._meso_page.n_vehicles()
             sc = self._scenarios[self._meso_page.selected_scenario_index()]
@@ -369,17 +380,17 @@ class SimApp(QMainWindow):
             self._meso_page.speed_wave.set_rec(rec)
             self._meso_page.road.set_run(rec)
         finally:
-            self._done_busy(btn)
+            self._done_busy()
 
     def _run_ring(self):
-        btn = self._meso_page._run_ring_btn
-        self._busy("calcolo ring sweep…", btn)
+        self._busy("calcolo ring sweep…")
         try:
             pts = run_fundamental_diagram(self._champ, _PARAMS_GT, self._sweep_densities,
-                                          ring_length=self._sweep_ring_len, n_steps=self._sweep_steps)
+                                          ring_length=self._sweep_ring_len, n_steps=self._sweep_steps,
+                                          on_point=self._ring_progress)
             self._meso_page.fundamental_diagram.set_points(pts)
         finally:
-            self._done_busy(btn)
+            self._done_busy()
 
     def select_scenario(self, idx: int):
         self._current_idx = int(idx)
@@ -406,6 +417,10 @@ class SimApp(QMainWindow):
             p.set_ground_truth(float(sc.params_gt[i]))
         self._inspector.set_neuron(None)                  # clear selection + graph highlight on scenario change
         self._netstate.highlight(None)
+        self._cursor = None                               # drop any paused scrub cursor + its lines/readout
+        for p in self._ts_panels:
+            p.set_cursor(None)
+        self._cursor_readout.setText("live")
         self._clear_panels()                              # blank stale curves/road so Reset visibly resets
         self._refresh_status()
 
@@ -437,8 +452,12 @@ class SimApp(QMainWindow):
         if results:
             self._last_result = results[-1]
             self._src_probe, self._src_traj = self._probe, self._traj   # live advanced -> scrub source = live
-            for r in results:                                           # integrate EVERY tick (speed>1 -> many)
-                self._topdown.update_frame(r)                           # Road stays smooth at full rate
+            last = len(results) - 1
+            for i, r in enumerate(results):                             # speed>1 -> many results per paint
+                if i == last:
+                    self._topdown.update_frame(r)                       # render only the final tick (others coalesce)
+                else:
+                    self._topdown.advance(r)                            # integrate ego position only, no QGraphics work
                 self._traj.record(r)
             for r, f in zip(results, self._probe.frames()[-len(results):]):
                 self._episode.update(r, f.spikes)                       # feed the post-run summary

@@ -10,6 +10,7 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import QLabel, QVBoxLayout, QWidget
 
 from sim.ui import metrics
+from utils.closed_loop_eval import DRAC_STAR as _DRAC_REF, TTC_STAR as _TTC_REF_S   # frozen safety thresholds
 
 PARAM_NAMES = ["v0", "T", "s0", "a", "b"]
 PARAM_UNITS = ["m/s", "s", "m", "m/s^2", "m/s^2"]
@@ -468,8 +469,8 @@ class VmemPanel(QWidget):
         frames = probe.frames()
         if not frames:
             return
-        vm = np.stack([f.v_mem for f in frames])
-        vth = np.stack([f.v_th_eff for f in frames])
+        vm = np.stack([f.v_mem[:_N_SAMPLE] for f in frames])       # only the 4 plotted columns (not all 32)
+        vth = np.stack([f.v_th_eff[:_N_SAMPLE] for f in frames])
         for i in range(min(_N_SAMPLE, vm.shape[1])):
             self._vmem_curves[i].setData(vm[:, i])
             self._vth_curves[i].setData(vth[:, i])
@@ -574,9 +575,7 @@ class TrajectoryPanel(QWidget):
         self._c_a.setData(a["a_ego"])
 
 
-_SAFETY_CAP = 30.0
-_TTC_REF_S = 1.5       # TTC alert threshold (s), standard car-following safety surrogate
-_DRAC_REF = 3.35       # DRAC alert threshold (m/s^2), comfortable-deceleration limit
+_SAFETY_CAP = 30.0     # _TTC_REF_S / _DRAC_REF are imported from the frozen source (top of file)
 
 
 class SafetyPanel(QWidget):

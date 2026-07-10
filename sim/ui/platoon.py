@@ -50,16 +50,20 @@ def run_ring(champion, params_gt, n_vehicles, ring_length, n_steps, device="cpu"
 
 
 def run_fundamental_diagram(champion, params_gt, densities_veh_per_km, ring_length=1000.0,
-                            n_steps=600, device="cpu"):
+                            n_steps=600, device="cpu", on_point=None):
     """Family-aware fundamental diagram: sweep densities -> Edie (rho, Q, V, wave) per point.
 
     Loops run_ring (which injects the family-aware batched forward, so BOTH BPTT and EventProp
     work) and reuses the Q/V/wave point formula of platoon_eval.fundamental_diagram. That function
     is NOT called directly: it hardwires the baseline forward and would break EventProp.
-    LAPACK-free (mean/std only) -> safe in cf_sim.
+    LAPACK-free (mean/std only) -> safe in cf_sim. `on_point(i, total)` (optional) is called before
+    each density point so a GUI can show bounded progress on this multi-second sweep.
     """
     pts = []
-    for rho_km in densities_veh_per_km:
+    total = len(densities_veh_per_km)
+    for i, rho_km in enumerate(densities_veh_per_km):
+        if on_point is not None:
+            on_point(i, total)
         n = max(2, int(round(rho_km / 1000.0 * ring_length)))
         rec = run_ring(champion, params_gt, n, ring_length, n_steps, device=device)
         v = rec["v"]

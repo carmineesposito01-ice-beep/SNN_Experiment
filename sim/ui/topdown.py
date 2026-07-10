@@ -8,6 +8,7 @@ from PySide6.QtWidgets import (QGraphicsLineItem, QGraphicsPolygonItem,
                                QGraphicsView)
 
 from config import DT
+from utils.closed_loop_eval import TTC_STAR as TTC_DANGER   # single source for the 1.5 s critical-TTC threshold
 
 PX_PER_M = 8.0
 VEH_LEN_M = 5.0
@@ -17,7 +18,6 @@ ROAD_X0_M = -200.0
 ROAD_LEN_M = 5000.0
 DASH_EVERY_M = 12.0
 
-TTC_DANGER = 1.5
 TTC_CAUTION = 4.0
 _COL = {"safe": "#2e8b57", "caution": "#e8871e", "danger": "#d1495b"}
 
@@ -127,6 +127,12 @@ class TopDownView(QGraphicsView):
         self._gap_text.setPos((ego_px + leader_px) / 2 - 22, y + 2)
         self.centerOn(ego_px, 0)                           # follow ego (pinned centre)
 
+    def advance(self, r):
+        """Integrate ego position WITHOUT rendering -- for intermediate ticks at speed>1, whose paint
+        would be coalesced away anyway. Keeps _ego_x/_last_s identical to update_frame's accumulation."""
+        self._ego_x += r.v * DT
+        self._last_s = r.s
+
     def update_frame(self, r):
         self._place(self._ego_x + r.v * DT, r.s, r.dv)     # integrate ego position
 
@@ -138,4 +144,4 @@ class TopDownView(QGraphicsView):
         n = a["t"].size
         i = index if index >= 0 else n + index
         i = max(0, min(i, n - 1))
-        self._place(float(np.cumsum(a["v"])[i] * DT), float(a["s"][i]), float(a["dv"][i]))
+        self._place(float(a["v"][:i + 1].sum() * DT), float(a["s"][i]), float(a["dv"][i]))
