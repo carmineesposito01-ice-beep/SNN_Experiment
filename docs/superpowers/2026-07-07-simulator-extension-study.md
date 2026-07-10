@@ -181,6 +181,15 @@ The core already computes these but shows none of them:
     every tick (speed>1 drift), scrub source reverts on Step, reconstruct cached+signalled, Home/End
     slider sync, `synops` DRY, `load_layout` logging, Safety named constants. Deferred+documented:
     `__init__` SRP split, data-prep version-cache, visibility gating, reconstruct prefix-splice.
+- **Champion selector + Meso/Macro analysis mode + page v2 — ✅ DONE (2026-07-09/10).** A second *mode*
+  (Live↔Meso/Macro toggle) running platoon/ring sims batch on-demand for all 4 champions (family-aware
+  batched forward via `platoon_eval`'s additive `forward=` hook). The page: a **platoon road view** (N
+  cars coloured by speed, slider+Play, animating the recorded run) on top + a 2×2 grid — **string
+  stability** · **velocity waves v(t)** (stop&go attenuation) · **space-time x(t)** · **fundamental
+  diagram Q(ρ)/V(ρ)**; a **scenario selector** drives the platoon head with the chosen scenario's
+  `v_leader`. Note: this reintroduces a batch "analysis mode" that §0.1 had dropped — a later user
+  decision, reconciled by keeping the core frozen and `platoon_eval` report-compatible. Spec+plans
+  `2026-07-09-meso-macro-analysis-mode*`, `2026-07-10-meso-page-v2*`. 121 sim tests green; core bit-identical.
 - **Phase 4 — Post-run seal (one episode) + float-vs-fixed A/B + optional export.** Fixed-point SW
   model path; same-seed overlay; generic CSV/PNG.
 - **Phase 5 (ambitions).** GT sliders / live UKF re-identification, video/GIF, scenario form editor,
