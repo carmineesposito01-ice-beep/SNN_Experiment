@@ -40,6 +40,12 @@ def synops_series(spikes_matrix, n_in, n_hid, n_out, rank):
     return static, dynamic
 
 
+def synops_breakdown(nsp, n_in, n_hid, n_out, rank):
+    """Per-tick SynOps split (fc, rec_V, rec_U, out) for ONE tick with `nsp` spikes -- the single
+    source the EpisodeSummary energy breakdown delegates to (same decomposition as synops_series)."""
+    return (n_in * n_hid, nsp * rank, (n_hid * rank if nsp > 0 else 0), nsp * n_out)
+
+
 def dense_mac(n_in, n_hid, n_out, rank):
     """Clock-driven dense-MAC equivalent per tick for THIS (low-rank) net = param count."""
     return int(n_in * n_hid + 2 * rank * n_hid + n_hid * n_out)

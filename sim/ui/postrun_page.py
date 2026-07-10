@@ -6,10 +6,13 @@ import pyqtgraph as pg
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QFrame, QGridLayout, QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
+# safety/comfort limits from the frozen source (single source, no drift vs the live Safety dock / the reports)
+from utils.closed_loop_eval import (DRAC_STAR as _DRAC_STAR, ISO_DECEL_LIMIT as _ISO_DECEL,
+                                    JERK_COMFORT as _ISO_JERK, TTC_STAR as _TTC_STAR)
+
 _GREEN = "#2e8b57"; _RED = "#d1495b"; _BLUE = "#2a7fb8"; _AMBER = "#e8871e"; _PURPLE = "#8a6fb0"
-_TTC_STAR = 1.5; _DRAC_STAR = 3.35        # safety limits (s, m/s²) — same as the live Safety dock
 _BRAKE_SAFE_M = 20.0                       # display scale: a 20 m avoidability margin reads as fully safe (0 m = the limit)
-_ISO_DECEL = 3.5; _ISO_JERK = 2.0         # comfort limits (m/s², m/s³) cited in the tooltips
+_GT_MAG = (30.0, 1.5, 2.0, 1.5, 1.5)      # ACC-IIDM GT magnitudes (== app _PARAMS_GT); id errors -> relative scale
 
 _METRIC_HELP = {
     "id_accuracy": "<b>Accuratezza identificazione</b><br>Quanto la SNN indovina i 5 parametri ACC-IIDM veri.<br>"
@@ -162,6 +165,17 @@ class PostRunPage(QWidget):
         return bar
 
     def set_summary(self, s, rows, champion, scenario):
+        if not s.get("n_ticks"):                             # no episode run yet -> neutral state, no misleading "ok"
+            self._verdict.setText("  — nessun episodio  ")
+            self._verdict.setStyleSheet("font-size:22px;font-weight:bold;padding:2px 12px;border-radius:4px;"
+                                        "background:#555;color:#ddd;")
+            self._subtitle.setText(f"{champion} · {scenario} · nessun dato")
+            for lbl in self._values.values():
+                lbl.setText("—")
+            for b in self._bars.values():
+                b.setOpts(width=[0.0] * len(b.opts["width"]))
+            self._v_curve.setData([], []); self._gap_curve.setData([], [])
+            return
         coll = bool(s.get("collided"))
         self._verdict.setText("  COLLISIONE  " if coll else "  ok  ")
         self._verdict.setStyleSheet(f"font-size:22px;font-weight:bold;padding:2px 12px;border-radius:4px;"
@@ -185,7 +199,8 @@ class PostRunPage(QWidget):
             return float(v) if isinstance(v, (int, float)) and v != float("inf") else d
 
         idv = [g("param_rmse_v0"), g("param_rmse_T"), g("param_rmse_s0"), g("param_rmse_a"), g("param_rmse_b")]
-        self._bars["id"].setOpts(width=idv, brushes=[_grad(x, max(idv + [1e-9])) for x in idv])
+        rel = [e / m for e, m in zip(idv, _GT_MAG)]          # relative error (matches id_accuracy) -> bars comparable
+        self._bars["id"].setOpts(width=rel, brushes=[_grad(x, max(rel + [1e-9])) for x in rel])
         # Sicurezza as a DANGER INDEX per metric (1.0 = the limit; green<1 safe / red>=1 violation) on a
         # fixed [0,2] scale -> the three different-unit metrics become visually comparable, and the safest
         # case (min_ttc = ∞) correctly reads as a short green bar instead of a red zero-length one.

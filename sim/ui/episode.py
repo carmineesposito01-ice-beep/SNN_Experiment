@@ -8,7 +8,7 @@ import torch
 
 from config import DT
 from core.hardware import po2_quantize
-from sim.ui.metrics import E_AC_PJ, E_MAC_PJ, ann_mac, synops, ttc
+from sim.ui.metrics import E_AC_PJ, E_MAC_PJ, ann_mac, synops_breakdown, ttc
 from utils.closed_loop_eval import comfort_metrics, safety_metrics
 from utils.net_diagnostics import _last_hidden
 
@@ -49,6 +49,7 @@ class EpisodeSummary:
         self._n = 0
         self._collided = False
         self._impact_dv = 0.0
+        self._collision_gap = None                         # post-update gap at the first collision (penetration)
         self._s = []; self._v = []; self._vl = []; self._dv = []; self._a = []; self._params = []
         self._sum_fire = 0.0; self._peak_fire = 0.0; self._max_spk = 0
         self._fired = None                                 # (H,) ever-fired mask
@@ -60,19 +61,19 @@ class EpisodeSummary:
         sp = np.asarray(spikes, dtype=float)
         a = float(r.a_ego); gap = float(r.s)
         self._n += 1
-        if bool(r.collided) and not self._collided:        # first collision -> impact Δv (as closed_loop_eval)
-            self._impact_dv = max(0.0, float(r.v) - float(r.vl))
+        if bool(r.collided) and not self._collided:        # first collision: use POST-update v/gap (as closed_loop_eval;
+            v_new = max(0.0, float(r.v) + a * DT)          # StepResult carries PRE-update v/s, so advance one step)
+            self._impact_dv = max(0.0, v_new - float(r.vl))
+            self._collision_gap = gap + (float(r.vl) - v_new) * DT
         self._collided = self._collided or bool(r.collided)
         self._s.append(gap); self._v.append(float(r.v)); self._vl.append(float(r.vl))
         self._dv.append(float(r.dv)); self._a.append(a); self._params.append(np.asarray(r.params, float)[:5])
         fire = float(sp.mean()); self._sum_fire += fire; self._peak_fire = max(self._peak_fire, fire)
         nsp = int(np.count_nonzero(sp > 0)); self._max_spk = max(self._max_spk, nsp)
         self._fired = (sp > 0) if self._fired is None else (self._fired | (sp > 0))
-        # energy breakdown = the SAME metrics.synops decomposition (one path; no n_ticks re-normalisation)
-        self._e_fc += n_in * n_hid
-        self._e_recV += nsp * rank
-        self._e_recU += (n_hid * rank) if nsp > 0 else 0
-        self._e_out += nsp * n_out
+        # energy breakdown via the SINGLE metrics source (no n_ticks re-normalisation; == the SynOps dock)
+        e_fc, e_recV, e_recU, e_out = synops_breakdown(nsp, n_in, n_hid, n_out, rank)
+        self._e_fc += e_fc; self._e_recV += e_recV; self._e_recU += e_recU; self._e_out += e_out
         tval = float(ttc(gap, r.dv))
         self._rows.append((r.t, round(gap, 3), round(float(r.v), 3), round(float(r.vl), 3),
                            round(float(r.dv), 3), round(a, 3),
@@ -85,8 +86,10 @@ class EpisodeSummary:
         if n == 0:
             return {"n_ticks": 0}
         a = np.asarray(self._a); v = np.asarray(self._v)
+        min_gap = (self._collision_gap if (self._collided and self._collision_gap is not None)
+                   else float(np.min(self._s)))            # collision -> post-update penetration (matches the report)
         traj = {"s": np.asarray(self._s), "dv": np.asarray(self._dv), "v": v, "a_ego": a,
-                "collided": self._collided, "min_gap": float(np.min(self._s)), "impact_dv": self._impact_dv}
+                "collided": self._collided, "min_gap": min_gap, "impact_dv": self._impact_dv}
         out = {"n_ticks": n, "duration_s": round(n * DT, 2), "collided": self._collided}
         sm = safety_metrics(traj); cm = comfort_metrics(traj)               # REUSED validated formulas
         for k in ("min_gap", "min_ttc", "brake_margin_min", "max_DRAC", "TET", "TIT", "impact_dv",

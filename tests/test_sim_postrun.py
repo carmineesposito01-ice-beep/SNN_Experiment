@@ -83,6 +83,10 @@ def test_postrun_safety_danger_index_and_comfort_colours(qapp):
     assert all(x < 1.0 for x in d)                           # all below the limit line
     assert p._bars["safe"].opts["brushes"][0].color().name() == _GREEN
     assert p._bars["comf"].opts["brushes"][1].color().name() == _GREEN   # max_decel 2.0 < ISO 3.5
+    idw = list(p._bars["id"].opts["width"])                 # id bars are RELATIVE error (v0 no longer spuriously worst)
+    assert len(idw) == 5 and idw[0] == min(idw)             # v0 (rmse 1.0/GT 30) is the best, not the worst
+    ebr = p._bars["energy"].opts["brushes"]
+    assert ebr[0].color().name() == _GREEN and ebr[1].color().name() == _RED   # SNN green, ANN red
 
     coll = _safe_summary(collided=True, min_ttc=0.8, max_DRAC=5.0, brake_margin_min=-2.0,
                          max_decel=9.0, rms_jerk=3.0, rho=2.99)
@@ -94,3 +98,11 @@ def test_postrun_safety_danger_index_and_comfort_colours(qapp):
     cbr = p._bars["comf"].opts["brushes"]
     assert cbr[1].color().name() == _RED and cbr[2].color().name() == _RED   # decel 9>3.5, jerk 3>2
     assert p._rho_plot.getViewBox().viewRange()[0][1] >= 2.99 * 1.15 - 1e-6   # ρ>1 scale crosses the boundary
+
+
+def test_postrun_empty_episode_no_fake_ok(qapp):
+    p = PostRunPage()
+    p.set_summary({"n_ticks": 0}, [], "Raffaello", "following")   # entered Post-run before running anything
+    assert "nessun episodio" in p._verdict.text()                 # neutral placeholder...
+    assert "ok" not in p._verdict.text().lower()                  # ...NOT a green "ok" for a non-run
+    assert all(x == 0.0 for x in p._bars["safe"].opts["width"])   # and no red danger bars

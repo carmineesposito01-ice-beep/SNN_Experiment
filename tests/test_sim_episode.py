@@ -27,7 +27,8 @@ def test_episode_summary_aggregates():
     s = acc.summary()
     assert s["n_ticks"] == 2 and abs(s["duration_s"] - 2 * DT) < 1e-9
     assert s["collided"] is True
-    assert s["min_gap"] == 10.0
+    v_new = max(0.0, 20.0 - 3.0 * DT)                        # collision min_gap = POST-update penetration (as the report)
+    assert abs(s["min_gap"] - round(10.0 + (15.0 - v_new) * DT, 3)) < 1e-6
     assert abs(s["min_ttc"] - 2.0) < 1e-6                     # 10/5 at tick 1 (tick 0 not closing)
     assert s["max_decel"] == 3.0                             # -min(a) = 3
     assert abs(s["peak_firing_pct"] - 12.5) < 1e-6
