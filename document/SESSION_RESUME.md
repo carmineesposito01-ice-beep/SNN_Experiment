@@ -10,9 +10,11 @@
 > **✅ B2 (SNN Donatello time-multiplexata, `hdl.RAM`) REALIZZATA E VERIFICATA (commit `f20e812`).** Da **44% → 6.9%
 > LUT** (~6.3× meno), 22 DSP, 2 BRAM, **bit-exact** (`test_b2_fsm` err=0), **cosim xsim PASSED**. È l'architettura di
 > deploy lean. File: `matlab/snn_b2_fsm.m` + `gen_b2_rom`/`b2_donatello_rom`/`test_b2_fsm`/`tb_b2_fsm`. Studio in
-> `document/HDL_ARCHITECTURE_STUDY.md`. **decode + wrapper AXI-Lite + BITSTREAM PYNQ-Z1 FATTI** (cosim `AXI TEST PASSED`;
-> IP synth **8.9% LUT / 38 DSP / 2 BRAM**; **`.bit` timing-clean** @8 MHz, WNS +7 ns, in `matlab/axi/build/`). **CHAIN HDL
-> COMPLETO** PyTorch→RTL→AXI→bitstream, tutto headless. **Prossimo:** integrazione V2I in Simulink. (Storia po2→shift/44% sotto.)
+> `document/HDL_ARCHITECTURE_STUDY.md`. **decode + wrapper AXI-Lite + BITSTREAM PYNQ-Z1 (board reale) FATTI** (cosim
+> `AXI TEST PASSED`; IP synth **8.9% LUT / 38 DSP / 2 BRAM**; **`.bit` timing-clean** @8 MHz WNS +6.97 ns, con **board
+> preset Digilent PYNQ-Z1** DDR/MIO reali + handoff **`.hwh`/`.xsa`** per PYNQ `Overlay`/Vitis, in `matlab/axi/build/`).
+> **CHAIN HDL COMPLETO** PyTorch→RTL→AXI→bitstream flashabile, tutto headless. **Prossimo:** integrazione V2I in Simulink.
+> (Storia po2→shift/44% sotto.)
 
 > ⚠️ **WORKTREE PARALLELO — NON è il track principale `main`.** Sei nel worktree
 > `.worktrees/Simulink_Importer` (branch **`Simulink_Importer`**), **traccia ②** (import checkpoint → Simulink → HDL).

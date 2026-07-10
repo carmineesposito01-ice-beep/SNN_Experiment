@@ -7,9 +7,10 @@
 > + `tb_b2_fsm` (cosim). **Causa-radice sbloccante:** `MapPersistentVarsToRAM` NON funziona in loop → serve
 > **`hdl.RAM` esplicito** cycle-based (lo studio sotto riguarda l'**auto-flow**, che resta non-percorribile).
 > **B2 è l'architettura di deploy lean per Donatello.** **CHAIN HDL COMPLETO (2026-07-10):** SNN + decode→LUT (σ)
-> + wrapper **AXI4-Lite** (cosim `AXI TEST PASSED`, `matlab/axi/`) + block design PS7 + **bitstream PYNQ-Z1
-> timing-clean** (`matlab/axi/build/snn_b2_donatello.bit`, FCLK 8 MHz, WNS +7 ns). IP synth 8.9% LUT / 38 DSP /
-> 2 BRAM. Tutto headless via MATLAB + Vivado Tcl. **Prossima fase progetto: integrazione V2I in Simulink.**
+> + wrapper **AXI4-Lite** (cosim `AXI TEST PASSED`, `matlab/axi/`) + block design con **board preset Digilent
+> PYNQ-Z1** (DDR/MIO/clock reali) + **bitstream flashabile timing-clean** (`matlab/axi/build/snn_b2_donatello.bit`
+> + handoff `.hwh`/`.xsa` per PYNQ `Overlay`/Vitis, FCLK 8 MHz, WNS +6.97 ns). IP synth 8.9% LUT / 38 DSP / 2 BRAM.
+> Tutto headless via MATLAB + Vivado Tcl. **Prossima fase progetto: integrazione V2I in Simulink.**
 
 > **Data:** 2026-07-10 · **Target:** PYNQ-Z1 (Zynq-7020 `xc7z020clg400-1`) · questo doc = **record del PERCHÉ**.
 > **Esito studio iniziale:** rearchitecting d'area via **auto-flow** (streaming ÷32) **non percorribile**; ma la

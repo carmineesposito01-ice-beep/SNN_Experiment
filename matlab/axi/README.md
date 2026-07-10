@@ -33,16 +33,35 @@ poll `status.done` → leggi `params[0..4]` → converti da Q7.13 (`/8192.0`).
 # 2. IP AXI       : vivado -mode batch -source build/axi_gen.tcl   (create_peripheral)
 # 3. synth-verify : vivado -mode batch -source build/axi_synth.tcl (0 errori, 8.9% LUT)
 # 4. cosim        : xvhdl <snn> snn_top_b2_flat.vhd; xvlog snn_b2_axi_lite.v axi_tb.v; xelab work.axi_tb; xsim -R
-# 5. bitstream    : vivado -mode batch -source build/bitstream2.tcl (package -> BD PS7 -> impl -> .bit)
-#    (usa ROOT corto per evitare il limite 260-byte path Windows)
+# 5. bitstream    : vivado -mode batch -source build/bitstream_board.tcl (board preset PYNQ-Z1 -> .bit + .xsa)
+#    (usa ROOT corto D:/zbd per evitare il limite 260-byte path Windows; board files in
+#     C:/AMDDesignTools/Boards_Drivers; bitstream2.tcl = variante vecchia con PS7 generica)
 ```
 
-## Fase 3 — Bitstream (FATTO ✅)
-Block design Zynq (**PS7 + questo IP + AXI SmartConnect**) → implementation → **`build/snn_b2_donatello.bit`**
-(PYNQ-Z1, xc7z020, 3.9 MB). **Timing-clean** con **FCLK0 = 8 MHz** (WNS **+7 ns**; il path combinatorio della lane
-SNN è ~118 ns → ~8.5 MHz Fmax — 8 MHz basta: servono ~kHz per control-step 0.1 s). Address base slave (M_AXI_GP0):
-**`0x4000_0000`**. Utilizzo full-system: LUT 4.527 (8.5%), FF 2.288, DSP 38, 1 BRAM tile. **Nota:** senza board file
-PYNQ-Z1 → config PS7 generica; per il deploy reale ri-generare con i board files della PYNQ-Z1 (DDR/MIO corretti).
+## Fase 3 — Bitstream (FATTO ✅, board PYNQ-Z1 reale)
+Block design Zynq con **board preset PYNQ-Z1** (`www.digilentinc.com:pynq-z1:part0:1.0` — DDR3/MIO/clock reali
+della board) **+ questo IP + AXI SmartConnect** → implementation → deliverable in `build/`:
+- **`snn_b2_donatello.bit`** — bitstream flashabile (4.0 MB)
+- **`snn_b2_donatello.hwh`** — hardware handoff (mappa indirizzi/IP; richiesto da PYNQ `Overlay`, stesso basename del `.bit`)
+- **`snn_b2_donatello.xsa`** — platform handoff completo per Vitis (contiene `.bit` + `.hwh`)
+
+**Timing-clean**: FCLK0 = **8 MHz**, WNS **+6.97 ns** ("All constraints met"). Path combinatorio lane SNN ~118 ns
+→ ~8.5 MHz Fmax; 8 MHz basta (servono ~kHz per control-step 0.1 s). Base slave (M_AXI_GP0): **`0x4000_0000`**.
+Util full-system: LUT ~4.5k (8.5%), FF ~2.3k, DSP 38, 1 BRAM tile. Build: `build/bitstream_board.tcl`.
+
+### Uso su PYNQ-Z1 (Python)
+```python
+from pynq import Overlay
+ol = Overlay("snn_b2_donatello.bit")     # richiede snn_b2_donatello.hwh nello stesso path
+ip = ol.snn0                             # IP AXI-Lite @ 0x4000_0000
+# normalizza xn in float sul PS -> Q?.13 interi con segno, poi:
+for i, x in enumerate(xn_fixed):
+    ip.write(0x00 + 4*i, int(x) & 0xFFFFFFFF)   # xn0..xn3
+ip.write(0x10, 1); ip.write(0x10, 0)     # pulse start (fronte)
+while ip.read(0x10) & 1 == 0:            # poll done
+    pass
+params = [ip.read(0x14 + 4*i) for i in range(5)]   # p0..p4 in Q7.13 -> /8192
+```
 
 ## Chain completo
 `PyTorch → snn_core (double, parità 2e-6) → fixed Q?.13 → snn_b2_fsm (hdl.RAM, bit-exact) → decode σ-LUT →
