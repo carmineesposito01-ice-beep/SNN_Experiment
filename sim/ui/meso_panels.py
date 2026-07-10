@@ -30,36 +30,50 @@ class StringStabilityPanel(QWidget):
             f"{'onda convettiva a monte' if m['convective_upstream'] else 'no onda a monte'}")
 
 
-class SpaceTimePanel(QWidget):
-    """Space-time diagram: x(t) of each vehicle (viridis by index) -> stop-and-go waves visible."""
-    def __init__(self):
+class _MultiCurvePanel(QWidget):
+    """N viridis curves of rec[field][:, i] vs time (one per vehicle). Base for the space-time (x)
+    and speed-wave (v) panels. Frames the data explicitly: clipToView + downsampling leave the
+    ViewBox auto-range stuck at the default [0,1] when the panel is populated before its first show
+    (-> blank panel), and the PlotWidget must be added to the layout (else it is an orphan)."""
+    def __init__(self, field, title, ylabel, y_units):
         super().__init__()
+        self._field = field
         layout = QVBoxLayout(self); layout.setContentsMargins(0, 0, 0, 0)
-        self._plot = pg.PlotWidget(title="spazio-tempo (traiettorie plotone)")
-        self._plot.setLabel("bottom", "time", units="steps"); self._plot.setLabel("left", "x", units="m")
+        self._plot = pg.PlotWidget(title=title)
+        self._plot.setLabel("bottom", "time", units="steps")
+        self._plot.setLabel("left", ylabel, units=y_units)
         self._plot.setDownsampling(auto=True, mode="peak"); self._plot.setClipToView(True)
         self._lut = pg.colormap.get("viridis").getLookupTable(0.0, 1.0, 256)
         self._curves = []
-        layout.addWidget(self._plot, stretch=1)      # T3 bug: was never added -> panel rendered blank
+        layout.addWidget(self._plot, stretch=1)
 
     def set_rec(self, rec):
-        x = np.asarray(rec["x"])                    # (T, N) absolute positions
-        if x.ndim != 2 or x.size == 0:
+        y = np.asarray(rec[self._field])            # (T, N)
+        if y.ndim != 2 or y.size == 0:
             return
-        T, N = x.shape
+        T, N = y.shape
         while len(self._curves) < N:
             self._curves.append(self._plot.plot())
         t = np.arange(T)
         for i in range(N):
             r, g, b = self._lut[int(i / max(1, N - 1) * 255)][:3]
-            self._curves[i].setData(t, x[:, i], pen=pg.mkPen(int(r), int(g), int(b), width=1))
+            self._curves[i].setData(t, y[:, i], pen=pg.mkPen(int(r), int(g), int(b), width=1))
         for c in self._curves[N:]:
             c.setData([], [])
-        # frame the data explicitly: with clipToView + downsampling the ViewBox auto-range never
-        # fires when the panel is populated before its first show -> it stays at the default [0,1]
-        # and the trajectories are drawn off-view (blank panel).
         self._plot.setXRange(0.0, float(max(T - 1, 1)), padding=0.02)
-        self._plot.setYRange(float(np.min(x)), float(np.max(x)), padding=0.05)
+        self._plot.setYRange(float(np.min(y)), float(np.max(y)), padding=0.05)
+
+
+class SpaceTimePanel(_MultiCurvePanel):
+    """Space-time diagram: x(t) of each vehicle (viridis by index) -> stop-and-go waves visible."""
+    def __init__(self):
+        super().__init__("x", "spazio-tempo (traiettorie plotone)", "x", "m")
+
+
+class SpeedWavePanel(_MultiCurvePanel):
+    """Speed waves: v(t) of each vehicle (viridis by index) -> stop-and-go attenuation visible."""
+    def __init__(self):
+        super().__init__("v", "onde di velocità (attenuazione stop&go)", "v", "m/s")
 
 
 _PARAM_NAMES = ("v0", "T", "s0", "a", "b")

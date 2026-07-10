@@ -12,8 +12,8 @@ pytest.importorskip("PySide6")
 pytest.importorskip("pyqtgraph")
 
 from PySide6.QtWidgets import QApplication          # noqa: E402
-from sim.ui.meso_panels import (FundamentalDiagramPanel, PlatoonParamsPanel,   # noqa: E402
-                                SpaceTimePanel, StringStabilityPanel)
+from sim.ui.meso_panels import (FundamentalDiagramPanel, PlatoonParamsPanel, SpaceTimePanel,   # noqa: E402
+                                SpeedWavePanel, StringStabilityPanel)
 
 
 @pytest.fixture(scope="module")
@@ -80,3 +80,14 @@ def test_platoon_params_panel_means(qapp):
     p.set_rec({"params": params}, warmup_frac=0.0)       # 5 param strips, mean over the regime
     assert len(p._bars) == 5
     assert np.allclose(p._bars[0].opts["height"], params[:, :, 0].mean(axis=0))
+
+
+def test_speed_wave_panel_curves_and_view(qapp):
+    p = SpeedWavePanel()
+    v = np.abs(np.cumsum(np.full((30, 3), 1.0), axis=0)) + 5.0   # speeds 6..35, outside [0,1]
+    p.set_rec({"v": v})
+    active = [c for c in p._curves if c.getData()[0] is not None and len(c.getData()[0]) > 0]
+    assert len(active) == 3                              # one curve per vehicle from rec['v']
+    assert p.layout().indexOf(p._plot) >= 0              # plot is in the layout (else blank)
+    _, y_range = p._plot.getViewBox().viewRange()
+    assert y_range[1] > 10.0                             # view fits the data, not stuck at [0,1]
