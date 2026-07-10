@@ -9,6 +9,7 @@ import torch
 from config import DT
 from core.hardware import po2_quantize
 from sim.ui.metrics import E_AC_PJ, E_MAC_PJ, ann_mac, synops, ttc
+from utils.closed_loop_eval import comfort_metrics, safety_metrics
 from utils.net_diagnostics import _last_hidden
 
 
@@ -34,72 +35,87 @@ CSV_HEADER = ("t", "gap", "v", "v_leader", "dv", "accel", "ttc",
               "v0", "T", "s0", "a", "b", "firing_pct")
 
 
+_PARAM_NAMES = ("v0", "T", "s0", "a", "b")
+
+
 class EpisodeSummary:
-    def __init__(self, dims):
-        self._dims = tuple(int(x) for x in dims)   # (n_in, n_hid, n_out, rank)
+    def __init__(self, dims, params_gt=None, model=None):
+        self._dims = tuple(int(x) for x in dims)           # (n_in, n_hid, n_out, rank)
+        self._gt = None if params_gt is None else np.asarray(params_gt, dtype=float)
+        self._rho = spectral_radius_po2(model) if model is not None else None
         self.reset()
 
     def reset(self):
         self._n = 0
         self._collided = False
-        self._min_gap = float("inf")
-        self._min_ttc = float("inf")
-        self._max_decel = 0.0
-        self._sum_a2 = 0.0
-        self._sum_jerk2 = 0.0
-        self._prev_a = None
-        self._sum_fire = 0.0
-        self._peak_fire = 0.0
-        self._synops_total = 0.0
+        self._impact_dv = 0.0
+        self._s = []; self._v = []; self._vl = []; self._dv = []; self._a = []; self._params = []
+        self._sum_fire = 0.0; self._peak_fire = 0.0; self._max_spk = 0
+        self._fired = None                                 # (H,) ever-fired mask
+        self._e_fc = 0.0; self._e_recV = 0.0; self._e_recU = 0.0; self._e_out = 0.0
         self._rows = []
 
     def update(self, r, spikes):
         n_in, n_hid, n_out, rank = self._dims
-        a = float(r.a_ego)
-        gap = float(r.s)
-        tval = float(ttc(gap, r.dv))
-        fire = float(np.asarray(spikes).mean())
+        sp = np.asarray(spikes, dtype=float)
+        a = float(r.a_ego); gap = float(r.s)
         self._n += 1
+        if bool(r.collided) and not self._collided:        # first collision -> impact Δv (as closed_loop_eval)
+            self._impact_dv = max(0.0, float(r.v) - float(r.vl))
         self._collided = self._collided or bool(r.collided)
-        self._min_gap = min(self._min_gap, gap)
-        if np.isfinite(tval):
-            self._min_ttc = min(self._min_ttc, tval)
-        self._max_decel = max(self._max_decel, -a)
-        self._sum_a2 += a * a
-        if self._prev_a is not None:
-            j = (a - self._prev_a) / DT
-            self._sum_jerk2 += j * j
-        self._prev_a = a
-        self._sum_fire += fire
-        self._peak_fire = max(self._peak_fire, fire)
-        static, dynamic = synops(spikes, n_in, n_hid, n_out, rank)
-        self._synops_total += static + dynamic
-        p = np.asarray(r.params, dtype=float)
+        self._s.append(gap); self._v.append(float(r.v)); self._vl.append(float(r.vl))
+        self._dv.append(float(r.dv)); self._a.append(a); self._params.append(np.asarray(r.params, float)[:5])
+        fire = float(sp.mean()); self._sum_fire += fire; self._peak_fire = max(self._peak_fire, fire)
+        nsp = int(np.count_nonzero(sp > 0)); self._max_spk = max(self._max_spk, nsp)
+        self._fired = (sp > 0) if self._fired is None else (self._fired | (sp > 0))
+        # energy breakdown = the SAME metrics.synops decomposition (one path; no n_ticks re-normalisation)
+        self._e_fc += n_in * n_hid
+        self._e_recV += nsp * rank
+        self._e_recU += (n_hid * rank) if nsp > 0 else 0
+        self._e_out += nsp * n_out
+        tval = float(ttc(gap, r.dv))
         self._rows.append((r.t, round(gap, 3), round(float(r.v), 3), round(float(r.vl), 3),
                            round(float(r.dv), 3), round(a, 3),
                            round(tval, 3) if np.isfinite(tval) else "",
-                           *(round(float(x), 4) for x in p[:5]), round(fire * 100, 2)))
+                           *(round(float(x), 4) for x in np.asarray(r.params, float)[:5]),
+                           round(fire * 100, 2)))
 
     def summary(self):
         n = self._n
-        n_in, n_hid, n_out, rank = self._dims
-        snn_pj = self._synops_total * E_AC_PJ
-        ann_pj = n * ann_mac(n_in, n_hid, n_out) * E_MAC_PJ
-        return {
-            "n_ticks": n,
-            "duration_s": round(n * DT, 2),
-            "collided": self._collided,
-            "min_gap": round(self._min_gap, 3) if n else 0.0,
-            "min_ttc": (round(self._min_ttc, 3) if np.isfinite(self._min_ttc) else float("inf")),
-            "max_decel": round(self._max_decel, 3),
-            "rms_accel": round((self._sum_a2 / n) ** 0.5, 3) if n else 0.0,
-            "rms_jerk": round((self._sum_jerk2 / (n - 1)) ** 0.5, 3) if n > 1 else 0.0,
-            "mean_firing_pct": round(self._sum_fire / n * 100, 2) if n else 0.0,
-            "peak_firing_pct": round(self._peak_fire * 100, 2),
-            "snn_pj": round(snn_pj, 1),
-            "ann_pj": round(ann_pj, 1),
-            "advantage": round(ann_pj / snn_pj, 2) if snn_pj > 0 else 0.0,
-        }
+        if n == 0:
+            return {"n_ticks": 0}
+        a = np.asarray(self._a); v = np.asarray(self._v)
+        traj = {"s": np.asarray(self._s), "dv": np.asarray(self._dv), "v": v, "a_ego": a,
+                "collided": self._collided, "min_gap": float(np.min(self._s)), "impact_dv": self._impact_dv}
+        out = {"n_ticks": n, "duration_s": round(n * DT, 2), "collided": self._collided}
+        sm = safety_metrics(traj); cm = comfort_metrics(traj)               # REUSED validated formulas
+        for k in ("min_gap", "min_ttc", "brake_margin_min", "max_DRAC", "TET", "TIT", "impact_dv",
+                  "TED_drac", "TID_drac"):
+            out[k] = round(sm[k], 3) if np.isfinite(sm[k]) else sm[k]
+        for k in ("rms_accel", "max_decel", "rms_jerk", "frac_decel_iso_viol", "frac_accel_iso_viol"):
+            out[k] = round(cm[k], 3)
+        params = np.asarray(self._params)                                  # (T, 5)
+        rel = []
+        for i, name in enumerate(_PARAM_NAMES):
+            base = self._gt[i] if self._gt is not None else params[:, i].mean()
+            rmse = float(np.sqrt(np.mean((params[:, i] - base) ** 2)))
+            out[f"param_rmse_{name}"] = round(rmse, 4)
+            if self._gt is not None and abs(self._gt[i]) > 1e-9:
+                rel.append(rmse / abs(self._gt[i]))
+        out["id_accuracy"] = (round(100.0 * max(0.0, 1.0 - (np.mean(rel) if rel else 1.0)), 1)
+                              if self._gt is not None else None)
+        out["mean_firing_pct"] = round(self._sum_fire / n * 100, 2)
+        out["peak_firing_pct"] = round(self._peak_fire * 100, 2)
+        out["dead_pct"] = round(float(np.mean(~self._fired)) * 100, 1) if self._fired is not None else 0.0
+        out["max_spikes_tick"] = int(self._max_spk)
+        out["rho"] = round(self._rho, 3) if self._rho is not None else None
+        # energy UNROUNDED (breakdown sums EXACTLY to snn_pj == the direct metrics.synops path); display rounds
+        out["e_fc"] = self._e_fc * E_AC_PJ; out["e_recV"] = self._e_recV * E_AC_PJ
+        out["e_recU"] = self._e_recU * E_AC_PJ; out["e_out"] = self._e_out * E_AC_PJ
+        out["snn_pj"] = out["e_fc"] + out["e_recV"] + out["e_recU"] + out["e_out"]
+        out["ann_pj"] = float(n * ann_mac(self._dims[0], self._dims[1], self._dims[2]) * E_MAC_PJ)
+        out["advantage"] = round(out["ann_pj"] / out["snn_pj"], 2) if out["snn_pj"] > 0 else 0.0
+        return out
 
     def rows(self):
         return list(self._rows)

@@ -59,3 +59,29 @@ def test_spectral_radius_matches_reports():
     don = spectral_radius_po2(load_champion(os.path.join(REPO2, "champions", "PE_t05_gp0002", "best_model.pt")).model)
     assert abs(raff - 2.99) < 0.35      # VALIDATION §9.3 / FPGA §0: Raffaello ρ≈2.99 (expansive)
     assert 0.0 <= don < 0.5             # Donatello ρ≈0.05 (contractive)
+
+
+def test_episode_summary_v2_rich():
+    acc = EpisodeSummary(DIMS, params_gt=np.array([30., 1.5, 2., 1.5, 1.5]))
+    sp = np.zeros(32); sp[:6] = 1.0
+    dead_sp = np.zeros(32)
+    for t in range(10):
+        acc.update(_step(t, s=30.0 - t, v=20.0, dv=1.0 + t, a=-0.5 * t), sp if t % 2 else dead_sp)
+    s = acc.summary()
+    for k in ("min_ttc", "brake_margin_min", "max_DRAC", "TET", "TIT", "impact_dv",
+              "rms_accel", "max_decel", "rms_jerk", "frac_decel_iso_viol"):
+        assert k in s
+    assert "param_rmse_v0" in s and s["param_rmse_v0"] == 0.0    # pred==GT here
+    assert s["dead_pct"] > 0.0 and "max_spikes_tick" in s
+    assert abs((s["e_fc"] + s["e_recV"] + s["e_recU"] + s["e_out"]) - s["snn_pj"]) < 1e-6
+    assert s["advantage"] > 1.0
+
+
+def test_episode_energy_matches_direct_synops():
+    from sim.ui.metrics import synops as _syn, E_AC_PJ as _EAC
+    acc = EpisodeSummary(DIMS)
+    spk = [np.array([1.0 if (i + t) % 4 == 0 else 0.0 for i in range(32)]) for t in range(8)]
+    for t in range(8):
+        acc.update(_step(t, 30.0, 20.0, 0.0, 0.0), spk[t])
+    direct = sum(sum(_syn(s, 4, 32, 5, 8)) for s in spk) * _EAC       # same path as the SynOps dock
+    assert abs(acc.summary()["snn_pj"] - direct) < 1e-6              # ONE energy path, no re-derivation
