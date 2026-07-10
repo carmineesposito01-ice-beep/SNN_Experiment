@@ -4,9 +4,31 @@ and per-tick rows for CSV export. Pure: no Qt."""
 import csv
 
 import numpy as np
+import torch
 
 from config import DT
+from core.hardware import po2_quantize
 from sim.ui.metrics import E_AC_PJ, E_MAC_PJ, ann_mac, synops, ttc
+from utils.net_diagnostics import _last_hidden
+
+
+def spectral_radius_po2(model, iters=200):
+    """ρ(U·V) of the po2 low-rank recurrence via power iteration. LAPACK-free: np.linalg.eigvals/svd
+    (as in net_diagnostics.recurrence_spectral) abort with OMP #15 in cf_sim. None if not low-rank."""
+    hid = _last_hidden(model)
+    if hid is None or not (hasattr(hid, "rec_U") and hasattr(hid, "rec_V")):
+        return None
+    with torch.no_grad():
+        W = (po2_quantize(hid.rec_U).detach().float() @ po2_quantize(hid.rec_V).detach().float())
+        v = torch.ones(W.shape[0], dtype=torch.float32); v = v / v.norm()
+        lam = 0.0
+        for _ in range(int(iters)):
+            w = W @ v
+            lam = float(w.norm())
+            if lam < 1e-30:
+                return 0.0                       # strongly contractive
+            v = w / lam
+        return lam
 
 CSV_HEADER = ("t", "gap", "v", "v_leader", "dv", "accel", "ttc",
               "v0", "T", "s0", "a", "b", "firing_pct")

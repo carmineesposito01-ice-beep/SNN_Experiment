@@ -49,3 +49,13 @@ def test_write_episode_csv(tmp_path):
     write_episode_csv(acc.rows(), str(p))
     lines = p.read_text(encoding="utf-8").strip().splitlines()
     assert lines[0].startswith("t,gap,v,v_leader") and len(lines) == 2   # header + 1 row
+
+
+def test_spectral_radius_matches_reports():
+    from utils.champion_io import load_champion
+    from sim.ui.episode import spectral_radius_po2
+    REPO2 = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    raff = spectral_radius_po2(load_champion(os.path.join(REPO2, "champions", "R33_C2_A1_T12_fix", "best_model.pt")).model)
+    don = spectral_radius_po2(load_champion(os.path.join(REPO2, "champions", "PE_t05_gp0002", "best_model.pt")).model)
+    assert abs(raff - 2.99) < 0.35      # VALIDATION §9.3 / FPGA §0: Raffaello ρ≈2.99 (expansive)
+    assert 0.0 <= don < 0.5             # Donatello ρ≈0.05 (contractive)
