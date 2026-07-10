@@ -7,8 +7,9 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QFrame, QGridLayout, QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
 # safety/comfort limits from the frozen source (single source, no drift vs the live Safety dock / the reports)
-from utils.closed_loop_eval import (DRAC_STAR as _DRAC_STAR, ISO_DECEL_LIMIT as _ISO_DECEL,
-                                    JERK_COMFORT as _ISO_JERK, TTC_STAR as _TTC_STAR)
+from utils.closed_loop_eval import (DRAC_STAR as _DRAC_STAR, ISO_ACCEL_LIMIT as _ISO_ACCEL,
+                                    ISO_DECEL_LIMIT as _ISO_DECEL, JERK_COMFORT as _ISO_JERK,
+                                    TTC_STAR as _TTC_STAR)
 
 _GREEN = "#2e8b57"; _RED = "#d1495b"; _BLUE = "#2a7fb8"; _AMBER = "#e8871e"; _PURPLE = "#8a6fb0"
 _BRAKE_SAFE_M = 20.0                       # display scale: a 20 m avoidability margin reads as fully safe (0 m = the limit)
@@ -87,6 +88,7 @@ class PostRunPage(QWidget):
             ("err v0", "param_rmse_v0", ""), ("err T", "param_rmse_T", ""), ("err s0", "param_rmse_s0", ""),
             ("err a", "param_rmse_a", ""), ("err b", "param_rmse_b", "")])
         self._bars["id"] = self._hbars(plot, ["v0", "T", "s0", "a", "b"])
+        plot.setXRange(0.0, 1.0, padding=0)            # fixed relative-error scale (1.0 = 100% off), not episode-relative
         grid.addWidget(c, 0, 0); self._cards.append(c)
 
         c, plot = self._card("Sicurezza", [("esito", "esito", ""), ("min gap", "min_gap", " m"),
@@ -103,6 +105,8 @@ class PostRunPage(QWidget):
             ("RMS jerk", "rms_jerk", " m/s³"), ("frac decel ISO", "frac_decel_iso_viol", ""),
             ("frac accel ISO", "frac_accel_iso_viol", "")])
         self._bars["comf"] = self._hbars(plot, ["accel", "decel", "jerk"])
+        plot.addLine(x=1.0, pen=pg.mkPen("#888", style=Qt.DashLine))   # ISO limit line (like Sicurezza)
+        plot.setXRange(0.0, 2.0, padding=0)                            # ratio-to-ISO scale -> bars comparable
         grid.addWidget(c, 0, 2); self._cards.append(c)
 
         c, plot = self._card("Salute rete / FPGA", [("firing medio", "mean_firing_pct", " %"),
@@ -199,8 +203,10 @@ class PostRunPage(QWidget):
             return float(v) if isinstance(v, (int, float)) and v != float("inf") else d
 
         idv = [g("param_rmse_v0"), g("param_rmse_T"), g("param_rmse_s0"), g("param_rmse_a"), g("param_rmse_b")]
-        rel = [e / m for e, m in zip(idv, _GT_MAG)]          # relative error (matches id_accuracy) -> bars comparable
-        self._bars["id"].setOpts(width=rel, brushes=[_grad(x, max(rel + [1e-9])) for x in rel])
+        rel = [e / m for e, m in zip(idv, _GT_MAG)]          # relative error (matches id_accuracy)
+        # length AND colour on a FIXED absolute scale (red at 50% rel = accuracy 50%), not episode-relative,
+        # so an excellent identification is not painted full-red just because it's the episode's worst param.
+        self._bars["id"].setOpts(width=[min(r, 1.0) for r in rel], brushes=[_grad(x, 0.5) for x in rel])
         # Sicurezza as a DANGER INDEX per metric (1.0 = the limit; green<1 safe / red>=1 violation) on a
         # fixed [0,2] scale -> the three different-unit metrics become visually comparable, and the safest
         # case (min_ttc = ∞) correctly reads as a short green bar instead of a red zero-length one.
@@ -211,9 +217,10 @@ class PostRunPage(QWidget):
         danger = [min(d_ttc, 2.0), min(d_drac, 2.0), min(max(d_brake, 0.0), 2.0)]
         self._bars["safe"].setOpts(width=danger,
                                    brushes=[pg.mkBrush(_RED if d >= 1.0 else _GREEN) for d in danger])
-        self._bars["comf"].setOpts(                               # ISO gates from the tooltips (accel has no hard gate)
-            width=[g("rms_accel"), g("max_decel"), g("rms_jerk")],
-            brushes=[pg.mkBrush(_AMBER),
+        self._bars["comf"].setOpts(                               # ratio-to-ISO on [0,2] w/ the 1.0 line (like Sicurezza)
+            width=[min(g("rms_accel") / _ISO_ACCEL, 2.0), min(g("max_decel") / _ISO_DECEL, 2.0),
+                   min(g("rms_jerk") / _ISO_JERK, 2.0)],
+            brushes=[pg.mkBrush(_AMBER),                          # accel: RMS has no hard gate -> neutral amber
                      pg.mkBrush(_GREEN if g("max_decel") < _ISO_DECEL else _RED),
                      pg.mkBrush(_GREEN if g("rms_jerk") < _ISO_JERK else _RED)])
         rho = g("rho")
