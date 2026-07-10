@@ -345,6 +345,18 @@ def test_simapp_end_of_episode_no_eager_reconstruct(qapp):
     assert win._recon_key is None          # reconstruct never ran -> no GUI freeze
 
 
+def test_simapp_dock_maximize_toggle(qapp):
+    win = SimApp(CHAMP)
+    n0 = len(visible_docks(win._area))
+    assert n0 >= 10 and win._maximized is None
+    win._toggle_maximize("Road")                   # double-click title -> maximize
+    assert win._maximized == "Road"
+    assert visible_docks(win._area) == {"Road"}     # only that dock fills the area
+    win._toggle_maximize("Road")                   # double-click again -> restore
+    assert win._maximized is None
+    assert len(visible_docks(win._area)) == n0      # previous arrangement restored
+
+
 def test_simapp_has_synops_dock(qapp):
     win = SimApp(CHAMP)
     assert "SynOps" in win._docks and len(win._docks) == 14

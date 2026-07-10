@@ -4,7 +4,7 @@ driven by a fixed-timestep QTimer loop, with a status bar (incl. network firing 
 import os
 
 import numpy as np
-from PySide6.QtCore import QElapsedTimer, Qt, QTimer
+from PySide6.QtCore import QElapsedTimer, QEvent, Qt, QTimer
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (QComboBox, QHBoxLayout, QLabel, QMainWindow, QPushButton,
                                QSlider, QStackedWidget, QVBoxLayout, QWidget)
@@ -98,7 +98,10 @@ class SimApp(QMainWindow):
             d = Dock(name, closable=True)
             d.addWidget(widgets[name])
             d.sigClosed.connect(lambda *_, n=name: self._on_dock_closed(n))
+            d.label.installEventFilter(self)      # double-click the title bar -> maximize / restore
             self._docks[name] = d
+        self._maximized = None                    # name of the currently maximized dock, or None
+        self._pre_max_state = None                # DockArea state saved before maximizing (for restore)
         apply_overview(self._area, self._docks)   # place all docks so restoreState can find them
 
         self._champ_selector = QComboBox()
@@ -188,6 +191,7 @@ class SimApp(QMainWindow):
         layout_menu.addAction(a_save); layout_menu.addAction(a_reset)
 
     def apply_preset(self, name):
+        self._maximized = None                # a preset redefines the layout -> clear any maximize state
         PRESETS[name](self._area, self._docks)
         self._sync_view_actions()
 
@@ -198,6 +202,33 @@ class SimApp(QMainWindow):
         elif not visible and present:
             self._docks[name].close()
         self._sync_view_actions()
+
+    def eventFilter(self, obj, event):
+        if event.type() == QEvent.Type.MouseButtonDblClick:
+            for name, d in self._docks.items():
+                if d.label is obj:                        # double-click on a dock title bar
+                    self._toggle_maximize(name)
+                    return True
+        return super().eventFilter(obj, event)
+
+    def _toggle_maximize(self, name):
+        """Fill the whole area with one dock (double-click its title); double-click again to restore."""
+        if self._maximized is None:
+            self._pre_max_state = self._area.saveState()
+            self._maximized = name
+            for other in list(visible_docks(self._area)):
+                if other != name:
+                    self._docks[other].close()
+        else:
+            self._maximized = None
+            for other in DOCK_ORDER:                       # re-add closed docks so restoreState can find them
+                if other not in visible_docks(self._area):
+                    self._area.addDock(self._docks[other], "right")
+            try:
+                self._area.restoreState(self._pre_max_state)
+            except Exception:                              # pyqtgraph 0.14 restoreState bug -> safe fallback
+                apply_overview(self._area, self._docks)
+            self._sync_view_actions()
 
     def _on_dock_closed(self, name):
         a = getattr(self, "_view_actions", {}).get(name)
