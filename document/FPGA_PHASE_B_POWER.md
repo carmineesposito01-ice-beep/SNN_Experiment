@@ -77,8 +77,35 @@ Breakdown dinamico (typical): Slice Logic 3 mW · Signals 3 mW · DSP 2 mW · Cl
 
 ---
 
-## 2. Gruppo B — Costanti node-correct e_AC / e_MAC ⏳
-*(in corso)*
+## 2. Gruppo B — Costanti node-correct e_AC / e_MAC ✅ (con caveat di risoluzione)
+
+Micro-datapath isolati **OOC** (niente I/O pad): `micro_ac` (shift-add po2 = "sinapsi" SNN) e `micro_mac`
+(MAC data×data = "sinapsi" ANN), 1 op/ciclo @100 MHz, operandi da LFSR interno. Potenza via SAIF (High).
+
+| | LUT | DSP | P_dyn | breakdown chiave |
+|---|---|---|---|---|
+| micro_ac | 83 | **0** | 3 mW | Slice Logic ~1 mW |
+| micro_mac | 97 | **1** | 4 mW | DSP48 ~1 mW |
+
+**Sanity confermata:** shift-add po2 → 0 DSP (LUT); MAC → 1 DSP48.
+
+**⚠️ Caveat di risoluzione (onestà):** a 1 op/ciclo il P_dyn è dominato da clock-tree + registri
+(LFSR+accumulatore) ed è al **floor mW** di `report_power` → l'e_op grezzo (P_dyn/Fclk ≈ 30-40 pJ)
+sovrastima la singola operazione. Il tentativo N=64-parallelo per salire sopra il floor è fallito
+(synthesis collassa i MAC correlati a 8 DSP + SAIF del netlist grande impraticabilmente lento). I valori
+per-op restano quindi **order-of-magnitude**.
+
+**Finding (robusto qualitativamente) — la seconda correzione al report:** dal breakdown, **DSP48 ~1 mW ≈
+Slice-Logic ~1 mW → e_MAC ≈ e_AC su FPGA** (ordine ~10 pJ), contro il **5.1× di Horowitz (45nm ASIC)**.
+Sul silicio FPGA il MAC su **DSP48 hard-block** è efficiente quanto lo shift-add po2 su LUT (entrambi
+dominati dall'overhead di fabric: registri/routing, non l'aritmetica ASIC pura). → **il vantaggio
+energetico per-operazione del report — che nasce da e_AC ≪ e_MAC — largamente SVANISCE su FPGA**
+(ratio vera ≈ 1, non 5). Nota che i totali confermano la direzione: micro_mac 4 mW vs micro_ac 3 mW
+(≈1.3×, non 5×).
+
+**Implicazione:** unito al Gruppo A (static-dominated, energia realizzata ≫ algoritmica), il vantaggio
+SNN-vs-ANN su FPGA è **molto minore** del ~5-15× del report. Il confronto robusto (sistema-vs-sistema,
+insensibile alla precisione per-op) è il Gruppo C.
 
 ## 3. Gruppo C — Baseline ANN densa ⏳
 *(in corso)*
