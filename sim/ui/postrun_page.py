@@ -13,7 +13,6 @@ from utils.closed_loop_eval import (DRAC_STAR as _DRAC_STAR, ISO_ACCEL_LIMIT as 
 
 _GREEN = "#2e8b57"; _RED = "#d1495b"; _BLUE = "#2a7fb8"; _AMBER = "#e8871e"; _PURPLE = "#8a6fb0"
 _BRAKE_SAFE_M = 20.0                       # display scale: a 20 m avoidability margin reads as fully safe (0 m = the limit)
-_GT_MAG = (30.0, 1.5, 2.0, 1.5, 1.5)      # ACC-IIDM GT magnitudes (== app _PARAMS_GT); id errors -> relative scale
 
 _METRIC_HELP = {
     "id_accuracy": "<b>Accuratezza identificazione</b><br>Quanto la SNN indovina i 5 parametri ACC-IIDM veri.<br>"
@@ -194,6 +193,8 @@ class PostRunPage(QWidget):
             if key == "rho" and val is not None:
                 lbl.setText(f"{val} · {'contrattivo' if val < 1 else 'espansivo'}")
                 lbl.setStyleSheet(f"color:{_GREEN if val < 1 else _RED};font-weight:bold;"); continue
+            if self._suffix[key] == " pJ" and isinstance(val, (int, float)):
+                lbl.setText(f"{val:,.0f} pJ"); continue   # thousands separator -> legible, still same unit
             lbl.setText(_fmt(val, self._suffix[key]))
             if key == "esito":
                 lbl.setStyleSheet(f"color:{_RED if coll else _GREEN};font-weight:bold;")
@@ -202,8 +203,7 @@ class PostRunPage(QWidget):
             v = s.get(k)
             return float(v) if isinstance(v, (int, float)) and v != float("inf") else d
 
-        idv = [g("param_rmse_v0"), g("param_rmse_T"), g("param_rmse_s0"), g("param_rmse_a"), g("param_rmse_b")]
-        rel = [e / m for e, m in zip(idv, _GT_MAG)]          # relative error (matches id_accuracy)
+        rel = [g(f"param_rel_{n}") for n in ("v0", "T", "s0", "a", "b")]   # already computed vs the REAL scenario GT
         # length AND colour on a FIXED absolute scale (red at 50% rel = accuracy 50%), not episode-relative,
         # so an excellent identification is not painted full-red just because it's the episode's worst param.
         self._bars["id"].setOpts(width=[min(r, 1.0) for r in rel], brushes=[_grad(x, 0.5) for x in rel])

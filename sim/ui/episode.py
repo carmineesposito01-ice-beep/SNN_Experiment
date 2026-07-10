@@ -104,7 +104,11 @@ class EpisodeSummary:
             rmse = float(np.sqrt(np.mean((params[:, i] - base) ** 2)))
             out[f"param_rmse_{name}"] = round(rmse, 4)
             if self._gt is not None and abs(self._gt[i]) > 1e-9:
-                rel.append(rmse / abs(self._gt[i]))
+                r = rmse / abs(self._gt[i])
+                out[f"param_rel_{name}"] = round(r, 4)   # per-param relative error (the id bars read this, no re-derive)
+                rel.append(r)
+            else:
+                out[f"param_rel_{name}"] = None
         out["id_accuracy"] = (round(100.0 * max(0.0, 1.0 - (np.mean(rel) if rel else 1.0)), 1)
                               if self._gt is not None else None)
         out["mean_firing_pct"] = round(self._sum_fire / n * 100, 2)

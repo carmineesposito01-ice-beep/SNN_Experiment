@@ -65,6 +65,8 @@ def _safe_summary(**over):
          "impact_dv": 0.0, "rms_accel": 0.5, "max_decel": 2.0, "rms_jerk": 1.0,
          "frac_decel_iso_viol": 0.0, "frac_accel_iso_viol": 0.0, "param_rmse_v0": 1.0,
          "param_rmse_T": 0.1, "param_rmse_s0": 0.1, "param_rmse_a": 0.1, "param_rmse_b": 0.1,
+         "param_rel_v0": 1.0 / 30, "param_rel_T": 0.1 / 1.5, "param_rel_s0": 0.05,
+         "param_rel_a": 0.1 / 1.5, "param_rel_b": 0.1 / 1.5,
          "id_accuracy": 84.0, "mean_firing_pct": 15.0, "peak_firing_pct": 40.0, "dead_pct": 0.0,
          "max_spikes_tick": 12, "rho": 0.05, "snn_pj": 400.0, "ann_pj": 6000.0, "advantage": 15.0,
          "e_fc": 100.0, "e_recV": 150.0, "e_recU": 100.0, "e_out": 50.0}
