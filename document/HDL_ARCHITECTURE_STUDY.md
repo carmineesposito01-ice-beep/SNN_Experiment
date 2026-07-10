@@ -1,8 +1,16 @@
-# HDL_ARCHITECTURE_STUDY.md — Studio d'architettura FPGA e decisione sullo "streaming ÷32"
+# HDL_ARCHITECTURE_STUDY.md — Studio d'architettura FPGA e realizzazione B2
 
-> **Data:** 2026-07-10 · **Worktree/branch:** `Simulink_Importer` · **Target:** PYNQ-Z1 (Zynq-7020 `xc7z020clg400-1`)
-> **Esito:** rearchitecting d'area (streaming ÷32) **investigato e NON perseguito**. Donatello resta al baseline
-> verificato (44% LUT). Contesto operativo in `HDL_PHASE.md`; questo doc è il **record del PERCHÉ**.
+> **✅ B2 REALIZZATO E VERIFICATO (2026-07-10, commit `f20e812`).** Dopo lo studio sotto, la **variante B2**
+> (pesi in ROM + MAC serializzato, time-multiplexing) è stata realizzata: `matlab/snn_b2_fsm.m` = SNN Donatello
+> **1 neurone/clock** con V/fatigue in **`hdl.RAM`**, **bit-exact** a `snn_core` (err=0), **synth 3.652 LUT = 6.9%**
+> (**~6.3× meno** del 44%), **22 DSP**, **2 BRAM**, ~14 MHz, **cosim xsim PASSED**. Verifica: `test_b2_fsm` (parità)
+> + `tb_b2_fsm` (cosim). **Causa-radice sbloccante:** `MapPersistentVarsToRAM` NON funziona in loop → serve
+> **`hdl.RAM` esplicito** cycle-based (lo studio sotto riguarda l'**auto-flow**, che resta non-percorribile).
+> **B2 è l'architettura di deploy lean per Donatello.**
+
+> **Data:** 2026-07-10 · **Target:** PYNQ-Z1 (Zynq-7020 `xc7z020clg400-1`) · questo doc = **record del PERCHÉ**.
+> **Esito studio iniziale:** rearchitecting d'area via **auto-flow** (streaming ÷32) **non percorribile**; ma la
+> variante **B2 con `hdl.RAM`** (§5) è stata poi **realizzata con successo** (vedi blocco sopra).
 
 ## 0. TL;DR
 Donatello ci sta e funziona sul 7020 (anelli ③④ verificati, cosim PASSED). Il 44% di LUT infastidiva per una
