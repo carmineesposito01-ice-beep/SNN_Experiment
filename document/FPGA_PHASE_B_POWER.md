@@ -5,7 +5,7 @@
 > Spec: `docs/superpowers/specs/2026-07-10-fpga-phase-b-power-design.md`. Piano:
 > `docs/superpowers/plans/2026-07-10-fpga-phase-b-power.md`. **DOC VIVO — aggiornato durante l'esecuzione.**
 
-**Stato:** Gruppo A (potenza sistema B2) ✅ · Gruppo B (costanti e_AC/e_MAC) ⏳ · Gruppo C (ANN) ⏳ · Gruppo D (deliverable) ⏳
+**Stato:** Gruppo A (potenza B2) ✅ · Gruppo B (e_AC/e_MAC) ✅ · Gruppo C (ANN + letteratura) ✅ · Gruppo D (consolidamento) ✅ — **FASE B CHIUSA** (Fase C su silicio rinviata-predisposta)
 
 ---
 
@@ -157,11 +157,37 @@ sproporzionato, e confermerebbe solo la linearità. **Caveat onesti:** (a) LSTM/
 (b) il moltiplicatore *esatto* richiederebbe **addestrare** una NN densa alla stessa accuratezza (non fatto,
 opzione estrema) — la letteratura lo **limita** a ~5-75×.
 
-## 4. Termica ⏳
-*(dalla potenza reale: Tj all'ambiente — verosimilmente non-problema a mW)*
+## 4. Termica ✅ (non-problema, confermato)
+Da `report_power`: **Tj ≈ 26.3 °C** (SNN) / 26.2 °C (ANN) all'ambiente 25 °C → innalzamento **~1.3 °C**
+(TJA 11.5 °C/W × ~114 mW). La sezione termica 🟡 del report è **confermata come non-problema**: a scala mW il
+derating Tj/Fmax è irrilevante (lontanissimi dai 100 °C di preoccupazione). Nessuno sweep XPE necessario.
 
-## 5. Tabella di validazione claim-by-claim
-*(consolidata a fine Gruppi B/C/D)*
+## 5. Tabella di validazione claim-by-claim (consolidata)
+
+| Claim (Fase A) | Fase A | **Fase B (reale)** | Esito | Provenienza |
+|---|---|---|---|---|
+| **DSP = 0** | 0 | **38** (elettivi; 0-DSP realizzabile a 9910 LUT) | **CORRETTA** (sfumata) | `util_b2_hier`/`nodsp` |
+| BRAM <1% | <1 | 1 tile (0.71%) | confermata | `util_b2_flat` |
+| LUT / FF | stima | 4223 LUT (7.9%) / 1584 FF | confermata | `util_b2_flat` |
+| **Fmax 100-200 MHz** | assunto | **~8.5 MHz** lane (met @8) | **CORRETTA** | `timing_b2` |
+| **e_AC / e_MAC** | 0.9 / 4.6 pJ (45nm) | **e_MAC ≈ e_AC** su FPGA (~10 pJ ordine) | **CORRETTA** (nodo+FPGA) | `power_micro_*` |
+| **Energia/inf** | ~0.4-1.2 nJ (op-count) | **383 nJ** dyn realizzata (static domina 92%) | **CORRETTA** | `power_b2_*` |
+| **Vantaggio 5-15×** | da AC≪MAC | **~5-65× ma da COMPATTEZZA** modello, NON AC≪MAC | **RI-INQUADRATA** | `power_ann` + letteratura §3 |
+| Termica (Tj) | stima | Tj ~26 °C (non-problema) | confermata | `power_b2_*` |
+| Correttezza param | — | bit-exact al riferimento (err=0), vedi §0 | confermata | HDL phase |
+
+**Le 3 correzioni di sostanza** (DSP≠0, Fmax≪assunto, e_MAC≈e_AC) + **la ri-inquadratura del vantaggio**
+(reale ma da compattezza-modello, non da costo-per-op) sono il valore della Fase B: un report che si
+auto-corregge con dati veri è più credibile.
+
+### 5.1 Mappa re-tag figure del report
+| Figura/claim report | Da → A | Nota |
+|---|---|---|
+| `resource_occupancy` (DSP=0) | 🟡→🟢 | **CORRETTA**: 38 DSP elettivi (0-DSP realizzabile) |
+| `energy_vs_ann`, `energy_breakdown` | 🟡→🟢 | **ri-inquadrata**: vantaggio da compattezza (~5-65×), non AC≪MAC |
+| `decode_criticalpath`, `area_model`, `bram_dimensioning` | 🟡→🟢 | misurati |
+| `derating_tj_fmax`, `thermal_budget` | 🟡→🟢 | Tj ~26°C (non-problema) |
+| mW reali su silicio, leakage vs Tj HW | resta 🔴 | **Fase C** |
 
 ## 6. Onestà
 Tutti i numeri sono **stime Vivado** con switching reale (confidenza HIGH nei `.rpt`), non misure su

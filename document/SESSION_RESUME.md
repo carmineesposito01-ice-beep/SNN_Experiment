@@ -13,7 +13,12 @@
 > `document/HDL_ARCHITECTURE_STUDY.md`. **decode + wrapper AXI-Lite + BITSTREAM PYNQ-Z1 (board reale) FATTI** (cosim
 > `AXI TEST PASSED`; IP synth **8.9% LUT / 38 DSP / 2 BRAM**; **`.bit` timing-clean** @8 MHz WNS +6.97 ns, con **board
 > preset Digilent PYNQ-Z1** DDR/MIO reali + handoff **`.hwh`/`.xsa`** per PYNQ `Overlay`/Vitis, in `matlab/axi/build/`).
-> **CHAIN HDL COMPLETO** PyTorch→RTL→AXI→bitstream flashabile, tutto headless. **Prossimo:** integrazione V2I in Simulink.
+> **CHAIN HDL COMPLETO** PyTorch→RTL→AXI→bitstream flashabile, tutto headless. **+ FASE B POWER ANALYSIS FATTA**
+> (validazione report FPGA, deliverable `document/FPGA_PHASE_B_POWER.md` + `matlab/axi/build/phase_b/`): synth OOC +
+> SAIF `report_power` High-confidence. **3 correzioni al report**: DSP 0→38 (elettivi, 0-DSP realizzabile), Fmax
+> 100-200→~8.5 MHz, **e_MAC≈e_AC su FPGA** (non il 5× Horowitz); + energia realizzata ≫ algoritmica (static domina
+> 92%). **Vantaggio SNN ri-inquadrato**: reale ~5-65× ma da **compattezza modello** (letteratura NN car-following
+> ~7k-100k MAC vs SNN ~800), NON da AC≪MAC. Fase C (silicio) rinviata-predisposta. **Prossimo:** integrazione V2I in Simulink.
 > (Storia po2→shift/44% sotto.)
 
 > ⚠️ **WORKTREE PARALLELO — NON è il track principale `main`.** Sei nel worktree
