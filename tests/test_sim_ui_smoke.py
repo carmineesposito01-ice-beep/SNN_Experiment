@@ -374,7 +374,7 @@ def test_simapp_postrun_mode(qapp):
     win.set_mode(2)                                       # Post-run
     assert win._mode_stack.currentIndex() == 2
     assert not win._run_btn.isChecked()                  # entering an analysis mode pauses live
-    assert win._champ_name in win._postrun_page._header.text()
+    assert win._champ_name in win._postrun_page._subtitle.text()
     assert win._postrun_page._values["min_gap"].text() not in ("—", "")   # report card populated
 
 

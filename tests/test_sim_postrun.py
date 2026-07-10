@@ -28,7 +28,7 @@ def test_postrun_page_populates(qapp):
             (1, 28.0, 20.0, 21.0, -1.0, 0.5, "", 30, 1.5, 2, 1.5, 1.5, 9.4),
             (2, 26.0, 20.5, 21.0, -0.5, 0.3, "", 30, 1.5, 2, 1.5, 1.5, 9.4)]
     p.set_summary(s, rows, "Raffaello", "following")
-    assert "Raffaello" in p._header.text() and "following" in p._header.text()
+    assert "Raffaello" in p._subtitle.text() and "following" in p._subtitle.text()
     assert "12.5" in p._values["min_gap"].text()
     assert "ok" in p._values["esito"].text().lower()
     assert len(p._v_curve.getData()[0]) == 3          # speed plot has the episode length
@@ -51,3 +51,9 @@ def test_postrun_page_v2_groups_and_tooltips(qapp):
     assert "84" in p._values["id_accuracy"].text()
     assert p._help_labels["rho"].toolTip() and "ρ" in p._help_labels["rho"].toolTip()
     assert "min_ttc" in _METRIC_HELP and "advantage" in _METRIC_HELP
+
+
+def test_postrun_page_v3_cards(qapp):
+    p = PostRunPage()
+    assert len(p._cards) >= 5                    # dashboard is card-based
+    assert p._verdict is not None                # big verdict badge exists
