@@ -13,7 +13,7 @@
 ## 🎯 Stato attuale (2026-07-10)
 
 **Worktree/branch**: `.worktrees/Simulator` on branch **`Simulator`** (it IS a git repo). All work
-committed + pushed to `origin/Simulator`. **136 sim tests green.** Core bit-identical.
+committed + pushed to `origin/Simulator`. **142 sim tests green.** Core bit-identical.
 
 **What it is**: a live plug&play GUI "digital twin" of the SNN car-following controller (ALIF,
 **4 inputs → 32 hidden → 5 params**, po2 weights, target FPGA PYNQ-Z1). **~800 weights** = the
@@ -64,6 +64,18 @@ perf via a 5-agent workflow — per-paint −30% (NetState freeze/LUT), redraw t
   the pip wheel needs a system vc_redist). **PyInstaller .exe deferred** ("dopo").
 - **Bug/polish (post-v2)**: end-of-episode **freeze fixed** (`d0a70ec`, auto-stop no longer does the eager
   reconstruct → 784ms→11ms) + **dock maximize** on title double-click (`d4c24fa`).
+- **QC HARDENING — 5-round cyclic review+fix** ✅: a deep
+  perf/UX/correctness/quality review run as a 4-lens workflow (find + adversarial verify, ≤4 agents), fixed,
+  re-reviewed until dry (`89987b8`→`c924147`). **34 confirmed findings fixed**, trend **11→13→6→3→1** (converged). Highlights:
+  Meso Run no longer silently freezes (wait cursor + disabled re-entry controls + `ring sweep i/N` progress);
+  **Reset/swap now blank the cockpit** (`clear()` per panel) and reset the road ego (no drive-off, no
+  scrub-jump); the post-run cards use **honest comparable scales** — Sicurezza/Comfort as a **danger index**
+  `[0,2]` with the limit line (min_ttc=∞ reads green, not red), Identificazione as **absolute relative error**
+  (matches `id_accuracy`, comparable across champions); **empty episode** shows "nessun episodio" not a fake
+  ok; **impact_dv + collision min_gap** recomputed post-update (match the report); energy via **one path**
+  (`metrics.synops_breakdown`) with thousands separators; TTC*/DRAC*/ISO imported from the frozen core (DRY);
+  **hidden docks skip redraw** (visibility-gated); pen/brush LUTs; shortcut/dock tooltips. Core bit-identical
+  throughout; **142 sim tests green** (was 136).
 
 ---
 
