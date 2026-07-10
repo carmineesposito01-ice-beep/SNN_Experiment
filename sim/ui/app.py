@@ -132,7 +132,8 @@ class SimApp(QMainWindow):
         root.addLayout(controls)
         root.addWidget(self._area, stretch=1)
         container = QWidget(); container.setLayout(root)
-        self._meso_page = MesoMacroPage(_PARAMS_GT)
+        self._meso_page = MesoMacroPage([s.name for s in self._scenarios])
+        self._meso_page._scenario_sel.setCurrentIndex(self._current_idx)
         self._meso_page._on_run_platoon = self._run_platoon
         self._meso_page._on_run_ring = self._run_ring
         self._sweep_densities = np.linspace(10.0, 120.0, 12)   # veh/km — macro ring-sweep grid
@@ -264,16 +265,12 @@ class SimApp(QMainWindow):
 
     def _run_platoon(self):
         n = self._meso_page.n_vehicles()
-        rec = run_platoon(self._champ, _PARAMS_GT, n, self._platoon_head_profile())
+        sc = self._scenarios[self._meso_page.selected_scenario_index()]
+        rec = run_platoon(self._champ, _PARAMS_GT, n, sc.v_leader)
         m = platoon_metrics(rec)
         self._meso_page.string_stability.set_metrics(m)
         self._meso_page.space_time.set_rec(rec)
         self._meso_page.speed_wave.set_rec(rec)
-
-    @staticmethod
-    def _platoon_head_profile(T=300, v_set=21.0, amp=2.0, period=50.0):
-        t = np.arange(T)
-        return v_set + amp * np.sin(2.0 * np.pi * t / period)   # sinusoidal head perturbation
 
     def _run_ring(self):
         pts = run_fundamental_diagram(self._champ, _PARAMS_GT, self._sweep_densities,

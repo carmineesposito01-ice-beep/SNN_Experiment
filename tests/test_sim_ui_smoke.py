@@ -308,6 +308,17 @@ def test_simapp_run_ring_populates_fundamental(qapp):
     assert qx is not None and len(qx) == 2                # two density points on Q(rho)
 
 
+def test_simapp_meso_scenario_selector(qapp):
+    win = SimApp(CHAMP)
+    assert win._meso_page._scenario_sel.count() == win.scenario_count()   # mirrors the library
+    win._meso_page._scenario_sel.setCurrentIndex(1)
+    assert win._meso_page.selected_scenario_index() == 1
+    win.set_mode(1); win._meso_page._n_spin.setValue(4)
+    win._run_platoon()                                                     # uses scenario 1's v_leader
+    st = win._meso_page.space_time._curves
+    assert len([c for c in st if c.getData()[0] is not None and len(c.getData()[0]) > 0]) == 4
+
+
 def test_simapp_has_synops_dock(qapp):
     win = SimApp(CHAMP)
     assert "SynOps" in win._docks and len(win._docks) == 14
