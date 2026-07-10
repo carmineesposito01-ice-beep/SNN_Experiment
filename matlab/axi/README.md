@@ -27,13 +27,23 @@ poll `status.done` → leggi `params[0..4]` → converti da Q7.13 (`/8192.0`).
 - **Cosim AXI** (xsim): `AXI TEST PASSED` — params letti = bit-exact a `snn_top_b2` (v0=26.49, ...).
 - Latenza: ~340 clock/inferenza (irrilevante: control-step 0.1 s).
 
-## Riproduzione (headless)
+## Riproduzione (headless) — script in `build/`
 ```
-# 1. RTL SNN+decode: matlab -batch "make_hdl_top_b2"  (in matlab/)
-# 2. IP AXI: vivado -mode batch -source axi_gen.tcl   (create_peripheral)
-# 3. synth : vivado -mode batch -source axi_synth.tcl
-# 4. cosim : xvhdl <snn sources> snn_top_b2_flat.vhd; xvlog snn_b2_axi_lite.v axi_tb.v; xelab work.axi_tb; xsim -R
+# 1. RTL SNN+decode: matlab -batch "make_hdl_top_b2"       (in matlab/)
+# 2. IP AXI       : vivado -mode batch -source build/axi_gen.tcl   (create_peripheral)
+# 3. synth-verify : vivado -mode batch -source build/axi_synth.tcl (0 errori, 8.9% LUT)
+# 4. cosim        : xvhdl <snn> snn_top_b2_flat.vhd; xvlog snn_b2_axi_lite.v axi_tb.v; xelab work.axi_tb; xsim -R
+# 5. bitstream    : vivado -mode batch -source build/bitstream2.tcl (package -> BD PS7 -> impl -> .bit)
+#    (usa ROOT corto per evitare il limite 260-byte path Windows)
 ```
 
-## Prossimo (Fase 3)
-Block design Zynq (PS + questo IP + AXI interconnect) → implementation → `.bit` per PYNQ-Z1.
+## Fase 3 — Bitstream (FATTO ✅)
+Block design Zynq (**PS7 + questo IP + AXI SmartConnect**) → implementation → **`build/snn_b2_donatello.bit`**
+(PYNQ-Z1, xc7z020, 3.9 MB). **Timing-clean** con **FCLK0 = 8 MHz** (WNS **+7 ns**; il path combinatorio della lane
+SNN è ~118 ns → ~8.5 MHz Fmax — 8 MHz basta: servono ~kHz per control-step 0.1 s). Address base slave (M_AXI_GP0):
+**`0x4000_0000`**. Utilizzo full-system: LUT 4.527 (8.5%), FF 2.288, DSP 38, 1 BRAM tile. **Nota:** senza board file
+PYNQ-Z1 → config PS7 generica; per il deploy reale ri-generare con i board files della PYNQ-Z1 (DDR/MIO corretti).
+
+## Chain completo
+`PyTorch → snn_core (double, parità 2e-6) → fixed Q?.13 → snn_b2_fsm (hdl.RAM, bit-exact) → decode σ-LUT →
+top → AXI4-Lite (cosim PASSED) → block design PS7 → bitstream PYNQ-Z1 (timing-clean)`. Tutto headless.
