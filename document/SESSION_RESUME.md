@@ -5,7 +5,7 @@
 
 ---
 
-## 🎯 Stato attuale (2026-07-10 — **SIMULATOR track: Fase 3 chiusa, meso/macro in corso**)
+## 🎯 Stato attuale (2026-07-10 — **SIMULATOR track: meso/macro + page v2 fatti, prossimo Fase 4**)
 
 > **Branch/worktree:** `Simulator` @ `.worktrees\Simulator` (parallelo a `main`). Questa sezione riguarda il
 > **track SIMULATORE** = POST_FPGA_ROADMAP Fase ①. Lo stato del track EventProp/main è più sotto ("Stato precedente").
@@ -19,19 +19,18 @@
 - `docs/superpowers/2026-07-09-phase3-qa-perf-report.md` — QA + sessione ottimizzazione (numeri prima/dopo).
 - Memoria assistente `cf-fsnn-parallel-tracks.md` (riga Simulator) — contesto supplementare.
 
-**Fatto** (tutto committato+pushato su `origin/Simulator`; **~110 test verdi**, core congelato bit-identico):
+**Fatto** (tutto committato+pushato su `origin/Simulator`; **121 test verdi**, core congelato bit-identico):
 - **MVP v1** + **Fase 1** (leggibilità param) + **Fase 2** (shell dockable, 4 preset, persistenza) + **NetViz** → **grafo node-link** (tragitti attivi bianchi).
 - **Fase 3a** (Trajectory+Safety) · **3b.1** (time-scrub) · **3b-resto** (deep-scrub oltre-buffer + event-timeline + neuron-inspector, 14 dock).
 - **Dock SynOps → ENERGIA (pJ)**: SNN (`SynOps×E_AC 0.9pJ`) vs ANN densa (`MAC×E_MAC 4.6pJ`, ricorrenza H·H) = ~14.5× (mostra AC<MAC, non il conteggio).
 - **QA Fase 3** (2 bug corretti: top-down speed>1, scrub-source su Step) + **sessione ottimizzazione** (workflow 5-agenti): per-paint −30%, throttle repaint ~15fps (fisica/Road a 30), reconstruct **7.7s→0.74s**, memo getter probe.
 - **Selettore campioni** (swap live tra i 4: Raffaello/Leonardo=BPTT, Donatello/Michelangelo=EventProp).
-- **Meso/Macro (IN CORSO)**: **T1** toggle Live↔Meso/Macro (`QStackedWidget`) · **T2** forward **BATCHATO** family-aware `sim/ui/platoon.py` (tutti-4; golden `batch n=1 == mono-veicolo`) · **T3** `StringStabilityPanel` + `SpaceTimePanel`. Riusa `utils/platoon_eval.py` (validato) via hook **`forward=` additivo** (report intatti).
+- **Meso/Macro ✅ (T1–T5 + page v2)**: toggle Live↔Meso/Macro; forward **BATCHATO** family-aware (tutti-4; golden `batch n=1 == mono-veicolo`) via hook **`forward=` additivo** su `platoon_eval` (report intatti). Pagina = **strada plotone** (N auto colorate per velocità, slider+Play sul run REGISTRATO) in cima + **2×2**: **string-stability · onde di velocità v(t)** (attenuazione stop&go) **· spazio-tempo x(t) · diagramma fondamentale Q/V**; **selettore scenario** pilota la testa col `v_leader` scelto. v2 (`7fc4c2c`..`47193dd`): base DRY `_MultiCurvePanel`, `PlatoonRoadView` (`sim/ui/meso_road.py`), rimosso `PlatoonParamsPanel`+`rec['params']` di T4 (core bit-identico). Render-verify BPTT(head→tail 0.07)+EventProp(0.315) su stop_and_go.
 
-**PROSSIMA AZIONE:** completare **Meso/Macro T4** (piano `docs/superpowers/plans/2026-07-09-meso-macro-analysis-mode.md`):
-`FundamentalDiagramPanel` Q(ρ)/V(ρ) + `PlatoonParamsPanel` (5×N) + `run_fundamental_diagram` family-aware +
-estendere `simulate_platoon` rec con `params (T,N,5)` + **griglia 2×2 con column-stretch** (nel render T3 lo spazio-tempo
-non era affiancato). Poi **T5** (render tutti-4 + doc), poi **Fase 4** (seal post-run + A/B float-vs-fixed + export CSV/PNG),
-poi **merge `Simulator`→`main`** (coordinare col track `Simulink_Importer`).
+**PROSSIMA AZIONE: Fase 4** (spec+plan `docs/superpowers/{specs,plans}/2026-07-10-meso-page-v2*` chiusi): **seal post-run**
+(un episodio) + **A/B float-vs-fixed** (⚠️ serve un forward fixed-point Qm.n che NON esiste ancora — scoparlo prima) +
+**export CSV/PNG** generico. Design prima del codice (brainstorming→writing-plans). Poi **merge `Simulator`→`main`**
+(coordinare col track `Simulink_Importer`).
 
 **⚠️ 2 GOTCHA cf_sim (LAPACK/OpenMP):** `np.linalg.matrix_rank` **e** `np.polyfit`/`lstsq` fanno **abort OMP #15**
 (OpenMP bundled di numpy vs Intel di torch; i test che non chiamano LAPACK non lo vedono). **Mai LAPACK nell'app** —
