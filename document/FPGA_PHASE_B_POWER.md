@@ -70,6 +70,10 @@ Breakdown dinamico (typical): Slice Logic 3 mW · Signals 3 mW · DSP 2 mW · Cl
   **~0.72 nJ** dell'op-count del report (~530× sul dinamico). Il time-mux (341 cicli) + la leakage
   stravolgono l'energia rispetto alla stima algoritmica: l'efficienza del report è una proprietà
   *algoritmica* che l'implementazione time-mux **non esibisce a livello di sistema**.
+- **Sweep Fclk (dichiarato):** la lane B2 chiude a **~8.5 MHz** → **un solo punto operativo** (8 MHz), niente
+  headroom verso l'alto. Verso il basso: E_dyn/inf ~costante (switching, ~clock-independent) ma E_**statica**/inf
+  **cresce** (leakage × tempo-inferenza più lungo) → clockare più lenti *peggiora* l'energia totale. Quindi
+  8 MHz è anche l'ottimo pratico per il B2. (micro/ANN, più semplici, a 100 MHz; e_op ~clock-independent.)
 - **Quasi data-independent** (worst 8 ≈ typical 9 mW): il time-mux fa lo stesso lavoro a prescindere
   dall'input → proprietà di determinismo (coerente col WCET=BCET del report).
 - **Per il confronto SNN-vs-ANN (Gruppo C):** vivrà nella *fetta dinamica* (lo static è comune a
@@ -164,17 +168,17 @@ derating Tj/Fmax è irrilevante (lontanissimi dai 100 °C di preoccupazione). Ne
 
 ## 5. Tabella di validazione claim-by-claim (consolidata)
 
-| Claim (Fase A) | Fase A | **Fase B (reale)** | Esito | Provenienza |
-|---|---|---|---|---|
-| **DSP = 0** | 0 | **38** (elettivi; 0-DSP realizzabile a 9910 LUT) | **CORRETTA** (sfumata) | `util_b2_hier`/`nodsp` |
-| BRAM <1% | <1 | 1 tile (0.71%) | confermata | `util_b2_flat` |
-| LUT / FF | stima | 4223 LUT (7.9%) / 1584 FF | confermata | `util_b2_flat` |
-| **Fmax 100-200 MHz** | assunto | **~8.5 MHz** lane (met @8) | **CORRETTA** | `timing_b2` |
-| **e_AC / e_MAC** | 0.9 / 4.6 pJ (45nm) | **e_MAC ≈ e_AC** su FPGA (~10 pJ ordine) | **CORRETTA** (nodo+FPGA) | `power_micro_*` |
-| **Energia/inf** | ~0.4-1.2 nJ (op-count) | **383 nJ** dyn realizzata (static domina 92%) | **CORRETTA** | `power_b2_*` |
-| **Vantaggio 5-15×** | da AC≪MAC | **~5-65× ma da COMPATTEZZA** modello, NON AC≪MAC | **RI-INQUADRATA** | `power_ann` + letteratura §3 |
-| Termica (Tj) | stima | Tj ~26 °C (non-problema) | confermata | `power_b2_*` |
-| Correttezza param | — | bit-exact al riferimento (err=0), vedi §0 | confermata | HDL phase |
+| Claim (Fase A) | Fase A | **Fase B (Vivado reale)** | Esito | **Fase C (silicio)** | Provenienza |
+|---|---|---|---|---|---|
+| **DSP = 0** | 0 | **38** (elettivi; 0-DSP realizzabile a 9910 LUT) | **CORRETTA** (sfumata) | — (B definitivo) | `util_b2_hier`/`nodsp` |
+| BRAM <1% | <1 | 1 tile (0.71%) | confermata | — | `util_b2_flat` |
+| LUT / FF | stima | 4223 LUT (7.9%) / 1584 FF | confermata | — | `util_b2_flat` |
+| **Fmax 100-200 MHz** | assunto | **~8.5 MHz** lane (met @8) | **CORRETTA** | — | `timing_b2` |
+| **e_AC / e_MAC** | 0.9 / 4.6 pJ (45nm) | **e_MAC ≈ e_AC** su FPGA (~10 pJ ordine) | **CORRETTA** (nodo+FPGA) | **TBD** (rail sensing) | `power_micro_*` |
+| **Energia/inf** | ~0.4-1.2 nJ (op-count) | **383 nJ** dyn realizzata (static domina 92%) | **CORRETTA** | **TBD** (mW reali) | `power_b2_*` |
+| **Vantaggio 5-15×** | da AC≪MAC | **~5-65× ma da COMPATTEZZA** modello, NON AC≪MAC | **RI-INQUADRATA** | **TBD** | `power_ann` + letteratura §3 |
+| Termica (Tj) | stima | Tj ~26 °C (non-problema) | confermata | **TBD** (Tj su silicio) | `power_b2_*` |
+| Correttezza param | — | bit-exact al riferimento (err=0), vedi §0 | confermata | — | HDL phase |
 
 **Le 3 correzioni di sostanza** (DSP≠0, Fmax≪assunto, e_MAC≈e_AC) + **la ri-inquadratura del vantaggio**
 (reale ma da compattezza-modello, non da costo-per-op) sono il valore della Fase B: un report che si
@@ -222,3 +226,28 @@ SNN ricorrente)** più grandi in operazioni → base del vantaggio-compattezza (
 [3] https://doi.org/10.1109/access.2023.3243620 · [4] https://doi.org/10.1109/tits.2017.2706963 ·
 [5] https://link.springer.com/article/10.1007/s13177-022-00339-9 · CNN-LSTM (MDPI Sensors 23(2):660)
 https://www.mdpi.com/1424-8220/23/2/660
+
+## 9. Appendice — Protocollo Fase C (predisposto, non eseguito)
+
+Fase C = misura di potenza reale su **PYNQ-Z1 fisica** (unica ground-truth silicio). Tutti gli artefatti sono
+pronti; resta solo la misura fisica.
+
+**Artefatti pronti:**
+- Bitstream flashabile `matlab/axi/build/snn_b2_donatello.bit` (+ `.hwh` per `pynq.Overlay`).
+- Stimolo realistico `matlab/axi/phase_b/stim_typical.mem` (traiettoria reale normalizzata Q5.13).
+- Driver `matlab/axi/run_on_pynq.py` (write xn → start → poll done → read params).
+
+**Protocollo (delta idle-vs-inferenza):**
+1. **Sensing.** La corrente PL della PYNQ-Z1 non è esposta on-board con precisione → **INA219/shunt esterno** sul
+   rail **VCCINT (1.0 V)** della logica PL, campionamento ≥1 kHz (o sensore board via PMBus se disponibile).
+2. **Baseline (idle):** overlay caricato, nessuna inferenza → `P_idle = Vccint·Iccint` medio su ~10 s (static +
+   clock-tree fermo).
+3. **Attivo:** loop stretto di inferenze (stream `stim_typical.mem` → start → poll done) ~10 s → `P_active` medio.
+4. **P_dyn reale = P_active − P_idle** → confronta con la stima Vivado SAIF (§1.4, ~9 mW); il gap = ciò che Vivado
+   non cattura (glitch, routing, PMU).
+5. **E/inf reale = P_dyn·cicli/Fclk** (341/8 MHz = 42.6 µs) → riempi la colonna **"Fase C"** della tabella §5.
+6. *(Opz.)* ripeti con overlay ANN per il rapporto SNN/ANN su silicio.
+
+**Attese:** `P_idle` domina (static ~103 mW + PS); il delta dinamico è ~mW → serve un sensore risoluto (INA219 al
+limite a 1.0 V; meglio shunt dedicato + amplificatore). **Onestà:** la board conferma/corregge solo i numeri di
+*potenza*; le conclusioni strutturali (DSP, Fmax, compattezza) sono già definitive dalla Fase B.
