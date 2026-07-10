@@ -18,6 +18,8 @@ class PlatoonRoadView(QWidget):
         super().__init__()
         self.setMinimumHeight(170)
         self._lut = pg.colormap.get("viridis").getLookupTable(0.0, 1.0, 256)
+        self._brush_lut = [QBrush(QColor(int(r), int(g), int(b)))    # 256 brushes once (no per-frame alloc)
+                           for r, g, b in self._lut[:, :3]]
         self._rec = None
         self._cars = []
         self._vmax = 1.0
@@ -84,8 +86,7 @@ class PlatoonRoadView(QWidget):
         for i, car in enumerate(self._cars):
             car.setPos(float(x[t, i]) * PX_PER_M, 0.0)
             frac = max(0.0, min(1.0, float(v[t, i]) / self._vmax))
-            r, g, b = self._lut[int(frac * 255)][:3]
-            car.setBrush(QBrush(QColor(int(r), int(g), int(b))))
+            car.setBrush(self._brush_lut[int(frac * 255)])   # index the shared brush LUT (no per-frame alloc)
         self._view.centerOn(float(np.mean(x[t])) * PX_PER_M, 0.0)
 
     def _tick(self):

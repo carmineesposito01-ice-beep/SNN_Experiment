@@ -409,3 +409,36 @@ def test_simapp_has_synops_dock(qapp):
     win._advance(0.5)
     y = win._synops._total_c.getData()[1]
     assert y is not None and y.size > 0 and float(y[-1]) >= 128               # >= static floor
+
+
+def _empty(curve):
+    x = curve.getData()[0]
+    return x is None or len(x) == 0
+
+
+def test_simapp_reset_clears_cockpit_panels(qapp):
+    win = SimApp(CHAMP)
+    win.select_scenario(0)
+    win._advance(2.0)                                        # populate the param/trajectory curves
+    assert not _empty(win._params[0]._curve)                # (sanity: they DID fill)
+    win.reset_run()                                         # Reset must visibly blank the plots
+    assert _empty(win._params[0]._curve)                    # param curve cleared
+    assert _empty(win._trajectory._c_s)                     # trajectory cleared
+    assert _empty(win._spikerate._curve)                    # spike-rate cleared
+    assert win._topdown.ego_x_m() == 0.0                    # road ego integrator reset
+
+
+def test_simapp_topdown_resets_across_scenarios(qapp):
+    win = SimApp(CHAMP)
+    win.select_scenario(0)
+    win._advance(3.0)
+    assert win._topdown.ego_x_m() > 0.0                     # ego advanced down the road
+    win.select_scenario(1)                                  # swapping scenario resets the integrator
+    assert win._topdown.ego_x_m() == 0.0                    # ...so the car never drives off the finite road
+
+
+def test_simapp_run_platoon_reenables_button(qapp):
+    win = SimApp(CHAMP)
+    win.set_mode(1); win._meso_page._n_spin.setValue(4)
+    win._run_platoon()
+    assert win._meso_page._run_platoon_btn.isEnabled()      # busy-guard restores the button in finally

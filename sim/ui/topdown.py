@@ -95,6 +95,13 @@ class TopDownView(QGraphicsView):
         self._scene.addItem(t)
         return t
 
+    def reset(self):
+        """Reset the integrated ego position (called per episode). Without this the car drives off
+        the finite road across successive runs, and live vs scrub (which recomputes x = Σv·DT from 0)
+        would disagree from the 2nd episode on."""
+        self._ego_x = 0.0
+        self._last_s = 0.0
+
     def ego_x_m(self):
         return self._ego_x
 

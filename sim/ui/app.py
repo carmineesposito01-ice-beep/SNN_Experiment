@@ -1,13 +1,15 @@
-"""SimApp -- main window: a dockable workspace (pyqtgraph DockArea) of 8 graphs (Road, Raster, v_mem,
-and the 5 identified params) + champion/scenario controls + View/Layout menus (presets + persistence),
+"""SimApp -- main window with three modes (a QStackedWidget): a Live cockpit, a Meso/Macro analysis
+page, and a Post-run dashboard. The Live cockpit is a dockable workspace (pyqtgraph DockArea) of 14
+docks (Road, NetState, SpikeRate, v_mem, Trajectory, Safety, Events, Inspector, SynOps + the 5
+identified params v0/T/s0/a/b) + champion/scenario controls + View/Layout menus (presets + persistence),
 driven by a fixed-timestep QTimer loop, with a status bar (incl. network firing %)."""
 import os
 
 import numpy as np
 from PySide6.QtCore import QElapsedTimer, QEvent, Qt, QTimer
 from PySide6.QtGui import QAction
-from PySide6.QtWidgets import (QComboBox, QFileDialog, QHBoxLayout, QLabel, QMainWindow, QPushButton,
-                               QSlider, QStackedWidget, QVBoxLayout, QWidget)
+from PySide6.QtWidgets import (QApplication, QComboBox, QFileDialog, QHBoxLayout, QLabel, QMainWindow,
+                               QPushButton, QSlider, QStackedWidget, QVBoxLayout, QWidget)
 from pyqtgraph.dockarea import Dock, DockArea
 
 from config import DT
@@ -340,20 +342,44 @@ class SimApp(QMainWindow):
             self._mode_sel.setCurrentIndex(idx)
             self._mode_sel.blockSignals(False)
 
+    def _busy(self, msg, btn):
+        """These batch sims run the frozen SNN synchronously on the GUI thread (platoon ~600 steps,
+        ring sweep ~7000+), which would look like a hang. Show a wait cursor + status + disable the
+        button so the user knows work is happening; always undone in _done_busy (try/finally)."""
+        self._status.showMessage(msg)
+        btn.setEnabled(False)
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+        self._status.repaint(); btn.repaint()
+
+    def _done_busy(self, btn):
+        QApplication.restoreOverrideCursor()
+        btn.setEnabled(True)
+        self._status.showMessage("fatto", 3000)
+
     def _run_platoon(self):
-        n = self._meso_page.n_vehicles()
-        sc = self._scenarios[self._meso_page.selected_scenario_index()]
-        rec = run_platoon(self._champ, _PARAMS_GT, n, sc.v_leader)
-        m = platoon_metrics(rec)
-        self._meso_page.string_stability.set_metrics(m)
-        self._meso_page.space_time.set_rec(rec)
-        self._meso_page.speed_wave.set_rec(rec)
-        self._meso_page.road.set_run(rec)
+        btn = self._meso_page._run_platoon_btn
+        self._busy("calcolo platoon…", btn)
+        try:
+            n = self._meso_page.n_vehicles()
+            sc = self._scenarios[self._meso_page.selected_scenario_index()]
+            rec = run_platoon(self._champ, _PARAMS_GT, n, sc.v_leader)
+            m = platoon_metrics(rec)
+            self._meso_page.string_stability.set_metrics(m)
+            self._meso_page.space_time.set_rec(rec)
+            self._meso_page.speed_wave.set_rec(rec)
+            self._meso_page.road.set_run(rec)
+        finally:
+            self._done_busy(btn)
 
     def _run_ring(self):
-        pts = run_fundamental_diagram(self._champ, _PARAMS_GT, self._sweep_densities,
-                                      ring_length=self._sweep_ring_len, n_steps=self._sweep_steps)
-        self._meso_page.fundamental_diagram.set_points(pts)
+        btn = self._meso_page._run_ring_btn
+        self._busy("calcolo ring sweep…", btn)
+        try:
+            pts = run_fundamental_diagram(self._champ, _PARAMS_GT, self._sweep_densities,
+                                          ring_length=self._sweep_ring_len, n_steps=self._sweep_steps)
+            self._meso_page.fundamental_diagram.set_points(pts)
+        finally:
+            self._done_busy(btn)
 
     def select_scenario(self, idx: int):
         self._current_idx = int(idx)
@@ -380,7 +406,16 @@ class SimApp(QMainWindow):
             p.set_ground_truth(float(sc.params_gt[i]))
         self._inspector.set_neuron(None)                  # clear selection + graph highlight on scenario change
         self._netstate.highlight(None)
+        self._clear_panels()                              # blank stale curves/road so Reset visibly resets
         self._refresh_status()
+
+    def _clear_panels(self):
+        """Blank every cockpit panel (empty buffers early-return in update_frame, so a redraw would
+        NOT clear the old curves) and reset the road's integrated ego position."""
+        for p in (*self._params, self._vmem, self._spikerate, self._trajectory,
+                  self._safety, self._timeline, self._synops, self._netstate):
+            p.clear()
+        self._topdown.reset()
 
     def reset_run(self):
         self.select_scenario(self._current_idx)

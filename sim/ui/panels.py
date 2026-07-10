@@ -1,6 +1,9 @@
-"""Individual live network graphs as standalone dockable widgets: RasterPanel (spike raster),
-VmemPanel (v_mem sample traces + effective threshold), ParamPanel (one identified param in physical
-units with an optional dashed ground-truth reference line and the live value in the title)."""
+"""Standalone dockable live panels: NeuronGraphPanel (node-link SNN view), NeuronInspectorPanel
+(selected-neuron scope + dominant connections), SpikeRatePanel (% firing trend), SynOpsPanel
+(per-tick energy: SNN accumulate vs dense-ANN), VmemPanel (v_mem sample traces + effective threshold),
+ParamPanel (one identified param in physical units + dashed ground-truth), TrajectoryPanel
+(gap/speeds/accel), SafetyPanel (TTC/headway/DRAC), EventTimelinePanel (clickable injected events).
+Each panel exposes clear() so the app can blank it on a scenario/champion swap or Reset."""
 import numpy as np
 import pyqtgraph as pg
 from PySide6.QtCore import Qt, Signal
@@ -49,6 +52,9 @@ class SpikeRatePanel(QWidget):
     def set_cursor(self, x):
         _set_cursor(self._cursors, x)
 
+    def clear(self):
+        self._curve.setData([])
+
     def update_frame(self, probe):
         sm = probe.spikes_matrix()          # (frames, H)
         if sm.size:
@@ -82,13 +88,20 @@ class SynOpsPanel(QWidget):
         self._cursors = [_add_cursor(self._plot.getPlotItem())]
         self._dims = None
         self._ann_pj = None                              # dense-ANN energy reference (pJ), constant
+        self._ref_n = None                               # length of the last-emitted ref line (skip-if-unchanged)
 
     def set_cursor(self, x):
         _set_cursor(self._cursors, x)
 
+    def clear(self):
+        self._static_c.setData([]); self._total_c.setData([]); self._ref_c.setData([])
+        self._ref_n = None
+        self._plot.setTitle("energia / tick — SNN (AC) vs ANN densa")
+
     def set_model(self, n_in, n_hid, n_out, rank):
         self._dims = (int(n_in), int(n_hid), int(n_out), int(rank))
         self._ann_pj = metrics.ann_mac(int(n_in), int(n_hid), int(n_out)) * metrics.E_MAC_PJ
+        self._ref_n = None                               # champion swap -> re-emit the flat reference line
 
     def update_frame(self, probe):
         if self._dims is None:
@@ -101,7 +114,9 @@ class SynOpsPanel(QWidget):
         total_pj = (static + dynamic) * metrics.E_AC_PJ
         self._static_c.setData(static_pj)
         self._total_c.setData(total_pj)
-        self._ref_c.setData(np.full(total_pj.size, float(self._ann_pj)))
+        if total_pj.size != self._ref_n:                 # ref line is constant -> only re-emit when length changes
+            self._ref_c.setData(np.full(total_pj.size, float(self._ann_pj)))
+            self._ref_n = total_pj.size
         cur = float(total_pj[-1])
         adv = self._ann_pj / cur if cur else 0.0
         self._plot.setTitle(f"{cur:.0f} pJ/tick (SNN, AC) · ANN densa {self._ann_pj:.0f} pJ · {adv:.1f}× meno energia")
@@ -134,6 +149,12 @@ class EventTimelinePanel(QWidget):
 
     def set_on_seek(self, cb):
         self._on_seek = cb
+
+    def clear(self):
+        self._sig = None
+        self._marks.setData([])
+        for t in self._pool:
+            t.setVisible(False)
 
     def _label(self, k, verb, idx):
         if k < len(self._pool):
@@ -286,6 +307,14 @@ class NeuronGraphPanel(QWidget):
         self._text("hidden · 32 ALIF", 1.2, top, (0.5, 1.0), "#c9a0e8")
         self._text("output · parametri", 2.6, top, (0.5, 1.0), "#88d6a0")
 
+    def clear(self):
+        if self._pos is None:
+            return
+        self._nodes.setData([])                          # hide the coloured nodes until the next frame
+        self._active.setData(pos=self._pos, adj=np.empty((0, 2), dtype=int),
+                             pen=self._active_pen, size=0)
+        self._last_vals = None
+
     def update_frame(self, probe, index=-1):
         frames = probe.frames()
         if not frames or self._pos is None:
@@ -431,6 +460,10 @@ class VmemPanel(QWidget):
     def set_cursor(self, x):
         _set_cursor(self._cursors, x)
 
+    def clear(self):
+        for c in (*self._vmem_curves, *self._vth_curves):
+            c.setData([])
+
     def update_frame(self, probe):
         frames = probe.frames()
         if not frames:
@@ -480,6 +513,11 @@ class ParamPanel(QWidget):
             self._gt.setPos(float(value))
             self._gt.setVisible(True)
 
+    def clear(self):
+        self._last = None
+        self._curve.setData([])
+        self._plot.setTitle(f"{self._name} ({self._unit})")
+
     def update_frame(self, probe):
         pm = probe.params_matrix()
         if pm.size:
@@ -520,6 +558,10 @@ class TrajectoryPanel(QWidget):
 
     def set_cursor(self, x):
         _set_cursor(self._cursors, x)
+
+    def clear(self):
+        for c in (self._c_s, self._c_v, self._c_vl, self._c_dv, self._c_a):
+            c.setData([])
 
     def update_frame(self, traj):
         a = traj.arrays()
@@ -568,6 +610,10 @@ class SafetyPanel(QWidget):
 
     def set_cursor(self, x):
         _set_cursor(self._cursors, x)
+
+    def clear(self):
+        for c in (self._c_ttc, self._c_th, self._c_drac):
+            c.setData([])
 
     def update_frame(self, traj):
         a = traj.arrays()
