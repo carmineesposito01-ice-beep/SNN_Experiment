@@ -292,6 +292,19 @@ def test_simapp_run_platoon_populates_meso(qapp):
     st = win._meso_page.space_time._curves
     active = [c for c in st if c.getData()[0] is not None and len(c.getData()[0]) > 0]
     assert len(active) == 5                               # 5 space-time trajectories
+    pp = win._meso_page.platoon_params._bars[0].opts["height"]
+    assert pp is not None and len(pp) == 5                # T4: per-vehicle params fed by the same run
+
+
+def test_simapp_run_ring_populates_fundamental(qapp):
+    win = SimApp(CHAMP)
+    win.set_mode(1)
+    win._sweep_densities = np.array([20.0, 60.0])         # shrink the macro sweep for the test
+    win._sweep_ring_len = 300.0
+    win._sweep_steps = 60
+    win._run_ring()
+    qx, _ = win._meso_page.fundamental_diagram._q_curve.getData()
+    assert qx is not None and len(qx) == 2                # two density points on Q(rho)
 
 
 def test_simapp_has_synops_dock(qapp):

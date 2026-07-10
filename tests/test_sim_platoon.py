@@ -49,3 +49,21 @@ def test_run_ring_shapes_both_families():
     for path in (BASE, EVENT):
         rec = run_ring(load_champion(path), _PG, n_vehicles=8, ring_length=400.0, n_steps=60)
         assert rec["v"].shape == (60, 8) and "density" in rec
+
+
+def test_simulate_platoon_records_params():
+    # T4: simulate_platoon additively records the 5 params each vehicle's SNN produces (T,N,5)
+    rec = run_platoon(load_champion(BASE), _PG, n_vehicles=5, v_leader_profile=np.full(40, 21.0))
+    assert rec["params"].shape == (40, 5, 5) and np.isfinite(rec["params"]).all()
+
+
+def test_run_fundamental_diagram_both_families():
+    # T4: family-aware fundamental diagram via run_ring (NOT platoon_eval.fundamental_diagram)
+    from sim.ui.platoon import run_fundamental_diagram
+    for path in (BASE, EVENT):
+        pts = run_fundamental_diagram(load_champion(path), _PG, [20.0, 60.0],
+                                      ring_length=300.0, n_steps=60)
+        assert len(pts) == 2
+        for p in pts:
+            assert {"rho_veh_km", "Q_veh_h", "V_km_h", "n", "wave_std", "unstable"} <= p.keys()
+            assert p["Q_veh_h"] >= 0.0 and p["n"] >= 2

@@ -24,7 +24,7 @@ from sim.ui.panels import (PARAM_COLORS, PARAM_NAMES, PARAM_UNITS, EventTimeline
                            NeuronGraphPanel, NeuronInspectorPanel, ParamPanel, SafetyPanel,
                            SpikeRatePanel, SynOpsPanel, TrajectoryPanel, VmemPanel)
 from sim.ui.meso_page import MesoMacroPage
-from sim.ui.platoon import platoon_metrics, run_platoon
+from sim.ui.platoon import platoon_metrics, run_fundamental_diagram, run_platoon
 from sim.ui.reconstruct import reconstruct_spliced
 from sim.ui.trajectory import TrajectoryBuffer
 from sim.ui.topdown import TopDownView
@@ -132,9 +132,12 @@ class SimApp(QMainWindow):
         root.addLayout(controls)
         root.addWidget(self._area, stretch=1)
         container = QWidget(); container.setLayout(root)
-        self._meso_page = MesoMacroPage()
+        self._meso_page = MesoMacroPage(_PARAMS_GT)
         self._meso_page._on_run_platoon = self._run_platoon
         self._meso_page._on_run_ring = self._run_ring
+        self._sweep_densities = np.linspace(10.0, 120.0, 12)   # veh/km — macro ring-sweep grid
+        self._sweep_ring_len = 1000.0                          # m
+        self._sweep_steps = 600
         self._mode_stack = QStackedWidget()
         self._mode_stack.addWidget(container)          # page 0: Live cockpit
         self._mode_stack.addWidget(self._meso_page)    # page 1: Meso/Macro analysis
@@ -265,6 +268,7 @@ class SimApp(QMainWindow):
         m = platoon_metrics(rec)
         self._meso_page.string_stability.set_metrics(m)
         self._meso_page.space_time.set_rec(rec)
+        self._meso_page.platoon_params.set_rec(rec)   # per-vehicle identified params (rec['params'])
 
     @staticmethod
     def _platoon_head_profile(T=300, v_set=21.0, amp=2.0, period=50.0):
@@ -272,7 +276,9 @@ class SimApp(QMainWindow):
         return v_set + amp * np.sin(2.0 * np.pi * t / period)   # sinusoidal head perturbation
 
     def _run_ring(self):
-        pass        # wired in T4 (fundamental diagram + per-vehicle params)
+        pts = run_fundamental_diagram(self._champ, _PARAMS_GT, self._sweep_densities,
+                                      ring_length=self._sweep_ring_len, n_steps=self._sweep_steps)
+        self._meso_page.fundamental_diagram.set_points(pts)
 
     def select_scenario(self, idx: int):
         self._current_idx = int(idx)

@@ -69,6 +69,7 @@ def simulate_platoon(model, params_gt, n_vehicles, v_leader_profile, device='cpu
     elif model is not None:
         model.eval(); model.reset_state(n, device)
     rec = {k: np.zeros((Tlen, n)) for k in ('v', 'x', 'gap', 'a')}
+    rec['params'] = np.zeros((Tlen, n, 5))                    # additive: the 5 params each SNN produces
     collided = False
     with torch.no_grad():
         for t in range(Tlen):
@@ -82,6 +83,7 @@ def simulate_platoon(model, params_gt, n_vehicles, v_leader_profile, device='cpu
             a_l = alpha_al * a_l + (1.0 - alpha_al) * a_l_raw; vl_prev = vlead.copy()
             acc = _accel(gap, v, dv, a_l, params)
             rec['v'][t] = v; rec['x'][t] = x; rec['gap'][t] = gap; rec['a'][t] = acc
+            rec['params'][t] = params.detach().cpu().contiguous().numpy()   # copy; `params` (-> _accel) untouched
             v = np.maximum(0.0, v + acc * DT); x = x + v * DT
             x_head_leader += float(v_leader_profile[t]) * DT
             if (gap <= 0).any():
