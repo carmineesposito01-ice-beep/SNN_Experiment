@@ -10,8 +10,9 @@
 > **✅ B2 (SNN Donatello time-multiplexata, `hdl.RAM`) REALIZZATA E VERIFICATA (commit `f20e812`).** Da **44% → 6.9%
 > LUT** (~6.3× meno), 22 DSP, 2 BRAM, **bit-exact** (`test_b2_fsm` err=0), **cosim xsim PASSED**. È l'architettura di
 > deploy lean. File: `matlab/snn_b2_fsm.m` + `gen_b2_rom`/`b2_donatello_rom`/`test_b2_fsm`/`tb_b2_fsm`. Studio in
-> `document/HDL_ARCHITECTURE_STUDY.md`. **Prossimo:** fasi finali sul design snello — decode→LUT, wrapper AXI-Lite +
-> bitstream, integrazione V2I. (Storia po2→shift/44% qui sotto.)
+> `document/HDL_ARCHITECTURE_STUDY.md`. **decode→LUT + wrapper AXI-Lite FATTI e verificati** (cosim `AXI TEST PASSED`;
+> IP integrato synth **8.9% LUT / 38 DSP / 2 BRAM**; RTL in `matlab/axi/` + mappa registri nel suo README). **Prossimo:**
+> Fase 3 = block design Zynq (PS + IP + interconnect) → bitstream PYNQ-Z1; poi integrazione V2I. (Storia po2→shift/44% sotto.)
 
 > ⚠️ **WORKTREE PARALLELO — NON è il track principale `main`.** Sei nel worktree
 > `.worktrees/Simulink_Importer` (branch **`Simulink_Importer`**), **traccia ②** (import checkpoint → Simulink → HDL).

@@ -1,0 +1,40 @@
+-- snn_top_b2_flat: wrapper con porte FLAT (std_logic_vector) per istanziazione da Verilog.
+-- xn: 4x19 = 76 bit; params: 5x21 = 105 bit. Solo remap di porte (nessuna logica).
+LIBRARY IEEE;
+USE IEEE.std_logic_1164.ALL;
+USE work.snn_top_b2_pkg.ALL;
+
+ENTITY snn_top_b2_flat IS
+  PORT( clk        : IN  std_logic;
+        reset      : IN  std_logic;
+        clk_enable : IN  std_logic;
+        xn         : IN  std_logic_vector(75 DOWNTO 0);   -- {xn3,xn2,xn1,xn0}, ognuno 19b
+        start      : IN  std_logic;
+        ce_out     : OUT std_logic;
+        params     : OUT std_logic_vector(104 DOWNTO 0);  -- {p4,p3,p2,p1,p0}, ognuno 21b
+        done       : OUT std_logic );
+END snn_top_b2_flat;
+
+ARCHITECTURE rtl OF snn_top_b2_flat IS
+  COMPONENT snn_top_b2
+    PORT( clk : IN std_logic; reset : IN std_logic; clk_enable : IN std_logic;
+          xn : IN vector_of_std_logic_vector19(0 TO 3); start : IN std_logic;
+          ce_out : OUT std_logic; params : OUT vector_of_std_logic_vector21(0 TO 4);
+          done : OUT std_logic );
+  END COMPONENT;
+  SIGNAL xn_c     : vector_of_std_logic_vector19(0 TO 3);
+  SIGNAL params_c : vector_of_std_logic_vector21(0 TO 4);
+BEGIN
+  xn_c(0) <= xn(18 DOWNTO 0);
+  xn_c(1) <= xn(37 DOWNTO 19);
+  xn_c(2) <= xn(56 DOWNTO 38);
+  xn_c(3) <= xn(75 DOWNTO 57);
+  params(20 DOWNTO 0)    <= params_c(0);
+  params(41 DOWNTO 21)   <= params_c(1);
+  params(62 DOWNTO 42)   <= params_c(2);
+  params(83 DOWNTO 63)   <= params_c(3);
+  params(104 DOWNTO 84)  <= params_c(4);
+  u_top : snn_top_b2 PORT MAP( clk => clk, reset => reset, clk_enable => clk_enable,
+                               xn => xn_c, start => start, ce_out => ce_out,
+                               params => params_c, done => done );
+END rtl;
