@@ -20,6 +20,13 @@ function gen_b2_rom()
   w('  W.tj = fi(%s, 1, 19, 13);\n',   mat2str(max(double(c.thresh_jump(:)), 0), 17));
   w('  W.delays = %s;\n',              mat2str(double(c.delays), 17));
   w('  W.sh = %d;\n',                  round(log2(double(c.leak_div(1)))));
+  % costanti normalize: xn = [x1*invS; x2*invV; (clamp(x3,-DV,DV)+DV)*inv2DV; x4*invVL]
+  nrm = double(c.norm(:));  % [S V DV VL]
+  w('  W.invS = fi(%.17g, 1, 24, 20);\n',   1 / nrm(1));
+  w('  W.invV = fi(%.17g, 1, 24, 20);\n',   1 / nrm(2));
+  w('  W.invVL = fi(%.17g, 1, 24, 20);\n',  1 / nrm(4));
+  w('  W.inv2DV = fi(%.17g, 1, 24, 20);\n', 1 / (2 * nrm(3)));
+  w('  W.DV = fi(%.17g, 1, 20, 13);\n',     nrm(3));
   w('end\n');
   fclose(fid);
   fprintf('scritto b2_donatello_rom.m (Donatello, rank=%d)\n', c.rank);
