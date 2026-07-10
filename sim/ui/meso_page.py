@@ -4,7 +4,7 @@ diagram, per-vehicle params). Scaffold in T1; panels are wired in T3/T4. The ana
 from PySide6.QtWidgets import (QGridLayout, QHBoxLayout, QLabel, QPushButton, QSpinBox,
                                QVBoxLayout, QWidget)
 
-from sim.ui.meso_panels import (FundamentalDiagramPanel, PlatoonParamsPanel, SpaceTimePanel,
+from sim.ui.meso_panels import (FundamentalDiagramPanel, SpaceTimePanel, SpeedWavePanel,
                                 StringStabilityPanel)
 
 
@@ -22,13 +22,13 @@ class MesoMacroPage(QWidget):
         root.addLayout(controls)
         self._grid = QGridLayout()
         self.string_stability = StringStabilityPanel()    # meso: string stability |H|_i
-        self.space_time = SpaceTimePanel()                 # meso: space-time waves
+        self.speed_wave = SpeedWavePanel()                 # meso: velocity waves v(t)
+        self.space_time = SpaceTimePanel()                 # meso: space-time x(t)
         self.fundamental_diagram = FundamentalDiagramPanel()   # macro: Q(rho)/V(rho)
-        self.platoon_params = PlatoonParamsPanel(params_gt)    # meso: per-vehicle identified params
         self._grid.addWidget(self.string_stability, 0, 0)
-        self._grid.addWidget(self.space_time, 0, 1)
-        self._grid.addWidget(self.fundamental_diagram, 1, 0)
-        self._grid.addWidget(self.platoon_params, 1, 1)
+        self._grid.addWidget(self.speed_wave, 0, 1)
+        self._grid.addWidget(self.space_time, 1, 0)
+        self._grid.addWidget(self.fundamental_diagram, 1, 1)
         for c in (0, 1):
             self._grid.setColumnStretch(c, 1)              # split columns evenly (T3: panels weren't side-by-side)
         for r in (0, 1):

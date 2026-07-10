@@ -76,9 +76,6 @@ class SpeedWavePanel(_MultiCurvePanel):
         super().__init__("v", "onde di velocità (attenuazione stop&go)", "v", "m/s")
 
 
-_PARAM_NAMES = ("v0", "T", "s0", "a", "b")
-
-
 class FundamentalDiagramPanel(QWidget):
     """MACRO: Q(rho) + V(rho) from the density sweep (X-linked); unstable points (wave_std>0.5) marked."""
     def __init__(self):
@@ -106,36 +103,3 @@ class FundamentalDiagramPanel(QWidget):
         un = np.array([bool(p["unstable"]) for p in pts])
         self._q_curve.setData(rho, Q); self._v_curve.setData(rho, V)
         self._q_unstable.setData(rho[un], Q[un]); self._v_unstable.setData(rho[un], V[un])
-
-
-class PlatoonParamsPanel(QWidget):
-    """MESO identification: the 5 ACC-IIDM params each vehicle's SNN produces, mean over the regime
-    (post-warmup) -> dispersion along the platoon. 5 bar strips vs vehicle index + optional GT line."""
-    def __init__(self, params_gt=None):
-        super().__init__()
-        self._gt = None if params_gt is None else np.asarray(params_gt, dtype=float)
-        layout = QVBoxLayout(self); layout.setContentsMargins(0, 0, 0, 0)
-        self._glw = pg.GraphicsLayoutWidget()
-        layout.addWidget(self._glw)
-        self._bars = []; self._plots = []
-        for r, name in enumerate(_PARAM_NAMES):
-            plt = self._glw.addPlot(row=r, col=0)
-            plt.setLabel("left", name)
-            plt.showAxis("bottom", r == len(_PARAM_NAMES) - 1)   # only the bottom strip shows the x axis
-            bar = pg.BarGraphItem(x=[0], height=[0], width=0.7, brush=pg.mkBrush("#8a6fb0"))
-            plt.addItem(bar); self._bars.append(bar); self._plots.append(plt)
-            if self._gt is not None:
-                plt.addItem(pg.InfiniteLine(pos=float(self._gt[r]), angle=0,
-                                            pen=pg.mkPen("#888", width=1, style=Qt.DashLine)))
-        self._plots[-1].setLabel("bottom", "veicolo")
-
-    def set_rec(self, rec, warmup_frac=0.3):
-        params = np.asarray(rec["params"], dtype=float)          # (T, N, 5)
-        if params.ndim != 3 or params.shape[2] != 5:
-            return
-        T, N, _ = params.shape
-        w = int(T * warmup_frac)
-        mean_pv = params[w:].mean(axis=0)                        # (N, 5) mean over the regime
-        x = np.arange(N)
-        for k in range(5):
-            self._bars[k].setOpts(x=x, height=mean_pv[:, k], width=0.7)

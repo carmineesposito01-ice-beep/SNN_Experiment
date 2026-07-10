@@ -12,7 +12,7 @@ pytest.importorskip("PySide6")
 pytest.importorskip("pyqtgraph")
 
 from PySide6.QtWidgets import QApplication          # noqa: E402
-from sim.ui.meso_panels import (FundamentalDiagramPanel, PlatoonParamsPanel, SpaceTimePanel,   # noqa: E402
+from sim.ui.meso_panels import (FundamentalDiagramPanel, SpaceTimePanel,   # noqa: E402
                                 SpeedWavePanel, StringStabilityPanel)
 
 
@@ -71,15 +71,6 @@ def test_fundamental_diagram_panel_plots(qapp):
     qx, qy = p._q_curve.getData()
     assert len(qx) == 2 and list(qy) == [1400.0, 1800.0]
     assert len(p._q_unstable.getData()[0]) == 1          # the one unstable point is marked
-
-
-def test_platoon_params_panel_means(qapp):
-    T, N = 20, 4
-    params = np.random.default_rng(0).random((T, N, 5))
-    p = PlatoonParamsPanel(params_gt=[30.0, 1.5, 2.0, 1.5, 1.5])
-    p.set_rec({"params": params}, warmup_frac=0.0)       # 5 param strips, mean over the regime
-    assert len(p._bars) == 5
-    assert np.allclose(p._bars[0].opts["height"], params[:, :, 0].mean(axis=0))
 
 
 def test_speed_wave_panel_curves_and_view(qapp):

@@ -51,12 +51,6 @@ def test_run_ring_shapes_both_families():
         assert rec["v"].shape == (60, 8) and "density" in rec
 
 
-def test_simulate_platoon_records_params():
-    # T4: simulate_platoon additively records the 5 params each vehicle's SNN produces (T,N,5)
-    rec = run_platoon(load_champion(BASE), _PG, n_vehicles=5, v_leader_profile=np.full(40, 21.0))
-    assert rec["params"].shape == (40, 5, 5) and np.isfinite(rec["params"]).all()
-
-
 def test_run_fundamental_diagram_both_families():
     # T4: family-aware fundamental diagram via run_ring (NOT platoon_eval.fundamental_diagram)
     from sim.ui.platoon import run_fundamental_diagram

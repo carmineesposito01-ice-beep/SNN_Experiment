@@ -268,7 +268,7 @@ class SimApp(QMainWindow):
         m = platoon_metrics(rec)
         self._meso_page.string_stability.set_metrics(m)
         self._meso_page.space_time.set_rec(rec)
-        self._meso_page.platoon_params.set_rec(rec)   # per-vehicle identified params (rec['params'])
+        self._meso_page.speed_wave.set_rec(rec)
 
     @staticmethod
     def _platoon_head_profile(T=300, v_set=21.0, amp=2.0, period=50.0):
