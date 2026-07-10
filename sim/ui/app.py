@@ -25,6 +25,7 @@ from sim.ui.panels import (PARAM_COLORS, PARAM_NAMES, PARAM_UNITS, EventTimeline
                            SpikeRatePanel, SynOpsPanel, TrajectoryPanel, VmemPanel)
 from sim.ui.meso_page import MesoMacroPage
 from sim.ui.platoon import platoon_metrics, run_fundamental_diagram, run_platoon
+from sim.ui.episode import EpisodeSummary, write_episode_csv
 from sim.ui.reconstruct import reconstruct_spliced
 from sim.ui.trajectory import TrajectoryBuffer
 from sim.ui.topdown import TopDownView
@@ -103,6 +104,7 @@ class SimApp(QMainWindow):
         self._maximized = None                    # name of the currently maximized dock, or None
         self._pre_max_state = None                # DockArea state saved before maximizing (for restore)
         apply_overview(self._area, self._docks)   # place all docks so restoreState can find them
+        self._episode = EpisodeSummary(self._synops._dims)   # per-episode aggregator (post-run seal + CSV)
 
         self._champ_selector = QComboBox()
         self._champ_selector.addItems([nick for nick, _ in self._champions])
@@ -325,6 +327,7 @@ class SimApp(QMainWindow):
         self._src_probe = self._probe                     # scrub source: live buffer while running
         self._src_traj = self._traj
         self._recon_key = None                            # invalidate the reconstruction cache
+        self._episode = EpisodeSummary(self._synops._dims)   # fresh per-scenario summary (refreshes dims on swap)
         backend = SoftwareBackend(self._champ.model)
         stepper = SimStepper.from_scenario(backend, sc, injector=self._injector)
         self.loop = SimLoop(stepper, self._probe, dt_fixed=DT)
@@ -359,6 +362,8 @@ class SimApp(QMainWindow):
             for r in results:                                           # integrate EVERY tick (speed>1 -> many)
                 self._topdown.update_frame(r)                           # Road stays smooth at full rate
                 self._traj.record(r)
+            for r, f in zip(results, self._probe.frames()[-len(results):]):
+                self._episode.update(r, f.spikes)                       # feed the post-run summary
             running = self._run_btn.isChecked()
             if (not running) or self._redraw_clock.elapsed() >= _REDRAW_MS:   # throttle the heavy repaint while live
                 self._redraw_series(self._probe, self._traj)

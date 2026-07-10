@@ -357,6 +357,15 @@ def test_simapp_dock_maximize_toggle(qapp):
     assert len(visible_docks(win._area)) == n0      # previous arrangement restored
 
 
+def test_simapp_feeds_episode_summary(qapp):
+    win = SimApp(CHAMP)
+    win.select_scenario(0)
+    assert win._episode.summary()["n_ticks"] == 0        # reset on scenario select
+    win._advance(0.5)                                     # a few live ticks
+    s = win._episode.summary()
+    assert s["n_ticks"] >= 5 and s["min_gap"] < float("inf") and s["ann_pj"] > 0
+
+
 def test_simapp_has_synops_dock(qapp):
     win = SimApp(CHAMP)
     assert "SynOps" in win._docks and len(win._docks) == 14
