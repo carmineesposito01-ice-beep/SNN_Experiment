@@ -63,10 +63,10 @@ module axi_tb;
     while (rd[0]==1'b0 && i<3000) begin axi_read(6'h10); i=i+1; end
     $display("done dopo %0d poll (status=%08X)", i, rd);
     axi_read(6'h14); chk(rd, 32'h00034FB6, "p0_v0");
-    axi_read(6'h18); chk(rd, 32'h00003426, "p1_s0");
-    axi_read(6'h1C); chk(rd, 32'h00004E6C, "p2_a");
-    axi_read(6'h20); chk(rd, 32'h00002044, "p3_b");
-    axi_read(6'h24); chk(rd, 32'h000036C6, "p4_T");
+    axi_read(6'h18); chk(rd, 32'h00003426, "p1_T");
+    axi_read(6'h1C); chk(rd, 32'h00004E6C, "p2_s0");
+    axi_read(6'h20); chk(rd, 32'h00002044, "p3_a");
+    axi_read(6'h24); chk(rd, 32'h000036C6, "p4_b");
     if (errors==0) $display("**************AXI TEST PASSED**************");
     else           $display("**************AXI TEST FAILED (%0d err)**************", errors);
     $finish;

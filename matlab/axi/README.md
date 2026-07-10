@@ -17,7 +17,7 @@ sintetizzato e **verificato in cosim** (2026-07-10).
 | `0x00–0x0C` | W | `xn[0..3]` normalizzati (Q5.13, 19b nei bit[18:0]) |
 | `0x10` | W | `control` — bit0 = **start** (pulse sul fronte di salita) |
 | `0x10` | R | `status` — bit0 = **done** |
-| `0x14–0x24` | R | `params[0..4]` = v0,s0,a,b,T (Q7.13, sign-ext a 32b) |
+| `0x14–0x24` | R | `params[0..4]` = v0,T,s0,a,b (Q7.13, sign-ext a 32b) — ordine di `snn_decode_hdl.m` |
 
 **Driver PS:** normalize in SW float → scrivi `xn[0..3]` → scrivi `control=1` poi `0` →
 poll `status.done` → leggi `params[0..4]` → converti da Q7.13 (`/8192.0`).
