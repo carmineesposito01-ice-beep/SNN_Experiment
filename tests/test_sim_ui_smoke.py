@@ -378,6 +378,20 @@ def test_simapp_postrun_mode(qapp):
     assert win._postrun_page._values["min_gap"].text() not in ("—", "")   # report card populated
 
 
+def test_simapp_export_csv_and_png(qapp, tmp_path):
+    win = SimApp(CHAMP)
+    win.select_scenario(0)
+    win._advance(0.5)
+    csv_p = tmp_path / "episode.csv"
+    win._do_export_csv(str(csv_p))
+    lines = csv_p.read_text(encoding="utf-8").strip().splitlines()
+    assert lines[0].startswith("t,gap,v") and len(lines) >= 6      # header + >=5 rows
+    win.resize(800, 600)
+    png_p = tmp_path / "shot.png"
+    win._do_export_png(str(png_p))
+    assert png_p.exists() and png_p.stat().st_size > 0
+
+
 def test_simapp_has_synops_dock(qapp):
     win = SimApp(CHAMP)
     assert "SynOps" in win._docks and len(win._docks) == 14

@@ -6,7 +6,7 @@ import os
 import numpy as np
 from PySide6.QtCore import QElapsedTimer, QEvent, Qt, QTimer
 from PySide6.QtGui import QAction
-from PySide6.QtWidgets import (QComboBox, QHBoxLayout, QLabel, QMainWindow, QPushButton,
+from PySide6.QtWidgets import (QComboBox, QFileDialog, QHBoxLayout, QLabel, QMainWindow, QPushButton,
                                QSlider, QStackedWidget, QVBoxLayout, QWidget)
 from pyqtgraph.dockarea import Dock, DockArea
 
@@ -177,6 +177,10 @@ class SimApp(QMainWindow):
 
     # ---- menus / docks ----
     def _build_menus(self):
+        file_menu = self.menuBar().addMenu("File")
+        a_csv = QAction("Export CSV…", self); a_csv.triggered.connect(self._export_csv)
+        a_png = QAction("Export PNG…", self); a_png.triggered.connect(self._export_png)
+        file_menu.addAction(a_csv); file_menu.addAction(a_png)
         view = self.menuBar().addMenu("View")
         self._view_actions = {}
         for name in DOCK_ORDER:
@@ -194,6 +198,29 @@ class SimApp(QMainWindow):
         a_save = QAction("Save layout", self); a_save.triggered.connect(self._save_layout)
         a_reset = QAction("Reset to saved", self); a_reset.triggered.connect(self._load_saved)
         layout_menu.addAction(a_save); layout_menu.addAction(a_reset)
+
+    def _export_csv(self):
+        path, _ = QFileDialog.getSaveFileName(self, "Export episode CSV", "episode.csv", "CSV (*.csv)")
+        if path:
+            self._do_export_csv(path)
+
+    def _do_export_csv(self, path):
+        try:
+            write_episode_csv(self._episode.rows(), path)
+            self._status.showMessage(f"CSV saved to {path}", 3000)
+        except OSError as e:
+            self._status.showMessage(f"CSV export failed: {e}", 5000)
+
+    def _export_png(self):
+        path, _ = QFileDialog.getSaveFileName(self, "Export view PNG", "simulator.png", "PNG (*.png)")
+        if path:
+            self._do_export_png(path)
+
+    def _do_export_png(self, path):
+        if self.grab().save(path):
+            self._status.showMessage(f"PNG saved to {path}", 3000)
+        else:
+            self._status.showMessage("PNG export failed", 5000)
 
     def apply_preset(self, name):
         self._maximized = None                # a preset redefines the layout -> clear any maximize state
