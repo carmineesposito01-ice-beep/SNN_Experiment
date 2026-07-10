@@ -244,6 +244,10 @@ class SimApp(QMainWindow):
         elif not visible and present:
             self._docks[name].close()
         self._sync_view_actions()
+        if visible and self._src_probe is not None and not self._run_btn.isChecked():
+            self._redraw_series(self._src_probe, self._src_traj)   # paused: fill the just-shown panel's curves...
+            if self._cursor is not None:
+                self._render_at_cursor(self._cursor)               # ...at the current scrub position
 
     def eventFilter(self, obj, event):
         if event.type() == QEvent.Type.MouseButtonDblClick:
@@ -472,17 +476,25 @@ class SimApp(QMainWindow):
                     self._cursor_slider.blockSignals(False)
         self._refresh_status()
 
+    def _dock_on(self, name):
+        # O(1) visibility from the (always-synced) View-menu action -- avoids parsing area.saveState() in the
+        # hot redraw loop. Skipping hidden panels' compute (numpy + GraphItem rebuild; Qt only skips the PAINT)
+        # is a real win in presets that hide docks (Guida/Neuro-debug). Defaults visible if menus not built yet.
+        a = getattr(self, "_view_actions", {}).get(name)
+        return a is None or a.isChecked()
+
     def _redraw_series(self, probe, traj):
-        for p in self._params:
-            p.update_frame(probe)
-        self._vmem.update_frame(probe)
-        self._spikerate.update_frame(probe)
-        self._synops.update_frame(probe)
-        self._trajectory.update_frame(traj)
-        self._safety.update_frame(traj)
-        self._netstate.update_frame(probe)                # head; scrub overrides via _render_at_cursor
-        self._timeline.update_events(self._injector.log(), probe.frames())
-        if self._inspector.neuron is not None:
+        for name, p in zip(("v0", "T", "s0", "a", "b"), self._params):
+            if self._dock_on(name):
+                p.update_frame(probe)
+        if self._dock_on("v_mem"): self._vmem.update_frame(probe)
+        if self._dock_on("SpikeRate"): self._spikerate.update_frame(probe)
+        if self._dock_on("SynOps"): self._synops.update_frame(probe)
+        if self._dock_on("Trajectory"): self._trajectory.update_frame(traj)
+        if self._dock_on("Safety"): self._safety.update_frame(traj)
+        if self._dock_on("NetState"): self._netstate.update_frame(probe)   # head; scrub overrides via _render_at_cursor
+        if self._dock_on("Events"): self._timeline.update_events(self._injector.log(), probe.frames())
+        if self._dock_on("Inspector") and self._inspector.neuron is not None:
             self._inspector.update_frame(probe)
 
     def status_text(self) -> str:

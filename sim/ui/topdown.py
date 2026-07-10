@@ -43,6 +43,8 @@ class TopDownView(QGraphicsView):
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.setBackgroundBrush(QBrush(QColor("#3a3a3a")))
+        self._ttc_colors = {k: QColor(v) for k, v in _COL.items()}          # 3 fixed TTC colours, once
+        self._ttc_pens = {k: QPen(QColor(v), 2, Qt.DashLine) for k, v in _COL.items()}   # (no per-frame alloc)
         self._ego_x = 0.0
         self._last_s = 0.0
         self._build_road()
@@ -117,13 +119,13 @@ class TopDownView(QGraphicsView):
         self._leader.setPos(leader_px, 0)
         self._ego_label.setPos(ego_px - 12, -VEH_W_M * PX_PER_M - 8)
         self._leader_label.setPos(leader_px - 18, -VEH_W_M * PX_PER_M - 8)
-        col = QColor(_COL[ttc_color(s, dv)])
+        key = ttc_color(s, dv)                             # index the cached pens/colours (setPen/setColor copy)
         y = VEH_W_M * PX_PER_M + 4
         self._gap_line.setLine(ego_px + VEH_LEN_M / 2 * PX_PER_M, y,
                                leader_px - VEH_LEN_M / 2 * PX_PER_M, y)
-        self._gap_line.setPen(QPen(col, 2, Qt.DashLine))
+        self._gap_line.setPen(self._ttc_pens[key])
         self._gap_text.setPlainText(f"s = {s:.1f} m")
-        self._gap_text.setDefaultTextColor(col)
+        self._gap_text.setDefaultTextColor(self._ttc_colors[key])
         self._gap_text.setPos((ego_px + leader_px) / 2 - 22, y + 2)
         self.centerOn(ego_px, 0)                           # follow ego (pinned centre)
 

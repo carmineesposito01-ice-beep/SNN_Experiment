@@ -442,3 +442,14 @@ def test_simapp_run_platoon_reenables_button(qapp):
     win.set_mode(1); win._meso_page._n_spin.setValue(4)
     win._run_platoon()
     assert win._meso_page._run_platoon_btn.isEnabled()      # busy-guard restores the button in finally
+
+
+def test_simapp_hidden_dock_skips_redraw(qapp):
+    win = SimApp(CHAMP)
+    win.select_scenario(0)
+    win._set_dock_visible("SpikeRate", False)              # hide the spike-rate dock
+    win._advance(1.0)
+    assert _empty(win._spikerate._curve)                  # hidden -> its plot data is NOT recomputed
+    win._set_dock_visible("SpikeRate", True)              # re-show it
+    win._advance(1.0)
+    assert not _empty(win._spikerate._curve)              # visible again -> updates

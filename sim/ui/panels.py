@@ -402,6 +402,9 @@ class NeuronInspectorPanel(QWidget):
     def set_cursor(self, x):
         _set_cursor(self._cursors, x)
 
+    def clear(self):
+        self.set_neuron(None)                                # drops the selection + blanks the scope/connections
+
     def set_topology(self, w_in, w_rec, w_out):
         self._w_in = np.asarray(w_in, dtype=np.float64)      # (H, IN)
         self._w_out = np.asarray(w_out, dtype=np.float64)    # (OUT, H)
