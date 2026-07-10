@@ -7,6 +7,9 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QFrame, QGridLayout, QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
 _GREEN = "#2e8b57"; _RED = "#d1495b"; _BLUE = "#2a7fb8"; _AMBER = "#e8871e"; _PURPLE = "#8a6fb0"
+_TTC_STAR = 1.5; _DRAC_STAR = 3.35        # safety limits (s, m/s²) — same as the live Safety dock
+_BRAKE_SAFE_M = 20.0                       # display scale: a 20 m avoidability margin reads as fully safe (0 m = the limit)
+_ISO_DECEL = 3.5; _ISO_JERK = 2.0         # comfort limits (m/s², m/s³) cited in the tooltips
 
 _METRIC_HELP = {
     "id_accuracy": "<b>Accuratezza identificazione</b><br>Quanto la SNN indovina i 5 parametri ACC-IIDM veri.<br>"
@@ -88,6 +91,9 @@ class PostRunPage(QWidget):
             ("max DRAC", "max_DRAC", " m/s²"), ("TET", "TET", " s"), ("TIT", "TIT", " s·s"),
             ("impact Δv", "impact_dv", " m/s")])
         self._bars["safe"] = self._hbars(plot, ["min TTC", "DRAC", "brake m."])
+        plot.addLine(x=1.0, pen=pg.mkPen("#888", style=Qt.DashLine))   # danger index: 1.0 = the safety limit
+        plot.setXRange(0.0, 2.0, padding=0)                            # fixed scale so the three bars are comparable
+        self._safe_plot = plot
         grid.addWidget(c, 0, 1); self._cards.append(c)
 
         c, plot = self._card("Comfort", [("RMS accel", "rms_accel", " m/s²"), ("max decel", "max_decel", " m/s²"),
@@ -180,12 +186,21 @@ class PostRunPage(QWidget):
 
         idv = [g("param_rmse_v0"), g("param_rmse_T"), g("param_rmse_s0"), g("param_rmse_a"), g("param_rmse_b")]
         self._bars["id"].setOpts(width=idv, brushes=[_grad(x, max(idv + [1e-9])) for x in idv])
-        self._bars["safe"].setOpts(
-            width=[g("min_ttc"), g("max_DRAC"), g("brake_margin_min")],
-            brushes=[pg.mkBrush(_GREEN if g("min_ttc") >= 1.5 else _RED),
-                     pg.mkBrush(_GREEN if g("max_DRAC") < 3.35 else _RED),
-                     pg.mkBrush(_GREEN if g("brake_margin_min") >= 0 else _RED)])
-        self._bars["comf"].setOpts(width=[g("rms_accel"), g("max_decel"), g("rms_jerk")], brush=_AMBER)
+        # Sicurezza as a DANGER INDEX per metric (1.0 = the limit; green<1 safe / red>=1 violation) on a
+        # fixed [0,2] scale -> the three different-unit metrics become visually comparable, and the safest
+        # case (min_ttc = ∞) correctly reads as a short green bar instead of a red zero-length one.
+        mttc = s.get("min_ttc")
+        d_ttc = 0.0 if mttc == float("inf") else (_TTC_STAR / g("min_ttc") if g("min_ttc") > 0 else 2.0)
+        d_drac = g("max_DRAC") / _DRAC_STAR
+        d_brake = 1.0 - g("brake_margin_min") / _BRAKE_SAFE_M      # margin>=scale -> 0 safe; <=0 -> >=1 unavoidable
+        danger = [min(d_ttc, 2.0), min(d_drac, 2.0), min(max(d_brake, 0.0), 2.0)]
+        self._bars["safe"].setOpts(width=danger,
+                                   brushes=[pg.mkBrush(_RED if d >= 1.0 else _GREEN) for d in danger])
+        self._bars["comf"].setOpts(                               # ISO gates from the tooltips (accel has no hard gate)
+            width=[g("rms_accel"), g("max_decel"), g("rms_jerk")],
+            brushes=[pg.mkBrush(_AMBER),
+                     pg.mkBrush(_GREEN if g("max_decel") < _ISO_DECEL else _RED),
+                     pg.mkBrush(_GREEN if g("rms_jerk") < _ISO_JERK else _RED)])
         rho = g("rho")
         self._bars["rho"].setOpts(width=[rho], brushes=[pg.mkBrush(_GREEN if rho < 1 else _RED)])
         self._rho_plot.setXRange(0.0, max(2.0, rho * 1.15), padding=0)   # keep the ρ=1 boundary clearly in view
