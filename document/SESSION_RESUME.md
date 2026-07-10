@@ -16,15 +16,16 @@
 verifica, e **§9 gotcha** (i tranelli da non ri-sbattere). Contesto libreria/blocchi: `document/SIMULINK_IMPORT_DESIGN.md`.
 
 **Stato in una riga:** RTL VHDL **bit-accurato** generato per Donatello via HDL Coder, **single-source da `snn_core`**
-(type-parametrizzato double/fi, NON riscrittura a mano). **po2→shift FATTO → moltiplicatori 27.840 → 32** (premessa
-0-DSP raggiunta **in STIMA**, non ancora sintetizzato), comportamento preservato (parità double **2e-6**, errore
+(type-parametrizzato double/fi, NON riscrittura a mano). **po2→shift FATTO → moltiplicatori 27.840 → 32** (→ **32 DSP
+REALI** post-synth+P&R 2026-07-10, **LUT 44% / slice 53%**, 0 BRAM, ~5 MHz — vedi `HDL_PHASE.md §0`), comportamento preservato (parità double **2e-6**, errore
 fixed **≤0.028 = max sui 5 parametri** (v0 il peggiore), Leonardo NON regredito). "bit-accurato" = garanzia HDL Coder
-vs il fixed MATLAB, non ancora cosim'd. **Bug leak-division RISOLTO** (`V./ld` fi = plateau ~3.5 → `leaky` bit-shift).
+vs il fixed MATLAB, **ora verificato in cosim xsim** (`TEST COMPLETED (PASSED)`, bit-esatto, 2026-07-10). **Bug leak-division RISOLTO** (`V./ld` fi = plateau ~3.5 → `leaky` bit-shift).
 
-**Cosa fare adesso** — **[Vivado in installazione ~3h, NON locale; nessun simulatore = niente cosim]:**
-1. Quando Vivado è pronto → **sintetizzare** l'RTL Donatello su Zynq-7020 `xc7z020clg400-1` per numeri **VERI**
-   DSP/LUT/FF/timing. Il resource-report di HDL Coder è solo una **STIMA** (pessimista sui DSP). Se sta / è vicino →
-   area OK. Se LUT alti (stima adder 5524/mux 11536) → **streaming ÷32** (refactor RAM-friendly, `HDL_PHASE.md §8` punto 2).
+**Cosa fare adesso** — **[✅ Vivado 2026.1 installato; ④ SINTESI+P&R REALI fatti 2026-07-10]:**
+1. ✅ **Donatello sintetizzato E routato** (OOC, `xc7z020clg400-1`): **LUT 23.186 = 44% (slice 53%), FF 3.386 = 3%,
+   DSP 32 = 15%** (mult residui previsti — po2→shift confermato), **BRAM 0**, **Fmax ~5 MHz** (non-vincolante). Fit
+   ok ma **LUT-bound**; la STIMA sotto-contava i LUT. **Decisione aperta:** area-opt **streaming ÷32** (§8.2, refactor
+   `snn_core` gated-parità) **vs** ampiezza (decode→LUT + altri 3 champion + cosim). Dettaglio in `HDL_PHASE.md §0`.
 2. Poi: **decode→LUT** (`coder.approximate` su σ), **altri 3 champion** (`make_hdl('Michelangelo'|...)`), **cosim**.
 
 **Vincoli/modi (track ②):** niente workaround; **VHDL MAI a mano** (rompe la catena 1:1); ottimizzare via config

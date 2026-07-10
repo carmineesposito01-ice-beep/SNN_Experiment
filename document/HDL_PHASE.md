@@ -10,6 +10,20 @@
 
 ## §0 RIPRESA RAPIDA (leggi prima questo)
 
+> **✅ AGGIORNAMENTO 2026-07-10 — ④ SINTESI + P&R REALI (Vivado 2026.1, OOC su `xc7z020clg400-1`).**
+> Donatello **entra e ROUTA** sullo Zynq-7020 (`Design State: Routed`, 0 ERROR). Numeri **VERI post-route**:
+> **LUT 23.186 = 44%** · **slice occupati 53%** · **FF 3.386 = 3%** · **DSP 32 = 15%** · **BRAM 0** ·
+> **Fmax ~5 MHz** (percorso critico 200 ns, **NON-vincolante**: control-step 0.1 s ⇒ margine ~50.000×). I 32 DSP
+> = i mult residui previsti (`si·eth`/`si·tjump`) → **po2→shift confermato dal reale, nulla "sfuggito"**.
+> `opt_design` toglie solo ~2% ⇒ **i LUT sono reali, non pessimismo di sintesi**; la STIMA HDL Coder li
+> **sotto-contava** (≈17k op → 23k LUT + 4.6k CARRY). **Scarti vs §1:** DSP **32≠0**; LUT **44%/slice 53%** per UN
+> champion ⇒ poco spazio per decode+AXI, zero per un 2° champion co-residente. **Fit ok ma LUT-bound → `streaming
+> ÷32` (§8.2) è l'attacco d'area ora giustificato dai numeri.** Post-synth (pre-P&R): LUT 24.087/45%, Fmax 6.6 MHz.
+> **③ COSIM CHIUSA (2026-07-10)**: TB auto in **xsim** → `**TEST COMPLETED (PASSED)**`, RTL **bit-esatto vs golden**
+> (0 mismatch, 16 campioni × 5 out, sim 1640 ns) — anello ③ ora **misurato**, non solo garantito da HDL Coder.
+> Artefatti: `scratchpad/impl_out/{util_impl,timing_impl}.rpt` + `donatello_routed.dcp`; script
+> `scratchpad/{synth,impl}_donatello.tcl` (promuovibili in `matlab/synth/`).
+
 **Stato in una riga:** RTL VHDL **bit-accurato** (garanzia HDL Coder vs il fixed MATLAB — **NON ancora
 cosim'd**) generato per Donatello, single-source da `snn_core`. **po2→shift FATTO** → moltiplicatori
 **27.840 → 32 in STIMA** (premessa 0-DSP; **NON ancora sintetizzato**), comportamento preservato (parità
@@ -57,8 +71,8 @@ PyTorch(fp32) ─①─ MATLAB double ─②─ MATLAB fixed(fi Q?.13) ─③─
 ```
 - **①** FATTO: `run_parity_tests` ~2e-6 (roundoff float).
 - **②** quantizzazione INEVITABILE ma piccola (≤0.028 su v0 a f=13) — **non** è un fallimento di conversione.
-- **③** HDL Coder garantisce RTL bit-esatto vs il fixed MATLAB; stream/share/shift **preservano i bit**.
-- **④** NON fatto (serve Vivado, non locale). Il TB auto (`raw_expected.dat`) proverà ③ in cosim.
+- **③** ✅ **verificato in cosim** (xsim, 2026-07-10): TB `raw_expected.dat` → `TEST COMPLETED (PASSED)`, RTL bit-esatto vs il fixed MATLAB. Non più solo garantito.
+- **④** ✅ **synth + P&R REALI** (Vivado 2026.1, 2026-07-10, §0): LUT 44%/slice 53%, DSP 32, 0 BRAM, ~5 MHz. Resta solo la sintesi degli altri 3 champion.
 
 ## §3 I tre livelli (dove si agisce — regola)
 1. **VHDL a mano → MAI.** Rompe la garanzia 1:1, non riproducibile, e ora **non verificabile** (niente simulatore).
@@ -102,9 +116,11 @@ Config in `make_hdl.m`: `LoopOptimization='StreamLoops'`, `ConstantMultiplierOpt
 - ✅ **po2→shift**: 32 moltiplicatori (i 32 residui = scalari gated `si·eth`/`si·tjump`, ≪ 220 DSP).
 - ✅ RTL bit-accurato generato per **Donatello** (+ testbench auto vs golden), 0 errori codegen.
 - ✅ Comportamento: parità double 2e-6; errore fixed ≤0.028 (v0) su tutti e 4 (Leonardo NON regredito).
-- ⏳ **Lato LUT**: adder 5.524 + mux 11.536 (barrel-shift + wide-acc + conditional-add) — alti in STIMA.
+- ✅/⏳ **Lato LUT**: **REALE post-route 23.186 LUT = 44% (slice 53%)**, 4.571 CARRY, 0 BRAM — la STIMA
+  (adder 5.524 + mux 11.536) li **sotto-contava**. Fit ok ma **LUT-bound** ⇒ streaming ÷32 giustificato dai numeri.
 - ⏳ **Streaming ÷32** dei neuroni: BLOCCATO da RAM-mapping (accessi non-scalari) — §8 punto 2 / §9.
-- ⏳ **Vivado/sintesi**: non locale (in installazione). Nessun simulatore → **niente cosim** ancora.
+- ✅ **Vivado 2026.1 + ④ synth & P&R REALI** (2026-07-10, vedi §0): Donatello routa, DSP 32/220, ~5 MHz
+  (non-vincolante). **Cosim ③ ✅ PASSED** (xsim, `TEST COMPLETED (PASSED)`, bit-esatto vs golden, 2026-07-10).
 - ⏳ **Decode (sigmoid)**: ESCLUSO dall'RTL → **LUT in fabric** (deciso), non ancora implementato.
 - ⏳ **Altri 3 champion**: wrapper generati; RTL prodotto solo per Donatello.
 
@@ -122,11 +138,14 @@ Config in `make_hdl.m`: `LoopOptimization='StreamLoops'`, `ConstantMultiplierOpt
   clock-rate), test-config `*_tc.vhd`, package `*_pkg.vhd`, testbench `*_tb.vhd` + vettori `xn.dat`/`raw_expected.dat`.
 
 ## §8 Prossimi passi
-1. **[Vivado pronto] Sintesi vera** RTL Donatello su Zynq-7020 (`xc7z020clg400-1`): crea progetto, aggiungi
-   `hdlsrc/snn_hdl_Donatello.vhd` + `*_pkg.vhd`, run synthesis → DSP/LUT/FF/timing reali. Decide se serve altro.
-2. **Se LUT troppo alti → streaming ÷32 (refactor RAM-friendly):** `x_buf` come **circular-buffer con
-   puntatore** (niente `x_buf(:,2:end)=...`); accessi **SCALARI** a V/fatigue/s_prev; abbassa `RAMThreshold`;
-   poi `coder.hdl.loopspec('stream')` sul loop neuroni. Sblocca RAM-mapping → clock ~320×, adder→~170, mux→~360.
+1. ✅ **[FATTO 2026-07-10] Sintesi + P&R reali** RTL Donatello su Zynq-7020 (`xc7z020clg400-1`): LUT 44%/slice 53%,
+   DSP 32, 0 BRAM, ~5 MHz. + ③ **cosim xsim PASSED** (bit-esatto vs golden). Vedi §0 e `HDL_ARCHITECTURE_STUDY.md`.
+2. ⛔ **[INVESTIGATO 2026-07-10 → NON PERSEGUITO] streaming ÷32.** Tentato (circular-buffer + `RAMThreshold` +
+   `loopspec('stream')`): NON ingrana — `loopspec('stream')` è **top-level-only** (loop neuroni annidato) e il
+   RAM-mapping fallisce ("accessed in a loop region" + "non-scalar sub-matrix access"). Servirebbe un
+   rearchitecting esplicito (`hdl.RAM`/FSM time-multiplex), **senza retraining** ma sostanziale, per un guadagno
+   **solo estetico** (target PYNQ-Z1 fisso, energia device-static-dominata, V2I piccolo). Analisi completa in
+   **`HDL_ARCHITECTURE_STUDY.md`**. Riapribile se il target cambia.
 3. **Decode → LUT** (`coder.approximate` su σ) come stadio separato + parità decode-approx vs esatto.
 4. **Altri 3 champion:** `make_hdl('Michelangelo'|'Raffaello'|'Leonardo')`.
 5. **Cosim** (quando c'è un simulatore): il TB auto verifica RTL vs golden bit-esatto (anello ③).
@@ -143,9 +162,12 @@ Config in `make_hdl.m`: `LoopOptimization='StreamLoops'`, `ConstantMultiplierOpt
   → vanno ESPRESSI esplicitamente** (come il leak-shift). La rete non si "sbrandella": si adatta l'espressione.
 - **Precisione shift**: `bitshift` nello STESSO tipo TRONCA (Leonardo → 0.95). Fix = tipo LARGO `accw`
   (+4 frac) → shift esatto, precisione preservata.
-- **Streaming bloccato da RAM-mapping**: il loop neuroni non si streamma perché V/fatigue/x_buf non mappano in
-  RAM (warning: "non-scalar sub-matrix access" = ring-buffer/slice; "accessed in loop region"; soglia default
-  256 > 32 elementi). Serve accessi scalari + `RAMThreshold` basso.
+- **Streaming ÷32 NON ottenibile con l'auto-flow (INVESTIGATO 2026-07-10 → `HDL_ARCHITECTURE_STUDY.md`)**: il loop
+  neuroni è annidato → `coder.hdl.loopspec('stream')` è **top-level-only** e viene ignorato; il RAM-mapping di
+  V/fatigue/x_buf fallisce ("accessed in a loop region" + "non-scalar sub-matrix access" dagli init `zeros`/
+  `s_prev=s`/`V_LI(:)`), anche con `RAMThreshold` basso + `head` circular-buffer int8. `StreamLoops`+`ResourceSharing`
+  (già nel baseline) sono il massimo dell'auto-flow. Per serializzare davvero serve `hdl.RAM`/FSM espliciti →
+  **non perseguito** (guadagno solo estetico, vedi studio).
 - **Simulink-HDL flow NON aiuta con MATLAB Function block**: dentro il block gira lo stesso motore
   MATLAB-to-HDL. Beneficio solo ricostruendo a blocchi (perde single-source) → **scartato**.
 - **Resource report = STIMA, non sintesi**: ignora DSP-inference (mult piccoli → LUT), LUT-packing, retiming.
