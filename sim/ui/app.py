@@ -24,6 +24,7 @@ from sim.ui.panels import (PARAM_COLORS, PARAM_NAMES, PARAM_UNITS, EventTimeline
                            NeuronGraphPanel, NeuronInspectorPanel, ParamPanel, SafetyPanel,
                            SpikeRatePanel, SynOpsPanel, TrajectoryPanel, VmemPanel)
 from sim.ui.meso_page import MesoMacroPage
+from sim.ui.postrun_page import PostRunPage
 from sim.ui.platoon import platoon_metrics, run_fundamental_diagram, run_platoon
 from sim.ui.episode import EpisodeSummary, write_episode_csv
 from sim.ui.reconstruct import reconstruct_spliced
@@ -145,10 +146,12 @@ class SimApp(QMainWindow):
         self._sweep_densities = np.linspace(10.0, 120.0, 12)   # veh/km — macro ring-sweep grid
         self._sweep_ring_len = 1000.0                          # m
         self._sweep_steps = 600
+        self._postrun_page = PostRunPage()
         self._mode_stack = QStackedWidget()
         self._mode_stack.addWidget(container)          # page 0: Live cockpit
         self._mode_stack.addWidget(self._meso_page)    # page 1: Meso/Macro analysis
-        self._mode_sel = QComboBox(); self._mode_sel.addItems(["Live", "Meso/Macro"])
+        self._mode_stack.addWidget(self._postrun_page) # page 2: Post-run report card
+        self._mode_sel = QComboBox(); self._mode_sel.addItems(["Live", "Meso/Macro", "Post-run"])
         self._mode_sel.currentIndexChanged.connect(self.set_mode)
         outer = QVBoxLayout(); outer.setContentsMargins(0, 0, 0, 0)
         outer.addWidget(self._mode_sel)
@@ -289,10 +292,14 @@ class SimApp(QMainWindow):
 
     def set_mode(self, idx: int):
         idx = int(idx)
-        if idx == 1:
-            self._run_btn.setChecked(False)       # pause the live sim when entering analysis mode
-        else:
-            self._meso_page.road.stop()           # stop the analysis playback when returning to Live
+        if idx != 0:
+            self._auto_stopping = True             # leaving Live is not a scrub -> skip the eager reconstruct
+            self._run_btn.setChecked(False)        # pause the live sim when entering an analysis mode
+        if idx != 1:
+            self._meso_page.road.stop()            # road playback only lives on the Meso page
+        if idx == 2:
+            self._postrun_page.set_summary(self._episode.summary(), self._episode.rows(),
+                                           self._champ_name, self._scenarios[self._current_idx].name)
         self._mode_stack.setCurrentIndex(idx)
         if self._mode_sel.currentIndex() != idx:
             self._mode_sel.blockSignals(True)

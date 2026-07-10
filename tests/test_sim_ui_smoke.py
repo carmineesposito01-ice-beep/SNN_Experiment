@@ -272,7 +272,7 @@ def test_simapp_champion_selector_lists_and_swaps(qapp):
 
 def test_simapp_mode_toggle(qapp):
     win = SimApp(CHAMP)
-    assert win._mode_stack.count() == 2                  # Live + Meso/Macro
+    assert win._mode_stack.count() == 3                  # Live + Meso/Macro + Post-run
     assert win._mode_stack.currentIndex() == 0           # starts Live
     win._run_btn.setChecked(True)
     win.set_mode(1)                                       # switch to analysis
@@ -364,6 +364,18 @@ def test_simapp_feeds_episode_summary(qapp):
     win._advance(0.5)                                     # a few live ticks
     s = win._episode.summary()
     assert s["n_ticks"] >= 5 and s["min_gap"] < float("inf") and s["ann_pj"] > 0
+
+
+def test_simapp_postrun_mode(qapp):
+    win = SimApp(CHAMP)
+    assert win._mode_stack.count() == 3                  # Live + Meso/Macro + Post-run
+    win.select_scenario(0)
+    win._advance(0.5)
+    win.set_mode(2)                                       # Post-run
+    assert win._mode_stack.currentIndex() == 2
+    assert not win._run_btn.isChecked()                  # entering an analysis mode pauses live
+    assert win._champ_name in win._postrun_page._header.text()
+    assert win._postrun_page._values["min_gap"].text() not in ("—", "")   # report card populated
 
 
 def test_simapp_has_synops_dock(qapp):
