@@ -13,7 +13,7 @@
 ## 🎯 Stato attuale (2026-07-10)
 
 **Worktree/branch**: `.worktrees/Simulator` on branch **`Simulator`** (it IS a git repo). All work
-committed + pushed to `origin/Simulator`. **135 sim tests green.** Core bit-identical.
+committed + pushed to `origin/Simulator`. **136 sim tests green.** Core bit-identical.
 
 **What it is**: a live plug&play GUI "digital twin" of the SNN car-following controller (ALIF,
 **4 inputs → 32 hidden → 5 params**, po2 weights, target FPGA PYNQ-Z1). **~800 weights** = the
@@ -51,8 +51,17 @@ perf via a 5-agent workflow — per-paint −30% (NetState freeze/LUT), redraw t
   · dead% · **ρ(U·V) via power-iteration** (LAPACK-free) · energy + breakdown — each metric with a **'?'
   definition+formula tooltip**. Reproduces the report verdicts (ρ 2.99/0.05, dead 18.8%/0%, EventProp
   identifies better) with energy **consistent with the SynOps dock** (tested invariant; no n_ticks bug).
+  The post-run page is now a **dark pyqtgraph dashboard (v3, `227f46d`)** — a verdict badge + a 3×2 grid
+  of cards (Identificazione · Sicurezza · Comfort · Salute rete/FPGA · Efficienza · Andamento), each a
+  bold bar/gauge plot that fills the card + the '?'-tooltipped values; ρ gauge on a `[0,max(2,ρ·1.15)]`
+  scale with the ρ=1 boundary line (render-verified on both champions: green sliver 0.057 vs red 2.99
+  crossing the line). Replaces the bland white columnar card. `set_summary` signature unchanged.
   **REMAINS: float-vs-fixed A/B** (⚠️ needs a fixed-point Qm.n SW forward that does NOT exist yet — maybe
   port from the Simulink_Importer/HDL track).
+- **Distribution** ✅ (`48b0333`): **conda `environment.yml` + `run_simulator.bat`** (creates `cf_sim`,
+  applies the OMP #15 libomp rename, launches) — the proven plug&play path; `README_SIM.md`;
+  `requirements-sim.txt` reclassified as a pip **fallback** (conda-forge PySide6 bundles the MSVC runtime,
+  the pip wheel needs a system vc_redist). **PyInstaller .exe deferred** ("dopo").
 - **Bug/polish (post-v2)**: end-of-episode **freeze fixed** (`d0a70ec`, auto-stop no longer does the eager
   reconstruct → 784ms→11ms) + **dock maximize** on title double-click (`d4c24fa`).
 
@@ -79,13 +88,13 @@ one Phase-4 piece remains, then merge:
 ## 🛠️ How to work (setup + discipline)
 
 - **Env**: `cf_sim` (conda). Tests/GUI: `conda run -n cf_sim python ...`.
-- **Tests**: `conda run -n cf_sim python -m pytest tests/test_sim_state.py tests/test_sim_backend.py
-  tests/test_sim_stepper.py tests/test_sim_scenario.py tests/test_sim_events.py tests/test_sim_probe.py
-  tests/test_sim_replay.py tests/test_sim_loop.py tests/test_sim_eventprop.py
-  tests/test_sim_input_capture.py tests/test_sim_trajectory.py tests/test_sim_layout.py
-  tests/test_sim_panels.py tests/test_sim_ui_smoke.py tests/test_sim_reconstruct.py
-  tests/test_sim_platoon.py tests/test_sim_meso_panels.py -q` — **list files explicitly** (non-sim tests
-  fail in cf_sim). 110 green at 2026-07-10.
+- **Tests**: run the 20 `test_sim_*.py` files **explicitly** (non-sim tests fail in cf_sim): `state
+  backend stepper scenario events probe replay loop eventprop input_capture trajectory layout panels
+  ui_smoke reconstruct platoon meso_panels meso_road episode postrun`. **136 green at 2026-07-10.**
+- **Test runner gotcha**: `conda run -n cf_sim python -m pytest …` **intermittently crashes conda's
+  plugin system**. Reliable bypass — call the env python directly with `Library/bin` on PATH:
+  `ENV=C:/Miniconda/envs/cf_sim; PATH="$ENV:$ENV/Library/bin:$ENV/Scripts:$PATH" "$ENV/python.exe" -m
+  pytest tests/test_sim_postrun.py -q`.
 - **Render**: write a scratchpad script with `os.environ["QT_QPA_PLATFORM"]="windows"`, build `SimApp`,
   drive it, `win.grab().save(png)`, then Read the png. Use `offscreen` for headless tests.
 - **Do NOT** `conda run -n cf_sim python -c "..."` inline (plugin/quoting crash) → write a script file.
