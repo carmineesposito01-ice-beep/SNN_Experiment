@@ -13,7 +13,7 @@
 ## 🎯 Stato attuale (2026-07-10)
 
 **Worktree/branch**: `.worktrees/Simulator` on branch **`Simulator`** (it IS a git repo). All work
-committed + pushed to `origin/Simulator`. **130 sim tests green.** Core bit-identical.
+committed + pushed to `origin/Simulator`. **135 sim tests green.** Core bit-identical.
 
 **What it is**: a live plug&play GUI "digital twin" of the SNN car-following controller (ALIF,
 **4 inputs → 32 hidden → 5 params**, po2 weights, target FPGA PYNQ-Z1). **~800 weights** = the
@@ -45,8 +45,14 @@ perf via a 5-agent workflow — per-paint −30% (NetState freeze/LUT), redraw t
   `2026-07-10-postrun-mode-export*`). Third mode (Live/Meso-Macro/**Post-run**) with a report card
   (esito·sicurezza·comfort·efficienza·rete) fed by an **incremental `EpisodeSummary`** accumulator
   (`sim/ui/episode.py`, O(1)/tick, no reconstruct) + `PostRunPage` (`sim/ui/postrun_page.py`); **File →
-  Export…** (episode CSV + window PNG). **REMAINS: float-vs-fixed A/B** (⚠️ needs a fixed-point Qm.n SW
-  forward that does NOT exist yet — maybe port from the Simulink_Importer/HDL track).
+  Export…** (episode CSV + window PNG). The report card is now **EXHAUSTIVE** (spec+plan
+  `2026-07-10-postrun-metrics-tooltips*`, commits `578d32f`→`f554896`): identification vs GT · extended
+  SSM (brake-margin/DRAC/TET/TIT/impact-Δv, reusing `closed_loop_eval.safety_metrics`/`comfort_metrics`)
+  · dead% · **ρ(U·V) via power-iteration** (LAPACK-free) · energy + breakdown — each metric with a **'?'
+  definition+formula tooltip**. Reproduces the report verdicts (ρ 2.99/0.05, dead 18.8%/0%, EventProp
+  identifies better) with energy **consistent with the SynOps dock** (tested invariant; no n_ticks bug).
+  **REMAINS: float-vs-fixed A/B** (⚠️ needs a fixed-point Qm.n SW forward that does NOT exist yet — maybe
+  port from the Simulink_Importer/HDL track).
 - **Bug/polish (post-v2)**: end-of-episode **freeze fixed** (`d0a70ec`, auto-stop no longer does the eager
   reconstruct → 784ms→11ms) + **dock maximize** on title double-click (`d4c24fa`).
 

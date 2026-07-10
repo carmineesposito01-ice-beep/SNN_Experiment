@@ -19,7 +19,7 @@
 - `docs/superpowers/2026-07-09-phase3-qa-perf-report.md` — QA + sessione ottimizzazione (numeri prima/dopo).
 - Memoria assistente `cf-fsnn-parallel-tracks.md` (riga Simulator) — contesto supplementare.
 
-**Fatto** (tutto committato+pushato su `origin/Simulator`; **130 test verdi**, core congelato bit-identico):
+**Fatto** (tutto committato+pushato su `origin/Simulator`; **135 test verdi**, core congelato bit-identico):
 - **MVP v1** + **Fase 1** (leggibilità param) + **Fase 2** (shell dockable, 4 preset, persistenza) + **NetViz** → **grafo node-link** (tragitti attivi bianchi).
 - **Fase 3a** (Trajectory+Safety) · **3b.1** (time-scrub) · **3b-resto** (deep-scrub oltre-buffer + event-timeline + neuron-inspector, 14 dock).
 - **Dock SynOps → ENERGIA (pJ)**: SNN (`SynOps×E_AC 0.9pJ`) vs ANN densa (`MAC×E_MAC 4.6pJ`, ricorrenza H·H) = ~14.5× (mostra AC<MAC, non il conteggio).
@@ -30,6 +30,9 @@
 **Fase 4 (post-run seal + export) FATTA** (`aa656ef`→`3569017`, spec+plan `2026-07-10-postrun-mode-export*`): **3° modo**
 Post-run = report card episodio (esito·sicurezza·comfort·efficienza·rete) da accumulatore incrementale `EpisodeSummary`
 (`sim/ui/episode.py`, O(1)/tick, niente reconstruct) + `PostRunPage`; **File → Export…** (CSV episodio + PNG finestra).
+Report card **ESAUSTIVA** (`578d32f`→`f554896`): identificazione vs GT · SSM estese (`safety_metrics`/`comfort_metrics`) ·
+dead% · **ρ(U·V) power-iteration** (LAPACK-free) · energia+breakdown, con **tooltip '?'** definizione+formula su ogni metrica —
+riproduce i verdetti dei report (ρ 2.99/0.05, dead 18.8%/0%), energia consistente col dock (invariante testato).
 Più **fix freeze fine-episodio** (`d0a70ec`) + **dock a tutto schermo** (`d4c24fa`). **PROSSIMA AZIONE: A/B float-vs-fixed**
 (⚠️ serve un forward fixed-point Qm.n che NON esiste ancora — scoparlo prima, magari portando dal track HDL/Simulink_Importer).
 Poi **merge `Simulator`→`main`** (coordinare col track `Simulink_Importer`).

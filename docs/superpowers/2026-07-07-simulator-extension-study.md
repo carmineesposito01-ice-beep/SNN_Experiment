@@ -194,7 +194,11 @@ The core already computes these but shows none of them:
   (Live/Meso-Macro/**Post-run**) = a report card of the one episode just run (esito · safety · comfort ·
   efficiency/energy · network), fed by an **incremental `EpisodeSummary`** accumulator (`sim/ui/episode.py`,
   O(1)/tick, buffer-independent, no reconstruct) + `PostRunPage`; **File → Export…** = episode CSV +
-  window PNG. Spec+plan `2026-07-10-postrun-mode-export*`; 130 sim tests green. **Deferred: float-vs-fixed
+  window PNG. Spec+plan `2026-07-10-postrun-mode-export*`. The report card is **exhaustive** (spec+plan
+  `2026-07-10-postrun-metrics-tooltips*`): identification vs GT · extended SSM (`safety_metrics`/`comfort_metrics`)
+  · dead% · **ρ(U·V)** (power-iteration, LAPACK-free) · energy + breakdown — each with a **'?' definition/formula
+  tooltip**; reproduces the report verdicts (ρ 2.99/0.05, dead 18.8%/0%) with energy consistent with the SynOps
+  dock (tested). 135 sim tests green. **Deferred: float-vs-fixed
   A/B** — needs a fixed-point Qm.n SW forward that does not exist yet (candidate: port from the
   Simulink_Importer/HDL track).
 - **Phase 5 (ambitions).** GT sliders / live UKF re-identification, video/GIF, scenario form editor,
