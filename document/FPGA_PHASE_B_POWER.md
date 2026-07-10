@@ -107,8 +107,55 @@ energetico per-operazione del report — che nasce da e_AC ≪ e_MAC — largame
 SNN-vs-ANN su FPGA è **molto minore** del ~5-15× del report. Il confronto robusto (sistema-vs-sistema,
 insensibile alla precisione per-op) è il Gruppo C.
 
-## 3. Gruppo C — Baseline ANN densa ⏳
-*(in corso)*
+## 3. Gruppo C — Confronto SNN vs ANN densa ✅ (ancorato a letteratura)
+
+### 3.1 ANN densa 4→32→32→5 misurata (l'equivalente denso del report, 1312 MAC)
+`ann_mlp` time-mux (1 MAC/ciclo, 1 DSP, pesi ROM, attivazioni in RAM), OOC @8 MHz, SAIF High:
+
+| | LUT | DSP | BRAM | P_dyn | cicli/inf | **E_dyn/inf** | E_tot/inf @8MHz |
+|---|---|---|---|---|---|---|---|
+| **ANN 1312-MAC** | 708 | 1 | 1.5 | 1 mW | 2627 (RAM read-latency ≈2×1312) | **328 nJ** | 34 µJ |
+| **SNN B2** | 4223 | 38 | 1 | 9 mW | 341 | **383 nJ** | 4.8 µJ |
+
+A parità di scala e clock, l'**energia di calcolo è COMPARABILE** (ANN leggermente meno). Il datapath SNN
+(38 DSP + ALIF) brucia 9× più potenza/ciclo dell'ANN (1 DSP seriale), ma finisce in 8× meno cicli → pari.
+*(E_tot @8MHz vede la SNN 7× meglio, ma solo perché finisce prima → meno static; clock-dependent.)*
+
+### 3.2 Ma l'ANN da 1312 MAC NON fa il task (pesi random) → si àncora alla letteratura
+Il confronto a 1312 MAC è capacità-parity zoppo: non sappiamo se 1312 MAC bastino per car-following.
+Ordini di grandezza tipici di **NN car-following task-capable** (letteratura):
+
+| Modello | Architettura | ~MAC/step | Fonte |
+|---|---|---|---|
+| PIDL-CF (MLP) | 3 hidden × 60 (sweep → 256/512 × 5 layer) | **~7.4k** (fino 100k+) | Mo et al., arXiv:2012.13376 |
+| LSTM personalized driver | **100 hidden units** (1 layer LSTM) | **~40k** | Hatazawa et al. 2023, JAMDSM |
+| Seq2seq Bi-GRU + attention | **128 units** bidirezionale | **~50-100k** | Lu et al. 2023, IEEE Access |
+
+SNN Donatello: **~800 pesi po2** (equivalente denso = 1312 MAC). → una NN densa che *davvero* fa il task è
+**~5× (MLP piccolo) fino a ~30-75× (LSTM/GRU ricorrenti, l'analogo equo della SNN ricorrente)** più grande.
+
+### 3.3 Sintesi — il vantaggio è reale ma da COMPATTEZZA del modello, non da AC≪MAC
+Poiché su FPGA `e_MAC ≈ e_AC` (Gruppo B) e per il time-mux `E ∝ MAC`, si scala la misura reale:
+`E_ann(task-capable) ≈ E_ann(1312) × MAC_lett/1312`:
+
+| ANN task-capable | MAC | E_dyn/inf (scalata) | **vantaggio SNN** (vs 383 nJ) |
+|---|---|---|---|
+| MLP piccolo | ~7.4k | ~1.9 µJ | **~5×** |
+| LSTM-100 | ~40k | ~10 µJ | **~26×** |
+| Bi-GRU-128 | ~100k | ~25 µJ | **~65×** |
+
+**Conclusione:** vantaggio energetico SNN reale **~5-65×**, ma da **rete compatta** (~5-75× meno operazioni
+per fare il task), NON dal costo-per-operazione (che su FPGA è ~uguale). **Il 5-15× del report è nel range
+giusto per il motivo sbagliato**: doppio errore che quasi si compensa — compattezza reale (↑) × premessa
+AC≪MAC falsa (↓).
+
+### 3.4 Perché SCALIAMO invece di costruire la NN grande (decisione)
+`E ∝ cicli ∝ MAC` è **misurato** (328 nJ / 2627 cicli; e_MAC≈e_AC), quindi scalare è grounded. Costruire un
+LSTM/GRU 40-100k-MAC in HDL = sforzo grande + rischio iterazioni (gate/attivazioni/FSM/RAM/BRAM),
+sproporzionato, e confermerebbe solo la linearità. **Caveat onesti:** (a) LSTM/GRU hanno op **non-MAC**
+(gate, tanh/sigmoid) che aggiungono ~20-50% → lo scaling **sottostima** l'ANN → conservativo pro-SNN;
+(b) il moltiplicatore *esatto* richiederebbe **addestrare** una NN densa alla stessa accuratezza (non fatto,
+opzione estrema) — la letteratura lo **limita** a ~5-75×.
 
 ## 4. Termica ⏳
 *(dalla potenza reale: Tj all'ambiente — verosimilmente non-problema a mW)*
@@ -127,3 +174,25 @@ avrà una colonna "Fase C misurato" (TBD) e un'appendice-protocollo.
   **flusso non-project** (`synth_design -mode out_of_context`); `xelab -debug typical` per il SAIF; sim
   gate-level lenta → 16 inferenze; correzioni al piano (firma `snn_normalize`, porte `done`/`clk_enable`,
   packing `xn`).
+
+## 8. Riferimenti — dimensioni tipiche NN car-following (per §3, utili al report)
+
+Modelli NN di car-following pubblicati e la loro **scala** (n. layer/neuroni → MAC/step), usati per ancorare
+il fattore-compattezza del §3. La colonna MAC è stimata dall'architettura riportata.
+
+| # | Riferimento | Architettura | Input → Output | ~MAC/step |
+|---|---|---|---|---|
+| [1] | **Mo, Shi, Di** — *A Physics-Informed Deep Learning Paradigm for Car-Following Models* (arXiv:2012.13376) | MLP (PUNN) hidden **(60,60,60)**, sweep neuroni {30,60,128,256,512} × layer {1..5} | spacing, Δv, v → accel | **~7.4k** (fino 100k+) |
+| [2] | **Hatazawa, Hamada, Oikawa, Hirose** (2023) — *Personalized driver model … using LSTM*, J. Adv. Mech. Design Syst. Manuf. 17(2) | **LSTM 100 hidden units** (sweep 50-250) | Δv, gap, ln(gap) → accel | **~40k** |
+| [3] | **Lu, Yi, Liang, Rui, Ran** (2023) — *Improved Seq2seq Deep Learning … CAV*, IEEE Access | **Bi-GRU 128 units** encoder + GRU decoder + attention | multi-preceding kinematics → v/accel | **~50-100k** |
+| [4] | **Wang, Jiang, Li, Lin, Zheng, Wang** (2017) — *Capturing Car-Following Behaviors by Deep Learning*, IEEE T-ITS | deep NN, finestra temporale multi-step | v, Δv, Δx (storia) → accel | migliaia+ |
+| [5] | **Kinoshita et al.** (2022) — *Data-driven Car-Following … Comparison of NN Structures*, Int. J. ITS Research | DNN/LSTM/1DCNN/2DCNN, ≥4 layer, molti input (10 front+3 rear+strada) | multi-veicolo + strada → accel | grande |
+
+**Confronto:** SNN Donatello ≈ **800 pesi po2** (equivalente denso 1312 MAC). Le reti dense/ricorrenti
+task-capable sopra sono **~5× (MLP piccolo [1]) … ~30-75× (LSTM/GRU ricorrenti [2][3], analogo equo della
+SNN ricorrente)** più grandi in operazioni → base del vantaggio-compattezza (§3.3).
+
+**URL:** [1] https://ar5iv.labs.arxiv.org/html/2012.13376 · [2] https://doi.org/10.1299/jamdsm.2023jamdsm0022 ·
+[3] https://doi.org/10.1109/access.2023.3243620 · [4] https://doi.org/10.1109/tits.2017.2706963 ·
+[5] https://link.springer.com/article/10.1007/s13177-022-00339-9 · CNN-LSTM (MDPI Sensors 23(2):660)
+https://www.mdpi.com/1424-8220/23/2/660
