@@ -392,6 +392,14 @@ def test_simapp_export_csv_and_png(qapp, tmp_path):
     assert png_p.exists() and png_p.stat().st_size > 0
 
 
+def test_simapp_episode_has_gt_and_rho(qapp):
+    win = SimApp(CHAMP)
+    win.select_scenario(0)
+    win._advance(0.5)
+    s = win._episode.summary()
+    assert "id_accuracy" in s and s["rho"] is not None      # GT + model wired into the accumulator
+
+
 def test_simapp_has_synops_dock(qapp):
     win = SimApp(CHAMP)
     assert "SynOps" in win._docks and len(win._docks) == 14

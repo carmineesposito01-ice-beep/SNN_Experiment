@@ -105,7 +105,9 @@ class SimApp(QMainWindow):
         self._maximized = None                    # name of the currently maximized dock, or None
         self._pre_max_state = None                # DockArea state saved before maximizing (for restore)
         apply_overview(self._area, self._docks)   # place all docks so restoreState can find them
-        self._episode = EpisodeSummary(self._synops._dims)   # per-episode aggregator (post-run seal + CSV)
+        self._episode = EpisodeSummary(self._synops._dims,   # per-episode aggregator (post-run seal + CSV)
+                                       params_gt=self._scenarios[self._current_idx].params_gt,
+                                       model=self._champ.model)
 
         self._champ_selector = QComboBox()
         self._champ_selector.addItems([nick for nick, _ in self._champions])
@@ -207,6 +209,11 @@ class SimApp(QMainWindow):
     def _do_export_csv(self, path):
         try:
             write_episode_csv(self._episode.rows(), path)
+            import csv as _csv
+            with open(path.rsplit(".", 1)[0] + "_summary.csv", "w", newline="", encoding="utf-8") as f:
+                w = _csv.writer(f); w.writerow(("metric", "value"))
+                for k, val in self._episode.summary().items():
+                    w.writerow((k, val))
             self._status.showMessage(f"CSV saved to {path}", 3000)
         except OSError as e:
             self._status.showMessage(f"CSV export failed: {e}", 5000)
@@ -361,7 +368,9 @@ class SimApp(QMainWindow):
         self._src_probe = self._probe                     # scrub source: live buffer while running
         self._src_traj = self._traj
         self._recon_key = None                            # invalidate the reconstruction cache
-        self._episode = EpisodeSummary(self._synops._dims)   # fresh per-scenario summary (refreshes dims on swap)
+        self._episode = EpisodeSummary(self._synops._dims,   # fresh per-scenario summary (refreshes dims on swap)
+                                       params_gt=self._scenarios[self._current_idx].params_gt,
+                                       model=self._champ.model)
         backend = SoftwareBackend(self._champ.model)
         stepper = SimStepper.from_scenario(backend, sc, injector=self._injector)
         self.loop = SimLoop(stepper, self._probe, dt_fixed=DT)
