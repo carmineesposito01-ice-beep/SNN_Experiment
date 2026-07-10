@@ -8,8 +8,12 @@ function y = micro_ac() %#codegen
     acc  = fi(0, 1, 32, 13);
     cnt  = uint8(0);
   end
-  nb   = bitxor(bitxor(bitget(lfsr,16), bitget(lfsr,14)), bitxor(bitget(lfsr,13), bitget(lfsr,11)));
-  lfsr = bitor(bitshift(lfsr, 1), uint16(nb));         % LFSR 16-bit (taps 16,14,13,11)
+  t1 = bitand(bitshift(lfsr, -15), uint16(1));         % tap bit 16
+  t2 = bitand(bitshift(lfsr, -13), uint16(1));         % tap bit 14
+  t3 = bitand(bitshift(lfsr, -12), uint16(1));         % tap bit 13
+  t4 = bitand(bitshift(lfsr, -10), uint16(1));         % tap bit 11
+  fb   = bitxor(bitxor(t1, t2), bitxor(t3, t4));       % feedback uint16 (0/1)
+  lfsr = bitor(bitshift(lfsr, 1), fb);                 % LFSR 16-bit full-word (no cast single-bit)
   x    = reinterpretcast(lfsr, numerictype(1, 16, 13)); % bits -> fi con segno, toggla ogni ciclo
   sh   = fi(bitsll(fi(x, 1, 32, 13), cnt), 1, 32, 13);  % x << cnt nel tipo largo (barrel shifter)
   acc  = fi(acc + sh, 1, 32, 13);                       % accumulo (AC)

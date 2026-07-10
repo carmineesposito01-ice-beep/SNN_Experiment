@@ -6,8 +6,12 @@ function y = micro_mac() %#codegen
     lfsr = uint16(4660);                               % 0x1234
     acc  = fi(0, 1, 48, 26);
   end
-  nb   = bitxor(bitxor(bitget(lfsr,16), bitget(lfsr,14)), bitxor(bitget(lfsr,13), bitget(lfsr,11)));
-  lfsr = bitor(bitshift(lfsr, 1), uint16(nb));         % LFSR 16-bit
+  t1 = bitand(bitshift(lfsr, -15), uint16(1));         % tap bit 16
+  t2 = bitand(bitshift(lfsr, -13), uint16(1));         % tap bit 14
+  t3 = bitand(bitshift(lfsr, -12), uint16(1));         % tap bit 13
+  t4 = bitand(bitshift(lfsr, -10), uint16(1));         % tap bit 11
+  fb   = bitxor(bitxor(t1, t2), bitxor(t3, t4));       % feedback uint16 (0/1)
+  lfsr = bitor(bitshift(lfsr, 1), fb);                 % LFSR 16-bit full-word
   x    = reinterpretcast(lfsr,               numerictype(1, 16, 13));  % operando 1 (toggla)
   w    = reinterpretcast(bitshift(lfsr, -3), numerictype(1, 16, 13));  % operando 2 (decorrelato)
   acc  = fi(acc + fi(x * w, 1, 48, 26), 1, 48, 26);    % MAC: mult data x data -> DSP48
