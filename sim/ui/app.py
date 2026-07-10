@@ -85,6 +85,7 @@ class SimApp(QMainWindow):
         self._src_probe = None
         self._src_traj = None
         self._recon_key = None      # cache key for the last deep-scrub reconstruction
+        self._auto_stopping = False  # set when the episode ends on its own -> stop WITHOUT eager reconstruct
 
         widgets = {"Road": self._topdown, "NetState": self._netstate, "SpikeRate": self._spikerate,
                    "v_mem": self._vmem, "Trajectory": self._trajectory, "Safety": self._safety,
@@ -371,6 +372,7 @@ class SimApp(QMainWindow):
 
     def _on_run_toggled(self, running: bool):
         if running:                                       # live: hide cursors, disable slider
+            self._auto_stopping = False
             self._cursor = None
             self._src_probe, self._src_traj = self._probe, self._traj
             self._cursor_slider.setEnabled(False)
@@ -382,7 +384,9 @@ class SimApp(QMainWindow):
         else:                                             # paused: scrub over the whole episode
             self._timer.stop()
             frames = self._probe.frames()
-            if frames and frames[-1].t + 1 > self._probe.capacity:   # buffer wrapped -> reconstruct
+            auto = self._auto_stopping                    # episode ended on its own -> don't freeze on an eager reconstruct
+            self._auto_stopping = False
+            if (not auto) and frames and frames[-1].t + 1 > self._probe.capacity:   # manual pause + buffer wrapped -> reconstruct
                 self._src_probe, self._src_traj = self._reconstruct(frames[-1].t)
             else:
                 self._src_probe, self._src_traj = self._probe, self._traj
@@ -479,4 +483,5 @@ class SimApp(QMainWindow):
     def _on_timer(self):
         self._advance(self._clamp_frame_dt(self._clock.restart() / 1000.0))
         if self.loop.done:
+            self._auto_stopping = True        # episode ended on its own: stop without the eager-reconstruct freeze
             self._run_btn.setChecked(False)

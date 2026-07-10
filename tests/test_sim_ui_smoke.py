@@ -330,6 +330,21 @@ def test_simapp_run_platoon_feeds_road(qapp):
     assert not win._meso_page.road._timer.isActive()
 
 
+def test_simapp_end_of_episode_no_eager_reconstruct(qapp):
+    # root-cause guard: the AUTOMATIC end-of-episode stop must NOT run the synchronous deep-scrub
+    # reconstruct (that froze the GUI ~0.8s+). Manual pause still reconstructs (covered separately).
+    win = SimApp(CHAMP)
+    win.select_scenario(0)
+    win._run_btn.setChecked(True)         # running (as live)
+    win._timer.stop()                     # headless: no real timer
+    win._advance(51.0)                     # >500 ticks -> ring buffer wraps
+    assert win.loop.stepper.st.t > win._probe.capacity
+    win._auto_stopping = True              # exactly what _on_timer sets when loop.done
+    win._run_btn.setChecked(False)         # -> _on_run_toggled(False), auto-stop path
+    assert win._src_probe is win._probe    # scrub source stays LIVE (no eager reconstruct)
+    assert win._recon_key is None          # reconstruct never ran -> no GUI freeze
+
+
 def test_simapp_has_synops_dock(qapp):
     win = SimApp(CHAMP)
     assert "SynOps" in win._docks and len(win._docks) == 14
