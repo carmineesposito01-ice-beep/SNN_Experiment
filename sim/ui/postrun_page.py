@@ -97,7 +97,6 @@ class PostRunPage(QWidget):
         self._bars["safe"] = self._hbars(plot, ["min TTC", "DRAC", "brake m."])
         plot.addLine(x=1.0, pen=pg.mkPen("#888", style=Qt.DashLine))   # danger index: 1.0 = the safety limit
         plot.setXRange(0.0, 2.0, padding=0)                            # fixed scale so the three bars are comparable
-        self._safe_plot = plot
         grid.addWidget(c, 0, 1); self._cards.append(c)
 
         c, plot = self._card("Comfort", [("RMS accel", "rms_accel", " m/s²"), ("max decel", "max_decel", " m/s²"),
