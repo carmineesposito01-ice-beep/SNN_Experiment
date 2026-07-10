@@ -257,6 +257,8 @@ class SimApp(QMainWindow):
         idx = int(idx)
         if idx == 1:
             self._run_btn.setChecked(False)       # pause the live sim when entering analysis mode
+        else:
+            self._meso_page.road.stop()           # stop the analysis playback when returning to Live
         self._mode_stack.setCurrentIndex(idx)
         if self._mode_sel.currentIndex() != idx:
             self._mode_sel.blockSignals(True)
@@ -271,6 +273,7 @@ class SimApp(QMainWindow):
         self._meso_page.string_stability.set_metrics(m)
         self._meso_page.space_time.set_rec(rec)
         self._meso_page.speed_wave.set_rec(rec)
+        self._meso_page.road.set_run(rec)
 
     def _run_ring(self):
         pts = run_fundamental_diagram(self._champ, _PARAMS_GT, self._sweep_densities,

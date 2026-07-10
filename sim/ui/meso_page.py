@@ -6,6 +6,7 @@ from PySide6.QtWidgets import (QComboBox, QGridLayout, QHBoxLayout, QLabel, QPus
 
 from sim.ui.meso_panels import (FundamentalDiagramPanel, SpaceTimePanel, SpeedWavePanel,
                                 StringStabilityPanel)
+from sim.ui.meso_road import PlatoonRoadView
 
 
 class MesoMacroPage(QWidget):
@@ -22,6 +23,8 @@ class MesoMacroPage(QWidget):
             controls.addWidget(w)
         controls.addStretch(1)
         root.addLayout(controls)
+        self.road = PlatoonRoadView()                      # platoon road view (top strip)
+        root.addWidget(self.road, stretch=0)
         self._grid = QGridLayout()
         self.string_stability = StringStabilityPanel()    # meso: string stability |H|_i
         self.speed_wave = SpeedWavePanel()                 # meso: velocity waves v(t)

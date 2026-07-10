@@ -319,6 +319,17 @@ def test_simapp_meso_scenario_selector(qapp):
     assert len([c for c in st if c.getData()[0] is not None and len(c.getData()[0]) > 0]) == 4
 
 
+def test_simapp_run_platoon_feeds_road(qapp):
+    win = SimApp(CHAMP)
+    win.set_mode(1); win._meso_page._n_spin.setValue(5)
+    win._run_platoon()
+    assert len(win._meso_page.road._cars) == 5           # road built with one car per vehicle
+    win._meso_page.road._play_btn.setChecked(True)
+    assert win._meso_page.road._timer.isActive()
+    win.set_mode(0)                                       # returning to Live stops the playback
+    assert not win._meso_page.road._timer.isActive()
+
+
 def test_simapp_has_synops_dock(qapp):
     win = SimApp(CHAMP)
     assert "SynOps" in win._docks and len(win._docks) == 14
