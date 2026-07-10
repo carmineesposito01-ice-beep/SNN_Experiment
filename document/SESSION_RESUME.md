@@ -19,7 +19,7 @@
 - `docs/superpowers/2026-07-09-phase3-qa-perf-report.md` — QA + sessione ottimizzazione (numeri prima/dopo).
 - Memoria assistente `cf-fsnn-parallel-tracks.md` (riga Simulator) — contesto supplementare.
 
-**Fatto** (tutto committato+pushato su `origin/Simulator`; **121 test verdi**, core congelato bit-identico):
+**Fatto** (tutto committato+pushato su `origin/Simulator`; **130 test verdi**, core congelato bit-identico):
 - **MVP v1** + **Fase 1** (leggibilità param) + **Fase 2** (shell dockable, 4 preset, persistenza) + **NetViz** → **grafo node-link** (tragitti attivi bianchi).
 - **Fase 3a** (Trajectory+Safety) · **3b.1** (time-scrub) · **3b-resto** (deep-scrub oltre-buffer + event-timeline + neuron-inspector, 14 dock).
 - **Dock SynOps → ENERGIA (pJ)**: SNN (`SynOps×E_AC 0.9pJ`) vs ANN densa (`MAC×E_MAC 4.6pJ`, ricorrenza H·H) = ~14.5× (mostra AC<MAC, non il conteggio).
@@ -27,10 +27,12 @@
 - **Selettore campioni** (swap live tra i 4: Raffaello/Leonardo=BPTT, Donatello/Michelangelo=EventProp).
 - **Meso/Macro ✅ (T1–T5 + page v2)**: toggle Live↔Meso/Macro; forward **BATCHATO** family-aware (tutti-4; golden `batch n=1 == mono-veicolo`) via hook **`forward=` additivo** su `platoon_eval` (report intatti). Pagina = **strada plotone** (N auto colorate per velocità, slider+Play sul run REGISTRATO) in cima + **2×2**: **string-stability · onde di velocità v(t)** (attenuazione stop&go) **· spazio-tempo x(t) · diagramma fondamentale Q/V**; **selettore scenario** pilota la testa col `v_leader` scelto. v2 (`7fc4c2c`..`47193dd`): base DRY `_MultiCurvePanel`, `PlatoonRoadView` (`sim/ui/meso_road.py`), rimosso `PlatoonParamsPanel`+`rec['params']` di T4 (core bit-identico). Render-verify BPTT(head→tail 0.07)+EventProp(0.315) su stop_and_go.
 
-**PROSSIMA AZIONE: Fase 4** (spec+plan `docs/superpowers/{specs,plans}/2026-07-10-meso-page-v2*` chiusi): **seal post-run**
-(un episodio) + **A/B float-vs-fixed** (⚠️ serve un forward fixed-point Qm.n che NON esiste ancora — scoparlo prima) +
-**export CSV/PNG** generico. Design prima del codice (brainstorming→writing-plans). Poi **merge `Simulator`→`main`**
-(coordinare col track `Simulink_Importer`).
+**Fase 4 (post-run seal + export) FATTA** (`aa656ef`→`3569017`, spec+plan `2026-07-10-postrun-mode-export*`): **3° modo**
+Post-run = report card episodio (esito·sicurezza·comfort·efficienza·rete) da accumulatore incrementale `EpisodeSummary`
+(`sim/ui/episode.py`, O(1)/tick, niente reconstruct) + `PostRunPage`; **File → Export…** (CSV episodio + PNG finestra).
+Più **fix freeze fine-episodio** (`d0a70ec`) + **dock a tutto schermo** (`d4c24fa`). **PROSSIMA AZIONE: A/B float-vs-fixed**
+(⚠️ serve un forward fixed-point Qm.n che NON esiste ancora — scoparlo prima, magari portando dal track HDL/Simulink_Importer).
+Poi **merge `Simulator`→`main`** (coordinare col track `Simulink_Importer`).
 
 **⚠️ 2 GOTCHA cf_sim (LAPACK/OpenMP):** `np.linalg.matrix_rank` **e** `np.polyfit`/`lstsq` fanno **abort OMP #15**
 (OpenMP bundled di numpy vs Intel di torch; i test che non chiamano LAPACK non lo vedono). **Mai LAPACK nell'app** —

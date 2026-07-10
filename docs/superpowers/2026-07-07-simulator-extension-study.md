@@ -190,8 +190,13 @@ The core already computes these but shows none of them:
   `v_leader`. Note: this reintroduces a batch "analysis mode" that §0.1 had dropped — a later user
   decision, reconciled by keeping the core frozen and `platoon_eval` report-compatible. Spec+plans
   `2026-07-09-meso-macro-analysis-mode*`, `2026-07-10-meso-page-v2*`. 121 sim tests green; core bit-identical.
-- **Phase 4 — Post-run seal (one episode) + float-vs-fixed A/B + optional export.** Fixed-point SW
-  model path; same-seed overlay; generic CSV/PNG.
+- **Phase 4 — post-run seal + export ✅ DONE (2026-07-10); float-vs-fixed A/B deferred.** Third mode
+  (Live/Meso-Macro/**Post-run**) = a report card of the one episode just run (esito · safety · comfort ·
+  efficiency/energy · network), fed by an **incremental `EpisodeSummary`** accumulator (`sim/ui/episode.py`,
+  O(1)/tick, buffer-independent, no reconstruct) + `PostRunPage`; **File → Export…** = episode CSV +
+  window PNG. Spec+plan `2026-07-10-postrun-mode-export*`; 130 sim tests green. **Deferred: float-vs-fixed
+  A/B** — needs a fixed-point Qm.n SW forward that does not exist yet (candidate: port from the
+  Simulink_Importer/HDL track).
 - **Phase 5 (ambitions).** GT sliders / live UKF re-identification, video/GIF, scenario form editor,
   a–b ellipse (separate estimator module), optional QThread worker.
 

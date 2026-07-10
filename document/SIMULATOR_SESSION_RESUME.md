@@ -13,7 +13,7 @@
 ## 🎯 Stato attuale (2026-07-10)
 
 **Worktree/branch**: `.worktrees/Simulator` on branch **`Simulator`** (it IS a git repo). All work
-committed + pushed to `origin/Simulator`. **121 sim tests green.** Core bit-identical.
+committed + pushed to `origin/Simulator`. **130 sim tests green.** Core bit-identical.
 
 **What it is**: a live plug&play GUI "digital twin" of the SNN car-following controller (ALIF,
 **4 inputs → 32 hidden → 5 params**, po2 weights, target FPGA PYNQ-Z1). **~800 weights** = the
@@ -41,19 +41,26 @@ perf via a 5-agent workflow — per-paint −30% (NetState freeze/LUT), redraw t
   diagram; also fixed a latent SpaceTimePanel blank-panel bug) · **v2** `7fc4c2c`→`f003916`
   (`_MultiCurvePanel` base + SpeedWavePanel; params panel + `rec['params']` removed; scenario selector;
   `PlatoonRoadView`). Spec+plan `2026-07-09-meso-macro-analysis-mode*` + `2026-07-10-meso-page-v2*`.
-- ③ **Phase 4** — NOT STARTED: post-run seal (one episode) + float-vs-fixed A/B (needs a fixed-point
-  Qm.n forward, not built) + CSV/PNG export.
+- ③ **Phase 4** — **PARTLY DONE**: **post-run seal + CSV/PNG export** ✅ (`aa656ef`→`3569017`, spec+plan
+  `2026-07-10-postrun-mode-export*`). Third mode (Live/Meso-Macro/**Post-run**) with a report card
+  (esito·sicurezza·comfort·efficienza·rete) fed by an **incremental `EpisodeSummary`** accumulator
+  (`sim/ui/episode.py`, O(1)/tick, no reconstruct) + `PostRunPage` (`sim/ui/postrun_page.py`); **File →
+  Export…** (episode CSV + window PNG). **REMAINS: float-vs-fixed A/B** (⚠️ needs a fixed-point Qm.n SW
+  forward that does NOT exist yet — maybe port from the Simulink_Importer/HDL track).
+- **Bug/polish (post-v2)**: end-of-episode **freeze fixed** (`d0a70ec`, auto-stop no longer does the eager
+  reconstruct → 784ms→11ms) + **dock maximize** on title double-click (`d4c24fa`).
 
 ---
 
-## ▶️ Cosa fare adesso (RESUME — pick up at Phase 4)
+## ▶️ Cosa fare adesso (RESUME — pick up at the float-vs-fixed A/B)
 
-Meso/Macro is DONE (T1–T5 + v2, render-verified BPTT + EventProp on stop_and_go). Next:
+Meso/Macro DONE + v2; freeze fixed; dock-maximize added; **Phase 4 post-run seal + export DONE**. Only
+one Phase-4 piece remains, then merge:
 
 1. `git -C "<worktree>" status` — must be clean on `Simulator` (pull if a remote is ahead).
-2. **③ Phase 4** — post-run seal of one episode + **float-vs-fixed A/B** (⚠️ needs a fixed-point Qm.n SW
-   forward that does NOT exist yet — scope it first) + generic CSV/PNG export. Design-before-code:
-   brainstorming → spec → plan → TDD.
+2. **Float-vs-fixed A/B** (the last Phase-4 piece): ⚠️ needs a **fixed-point Qm.n SW forward** that does
+   NOT exist in the simulator yet — scope it first (maybe port the fixed-point logic from the
+   `Simulink_Importer`/HDL track, which already did it for the FPGA). Design-before-code.
 3. Then **merge `Simulator`→`main`** (coordinate with the `Simulink_Importer` track).
 
 **Meso page map** (reference): `sim/ui/meso_page.py` (scenario selector + road strip + 2×2 grid) ·
@@ -131,4 +138,5 @@ Meso/Macro is DONE (T1–T5 + v2, render-verified BPTT + EventProp on stop_and_g
   + event-timeline + inspector · **SynOps→energy dock** · **QA + optimization** · **champion selector**.
 - **Meso/Macro mode** ✅ (T1–T5 `4736b8b`→`628c20c`,`d9b16ff` + **page v2** `7fc4c2c`→`f003916`:
   `_MultiCurvePanel` base + velocity-wave `v(t)` panel replacing params, scenario selector driving the
-  platoon head, `PlatoonRoadView` N-car road with slider+Play) → **NOW: Phase 4** → **merge to main**.
+  platoon head, `PlatoonRoadView` N-car road with slider+Play) + freeze-fix + dock-maximize +
+  **Phase 4 post-run seal + export** (`aa656ef`→`3569017`) → **NOW: Phase 4 float-vs-fixed A/B** → **merge to main**.
