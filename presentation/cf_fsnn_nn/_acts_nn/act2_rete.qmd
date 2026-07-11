@@ -1,1 +1,244 @@
-<!-- act2_rete — popolato nei task successivi -->
+# Parte 2 — La nostra rete (CF-SNN) {.divider .act2}
+
+## Algoritmo PINN — cos'è e perché {.act2}
+::: {.explain}
+**Cos'è.** Un Physics-Informed NN: la rete non fitta i parametri (non osservabili) ma li fa passare nel modello fisico, e allena il confronto con l'accelerazione osservata. **Perché qui:** i 5 parametri ACC-IIDM non sono misurabili direttamente — la fisica fa da ponte e da regolarizzatore.
+:::
+
+
+::: {.progress-dots}
+[]{.dot .filled} []{.dot} []{.dot}
+:::
+
+::: {.twocol}
+::: {.vis}
+[▶ animato nel deck]{.pill}
+![](assets/manim/pinn_loop.gif)
+:::
+::: {.side}
+::: {.explain}
+La rete **non fitta i parametri** (non osservabili). Chiude un [anello]{.accent}: la traiettoria entra nella
+SNN → 5 parametri → il modello fisico ACC-IIDM ricostruisce l'accelerazione $\hat a$ → il confronto con
+quella osservata forma la **loss**, il cui gradiente aggiorna la rete.
+:::
+::: {.eq .math}
+$$ \text{traiettoria} \xrightarrow{\ \text{SNN}\ } [v_0,T,s_0,a,b] \xrightarrow{\ \text{ACC-IIDM}\ } \hat a $$
+$$ \hat a \;\overset{?}{\approx}\; a_\text{obs} \;\Rightarrow\; \mathcal{L} \xrightarrow{\ \nabla\ } \text{aggiorna la rete} $$
+:::
+::: {.notes}
+La rete non fitta i parametri direttamente (non sono osservabili): chiude un anello traiettoria → SNN → 5 parametri → ACC-IIDM → â → confronto con a osservata → loss → gradiente. La loss combina più termini pesati (dati, coerenza fisica, ecc.), ma l'ablazione mostra che azzerare i termini fisici muove la validazione di pochissimo: il collo di bottiglia è l'architettura/gradiente, non la formulazione PINN.
+:::
+:::
+:::
+
+::: {.footerbar}
+Parte 2 · Approccio PINN
+:::
+
+## Architettura {.act2}
+
+::: {.progress-dots}
+[]{.dot .filled} []{.dot} []{.dot}
+:::
+
+::: {.twocol}
+::: {.vis}
+[▶ animato nel deck]{.pill}
+![](assets/manim/architecture_flow.gif)
+:::
+::: {.side}
+::: {.explain}
+Ibrida: continuo → spiking → continuo, in 864 parametri.
+
+- **INPUT** (4) — i segnali V2X entrano come [corrente continua]{.accent} ($I=Wx$), non spike.
+- **HIDDEN** (32) — neuroni **ALIF spiking**: l'unico strato che spara.
+- **OUTPUT** (5) — integratori a perdita (LI), senza soglia; il readout è la tensione.
+
+Ogni passo Δt = 0.1 s → **10 tick interni** di assestamento.
+:::
+::: {.notes}
+Dettaglio esteso sui tre strati. INPUT (4): i segnali V2X normalizzati entrano come corrente continua I = W x, non come treni di spike. HIDDEN (32): neuroni ALIF spiking con loop ricorrente a basso rango — è l'unico strato che effettivamente spara. OUTPUT (5): integratori a perdita (LI) continui, senza soglia; il readout è direttamente la tensione di membrana. Dopo l'output un decode σ mappa ogni tensione nel suo range fisico. Ogni passo fisico Δt = 0.1 s è elaborato con 10 tick interni a input costante: quei tick sono tempo di assestamento della dinamica, non nuova informazione. Quindi 50 passi fisici corrispondono a 500 tick interni.
+:::
+::: {.eq}
+**864 pesi** = `fc` 128 + ricorrenza `U·V` 512 + soglie ALIF 64 + `out` 160
+:::
+:::
+:::
+
+::: {.footerbar}
+Parte 2 · Architettura
+:::
+
+## Architettura — Layer d'ingresso {.act2}
+
+::: {.twocol}
+::: {.vis}
+![](figures/eq_norm.png)
+:::
+::: {.side}
+::: {.explain}
+I **4 segnali V2X** (gap `s`, velocità `v`, Δv, velocità leader) sono **normalizzati** e iniettati come
+**corrente continua** `I = W·x` nello strato nascosto — **non** come spike. È il ponte continuo→spiking.
+:::
+::: {.eq .math}
+$$ x_\text{norm} = \frac{x}{x_\text{scala}}, \qquad I_\text{in} = W_\text{fc}\,x_\text{norm} $$
+:::
+:::
+:::
+
+::: {.footerbar}
+Parte 2 · layer d'ingresso
+:::
+
+## Architettura — Neurone ALIF {.act2}
+
+::: {.progress-dots}
+[]{.dot .filled} []{.dot} []{.dot}
+:::
+
+::: {.twocol}
+::: {.vis}
+[▶ animato nel deck]{.pill}
+![](assets/manim/alif_fatigue_dark.gif)
+:::
+::: {.side}
+::: {.explain}
+A ogni tick il neurone [adaptive-LIF]{.accent} integra la corrente, perde carica per leak, spara sopra la
+soglia effettiva e *affatica* quella soglia a ogni spike. `base_threshold` (1.5) e `thresh_jump` (0.5)
+sono **apprendibili, per-neurone (32 + 32)**. Reset sottrattivo, hardware-friendly.
+:::
+::: {.notes}
+Approfondimento sul neurone e sul perché delle scelte. base_threshold init 1.5 e thresh_jump init 0.5 sono parametri apprendibili, per-neurone (32 + 32 valori), e NON sono quantizzati po2 — restano fp. Il reset sottrattivo significa nessun azzeramento forzato della membrana e nessun divisore, quindi resta amichevole verso l'hardware FPGA. Punto importante sul training: il canale-soglia è l'unica via attraverso cui base e jump ricevono gradiente e imparano, perciò il termine di reset NON va staccato dal grafo di autograd, altrimenti quei due parametri smettono di aggiornarsi.
+:::
+::: {.eq .math}
+$$ \text{integra + leak:}\quad V \leftarrow V - \tfrac{V}{8} + I_\text{in} + I_\text{rec} $$
+$$ \text{soglia efficace:}\quad \theta_\text{eff} = \text{base} + \max(0,\ \text{fatica}) $$
+$$ \text{spike:}\quad S = \mathbb{1}[\,V \ge \theta_\text{eff}\,] $$
+$$ \text{fatica (adattamento):}\quad \text{fatica} \leftarrow \text{fatica} - \tfrac{\text{fatica}}{8} + S\cdot\text{jump} $$
+$$ \text{reset sottrattivo:}\quad V \leftarrow V - S\cdot\theta_\text{eff} $$
+:::
+:::
+:::
+
+::: {.footerbar}
+Parte 2 · Il neurone ALIF
+:::
+
+## Architettura — Low-Rank {.act2}
+
+::: {.progress-dots}
+[]{.dot .filled} []{.dot} []{.dot}
+:::
+
+::: {.twocol}
+::: {.vis}
+[▶ animato nel deck]{.pill}
+![](assets/manim/low_rank.gif)
+:::
+::: {.side}
+::: {.explain}
+La ricorrenza piena 32×32 costerebbe **1024 moltiplicazioni**/tick. La spezziamo in due matmul piccole via un
+collo di bottiglia a [8 modi]{.accent}:
+
+- **V comprime** i 32 spike → 8 modi ($256$ molt.).
+- **U espande** gli 8 modi → 32 neuroni ($256$ molt.).
+- **512 vs 1024** → [dimezza i moltiplicatori]{.accent}; $U\!\cdot\!V$ non si forma mai.
+
+Il rango-8 fa anche da *regolarizzatore* (ρ, slide dopo).
+:::
+::: {.notes}
+Dettaglio sulla fattorizzazione. U è 32×8 e V è 8×32, quindi il feedback dei 32 neuroni è forzato attraverso un collo di bottiglia a soli 8 modi: prima si proietta lo stato sui 8 modi tramite V, poi lo si rilegge tramite U. Il calcolo avviene come due matmul in sequenza (256 + 256 = 512 moltiplicazioni), senza mai formare esplicitamente il prodotto U·V (che vanificherebbe il risparmio). Init ortogonale con gain 0.2. È esattamente qui, sul prodotto U·V, che vive il raggio spettrale ρ(U·V) discusso nella slide successiva.
+:::
+::: {.eq .math}
+$$ m = V\,s_\text{prev}\ (8{\times}32),\qquad I_\text{rec} = U\,m\ (32{\times}8) $$
+$$ 256 + 256 = 512 \ \text{vs}\ 1024\ \text{(matrice piena)} $$
+:::
+:::
+:::
+
+::: {.footerbar}
+Parte 2 · Ricorrenza low-rank
+:::
+
+## Architettura — Layer d'uscita {.act2}
+
+::: {.twocol}
+::: {.vis}
+![](figures/eq_li.png)
+:::
+::: {.side}
+::: {.explain}
+**5 neuroni LI** (Leaky-Integrate, senza soglia): non sparano, **integrano** la corrente e il readout è la
+loro **tensione** di membrana. Una **sigmoide** vincola ogni uscita nel suo intervallo prima del decode.
+:::
+::: {.eq .math}
+$$ V^\text{out} \leftarrow \beta\,V^\text{out} + I, \qquad o = \sigma(V^\text{out}) \in (0,1) $$
+:::
+:::
+:::
+
+::: {.footerbar}
+Parte 2 · layer d'uscita (LI)
+:::
+
+## Architettura — Decode {.act2}
+
+::: {.twocol}
+::: {.vis}
+[▶ prima/dopo — placeholder]{.pill}
+![](figures/eq_decode.png)
+:::
+::: {.side}
+::: {.explain}
+Il **decode** mappa le 5 uscite normalizzate `(0,1)` nel **range fisico** di ciascun parametro
+`[v0, T, s0, a, b]` — un riscalamento affine per-canale. Ultimo anello prima del modello ACC-IIDM.
+:::
+::: {.eq .math}
+$$ p_k = p_k^\text{min} + o_k\,(p_k^\text{max} - p_k^\text{min}) $$
+:::
+:::
+:::
+
+::: {.notes}
+Placeholder: in rifinitura, visual "prima/dopo" del decode (uscita normalizzata → valore fisico).
+:::
+
+::: {.footerbar}
+Parte 2 · decode (uscita → fisico)
+:::
+
+## Ottimizzazioni — pesi Po2 + ricorrenza {.act2}
+
+::: {.progress-dots}
+[]{.dot .filled} []{.dot} []{.dot}
+:::
+
+::: {.twocol}
+::: {.vis}
+[▶ animato nel deck]{.pill}
+![](assets/manim/ste_po2.gif)
+:::
+::: {.side}
+::: {.explain}
+I pesi sono vincolati a [potenze di due]{.accent} (**13 livelli**), così su FPGA moltiplicare per $2^k$ è
+un bit-shift. Round/clamp/mask non sono derivabili: lo **Straight-Through Estimator** fa forward col peso
+quantizzato, backward come identità. Costo misurato sul plateau: solo ~0.2%.
+:::
+::: {.notes}
+Dettagli sulla quantizzazione. L'esponente delle potenze di due è vincolato in [-4, 1], e i pesi vengono azzerati se |w| < 2^-5 (dead-band): questo produce esattamente 13 livelli, {±1/16, ±1/8, ±1/4, ±1/2, ±1, ±2, 0}. Sullo Straight-Through Estimator: in forward si usa il peso quantizzato w_q, mentre in backward il gradiente passa come identità e aggiorna il peso fp32 grezzo sottostante — è lo stesso identico trucco usato per il gradiente surrogato dei neuroni spiking. Il costo di accuratezza di tutta questa quantizzazione, misurato al plateau, è solo circa lo 0.2%: praticamente gratis rispetto al guadagno hardware.
+:::
+::: {.eq .math}
+$$ w_q = \text{sign}(w)\cdot 2^{\text{clamp}(\text{round}(\log_2|w|),\,-4,\,1)}\cdot\mathbb{1}[\,|w|>2^{-5}\,] $$
+$$ \text{forward: } y = f(w_q) \qquad \text{backward: } \tfrac{\partial\mathcal{L}}{\partial w} \leftarrow \tfrac{\partial\mathcal{L}}{\partial w_q} $$
+$$ \{\pm\tfrac1{16},\pm\tfrac18,\pm\tfrac14,\pm\tfrac12,\pm1,\pm2,\,0\}\ \Rightarrow\ 13\ \text{livelli} $$
+:::
+:::
+:::
+
+::: {.explain}
+**Seconda ottimizzazione: la ricorrenza low-rank.** Il feedback 32×32 (1024 molt.) è fattorizzato in `U·V` rango-8 (512 molt.), dimezzando i moltiplicatori — e il rango-8 fa da regolarizzatore (ρ, Parte 5).
+:::
+
+::: {.footerbar}
+Parte 2 · ottimizzazioni
+:::
