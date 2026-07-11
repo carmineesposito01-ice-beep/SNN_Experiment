@@ -150,14 +150,14 @@ Parte 3 · Risultati BPTT
     <polyline id="ev-fwd" class="ev-fwd" points=""/>
     <polyline id="ev-curve" class="ev-curve" points=""/>
     <circle id="ev-cursor" class="ev-cursor" cx="30" cy="128" r="3.2"/>
-    <text id="ev-xt" class="ev-xt" x="196" y="28" opacity="0">x(T) → λ(T)</text>
+    <text id="ev-xt" class="ev-xt" x="178" y="28" opacity="0">uscita → errore → λ</text>
   </svg>
   <div class="ev-readout">
     <span id="ev-r1">V = 0.00</span>
     <span>∂ℒ/∂W = <b id="ev-grad">0.00</b></span>
   </div>
   <div class="ev-update" id="ev-update">forward: la rete calcola V e gli spike</div>
-  <div class="ev-foot">λ(T) parte dallo <b>stato finale x(T)</b>; poi integra <b>indietro</b> (T→0): leak tra gli spike, salto a ogni spike. Memoria ∝ <b>#spike</b>.</div>
+  <div class="ev-foot">λ (aggiunto di <b>V</b>) parte da <b>0</b>; l'errore all'uscita entra agli <b>spike</b>; integra <b>indietro</b> (T→0). In letteratura memoria ∝ <b>#spike</b>.</div>
 </div>
 <script>
 (function(){
@@ -209,7 +209,7 @@ Parte 3 · Risultati BPTT
       if(g("ev-update"))g("ev-update").textContent="forward: la rete calcola V e gli spike — nessun gradiente ancora";
       if(p.spk){ var s=g("ev-sp"+sp); if(s)s.classList.add("hit"); sp++; }
       fi++;
-      if(fi>=F.length){ mode="pre"; if(g("ev-r1"))g("ev-r1").textContent="x(T) → errore → λ"; if(g("ev-xt"))g("ev-xt").setAttribute("opacity","1"); if(g("ev-phase"))g("ev-phase").textContent="l'errore all'uscita avvia λ"; if(g("ev-update"))g("ev-update").textContent="lo stato finale x(T) dà l'errore ∂ℒ/∂s che avvia l'adjoint"; t=setTimeout(step,1500); return; }
+      if(fi>=F.length){ mode="pre"; if(g("ev-r1"))g("ev-r1").textContent="errore ∂ℒ/∂s → λ"; if(g("ev-xt"))g("ev-xt").setAttribute("opacity","1"); if(g("ev-phase"))g("ev-phase").textContent="l'errore all'uscita avvia λ"; if(g("ev-update"))g("ev-update").textContent="l'uscita dà l'errore ∂ℒ/∂s; l'adjoint λ parte da 0"; t=setTimeout(step,1500); return; }
       t=setTimeout(step,175); return;
     }
     if(mode==="pre"){ L.classList.add("bwd"); mode="bwd"; bi=0; t=setTimeout(step,220); return; }
@@ -248,20 +248,19 @@ Parte 3 · Risultati BPTT
 :::
 ::: {.side}
 ::: {.explain}
-L'alternativa **esatta** al surrogato — ha prodotto il candidato al deploy. Una variabile *adjoint* $\lambda$
-integrata [all'indietro nel tempo]{.accent} ($T\to0$) che **salta solo agli spike**:
+L'alternativa **esatta** al surrogato. L'aggiunto **λ** (del potenziale $V$) parte da **0** e torna [indietro]{.accent} ($T\to0$): tra gli spike **decade**, a ogni spike entra l'**errore** $\partial\mathcal{L}/\partial s$ (uscita − target). Qui `drive` = corrente in ingresso e $V_k=\alpha_m V_{k-1}+\text{drive}_k$.
 
-- gradiente [*esatto*]{.accent}, non distorto dal surrogato;
-- tra gli spike solo leak → memoria $\propto$ **#spike**, non $T$;
+- gradiente [*esatto*]{.accent} — derivata reale al crossing, `drive`$-\theta\approx V'(t^*)$;
 - **contrattivo** se ρ<1 (l'adjoint converge).
 :::
 ::: {.eq .math}
-$$ \text{tra gli spike:}\quad \lambda_k = \alpha_m\,\lambda_{k+1}\qquad(\alpha_m=\tfrac{7}{8},\ \text{solo leak}) $$
-$$ \text{allo spike:}\quad \lambda_k = \underbrace{\alpha_m\,\lambda_{k+1}}_{\text{leak}} + \underbrace{\tfrac{\lambda_{k+1}+\partial\mathcal{L}/\partial s}{\text{drive}-\theta}}_{\text{entra l'errore }\partial\mathcal{L}/\partial s} $$
-$$ \text{pesi:}\quad \tfrac{\partial\mathcal{L}}{\partial W}\mathrel{+}= -\,\lambda_k\,x_k^{\top}\qquad(\text{somma su tutti i tick}) $$
+$$ \text{forward:}\ \ V_k=\alpha_m V_{k-1}+\text{drive}_k,\quad V_k>\theta\Rightarrow s_k{=}1,\quad V_k\mathrel{-}=\theta $$
+$$ \lambda\ (\text{aggiunto di }V)\ \text{parte da }0;\qquad \text{tra gli spike:}\ \ \lambda_k=\alpha_m\lambda_{k+1} $$
+$$ \text{allo spike:}\ \ \lambda_k=\underbrace{\alpha_m\lambda_{k+1}}_{\text{leak}}+\underbrace{\tfrac{\lambda_{k+1}+\partial\mathcal{L}/\partial s}{\text{drive}-\theta}}_{\text{errore allo spike}} $$
+$$ \text{pesi:}\ \ \tfrac{\partial\mathcal{L}}{\partial W}\mathrel{+}=-\lambda_k\,x_k^{\top} $$
 :::
 ::: {.eqnote}
-Il gradiente è una **somma sui tick** (come BPTT), ma λ riceve **informazione nuova solo agli spike** — tra gli spike **decade** in modo analitico → si processano **solo gli spike**: gradiente **esatto**, **memoria ∝ #spike**.
+Tra gli spike λ è **analitica** (solo leak): in letteratura l'adjoint costa **O(#spike)**, non O(T·N) — vantaggio per l'hardware neuromorfico.
 :::
 ::: {.notes}
 EventProp (Wunderlich & Pehle 2021) calcola il gradiente ESATTO di una rete spiking, senza l'approssimazione del surrogato. Introduce variabili adjoint inizializzate al tempo finale T dalla loss e integrate all'indietro (da T verso 0). Tra uno spike e l'altro l'adjoint evolve solo per leak; l'informazione di gradiente entra come un SALTO agli istanti di spike (event-driven). Costo O(#spike), non O(T). Contrattivo per costruzione: l'adjoint propaga attraverso Rᵀ e converge solo se ρ<1 — lo stesso vincolo spettrale che rende lo stato fixed-point limitato. I due champion EventProp hanno ρ<1 e 0 neuroni morti; uno è il candidato al deploy.
