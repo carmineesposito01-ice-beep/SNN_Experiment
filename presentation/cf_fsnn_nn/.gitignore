@@ -1,0 +1,7 @@
+_output/
+.quarto/
+/.quarto/
+**/*.quarto_ipynb
+__pycache__/
+slides_nn.html
+slides_nn_files/

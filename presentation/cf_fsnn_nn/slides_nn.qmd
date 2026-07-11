@@ -1,0 +1,28 @@
+---
+title: "CF-SNN — Rete spiking per il Car-Following"
+subtitle: "AI-acceleration su FPGA · dai segnali V2X ai parametri di controllo"
+format:
+  revealjs:
+    theme: [../_shared/theme/cf_dark.scss, cf_slim.scss]
+    slide-number: c/t
+    navigation-mode: linear
+    html-math-method: katex
+    fig-align: center
+    embed-resources: false
+    logo: assets/img/kineton_logo_placeholder.svg
+    include-after-body: fit-equations.js
+---
+
+{{< include _acts_nn/act0_progetto.qmd >}}
+
+{{< include _acts_nn/act1_snn.qmd >}}
+
+{{< include _acts_nn/act2_rete.qmd >}}
+
+{{< include _acts_nn/act3_training.qmd >}}
+
+{{< include _acts_nn/act4_risultati.qmd >}}
+
+{{< include _acts_nn/act5_fpga.qmd >}}
+
+{{< include _acts_nn/act6_verdetto.qmd >}}
