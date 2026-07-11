@@ -45,3 +45,16 @@ $font-size-root: 18px;
 // Paragrafi "nudi" (non dentro .explain/.card/.eq): stessa scala del resto → niente testo gigante
 .reveal .twocol .side > p { font-size: 0.56em; line-height: 1.34; margin: 5px 0; }
 .reveal .slides section > p { font-size: 0.56em; line-height: 1.36; }
+// Animazione PINN step-through (fragment): vettori/valori che scorrono nella pipeline
+.reveal .pinn { display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 0.5em; line-height: 1.22; margin-top: 30px; }
+.reveal .pinn-row > p { margin: 1px 0; }
+.reveal .pinn-row { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.reveal .pinn-box { display: inline-block; padding: 4px 12px; border-radius: 7px; border: 1.5px solid #6C7683; background: #1B2029; font-weight: 700; color: #EAF1F7; }
+.reveal .pinn-box.net { border-color: #56B4E9; }
+.reveal .pinn-box.mod { border-color: #E69F00; }
+.reveal .pinn-box.loss { border-color: #CC79A7; }
+.reveal .pinn-vec { font-family: ui-monospace, 'Courier New', monospace; color: #9FD3F2; font-size: 0.94em; }
+.reveal .pinn-vec.par { color: #FFD27A; }
+.reveal .pinn-eq { font-family: ui-monospace, 'Courier New', monospace; color: #C7D0DA; font-size: 0.9em; }
+.reveal .pinn-ar { color: #8A93A0; font-size: 1.05em; line-height: 1; }
+.reveal .pinn-back { color: #2ECC71; font-weight: 700; margin-top: 2px; }

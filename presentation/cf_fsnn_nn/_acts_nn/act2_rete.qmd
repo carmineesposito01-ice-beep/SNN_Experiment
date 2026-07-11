@@ -8,8 +8,40 @@
 
 ::: {.twocol}
 ::: {.vis}
-[▶ animazione PINN — clic per sfogliare i passaggi (da rifare)]{.pill}
-![](assets/manim/pinn_loop.gif)
+[▶ clic per sfogliare i passaggi]{.pill}
+
+::: {.pinn}
+::: {.fragment .pinn-row}
+[Traiettoria — V2X]{.pinn-box}
+
+[s=45 · v=20 · Δv=−2 · vₗ=22]{.pinn-vec}
+:::
+::: {.fragment .pinn-ar}
+↓
+:::
+::: {.fragment .pinn-row}
+[Rete]{.pinn-box .net}
+
+[v₀=26.5 · T=1.63 · s₀=2.45 · a=1.01 · b=1.71]{.pinn-vec .par}
+:::
+::: {.fragment .pinn-ar}
+↓
+:::
+::: {.fragment .pinn-row}
+[Modello di car-following]{.pinn-box .mod}
+
+[s\* = s₀+max(0, vT+vΔv∕2√(ab)) ≈ 19.9]{.pinn-eq}
+:::
+::: {.fragment .pinn-ar}
+↓ &nbsp; [â = −0.8 m/s²]{.pinn-vec}
+:::
+::: {.fragment .pinn-row}
+[â vs a_obs(−0.7) → loss ≈ 0.01]{.pinn-box .loss}
+:::
+::: {.fragment .pinn-back}
+↺ gradiente → aggiorna la rete
+:::
+:::
 :::
 ::: {.side}
 ::: {.card}
