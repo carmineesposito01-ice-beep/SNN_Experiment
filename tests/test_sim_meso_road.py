@@ -46,3 +46,22 @@ def test_road_view_play_toggles_timer(qapp):
     assert r._timer.isActive()
     r.stop()
     assert not r._timer.isActive()
+
+
+def test_road_view_highlight_outlines_one_car_and_persists(qapp):
+    r = PlatoonRoadView(); r.set_run(_rec(T=10, N=4))
+    r.highlight(2)
+    assert r._highlighted == 2
+    assert abs(r._cars[2].pen().widthF() - 2.5) < 1e-9 and r._cars[2].pen().color().name() == "#ffffff"
+    assert abs(r._cars[0].pen().widthF() - 1.0) < 1e-9        # others keep the default outline
+    r.render_frame(4)                                         # scrub repaints brush+pos only ->
+    assert abs(r._cars[2].pen().widthF() - 2.5) < 1e-9        # the ring survives
+    r.highlight(None)
+    assert r._highlighted is None and abs(r._cars[2].pen().widthF() - 1.0) < 1e-9
+
+
+def test_road_view_new_run_clears_highlight(qapp):
+    r = PlatoonRoadView(); r.set_run(_rec(T=10, N=4))
+    r.highlight(1)
+    r.set_run(_rec(T=8, N=3))                                 # fresh cars -> selection must not carry over
+    assert r._highlighted is None

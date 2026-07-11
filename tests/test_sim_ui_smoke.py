@@ -91,7 +91,7 @@ def test_dark_theme_applies(qapp):
 # --- Extension Phase 2: dockable shell ---
 def test_simapp_builds_docks(qapp):
     win = SimApp(CHAMP)
-    assert set(win._docks.keys()) == set(DOCK_ORDER)     # 9 docks (Road/NetState/SpikeRate/v_mem/5 params)
+    assert set(win._docks.keys()) == set(DOCK_ORDER)     # Road/NetState/SpikeRate/Input/Trajectory/Safety/Events/Inspector/SynOps + 5 params
     assert visible_docks(win._area) == set(DOCK_ORDER)   # Overview on startup (no layout_path)
 
 
@@ -119,16 +119,16 @@ def test_simapp_status_has_firing(qapp):
 
 def test_simapp_view_toggle_hides_and_shows_dock(qapp):
     win = SimApp(CHAMP)
-    win._set_dock_visible("v_mem", False)
-    assert "v_mem" not in visible_docks(win._area)
-    win._set_dock_visible("v_mem", True)
-    assert "v_mem" in visible_docks(win._area)
+    win._set_dock_visible("Input", False)
+    assert "Input" not in visible_docks(win._area)
+    win._set_dock_visible("Input", True)
+    assert "Input" in visible_docks(win._area)
 
 
 def test_simapp_apply_preset(qapp):
     win = SimApp(CHAMP)
     win.apply_preset("Identificazione")
-    assert "v_mem" not in visible_docks(win._area)
+    assert "Input" not in visible_docks(win._area)
     win.apply_preset("Overview")
     assert visible_docks(win._area) == set(DOCK_ORDER)
 
@@ -355,6 +355,26 @@ def test_simapp_dock_maximize_toggle(qapp):
     win._toggle_maximize("Road")                   # double-click again -> restore
     assert win._maximized is None
     assert len(visible_docks(win._area)) == n0      # previous arrangement restored
+
+
+def test_simapp_maximize_restores_exact_preset_set(qapp):
+    # Regression (the "soft-lock"): under a preset that hides docks, maximize+restore must re-show
+    # EXACTLY the pre-maximize set. The old restore re-added the FULL DOCK_ORDER, and restoreState
+    # leaves docks it doesn't mention in place -> the hidden docks reappear (12 -> 14) and clutter the
+    # layout so other title bars are hard to hit ("can only ever re-maximize that one"). The clean
+    # restore keeps the layout intact, so a DIFFERENT dock still maximizes afterwards.
+    win = SimApp(CHAMP)
+    win.apply_preset("Neuro-debug")
+    before = visible_docks(win._area)
+    assert "Trajectory" not in before and "Safety" not in before   # preset hid these two
+    win._toggle_maximize("Road")
+    assert visible_docks(win._area) == {"Road"}
+    win._toggle_maximize("Road")
+    assert visible_docks(win._area) == before        # preset-hidden docks stay hidden (no drift)
+    win._toggle_maximize("SpikeRate")                # a DIFFERENT dock still maximizes after restore
+    assert visible_docks(win._area) == {"SpikeRate"}
+    win._toggle_maximize("SpikeRate")
+    assert visible_docks(win._area) == before
 
 
 def test_simapp_feeds_episode_summary(qapp):

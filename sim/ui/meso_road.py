@@ -23,6 +23,7 @@ class PlatoonRoadView(QWidget):
         self._rec = None
         self._cars = []
         self._vmax = 1.0
+        self._highlighted = None
         root = QVBoxLayout(self); root.setContentsMargins(0, 0, 0, 0)
         self._view = QGraphicsView()
         self._view.setRenderHint(QPainter.Antialiasing)
@@ -74,6 +75,7 @@ class PlatoonRoadView(QWidget):
         self._vmax = max(1.0, float(np.max(v)))
         self._build_road(float(np.min(x)), float(np.max(x)))
         self._cars = [self._car() for _ in range(x.shape[1])]
+        self._highlighted = None                        # fresh cars -> no selection carried over
         self._slider.setEnabled(True); self._slider.setRange(0, x.shape[0] - 1)
         self._slider.blockSignals(True); self._slider.setValue(0); self._slider.blockSignals(False)
         self.render_frame(0)
@@ -88,6 +90,14 @@ class PlatoonRoadView(QWidget):
             frac = max(0.0, min(1.0, float(v[t, i]) / self._vmax))
             car.setBrush(self._brush_lut[int(frac * 255)])   # index the shared brush LUT (no per-frame alloc)
         self._view.centerOn(float(np.mean(x[t])) * PX_PER_M, 0.0)
+
+    def highlight(self, i):
+        """Outline vehicle i in bold white (others keep the default outline). The pen persists across
+        frames — render_frame only repaints brush + position — so the ring survives scrub/playback."""
+        self._highlighted = i if (i is not None and 0 <= i < len(self._cars)) else None
+        for j, car in enumerate(self._cars):
+            car.setPen(QPen(QColor("#ffffff"), 2.5) if j == self._highlighted
+                       else QPen(QColor("#101010"), 1.0))
 
     def _tick(self):
         self._slider.setValue((self._slider.value() + 1) % (self._slider.maximum() + 1))

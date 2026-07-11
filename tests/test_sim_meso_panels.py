@@ -82,3 +82,52 @@ def test_speed_wave_panel_curves_and_view(qapp):
     assert p.layout().indexOf(p._plot) >= 0              # plot is in the layout (else blank)
     _, y_range = p._plot.getViewBox().viewRange()
     assert y_range[1] > 10.0                             # view fits the data, not stuck at [0,1]
+
+
+def test_fundamental_diagram_unstable_hover_data_and_legend(qapp):
+    # Bug: the red x marks were unexplained. Each carries its wave_std for the hover tooltip, and an
+    # on-panel legend states what the symbol means (stop-and-go unstable density point).
+    p = FundamentalDiagramPanel()
+    p.set_points([
+        {"rho_veh_km": 20.0, "Q_veh_h": 1400.0, "V_m_s": 19.0, "V_km_h": 68.4,
+         "n": 20, "wave_std": 0.1, "unstable": False},
+        {"rho_veh_km": 60.0, "Q_veh_h": 1800.0, "V_m_s": 8.0, "V_km_h": 28.8,
+         "n": 60, "wave_std": 0.9, "unstable": True},
+    ])
+    pts = p._q_unstable.points()
+    assert len(pts) == 1 and abs(pts[0].data() - 0.9) < 1e-9   # wave_std attached -> shown on hover
+    assert "instabile" in p._legend.text().lower()             # symbol explained on the panel
+
+
+def test_meso_curve_click_emits_vehicle_index(qapp):
+    # Feature: a vehicle's curve is clickable -> emits its index (so the page can highlight it).
+    p = SpeedWavePanel()
+    p.set_rec({"v": np.abs(np.cumsum(np.full((10, 4), 1.0), axis=0)) + 5.0})
+    got = []
+    p.sigVehicleClicked.connect(got.append)
+    p._curves[2].sigClicked.emit(p._curves[2], None)     # the signal setCurveClickable fires on click
+    assert got == [2]
+
+
+def test_meso_curve_highlight_bolds_selected_dims_rest(qapp):
+    p = SpaceTimePanel()
+    p.set_rec({"x": np.cumsum(np.full((10, 4), 5.0), axis=0)})
+    p.highlight(1)
+    assert p._highlighted == 1
+    sel = p._curves[1].opts["pen"]
+    assert abs(sel.widthF() - 2.5) < 1e-9 and sel.color().name() == "#ffffff"   # selected: bold white
+    assert abs(p._curves[0].opts["pen"].widthF() - 0.5) < 1e-9                   # the rest: dimmed
+    p.highlight(None)
+    assert p._highlighted is None
+    assert abs(p._curves[0].opts["pen"].widthF() - 1.0) < 1e-9                   # back to normal width
+
+
+def test_meso_page_click_syncs_road_and_both_panels(qapp):
+    # Feature: clicking a curve in one meso panel highlights that vehicle on the road AND in both panels.
+    from sim.ui.meso_page import MesoMacroPage
+    page = MesoMacroPage(scenario_names=["a", "b"])
+    rec = {"x": np.cumsum(np.full((10, 4), 5.0), axis=0), "v": np.full((10, 4), 10.0)}
+    page.road.set_run(rec); page.speed_wave.set_rec(rec); page.space_time.set_rec(rec)
+    page.speed_wave.sigVehicleClicked.emit(2)            # as if a speed-wave curve was clicked
+    assert page.road._highlighted == 2
+    assert page.speed_wave._highlighted == 2 and page.space_time._highlighted == 2

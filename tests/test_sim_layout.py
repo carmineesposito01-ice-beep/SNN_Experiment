@@ -38,18 +38,18 @@ def test_overview_all_visible(qapp):
     assert visible_docks(area) == set(DOCK_ORDER)
 
 
-def test_identificazione_hides_vmem(qapp):
+def test_identificazione_hides_input(qapp):
     area, docks = _build_area()
     apply_identificazione(area, docks)
     vis = visible_docks(area)
-    assert "v_mem" not in vis
+    assert "Input" not in vis
     assert {"v0", "T", "s0", "a", "b"} <= vis
 
 
 def test_neuro_debug_shows_netstate_and_spikerate(qapp):
     area, docks = _build_area()
     apply_neuro_debug(area, docks)
-    assert {"NetState", "SpikeRate", "v_mem"} <= visible_docks(area)
+    assert {"NetState", "SpikeRate", "Input"} <= visible_docks(area)
 
 
 def test_guida_shows_trajectory_and_safety(qapp):

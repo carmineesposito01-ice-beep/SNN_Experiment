@@ -7,7 +7,7 @@ import json
 import logging
 import os
 
-DOCK_ORDER = ["Road", "NetState", "SpikeRate", "v_mem", "Trajectory", "Safety",
+DOCK_ORDER = ["Road", "NetState", "SpikeRate", "Input", "Trajectory", "Safety",
               "Events", "Inspector", "SynOps", "v0", "T", "s0", "a", "b"]
 _PARAMS = ["v0", "T", "s0", "a", "b"]
 LAYOUT_PATH = os.path.expanduser(os.path.join("~", ".cf_fsnn_sim", "layout.json"))
@@ -47,10 +47,10 @@ def _hide(docks, name):
 def apply_overview(area, docks):
     _show(area, docks, "Road", "top")
     _show(area, docks, "NetState", "bottom", "Road")
-    _show(area, docks, "v_mem", "bottom", "NetState")
-    _show(area, docks, "Trajectory", "right", "v_mem")
+    _show(area, docks, "Input", "bottom", "NetState")
+    _show(area, docks, "Trajectory", "right", "Input")
     _show(area, docks, "Safety", "right", "Trajectory")
-    _show(area, docks, "v0", "bottom", "v_mem")
+    _show(area, docks, "v0", "bottom", "Input")
     for prev, n in zip(["v0", "T", "s0", "a"], ["T", "s0", "a", "b"]):
         _show(area, docks, n, "right", prev)
     _show(area, docks, "SpikeRate", "right", "NetState")   # last: split NetState's row -> NetState | SpikeRate
@@ -60,7 +60,7 @@ def apply_overview(area, docks):
 
 
 def apply_guida(area, docks):
-    for d in ("NetState", "SpikeRate", "v_mem", "Inspector", "Events", "SynOps"):
+    for d in ("NetState", "SpikeRate", "Input", "Inspector", "Events", "SynOps"):
         _hide(docks, d)
     _show(area, docks, "Road", "top")
     _show(area, docks, "Trajectory", "bottom", "Road")   # driving story: road + trajectory + safety
@@ -71,7 +71,7 @@ def apply_guida(area, docks):
 
 
 def apply_identificazione(area, docks):
-    for d in ("v_mem", "NetState", "SpikeRate", "Trajectory", "Safety", "Inspector", "SynOps"):
+    for d in ("Input", "NetState", "SpikeRate", "Trajectory", "Safety", "Inspector", "SynOps"):
         _hide(docks, d)
     _show(area, docks, "Road", "top")
     _show(area, docks, "v0", "bottom", "Road")
@@ -85,10 +85,10 @@ def apply_neuro_debug(area, docks):
     _hide(docks, "Safety")
     _show(area, docks, "NetState", "left")
     _show(area, docks, "SpikeRate", "right", "NetState")
-    _show(area, docks, "v_mem", "bottom", "NetState")
-    _show(area, docks, "Inspector", "right", "v_mem")
+    _show(area, docks, "Input", "bottom", "NetState")
+    _show(area, docks, "Inspector", "right", "Input")
     _show(area, docks, "SynOps", "bottom", "SpikeRate")
-    _show(area, docks, "Road", "bottom", "v_mem")
+    _show(area, docks, "Road", "bottom", "Input")
     _show(area, docks, "Events", "bottom", "Road")
     _show(area, docks, "v0", "right", "SpikeRate")
     for n in ["T", "s0", "a", "b"]:

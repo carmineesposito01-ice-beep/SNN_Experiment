@@ -34,6 +34,10 @@ class MesoMacroPage(QWidget):
         self._grid.addWidget(self.speed_wave, 0, 1)
         self._grid.addWidget(self.space_time, 1, 0)
         self._grid.addWidget(self.fundamental_diagram, 1, 1)
+        # click a vehicle's curve (in either meso panel) -> highlight that vehicle on the road AND
+        # in both curve panels, so the selection stays in sync everywhere.
+        self.speed_wave.sigVehicleClicked.connect(self._on_vehicle_clicked)
+        self.space_time.sigVehicleClicked.connect(self._on_vehicle_clicked)
         for c in (0, 1):
             self._grid.setColumnStretch(c, 1)              # split columns evenly (T3: panels weren't side-by-side)
         for r in (0, 1):
@@ -43,6 +47,12 @@ class MesoMacroPage(QWidget):
         self._on_run_ring = None
         self._run_platoon_btn.clicked.connect(lambda: self._on_run_platoon and self._on_run_platoon())
         self._run_ring_btn.clicked.connect(lambda: self._on_run_ring and self._on_run_ring())
+
+    def _on_vehicle_clicked(self, i):
+        """A meso curve was clicked -> highlight that vehicle on the road AND in both curve panels."""
+        self.road.highlight(i)
+        self.speed_wave.highlight(i)
+        self.space_time.highlight(i)
 
     def n_vehicles(self):
         return int(self._n_spin.value())

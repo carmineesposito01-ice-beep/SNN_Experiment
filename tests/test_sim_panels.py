@@ -13,7 +13,9 @@ pytest.importorskip("pyqtgraph")
 
 from PySide6.QtWidgets import QApplication          # noqa: E402
 from sim.probe import AttributeProbe                # noqa: E402
-from sim.ui.panels import NeuronGraphPanel, ParamPanel, SpikeRatePanel, VmemPanel  # noqa: E402
+from sim.state import StepResult                    # noqa: E402
+from sim.ui.panels import InputPanel, NeuronGraphPanel, ParamPanel, SpikeRatePanel  # noqa: E402
+from sim.ui.trajectory import TrajectoryBuffer      # noqa: E402
 
 
 @pytest.fixture(scope="module")
@@ -31,8 +33,19 @@ def _probe(params, spikes=None):
     return p
 
 
-def test_vmem_panel_updates(qapp):
-    VmemPanel().update_frame(_probe([0, 0, 0, 0, 0]))
+def _input_traj(gaps):
+    tb = TrajectoryBuffer(capacity=50)
+    for t, s in enumerate(gaps):
+        tb.record(StepResult(t=t, s=float(s), v=15.0, vl=13.0, dv=2.0, a_ego=-0.5,
+                             params=np.zeros(5), collided=False))
+    return tb
+
+
+def test_input_panel_plots_the_gap_series(qapp):
+    panel = InputPanel()
+    panel.update_frame(_input_traj([20.0, 19.0, 18.0, 17.0]))
+    gap = panel._curves["s"].getData()[1]
+    assert list(gap) == [20.0, 19.0, 18.0, 17.0]      # the 4-input mirror reads the physical gap s
 
 
 def test_param_panel_physical_value_and_title(qapp):
@@ -54,7 +67,8 @@ def test_param_panel_ground_truth(qapp):
 
 def test_line_panels_have_clip_to_view(qapp):
     # downsampling + clip keep the live plots cheap; clipToViewMode() reports the clip state
-    assert VmemPanel()._plot.getPlotItem().clipToViewMode() is True
+    ip = InputPanel()                                          # hold a ref (else the C++ PlotItem is GC'd)
+    assert ip._plots[0].clipToViewMode() is True              # first of the 4 stacked input plots
     assert ParamPanel(0, "v0", "m/s", "#d1495b")._plot.getPlotItem().clipToViewMode() is True
 
 

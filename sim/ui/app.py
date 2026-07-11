@@ -1,6 +1,6 @@
 """SimApp -- main window with three modes (a QStackedWidget): a Live cockpit, a Meso/Macro analysis
 page, and a Post-run dashboard. The Live cockpit is a dockable workspace (pyqtgraph DockArea) of 14
-docks (Road, NetState, SpikeRate, v_mem, Trajectory, Safety, Events, Inspector, SynOps + the 5
+docks (Road, NetState, SpikeRate, Input, Trajectory, Safety, Events, Inspector, SynOps + the 5
 identified params v0/T/s0/a/b) + champion/scenario controls + View/Layout menus (presets + persistence),
 driven by a fixed-timestep QTimer loop, with a status bar (incl. network firing %)."""
 import os
@@ -24,7 +24,7 @@ from sim.ui.layout import (DOCK_ORDER, LAYOUT_PATH, PRESETS, apply_overview, loa
 from sim.ui.loop import SimLoop
 from sim.ui.panels import (PARAM_COLORS, PARAM_NAMES, PARAM_UNITS, EventTimelinePanel,
                            NeuronGraphPanel, NeuronInspectorPanel, ParamPanel, SafetyPanel,
-                           SpikeRatePanel, SynOpsPanel, TrajectoryPanel, VmemPanel)
+                           SpikeRatePanel, SynOpsPanel, TrajectoryPanel, InputPanel)
 from sim.ui.meso_page import MesoMacroPage
 from sim.ui.postrun_page import PostRunPage
 from sim.ui.platoon import platoon_metrics, run_fundamental_diagram, run_platoon
@@ -68,7 +68,7 @@ class SimApp(QMainWindow):
         self._topdown = TopDownView()
         self._netstate = NeuronGraphPanel()
         self._spikerate = SpikeRatePanel()
-        self._vmem = VmemPanel()
+        self._input = InputPanel()
         self._trajectory = TrajectoryPanel()
         self._safety = SafetyPanel()
         self._timeline = EventTimelinePanel()
@@ -81,7 +81,7 @@ class SimApp(QMainWindow):
         # NB: SpikeRate is intentionally NOT X-linked to the params — in tab-stacked presets a linked
         # param can be a hidden tab, whose stale range would corrupt SpikeRate's axis. A unified time
         # cursor is a Phase-3b (scrub) concern; here each time-series autoranges to its own data.
-        self._ts_panels = [*self._params, self._vmem, self._spikerate, self._trajectory,
+        self._ts_panels = [*self._params, self._input, self._spikerate, self._trajectory,
                            self._safety, self._timeline, self._inspector, self._synops]
         self._apply_champion_topology()              # topology into NetState/Inspector/SynOps (re-run on swap)
         self._timeline.set_on_seek(self._seek_to)
@@ -92,7 +92,7 @@ class SimApp(QMainWindow):
         self._auto_stopping = False  # set when the episode ends on its own -> stop WITHOUT eager reconstruct
 
         widgets = {"Road": self._topdown, "NetState": self._netstate, "SpikeRate": self._spikerate,
-                   "v_mem": self._vmem, "Trajectory": self._trajectory, "Safety": self._safety,
+                   "Input": self._input, "Trajectory": self._trajectory, "Safety": self._safety,
                    "Events": self._timeline, "Inspector": self._inspector, "SynOps": self._synops,
                    "v0": self._params[0], "T": self._params[1],
                    "s0": self._params[2], "a": self._params[3], "b": self._params[4]}
@@ -107,6 +107,7 @@ class SimApp(QMainWindow):
             self._docks[name] = d
         self._maximized = None                    # name of the currently maximized dock, or None
         self._pre_max_state = None                # DockArea state saved before maximizing (for restore)
+        self._pre_max_visible = set()             # dock names visible before maximizing (restore that exact set)
         apply_overview(self._area, self._docks)   # place all docks so restoreState can find them
         self._episode = EpisodeSummary(self._synops._dims,   # per-episode aggregator (post-run seal + CSV)
                                        params_gt=self._scenarios[self._current_idx].params_gt,
@@ -263,14 +264,15 @@ class SimApp(QMainWindow):
         """Fill the whole area with one dock (double-click its title); double-click again to restore."""
         if self._maximized is None:
             self._pre_max_state = self._area.saveState()
+            self._pre_max_visible = set(visible_docks(self._area))   # restore EXACTLY this set, not all docks
             self._maximized = name
-            for other in list(visible_docks(self._area)):
+            for other in self._pre_max_visible:
                 if other != name:
                     self._docks[other].close()
         else:
             self._maximized = None
-            for other in DOCK_ORDER:                       # re-add closed docks so restoreState can find them
-                if other not in visible_docks(self._area):
+            for other in self._pre_max_visible:            # re-add ONLY the pre-maximize-visible docks
+                if other not in visible_docks(self._area):  # (a preset/manual-hidden dock stays hidden)
                     self._area.addDock(self._docks[other], "right")
             try:
                 self._area.restoreState(self._pre_max_state)
@@ -433,7 +435,7 @@ class SimApp(QMainWindow):
     def _clear_panels(self):
         """Blank every cockpit panel (empty buffers early-return in update_frame, so a redraw would
         NOT clear the old curves) and reset the road's integrated ego position."""
-        for p in (*self._params, self._vmem, self._spikerate, self._trajectory,
+        for p in (*self._params, self._input, self._spikerate, self._trajectory,
                   self._safety, self._timeline, self._synops, self._netstate):
             p.clear()
         self._topdown.reset()
@@ -489,7 +491,7 @@ class SimApp(QMainWindow):
         for name, p in zip(("v0", "T", "s0", "a", "b"), self._params):
             if self._dock_on(name):
                 p.update_frame(probe)
-        if self._dock_on("v_mem"): self._vmem.update_frame(probe)
+        if self._dock_on("Input"): self._input.update_frame(traj)   # the 4 inputs (physical) from the traj buffer
         if self._dock_on("SpikeRate"): self._spikerate.update_frame(probe)
         if self._dock_on("SynOps"): self._synops.update_frame(probe)
         if self._dock_on("Trajectory"): self._trajectory.update_frame(traj)

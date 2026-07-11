@@ -1,6 +1,6 @@
 """Standalone dockable live panels: NeuronGraphPanel (node-link SNN view), NeuronInspectorPanel
 (selected-neuron scope + dominant connections), SpikeRatePanel (% firing trend), SynOpsPanel
-(per-tick energy: SNN accumulate vs dense-ANN), VmemPanel (v_mem sample traces + effective threshold),
+(per-tick energy: SNN accumulate vs dense-ANN), InputPanel (the 4 network inputs in physical units),
 ParamPanel (one identified param in physical units + dashed ground-truth), TrajectoryPanel
 (gap/speeds/accel), SafetyPanel (TTC/headway/DRAC), EventTimelinePanel (clickable injected events).
 Each panel exposes clear() so the app can blank it on a scenario/champion swap or Reset."""
@@ -445,38 +445,52 @@ class NeuronInspectorPanel(QWidget):
         self._spk.setData([{"pos": (float(x), float(vm[x]))} for x in idx])
 
 
-class VmemPanel(QWidget):
+class InputPanel(QWidget):
+    """The 4 network INPUTS over time, in physical units — gap s (m), ego speed v (m/s), closing Δv
+    (m/s), leader speed v_l (m/s): the input-side mirror of the 5 identified-parameter output plots.
+    Fed from the trajectory buffer (the controller's real inputs); replaces the old v_mem sample dock,
+    now redundant with the neuron Inspector."""
+    _SPECS = [("s", "gap", "m", "#2e8b57"), ("v", "ego", "m/s", "#2a7fb8"),
+              ("dv", "Δv", "m/s", "#e8871e"), ("vl", "leader", "m/s", "#d1495b")]
+
     def __init__(self):
         super().__init__()
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        self._plot = pg.PlotWidget(title="v_mem (sample neurons) + effective threshold (dashed)")
-        self._plot.setLabel("bottom", "time", units="steps")
-        self._plot.setLabel("left", "v_mem")
-        self._plot.setDownsampling(auto=True, mode="peak")   # render only what's visible/needed
-        self._plot.setClipToView(True)
-        self._vmem_curves = [self._plot.plot(pen=pg.mkPen("#8fd6ff", width=1)) for _ in range(_N_SAMPLE)]
-        self._vth_curves = [self._plot.plot(pen=pg.mkPen("#e8871e", width=1, style=Qt.DashLine))
-                            for _ in range(_N_SAMPLE)]
-        layout.addWidget(self._plot)
-        self._cursors = [_add_cursor(self._plot.getPlotItem())]
+        self._glw = pg.GraphicsLayoutWidget()
+        layout.addWidget(self._glw)
+        self._curves = {}
+        self._plots = []
+        self._cursors = []
+        last = len(self._SPECS) - 1
+        for row, (key, lbl, unit, color) in enumerate(self._SPECS):
+            p = self._glw.addPlot(row=row, col=0)
+            p.setLabel("left", lbl, units=unit, **_AXIS_LBL)
+            p.setDownsampling(auto=True, mode="peak")
+            p.setClipToView(True)
+            p.showGrid(x=False, y=True, alpha=0.2)
+            p.getAxis("left").enableAutoSIPrefix(False)         # Δv~0.5 must read "0.5 m/s", not "500 mm/s"
+            p.getAxis("left").setWidth(46)                      # fixed gutter -> the 4 axes line up
+            p.setLabel("bottom", "time", units="steps", **_AXIS_LBL) if row == last else p.hideAxis("bottom")
+            if self._plots:
+                p.setXLink(self._plots[0])
+            self._curves[key] = p.plot(pen=pg.mkPen(color, width=2))
+            self._plots.append(p)
+            self._cursors.append(_add_cursor(p))
 
     def set_cursor(self, x):
         _set_cursor(self._cursors, x)
 
     def clear(self):
-        for c in (*self._vmem_curves, *self._vth_curves):
+        for c in self._curves.values():
             c.setData([])
 
-    def update_frame(self, probe):
-        frames = probe.frames()
-        if not frames:
+    def update_frame(self, traj):
+        a = traj.arrays()
+        if a["t"].size == 0:
             return
-        vm = np.stack([f.v_mem[:_N_SAMPLE] for f in frames])       # only the 4 plotted columns (not all 32)
-        vth = np.stack([f.v_th_eff[:_N_SAMPLE] for f in frames])
-        for i in range(min(_N_SAMPLE, vm.shape[1])):
-            self._vmem_curves[i].setData(vm[:, i])
-            self._vth_curves[i].setData(vth[:, i])
+        for key in ("s", "v", "dv", "vl"):
+            self._curves[key].setData(a[key])
 
 
 class ParamPanel(QWidget):
