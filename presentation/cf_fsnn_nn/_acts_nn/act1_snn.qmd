@@ -1,1 +1,86 @@
-<!-- act1_snn — popolato nei task successivi -->
+# Parte 1 — Le reti neurali (SNN) {.divider .act1}
+
+## Come funziona una rete neurale {.act1}
+
+::: {.twocol}
+::: {.vis}
+![](assets/img/membrane.png)
+:::
+::: {.side}
+::: {.explain}
+Un **neurone** somma ingressi pesati e applica una **non-linearità**; impilando strati la rete approssima una
+funzione. L'**addestramento** regola i pesi minimizzando una perdita via discesa del gradiente.
+:::
+::: {.eq .math}
+$$ y = \phi\!\Big(\sum_i w_i x_i + b\Big) $$
+:::
+:::
+:::
+
+::: {.footerbar}
+Parte 1 · principio di funzionamento
+:::
+
+## Le tre generazioni di reti neurali vivono su assi diversi {.act1}
+
+::: {.twocol}
+::: {.vis}
+[▶ animato nel deck]{.pill}
+![](assets/manim/three_generations.gif)
+:::
+::: {.side}
+::: {.explain}
+Tre modi diversi di *comportarsi*:
+
+- **Percettrone** — soglia netta, uscita binaria: nessuna sfumatura.
+- **ANN** — valore reale continuo e [differenziabile]{.accent}: da qui il backprop.
+- **SNN** — comunica con *spike* discreti e ha uno **stato interno che integra nel tempo**: è il *quando* a portare l'informazione.
+:::
+::: {.eq .math}
+$$
+\begin{aligned}
+\text{percettrone:}\quad & y = H(\mathbf{w}\!\cdot\!\mathbf{x} - \theta)\\[4pt]
+\text{ANN (derivabile):}\quad & y = \sigma(\mathbf{w}\!\cdot\!\mathbf{x} + b)\\[4pt]
+\text{SNN (stato + spike):}\quad & S = H(V - \theta),\\
+& V \leftarrow \beta V + I - S\,\theta
+\end{aligned}
+$$
+:::
+:::
+::: {.notes}
+Le tre generazioni si leggono su assi diversi, non come una scala di accuratezza crescente. Il percettrone (1ª gen) decide con una soglia netta: uscita binaria, nessuna sfumatura. La rete artificiale (ANN, 2ª gen) sostituisce il gradino con una funzione continua e derivabile — è proprio questo che ha reso possibile il backpropagation e il deep learning. La rete spiking (SNN, 3ª gen) torna a comunicare con impulsi discreti (spike), ma aggiunge una variabile di stato interna — il potenziale di membrana — che integra nel tempo. Il punto chiave da comunicare: la 3ª generazione non è "più accurata", vive su un asse diverso — energia, latenza, silicio (hardware neuromorfico). Si sceglie una SNN quando contano i joule e i millisecondi, non i punti di accuratezza.
+:::
+:::
+
+::: {.footerbar}
+Parte 1 · Tre generazioni
+:::
+
+## Confronto tra generazioni e scelta {.act1}
+
+::: {.explain}
+Un'ANN è un [dimmer]{.accent}: emette in continuo un valore reale. Una SNN è codice Morse: tace e comunica solo con spike — l'informazione sta nel *quando*. Da qui la regola della Parte 3: l'energia è proporzionale agli eventi, non al tempo.
+:::
+
+::: {.eq}
+| asse | ANN | SNN |
+|---|---|---|
+| comunicazione | valore reale continuo | spike binario (evento) |
+| stato / memoria | assente (feed-forward) | potenziale $V$ che integra |
+| calcolo | moltiplica-accumula (MAC) | accumula su evento (AC) |
+| differenziabilità | nativa ($\sigma$ liscia) | assente (gradino $H$) |
+| hardware | GPU / TPU | neuromorfico / FPGA |
+| costo | $\propto$ tempo (ogni clock) | $\propto$ eventi (spike) |
+:::
+
+::: {.notes}
+Un'ANN è come un dimmer: ogni neurone emette in continuo un valore reale, un numero aggiornato a ogni passo di clock. Una SNN è come il codice Morse: tace, e comunica solo con impulsi puntuali (spike) — l'informazione sta nel quando, non nell'ampiezza. La conseguenza pratica è la regola che governa tutta la Parte 3: l'energia è proporzionale agli eventi (spike), non al tempo. Un'ANN paga a ogni ciclo anche se nulla cambia; una SNN paga solo quando un neurone scatta. Se l'attività è sparsa, il costo crolla — ma il vantaggio nasce dall'evento, non dalla lentezza. I sei assi della tabella (comunicazione, stato/memoria, calcolo, differenziabilità, hardware, costo) mostrano che la differenza non è solo l'attivazione ma un profilo completo diverso.
+:::
+
+::: {.explain}
+**La scelta.** Per un controllore automotive su FPGA — dove contano determinismo, energia e silicio, non i punti di accuratezza su GPU — la **3ª generazione (SNN)** è l'asse giusto: eventi invece di clock, accumulo invece di MAC.
+:::
+
+::: {.footerbar}
+Parte 1 · confronto e scelta
+:::
