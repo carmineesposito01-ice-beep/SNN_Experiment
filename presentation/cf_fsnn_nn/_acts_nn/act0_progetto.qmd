@@ -1,1 +1,67 @@
-<!-- act0_progetto — popolato nei task successivi -->
+## Obiettivo — parametri di car-following da segnali V2X, su FPGA
+
+::: {.twocol}
+::: {.vis}
+[▶ illustrazione — placeholder]{.pill}
+![](figures/v2x.png)
+:::
+::: {.side}
+::: {.explain}
+Un sistema **DSP** con **AI-acceleration** che, a bordo veicolo, genera i **5 parametri** di un modello di
+car-following (**ACC-IIDM**) a partire dai **segnali V2X** — su hardware **FPGA**.
+:::
+::: {.eq}
+segnali V2X  →  [ SNN su FPGA ]  →  `[v0, T, s0, a, b]`  →  controllo ACC
+:::
+:::
+:::
+
+::: {.notes}
+Placeholder illustrazione: in rifinitura, schema dedicato "FPGA che riceve V2X e restituisce i 5 parametri".
+:::
+
+::: {.footerbar}
+Il progetto · obiettivo
+:::
+
+## Perché una rete neurale?
+
+::: {.threecol}
+::: {.card}
+[Velocità d'inferenza]{.card-title}
+Un passo si calcola in **microsecondi**: mappa diretta ingresso→parametri, senza ottimizzazione iterativa online.
+:::
+::: {.card}
+[Oltre il deterministico]{.card-title}
+La natura **probabilistica** della rete abilita comportamenti diversi dal classico stimatore deterministico — si adatta a pattern di guida non catturati da regole fisse.
+:::
+::: {.card}
+[Problema inverso appreso]{.card-title}
+Impara il **mapping inverso** traiettoria→parametri dai dati, dove l'inversione analitica sarebbe mal posta.
+:::
+:::
+
+::: {.footerbar}
+Il progetto · perché una NN
+:::
+
+## Perché una FPGA?
+
+::: {.threecol}
+::: {.card}
+[Determinismo temporale]{.card-title}
+Nessun ramo dipendente dai dati → **WCET == BCET**, jitter zero. Hard-real-time by design.
+:::
+::: {.card}
+[Basso consumo]{.card-title}
+Datapath dedicato, sinapsi **po2 = shift** (0 DSP): energia proporzionale agli eventi, non al clock.
+:::
+::: {.card}
+[Fast-prototyping]{.card-title}
+Riconfigurabile in ore, non mesi: iterazione rapida rispetto all'**ASIC**, a parità di determinismo.
+:::
+:::
+
+::: {.footerbar}
+Il progetto · perché FPGA
+:::
