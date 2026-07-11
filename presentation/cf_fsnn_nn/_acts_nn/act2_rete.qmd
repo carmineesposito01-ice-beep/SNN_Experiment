@@ -8,37 +8,65 @@
 
 ::: {.twocol}
 ::: {.vis}
-[▶ clic per sfogliare i passaggi]{.pill}
 
-::: {.pinn}
-::: {.fragment .pinn-row}
-[Traiettoria — V2X]{.pinn-box}
+```{=html}
+<div class="pinnloop" id="pinnloop">
+  <div class="pl-head">
+    <button class="pl-btn" id="pl-btn" onclick="pinnLoopToggle(event)">▶ avvia il ciclo</button>
+    <span class="pl-cyc" id="pl-cyc">ciclo 1</span>
+  </div>
+  <div class="pl-node pl-in"><b>Traiettoria — V2X</b><span class="pl-val">s=30 · v=25 · Δv=+5 · vₗ=20</span></div>
+  <div class="pl-arr">↓</div>
+  <div class="pl-loopwrap">
+    <div class="pl-fb"><span>↺ gradiente</span></div>
+    <div class="pl-col">
+      <div class="pl-node pl-net" id="pl-rete"><b>Rete</b><span class="pl-val" id="pl-par">v₀=31 · T=1.2 · s₀=1.7 · a=0.7 · b=2.5</span></div>
+      <div class="pl-arr">↓</div>
+      <div class="pl-node pl-mod" id="pl-mod"><b>Modello car-following</b><span class="pl-val" id="pl-ahat">â = −0.7 m/s²</span></div>
+      <div class="pl-arr">↓</div>
+      <div class="pl-node pl-loss" id="pl-loss"><b>Loss vs a_obs(−2.1)</b><span class="pl-val" id="pl-lossval">2.0</span><div class="pl-bar"><div class="pl-barfill" id="pl-lossbar"></div></div></div>
+    </div>
+  </div>
+</div>
+<script>
+(function(){
+  var C=[
+    {par:"v₀=31 · T=1.2 · s₀=1.7 · a=0.7 · b=2.5",       ah:"â = −0.7 m/s²",  ls:"2.0",   w:100},
+    {par:"v₀=28 · T=1.4 · s₀=2.1 · a=0.90 · b=1.9",      ah:"â = −1.5 m/s²",  ls:"0.36",  w:42},
+    {par:"v₀=27 · T=1.55 · s₀=2.35 · a=0.98 · b=1.75",   ah:"â = −1.9 m/s²",  ls:"0.04",  w:14},
+    {par:"v₀=26.5 · T=1.63 · s₀=2.45 · a=1.01 · b=1.71", ah:"â = −2.05 m/s²", ls:"0.003", w:4}
+  ];
+  var ci=0, ph=0, playing=false, converged=false, t=null;
+  function g(id){return document.getElementById(id);}
+  function bar(w){var b=g("pl-lossbar"); if(b)b.style.width=w+"%";}
+  function clr(){["pl-rete","pl-mod","pl-loss"].forEach(function(id){var e=g(id);if(e)e.classList.remove("active");});}
+  function act(id){var e=g(id);if(e)e.classList.add("active");}
+  function cyc(i){return "ciclo "+(i+1)+(i===C.length-1?" · convergenza":"");}
+  function paint(i){var c=C[i];if(!c)return; if(g("pl-par"))g("pl-par").textContent=c.par; if(g("pl-ahat"))g("pl-ahat").textContent=c.ah; if(g("pl-lossval"))g("pl-lossval").textContent=c.ls; bar(c.w); if(g("pl-cyc"))g("pl-cyc").textContent=cyc(i);}
+  function stop(conv){playing=false; if(t){clearTimeout(t);t=null;} clr(); converged=conv; ph=0; var b=g("pl-btn"); if(b)b.textContent=conv?"↻ rivedi":"▶ riprendi";}
+  function step(){
+    if(!playing)return;
+    var L=g("pinnloop"); if(!L||L.offsetParent===null){stop(false);return;}
+    clr(); var c=C[ci];
+    if(ph===0){ if(g("pl-cyc"))g("pl-cyc").textContent="ciclo "+(ci+1); act("pl-rete"); if(g("pl-par"))g("pl-par").textContent=c.par; t=setTimeout(function(){ph=1;step();},780); }
+    else if(ph===1){ act("pl-mod"); if(g("pl-ahat"))g("pl-ahat").textContent=c.ah; t=setTimeout(function(){ph=2;step();},780); }
+    else if(ph===2){ act("pl-loss"); if(g("pl-lossval"))g("pl-lossval").textContent=c.ls; bar(c.w);
+      if(ci>=C.length-1){ if(g("pl-cyc"))g("pl-cyc").textContent=cyc(ci); t=setTimeout(function(){stop(true);},950); }
+      else { t=setTimeout(function(){ph=3;step();},840); } }
+    else if(ph===3){ L.classList.add("fb"); t=setTimeout(function(){L.classList.remove("fb"); ci++; ph=0; step();},900); }
+  }
+  window.pinnLoopToggle=function(ev){
+    if(ev){ev.stopPropagation(); if(ev.preventDefault)ev.preventDefault();}
+    var b=g("pl-btn");
+    if(playing){ playing=false; if(t){clearTimeout(t);t=null;} if(b)b.textContent="▶ riprendi"; return; }
+    if(converged){ ci=0; ph=0; converged=false; paint(0); }
+    playing=true; if(b)b.textContent="⏸ pausa"; step();
+  };
+  if(g("pl-par")) paint(0);
+})();
+</script>
+```
 
-[s=30 · v=25 · Δv=+5 · vₗ=20]{.pinn-vec}
-:::
-::: {.fragment .pinn-ar}
-↓
-:::
-::: {.fragment .pinn-row}
-[Rete · ciclo 1]{.pinn-box .net}
-
-[v₀=31 · T=1.2 · s₀=1.7 · a=0.7 · b=2.5]{.pinn-vec .par}
-:::
-::: {.fragment .pinn-row}
-[Modello → â = −0.7 → loss = 2.0]{.pinn-box .loss}
-:::
-::: {.fragment .pinn-back}
-↺ il gradiente della loss affina i pesi
-:::
-::: {.fragment .pinn-row}
-[Rete · ciclo 2 — parametri diversi]{.pinn-box .net}
-
-[v₀=27 · T=1.5 · s₀=2.3 · a=0.95 · b=1.8]{.pinn-vec .par}
-:::
-::: {.fragment .pinn-row}
-[Modello → â = −1.9 → loss = 0.04 ↓]{.pinn-box .loss2}
-:::
-:::
 :::
 ::: {.side}
 ::: {.card}

@@ -45,17 +45,28 @@ $font-size-root: 18px;
 // Paragrafi "nudi" (non dentro .explain/.card/.eq): stessa scala del resto → niente testo gigante
 .reveal .twocol .side > p { font-size: 0.56em; line-height: 1.34; margin: 5px 0; }
 .reveal .slides section > p { font-size: 0.56em; line-height: 1.36; }
-// Animazione PINN step-through (fragment): vettori/valori che scorrono nella pipeline
-.reveal .pinn { display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 0.47em; line-height: 1.2; margin-top: 30px; }
-.reveal .pinn-row > p { margin: 1px 0; }
-.reveal .pinn-row { display: flex; flex-direction: column; align-items: center; gap: 2px; }
-.reveal .pinn-box { display: inline-block; padding: 5px 14px; border-radius: 8px; border: 1.5px solid #6C7683; background: linear-gradient(180deg,#242C37,#161A21); box-shadow: 0 2px 7px rgba(0,0,0,0.45); font-weight: 700; color: #EAF1F7; }
-.reveal .pinn-box.net { border-color: #56B4E9; }
-.reveal .pinn-box.mod { border-color: #E69F00; }
-.reveal .pinn-box.loss { border-color: #CC79A7; }
-.reveal .pinn-box.loss2 { border-color: #2ECC71; }
-.reveal .pinn-vec { display: inline-block; font-family: ui-monospace, 'Courier New', monospace; color: #9FD3F2; font-size: 0.94em; background: rgba(255,255,255,0.05); padding: 2px 9px; border-radius: 6px; }
-.reveal .pinn-vec.par { color: #FFD27A; }
-.reveal .pinn-eq { display: inline-block; font-family: ui-monospace, 'Courier New', monospace; color: #C7D0DA; font-size: 0.88em; background: rgba(255,255,255,0.04); padding: 2px 9px; border-radius: 6px; }
-.reveal .pinn-ar { color: #8A93A0; font-size: 1.05em; line-height: 1; }
-.reveal .pinn-back { color: #2ECC71; font-weight: 700; margin-top: 5px; background: rgba(46,204,113,0.12); border: 1px solid rgba(46,204,113,0.45); border-radius: 20px; padding: 3px 15px; }
+// Animazione PINN — ciclo di training play/pause (un ciclo, valori che cambiano a ogni giro)
+.reveal .pinnloop { margin: 10px auto 0; max-width: 300px; font-size: 0.5em; line-height: 1.2; }
+.reveal .pl-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; gap: 8px; }
+.reveal .pl-btn { font: inherit; font-weight: 700; color: #EAF1F7; background: linear-gradient(180deg,#2b3440,#1a2028); border: 1.5px solid #56B4E9; border-radius: 20px; padding: 4px 14px; cursor: pointer; }
+.reveal .pl-btn:hover { border-color: #8fd0f5; }
+.reveal .pl-cyc { font-weight: 700; color: #56B4E9; background: rgba(86,178,233,0.14); border: 1px solid rgba(86,178,233,0.4); border-radius: 12px; padding: 2px 10px; white-space: nowrap; }
+.reveal .pl-node { position: relative; border: 1.5px solid #6C7683; border-radius: 9px; background: linear-gradient(180deg,#232B36,#161A21); box-shadow: 0 2px 6px rgba(0,0,0,0.4); padding: 5px 12px; text-align: center; color: #EAF1F7; transition: box-shadow .25s, transform .2s, border-color .25s; }
+.reveal .pl-node b { display: block; font-weight: 700; }
+.reveal .pl-node .pl-val { display: block; font-family: ui-monospace,'Courier New',monospace; color: #9FD3F2; font-size: 0.9em; margin-top: 2px; }
+.reveal .pl-node.pl-net { border-color: #56B4E9; }
+.reveal .pl-node.pl-net .pl-val { color: #FFD27A; }
+.reveal .pl-node.pl-mod { border-color: #E69F00; }
+.reveal .pl-node.pl-loss { border-color: #CC79A7; }
+.reveal .pl-node.active { transform: scale(1.04); }
+.reveal .pl-node.pl-net.active { box-shadow: 0 0 0 2px #56B4E9, 0 0 18px rgba(86,178,233,0.5); }
+.reveal .pl-node.pl-mod.active { box-shadow: 0 0 0 2px #E69F00, 0 0 18px rgba(230,159,0,0.5); }
+.reveal .pl-node.pl-loss.active { box-shadow: 0 0 0 2px #CC79A7, 0 0 18px rgba(204,121,167,0.5); }
+.reveal .pl-arr { text-align: center; color: #8A93A0; font-size: 1.05em; line-height: 1.1; margin: 1px 0; }
+.reveal .pl-loopwrap { position: relative; padding-left: 26px; }
+.reveal .pl-fb { position: absolute; left: 0; top: 8px; bottom: 30px; width: 18px; border: 2px solid rgba(46,204,113,0.4); border-right: none; border-radius: 11px 0 0 11px; display: flex; align-items: center; justify-content: center; transition: border-color .2s, box-shadow .2s; }
+.reveal .pl-fb span { transform: rotate(-90deg); white-space: nowrap; font-size: 0.8em; font-weight: 700; color: #2ECC71; }
+.reveal #pinnloop.fb .pl-fb { border-color: #2ECC71; box-shadow: -3px 0 12px rgba(46,204,113,0.55); }
+.reveal .pl-col { display: flex; flex-direction: column; gap: 2px; }
+.reveal .pl-bar { height: 5px; background: rgba(255,255,255,0.08); border-radius: 3px; margin-top: 4px; overflow: hidden; }
+.reveal .pl-barfill { height: 100%; width: 100%; background: linear-gradient(90deg,#CC79A7,#E69F00); border-radius: 3px; transition: width .5s ease; }
