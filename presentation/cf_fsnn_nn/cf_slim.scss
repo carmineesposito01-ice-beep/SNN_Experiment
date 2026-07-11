@@ -102,6 +102,8 @@ $font-size-root: 18px;
 .reveal .ev-xt { fill: #E69F00; font-size: 8px; font-family: ui-monospace,monospace; font-weight: 700; }
 .reveal .ev-th { stroke: #CC79A7; stroke-width: 1; stroke-dasharray: 4 3; opacity: 0.6; }
 .reveal .ev-thl { fill: #CC79A7; font-size: 8px; font-family: ui-monospace,monospace; }
+.reveal .eqnote { margin-top: 7px; font-size: 0.5em; line-height: 1.3; color: #cfd6de; background: rgba(86,178,233,0.10); border-left: 3px solid #56B4E9; border-radius: 5px; padding: 5px 9px; }
+.reveal .eqnote strong { color: #9FD3F2; }
 .reveal .ev-readout { display: flex; justify-content: space-around; margin-top: 6px; font-family: ui-monospace,'Courier New',monospace; color: #C7D0DA; }
 .reveal .ev-readout b { color: #9FD3F2; }
 .reveal #ev-grad { color: #2ECC71; }

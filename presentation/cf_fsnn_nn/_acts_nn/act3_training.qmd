@@ -153,10 +153,10 @@ Parte 3 · Risultati BPTT
     <text id="ev-xt" class="ev-xt" x="196" y="28" opacity="0">x(T) → λ(T)</text>
   </svg>
   <div class="ev-readout">
-    <span id="ev-r1">forward: calcola x(t)</span>
+    <span id="ev-r1">V = 0.00</span>
     <span>∂ℒ/∂W = <b id="ev-grad">0.00</b></span>
   </div>
-  <div class="ev-update" id="ev-update">poi aggiorna i pesi:&nbsp; <b>W ← W − η · ∂ℒ/∂W</b></div>
+  <div class="ev-update" id="ev-update">forward: la rete calcola V e gli spike</div>
   <div class="ev-foot">λ(T) parte dallo <b>stato finale x(T)</b>; poi integra <b>indietro</b> (T→0): leak tra gli spike, salto a ogni spike. Memoria ∝ <b>#spike</b>.</div>
 </div>
 <script>
@@ -171,13 +171,13 @@ Parte 3 · Risultati BPTT
     {t:9,v:0.55},{t:10,v:0.80}
   ];
   var B=[
-    {t:10,l:0.20},{t:9.5,l:0.185},{t:9,l:0.17},{t:8.5,l:0.15},{t:8,l:0.13},
+    {t:10,l:0.20,acc:"0.00"},{t:9.5,l:0.185,acc:"0.02"},{t:9,l:0.17,acc:"0.04"},{t:8.5,l:0.15,acc:"0.06"},{t:8,l:0.13,acc:"0.07"},
     {t:8,l:0.40,spike:1,acc:"0.12"},
-    {t:7,l:0.34},{t:6,l:0.29},{t:5,l:0.24},
+    {t:7,l:0.34,acc:"0.16"},{t:6,l:0.29,acc:"0.19"},{t:5,l:0.24,acc:"0.22"},
     {t:5,l:0.60,spike:1,acc:"0.31"},
-    {t:4,l:0.51},{t:3,l:0.43},{t:2,l:0.37},
+    {t:4,l:0.51,acc:"0.37"},{t:3,l:0.43,acc:"0.42"},{t:2,l:0.37,acc:"0.46"},
     {t:2,l:0.78,spike:1,acc:"0.52"},
-    {t:1,l:0.66},{t:0,l:0.55}
+    {t:1,l:0.66,acc:"0.57"},{t:0,l:0.55,acc:"0.62"}
   ];
   function X(t){return 30+t*26;}
   function Y(v){return 140-v*100;}
@@ -188,10 +188,10 @@ Parte 3 · Risultati BPTT
     if(g("ev-fwd"))g("ev-fwd").setAttribute("points","");
     if(g("ev-curve"))g("ev-curve").setAttribute("points","");
     if(g("ev-grad"))g("ev-grad").textContent="0.00";
-    if(g("ev-r1"))g("ev-r1").textContent="forward: V integra e spara";
+    if(g("ev-r1"))g("ev-r1").textContent="V = 0.00";
     if(g("ev-cursor")){g("ev-cursor").setAttribute("cx",X(0));g("ev-cursor").setAttribute("cy",Y(0.0));}
     for(var k=0;k<3;k++){var s=g("ev-sp"+k); if(s)s.classList.remove("hit");}
-    if(g("ev-update"))g("ev-update").classList.remove("on");
+    if(g("ev-update")){g("ev-update").classList.remove("on");g("ev-update").textContent="forward: la rete calcola V e gli spike";}
     if(g("ev-xt"))g("ev-xt").setAttribute("opacity","0");
     var L=g("evp"); if(L)L.classList.remove("bwd");
     if(g("ev-phase"))g("ev-phase").textContent="forward · V(t)";
@@ -205,9 +205,11 @@ Parte 3 · Risultati BPTT
       if(g("ev-fwd"))g("ev-fwd").setAttribute("points",fpts);
       if(g("ev-cursor")){g("ev-cursor").setAttribute("cx",X(p.t));g("ev-cursor").setAttribute("cy",Y(p.v));}
       if(g("ev-phase"))g("ev-phase").textContent="forward · V integra e spara";
+      if(g("ev-r1"))g("ev-r1").textContent="V = "+p.v.toFixed(2);
+      if(g("ev-update"))g("ev-update").textContent="forward: la rete calcola V e gli spike — nessun gradiente ancora";
       if(p.spk){ var s=g("ev-sp"+sp); if(s)s.classList.add("hit"); sp++; }
       fi++;
-      if(fi>=F.length){ mode="pre"; if(g("ev-r1"))g("ev-r1").textContent="x(T) → λ(T) = ∂ℒ/∂s"; if(g("ev-xt"))g("ev-xt").setAttribute("opacity","1"); if(g("ev-phase"))g("ev-phase").textContent="λ(T) dallo stato finale x(T)"; t=setTimeout(step,1400); return; }
+      if(fi>=F.length){ mode="pre"; if(g("ev-r1"))g("ev-r1").textContent="x(T) → errore → λ"; if(g("ev-xt"))g("ev-xt").setAttribute("opacity","1"); if(g("ev-phase"))g("ev-phase").textContent="l'errore all'uscita avvia λ"; if(g("ev-update"))g("ev-update").textContent="lo stato finale x(T) dà l'errore ∂ℒ/∂s che avvia l'adjoint"; t=setTimeout(step,1500); return; }
       t=setTimeout(step,175); return;
     }
     if(mode==="pre"){ L.classList.add("bwd"); mode="bwd"; bi=0; t=setTimeout(step,220); return; }
@@ -216,14 +218,18 @@ Parte 3 · Risultati BPTT
       bpts += (bpts?" ":"")+X(q.t).toFixed(1)+","+Y(q.l).toFixed(1);
       if(g("ev-curve"))g("ev-curve").setAttribute("points",bpts);
       if(g("ev-cursor")){g("ev-cursor").setAttribute("cx",X(q.t));g("ev-cursor").setAttribute("cy",Y(q.l));}
-      if(g("ev-r1"))g("ev-r1").textContent="λ(t) = "+q.l.toFixed(2);
+      if(g("ev-r1"))g("ev-r1").textContent="λ = "+q.l.toFixed(2);
+      if(g("ev-grad"))g("ev-grad").textContent=q.acc;
       if(q.spike){
-        if(g("ev-phase"))g("ev-phase").textContent="backward · salto allo spike";
-        if(g("ev-grad"))g("ev-grad").textContent=q.acc;
+        if(g("ev-phase"))g("ev-phase").textContent="backward · spike";
+        if(g("ev-update"))g("ev-update").textContent="spike: l'errore ∂ℒ/∂s entra → λ salta → ∂ℒ/∂W cresce di più";
         L.classList.add("jump"); setTimeout(function(){L.classList.remove("jump");},320);
-      } else if(bi>0){ if(g("ev-phase"))g("ev-phase").textContent="backward · leak (T→0)"; }
+      } else if(bi>0){
+        if(g("ev-phase"))g("ev-phase").textContent="backward · leak";
+        if(g("ev-update"))g("ev-update").textContent="tra gli spike: λ decade (nessuna info nuova), ∂ℒ/∂W cresce ancora un po'";
+      }
       bi++;
-      if(bi>=B.length){ if(g("ev-phase"))g("ev-phase").textContent="aggiorna i pesi"; if(g("ev-update"))g("ev-update").classList.add("on"); mode="done"; stop(true); return; }
+      if(bi>=B.length){ if(g("ev-phase"))g("ev-phase").textContent="pesi aggiornati"; if(g("ev-update")){g("ev-update").innerHTML="gradiente esatto → <b>W ← W − η · ∂ℒ/∂W</b>"; g("ev-update").classList.add("on");} mode="done"; stop(true); return; }
       t=setTimeout(step, B[bi-1].spike?780:130); return;
     }
   }
@@ -250,9 +256,12 @@ integrata [all'indietro nel tempo]{.accent} ($T\to0$) che **salta solo agli spik
 - **contrattivo** se ρ<1 (l'adjoint converge).
 :::
 ::: {.eq .math}
-$$ \lambda(T)=\left.\tfrac{\partial\mathcal{L}}{\partial s}\right|_{x(T)}\quad(\text{adjoint iniziale, dallo stato finale } x(T)) $$
-$$ \text{leak: }\ \lambda_k=\alpha_m\,\lambda_{k+1}\ ;\qquad \text{salto: }\ \lambda_k \mathrel{+}= \tfrac{\lambda_{k+1}+\partial\mathcal{L}/\partial s}{\text{drive}-\theta} $$
-$$ \text{pesi: }\ \tfrac{\partial\mathcal{L}}{\partial W}\mathrel{-}=\lambda_k\,x_k^{\top}\quad(\text{accumula a ogni tick}) $$
+$$ \text{tra gli spike:}\quad \lambda_k = \alpha_m\,\lambda_{k+1}\qquad(\alpha_m=\tfrac{7}{8},\ \text{solo leak}) $$
+$$ \text{allo spike:}\quad \lambda_k = \underbrace{\alpha_m\,\lambda_{k+1}}_{\text{leak}} + \underbrace{\tfrac{\lambda_{k+1}+\partial\mathcal{L}/\partial s}{\text{drive}-\theta}}_{\text{entra l'errore }\partial\mathcal{L}/\partial s} $$
+$$ \text{pesi:}\quad \tfrac{\partial\mathcal{L}}{\partial W}\mathrel{+}= -\,\lambda_k\,x_k^{\top}\qquad(\text{somma su tutti i tick}) $$
+:::
+::: {.eqnote}
+Il gradiente è una **somma sui tick** (come BPTT), ma λ riceve **informazione nuova solo agli spike** — tra gli spike **decade** in modo analitico → si processano **solo gli spike**: gradiente **esatto**, **memoria ∝ #spike**.
 :::
 ::: {.notes}
 EventProp (Wunderlich & Pehle 2021) calcola il gradiente ESATTO di una rete spiking, senza l'approssimazione del surrogato. Introduce variabili adjoint inizializzate al tempo finale T dalla loss e integrate all'indietro (da T verso 0). Tra uno spike e l'altro l'adjoint evolve solo per leak; l'informazione di gradiente entra come un SALTO agli istanti di spike (event-driven). Costo O(#spike), non O(T). Contrattivo per costruzione: l'adjoint propaga attraverso Rᵀ e converge solo se ρ<1 — lo stesso vincolo spettrale che rende lo stato fixed-point limitato. I due champion EventProp hanno ρ<1 e 0 neuroni morti; uno è il candidato al deploy.
