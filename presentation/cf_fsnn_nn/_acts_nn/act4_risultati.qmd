@@ -1,6 +1,6 @@
 # Parte 4 — Risultati {.divider .act3}
 
-## Quattro campioni, un oracolo, nessun "migliore" assoluto {.act3}
+## I quattro campioni {.act3}
 
 ::: {.twocol}
 ::: {.vis}
@@ -8,78 +8,76 @@
 :::
 ::: {.side}
 ::: {.explain}
-Quattro reti [caratterizzate per-metrica]{.accent}, non un generico "best": due addestrate con BPTT, due con
-EventProp, tutte misurate contro l'oracolo `Master Splinter` (l'ACC-IIDM con i parametri veri). Ogni rete
-eccelle su assi diversi — chi vince lo decidono i sei livelli, non un numero solo.
+Quattro reti caratterizzate **per-metrica**, non un generico "migliore": due addestrate con **BPTT**, due con **EventProp**. Riferimento = l'oracolo **Master Splinter** (il modello con i parametri veri).
 :::
-::: {.eq}
-BPTT: Leonardo · Raffaello
-EventProp: Donatello · Michelangelo
-oracolo: Master Splinter (ACC-IIDM, param veri)
-:::
+
+- **Leonardo** (BPTT) — conservativo, miglior fisica (val_data 0.1926)
+- **Raffaello** (BPTT) — aggressivo, `v0` mis-identificato
+- **Donatello** (EventProp) — equilibrato, NRMSE minima (0.152), ρ 0.05
+- **Michelangelo** (EventProp) — conservativo, ρ 0.39
+
+Chi "vince" lo decidono i **sei livelli** di valutazione, non un numero solo.
 :::
 :::
 
 ::: {.notes}
-Le quattro reti sono addestrate con due algoritmi diversi: back-propagation-through-time (BPTT) e EventProp.
-L'oracolo `Master Splinter` è il modello ACC-IIDM con i parametri veri e fissa il limite superiore di
-riferimento. I quattro campioni coprono un fronte di trade-off: due EventProp (`Donatello`, `Michelangelo`)
-e due BPTT (`Leonardo`, `Raffaello`). Volutamente NON anticipo qui il vincitore: l'obiettivo della Parte 3 è
-mostrare come la scelta emerga dai sei livelli di valutazione, non da un singolo numero.
+Le quattro reti sono addestrate con due algoritmi (BPTT ed EventProp) e misurate contro l'oracolo Master Splinter (il modello con i parametri veri, limite superiore di riferimento). Coprono un fronte di trade-off: due EventProp e due BPTT. Da qui in poi si nominano; chi vince emerge dai sei livelli di valutazione, non da un singolo numero.
 :::
 
 ::: {.footerbar}
-Parte 4 · i quattro campioni
+Parte 4 · I quattro campioni
 :::
 
-## Come li valutiamo: sei livelli, dal reporting all'FPGA {.act3}
+## Come li valutiamo {.act3}
 
 ::: {.explain}
-La valutazione sale per [sei livelli]{.accent}, ognuno una domanda diversa. La metrica primaria non è la
-NRMSE sui parametri ma il [comportamento in anello chiuso]{.accent} (`val_data`): una rete può identificare
-bene e guidare male.
-:::
-
-::: {.notes}
-Il punto chiave: una identificazione numericamente buona può comunque guidare male in anello chiuso, quindi la
-NRMSE sui parametri è solo il punto di partenza, non il verdetto. I sei livelli della gerarchia sono: T0
-metriche di loss (accuratezza e NRMSE per-parametro riferite all'oracolo), T1 safety (collisioni, coda), T2
-robustezza (plant fisico e canale V2X), T3 traffico (micro/meso/macro), T4 identificabilità (Fisher
-Information Matrix), T5 FPGA-friendly (go/no-go hardware).
+Valutazione basata su **6 livelli**, ognuno una domanda diversa.
 :::
 
 ::: {.threecol}
 ::: {.card}
 [T0 · Metriche di Loss]{.card-title}
-Accuratezza e NRMSE per-parametro, riferite all'oracolo (=0). Il punto di partenza.
+
+- loss di ricostruzione (val_data)
+- NRMSE per-parametro vs oracolo
 :::
 ::: {.card}
 [T1 · Safety]{.card-title}
-Collisioni, gap minimo, margine di frenata; string stability della coda.
+
+- collisioni, gap minimo
+- margine di frenata, string stability
 :::
 ::: {.card}
 [T2 · Robustezza]{.card-title}
-Plant fisico (asciutto/bagnato/ghiaccio) e canale V2X (perdita pacchetti).
+
+- plant fisico (asciutto/bagnato/ghiaccio)
+- canale V2X (perdita pacchetti)
 :::
 :::
 
 ::: {.threecol}
 ::: {.card}
 [T3 · Traffico]{.card-title}
-Micro → meso → macro: onde stop-and-go, diagramma fondamentale.
+
+- micro → meso → macro
+- onde stop-and-go, diagramma fondamentale
 :::
 ::: {.card}
 [T4 · Identificabilità]{.card-title}
-Fisher Information Matrix: quali parametri sono realmente osservabili.
+
+- Fisher Information Matrix
+- quali parametri sono osservabili
 :::
 ::: {.card}
 [T5 · FPGA-Friendly]{.card-title}
-Fixed-point, po2, ρ<1, timing, SEU: il go/no-go hardware.
+
+- fixed-point, po2, ρ<1
+- timing, SEU: go/no-go hardware
 :::
 :::
 
 ::: {.footerbar}
-Parte 4 · gerarchia di valutazione a 6 livelli
+Parte 4 · Gerarchia di valutazione (6 livelli)
 :::
 
 ## T0 · Accuratezza: la mappa dei cinque parametri {.act3}
@@ -186,7 +184,7 @@ Parte 4 · T2 robustezza (plant + canale V2X)
 ::: {.vis}
 ![](figures/string.png)
 :::
-::: {.vis style="background:#FFFFFF"}
+::: {.vis .light}
 ![](assets/results/meso_spacetime.png)
 :::
 ::: {.vis}

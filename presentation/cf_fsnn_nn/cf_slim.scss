@@ -32,3 +32,12 @@ $font-size-root: 18px;
 .reveal .card.fragment { opacity: 0.28; transition: opacity 0.25s, box-shadow 0.25s, border-color 0.25s; }
 .reveal .card.fragment.visible { opacity: 1; }
 .reveal .card.fragment.current-fragment { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+// Tabella di confronto (slide Confronto): pannello + colonna SNN (ultima) evidenziata
+.reveal .cmp { background: #15181D; border: 1px solid #333B45; border-radius: 9px; padding: 8px 14px; font-size: 0.52em; }
+.reveal .cmp table { margin: 0; width: 100%; }
+.reveal .cmp table td:last-child, .reveal .cmp table th:last-child { background: rgba(86,178,233,0.13); border-left: 2px solid var(--accent); font-weight: 600; }
+// Slide riferimenti: elenco fitto a due colonne
+.reveal .refs { font-size: 0.4em; line-height: 1.3; column-count: 2; column-gap: 22px; }
+.reveal .refs h4 { color: var(--accent); font-size: 1.15em; margin: 4px 0 3px 0; break-after: avoid; }
+.reveal .refs ul { margin: 0 0 6px 0; font-size: 1em; }
+.reveal .refs li { margin-bottom: 3px; break-inside: avoid; }

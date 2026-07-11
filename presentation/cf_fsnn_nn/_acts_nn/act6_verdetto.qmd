@@ -41,7 +41,67 @@ per cui il deploy è sconsigliato.
 :::
 
 ::: {.footerbar}
-Verdetto · verdetto di deploy · Pareto = trade-off
+Verdetto · Verdetto di deploy · Pareto = trade-off
+:::
+
+## Riferimenti (1/2) {.act3}
+
+::: {.refs}
+#### Reti neurali — fondamenti
+- Cybenko (1989). Approximation by superpositions of a sigmoidal function. *Math. Control Signals Syst.* 2(4). doi:10.1007/BF02551274
+- Hornik, Stinchcombe, White (1989); Hornik (1991). Universal approximators. *Neural Networks*
+- LeCun, Bengio, Hinton (2015). Deep learning. *Nature* 521. doi:10.1038/nature14539
+- Goodfellow, Bengio, Courville (2016). *Deep Learning*. MIT Press
+- Bishop (1995). Training with noise = Tikhonov reg. *Neural Comput.* 7(1) · Vapnik (1999). *Statistical Learning Theory*
+
+#### SNN · gradiente surrogato · EventProp
+- Maass (1997). Networks of spiking neurons: the third generation. *Neural Networks* 10(9)
+- Neftci, Mostafa, Zenke (2019). Surrogate gradient learning in SNNs. *IEEE SPM* 36(6). arXiv:1901.09948
+- Wunderlich, Pehle (2021). Event-based backprop computes exact gradients for SNNs. *Sci. Rep.* 11:12829. doi:10.1038/s41598-021-91786-z
+
+#### ALIF · soglia adattiva · LSNN
+- Brette, Gerstner (2005). Adaptive exponential I&F (AdEx). *J. Neurophysiol.* 94(5)
+- Gerstner, Kistler, Naud, Paninski (2014). *Neuronal Dynamics*. Cambridge UP
+- Bellec, Salaj, Subramoney, Legenstein, Maass (2018). LSNN. *NeurIPS* 31. arXiv:1803.09574
+- Bellec et al. (2020). e-prop. *Nat. Commun.* 11:3625. doi:10.1038/s41467-020-17236-y
+
+#### PINN
+- Raissi, Perdikaris, Karniadakis (2019). Physics-informed neural networks. *J. Comput. Phys.* 378. doi:10.1016/j.jcp.2018.10.045
+:::
+
+::: {.footerbar}
+Riferimenti · 1/2
+:::
+
+## Riferimenti (2/2) {.act3}
+
+::: {.refs}
+#### Car-following con reti neurali
+- Mo, Di, Shi (2021). A physics-informed DL paradigm for car-following. *Transp. Res. C* 130. doi:10.1016/j.trc.2021.103240
+- Wang, Jiang, Li, Lin, Zheng, Wang (2018). Capturing car-following by deep learning. *IEEE T-ITS* 19(3). doi:10.1109/TITS.2017.2706963
+- Hatazawa, Hamada, Oikawa, Hirose (2023). Personalized LSTM driver model. *J. Adv. Mech. Des. Syst. Manuf.* 17(2)
+- Lu, Yi, Liang, Rui, Ran (2023). Improved seq2seq (Bi-GRU) for CAV. *IEEE Access* 11 (doc. 10041142)
+- Kinoshita, Shiomi (2023). Data-driven CF: comparison of NN structures. *Int. J. ITS Res.* 21. doi:10.1007/s13177-022-00339-9
+
+#### Car-following fisico — IDM · ACC/CAH
+- Treiber, Hennecke, Helbing (2000). IDM. *Phys. Rev. E* 62(2). doi:10.1103/PhysRevE.62.1805
+- Kesting, Treiber, Helbing (2010). Enhanced IDM (ACC/CAH). *Phil. Trans. R. Soc. A* 368. doi:10.1098/rsta.2010.0084
+- Treiber, Kesting (2013). *Traffic Flow Dynamics*. Springer. doi:10.1007/978-3-642-32460-4
+
+#### Ottimizzatore · Quantizzazione
+- Mishchenko, Defazio (2023). Prodigy. arXiv:2306.06101
+- Miyashita, Lee, Murmann (2016). CNNs using logarithmic data representation. arXiv:1603.01025
+- Bengio, Léonard, Courville (2013). Straight-Through Estimator. arXiv:1308.3432
+
+#### FPGA — motivazione e hardware
+- Nurvitadhi et al. (2017). Can FPGAs beat GPUs? *ISFPGA*. doi:10.1145/3020078.3021740
+- National Instruments. FPGA Fundamentals (white paper) · Southworth (2020), *Military Embedded Systems*
+- Chen, Emer, Sze (2016). Eyeriss. *ISCA* · AMD (Xilinx). Dynamic Function eXchange (DFX)
+- AMD/Xilinx. Zynq-7000 Data Sheet (DS190) · Digilent. PYNQ-Z1 Reference Manual
+:::
+
+::: {.footerbar}
+Riferimenti · 2/2
 :::
 
 # Fine {.divider .act3}

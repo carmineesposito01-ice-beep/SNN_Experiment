@@ -8,34 +8,25 @@ a partire da **segnali V2X**, su hardware **FPGA** a bordo veicolo.
 ::: {.flowrow}
 ::: {.card}
 [Segnali V2X]{.card-title}
-
-- gap `s`
-- velocità `v`
-- Δv (verso il leader)
-- velocità leader `vl`
+Informazioni scambiate tra i veicoli vicini, usate come ingresso del sistema.
 :::
 ::: {.arrow}
 →
 :::
 ::: {.card}
 [FPGA — PYNQ-Z1]{.card-title}
-SoC Zynq-7020: la SNN gira nella logica programmabile.
+SoC Zynq-7020: l'acceleratore che **genera i parametri**.
 
 - 53.200 LUT · 106.400 FF
 - 220 DSP48 · 140 BRAM (36 Kb)
 - 2× ARM Cortex-A9 @ 650 MHz
-
-*Rete a pesi po2 → 0 DSP, <1% BRAM.*
 :::
 ::: {.arrow}
 →
 :::
 ::: {.card}
-[Modello ACC-IIDM]{.card-title}
-I 5 parametri stimati alimentano il controllore fisico.
-
-- uscita: `[v0, T, s0, a, b]`
-- → accelerazione `a(t)`
+[Modello di car-following]{.card-title}
+Riceve i parametri stimati e ne riproduce il **comportamento di guida**.
 :::
 :::
 
@@ -60,23 +51,15 @@ Buone prestazioni su traiettorie e stili non visti della stessa distribuzione, n
 :::
 :::
 
-::: {.threecol}
+::: {.twocol}
 ::: {.card .fragment}
 [Robusta al rumore]{.card-title}
-Degrada in modo graduale su segnali imperfetti; l'inversione classica può amplificarne il rumore. *(La tenuta al packet-loss V2X viene però dall'handler hold-last, non dalla rete nuda.)*
+Degrada in modo graduale su segnali imperfetti, mentre un'inversione classica può amplificarne il rumore. *(La tenuta al packet-loss viene però dal gestore hold-last, non dalla rete nuda.)*
 :::
 ::: {.card .fragment}
 [Elabora serie temporali]{.card-title}
-Assorbe la sequenza multi-canale (gap, v, Δv, vl nel tempo) grazie allo stato/memoria interna — la forza nativa di una rete con stato.
+Assorbe la sequenza multi-canale nel tempo grazie allo stato/memoria interna — la forza nativa di una rete con stato.
 :::
-::: {.card .fragment}
-[Un solo forward]{.card-title}
-A inferenza è una singola passata a costo fisso: adatta a un controllore a bordo, in tempo reale.
-:::
-:::
-
-::: {.explain .fragment}
-La scelta di una rete **spiking** è motivata più avanti — da **energia** e **target FPGA** — non da questi vantaggi di accuratezza.
 :::
 
 ::: {.footerbar}

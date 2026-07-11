@@ -1,27 +1,29 @@
-# Parte 1 — Le reti neurali (SNN) {.divider .act1}
+# Parte 1 — Le reti neurali {.divider .act1}
 
-## Come funziona una rete neurale {.act1}
+## Reti Neurali — Come funziona? {.act1}
 
 ::: {.twocol}
-::: {.vis}
+::: {.vis .light}
+[▶ figura: principio NN — da creare]{.pill}
 ![](assets/img/membrane.png)
 :::
 ::: {.side}
 ::: {.explain}
-Un **neurone** somma ingressi pesati e applica una **non-linearità**; impilando strati la rete approssima una
-funzione. L'**addestramento** regola i pesi minimizzando una perdita via discesa del gradiente.
+Una rete è fatta di **neuroni** collegati da **pesi**: il comportamento **emerge dai pesi**, non da regole fisse, e si impara dagli esempi.
 :::
-::: {.eq .math}
-$$ y = \phi\!\Big(\sum_i w_i x_i + b\Big) $$
-:::
+
+- Ogni neurone **combina gli ingressi pesati** e applica una non-linearità
+- Impilando più strati, rappresenta relazioni via via più complesse
+- L'**uscita** dipende interamente dai valori dei **pesi**
+- L'**addestramento** regola i pesi finché l'uscita non è quella desiderata
 :::
 :::
 
 ::: {.footerbar}
-Parte 1 · principio di funzionamento
+Parte 1 · Principio di funzionamento
 :::
 
-## Le tre generazioni di reti neurali vivono su assi diversi {.act1}
+## Reti Neurali — Le 3 generazioni {.act1}
 
 ::: {.twocol}
 ::: {.vis}
@@ -56,31 +58,23 @@ Le tre generazioni si leggono su assi diversi, non come una scala di accuratezza
 Parte 1 · Tre generazioni
 :::
 
-## Confronto tra generazioni e scelta {.act1}
+## Reti Neurali — Confronto {.act1}
 
-::: {.explain}
-Un'ANN è un [dimmer]{.accent}: emette in continuo un valore reale. Una SNN è codice Morse: tace e comunica solo con spike — l'informazione sta nel *quando*. Da qui la regola della Parte 3: l'energia è proporzionale agli eventi, non al tempo.
-:::
-
-::: {.eq}
-| asse | ANN | SNN |
-|---|---|---|
-| comunicazione | valore reale continuo | spike binario (evento) |
-| stato / memoria | assente (feed-forward) | potenziale $V$ che integra |
-| calcolo | moltiplica-accumula (MAC) | accumula su evento (AC) |
-| differenziabilità | nativa ($\sigma$ liscia) | assente (gradino $H$) |
-| hardware | GPU / TPU | neuromorfico / FPGA |
-| costo | $\propto$ tempo (ogni clock) | $\propto$ eventi (spike) |
+::: {.cmp}
+| asse | Percettrone | ANN | SNN |
+|---|---|---|---|
+| comunicazione | uscita binaria (soglia) | valore reale continuo | spike (evento) |
+| stato / memoria | assente | assente (feed-forward) | potenziale $V$ che integra |
+| calcolo | somma pesata + soglia | moltiplica-accumula (MAC) | accumula su evento (AC) |
+| differenziabilità | assente (gradino) | nativa ($\sigma$ liscia) | assente (gradino) |
+| hardware | — | GPU / TPU | neuromorfico / FPGA |
+| costo | — | $\propto$ tempo (clock) | $\propto$ eventi (spike) |
 :::
 
 ::: {.notes}
-Un'ANN è come un dimmer: ogni neurone emette in continuo un valore reale, un numero aggiornato a ogni passo di clock. Una SNN è come il codice Morse: tace, e comunica solo con impulsi puntuali (spike) — l'informazione sta nel quando, non nell'ampiezza. La conseguenza pratica è la regola che governa tutta la Parte 3: l'energia è proporzionale agli eventi (spike), non al tempo. Un'ANN paga a ogni ciclo anche se nulla cambia; una SNN paga solo quando un neurone scatta. Se l'attività è sparsa, il costo crolla — ma il vantaggio nasce dall'evento, non dalla lentezza. I sei assi della tabella (comunicazione, stato/memoria, calcolo, differenziabilità, hardware, costo) mostrano che la differenza non è solo l'attivazione ma un profilo completo diverso.
-:::
-
-::: {.explain}
-**La scelta.** Per un controllore automotive su FPGA — dove contano determinismo, energia e silicio, non i punti di accuratezza su GPU — la **3ª generazione (SNN)** è l'asse giusto: eventi invece di clock, accumulo invece di MAC.
+La tabella confronta le tre generazioni su sei assi. La colonna SNN è evidenziata perché è la scelta del progetto: per un controllore automotive su FPGA — dove contano determinismo, energia e silicio, non i punti di accuratezza su GPU — la 3ª generazione è l'asse giusto (eventi invece di clock, accumulo invece di MAC). Le motivazioni sono già leggibili nella colonna e vengono esposte a voce.
 :::
 
 ::: {.footerbar}
-Parte 1 · confronto e scelta
+Parte 1 · Confronto e scelta
 :::
