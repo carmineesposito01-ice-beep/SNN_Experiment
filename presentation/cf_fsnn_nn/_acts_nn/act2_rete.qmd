@@ -14,7 +14,7 @@
 ::: {.fragment .pinn-row}
 [Traiettoria — V2X]{.pinn-box}
 
-[s=45 · v=20 · Δv=−2 · vₗ=22]{.pinn-vec}
+[s=30 · v=25 · Δv=+5 · vₗ=20]{.pinn-vec}
 :::
 ::: {.fragment .pinn-ar}
 ↓
@@ -30,13 +30,13 @@
 ::: {.fragment .pinn-row}
 [Modello di car-following]{.pinn-box .mod}
 
-[s\* = s₀+max(0, vT+vΔv∕2√(ab)) ≈ 19.9]{.pinn-eq}
+[s\* ≈ 91 · a_IIDM = −8.2 · a_CAH = −0.4]{.pinn-eq}
 :::
 ::: {.fragment .pinn-ar}
-↓ &nbsp; [â = −0.8 m/s²]{.pinn-vec}
+↓ &nbsp; [â = blend ≈ −2.2 m/s²]{.pinn-vec}
 :::
 ::: {.fragment .pinn-row}
-[â vs a_obs(−0.7) → loss ≈ 0.01]{.pinn-box .loss}
+[â vs a_obs(−2.1) → loss ≈ 0.01]{.pinn-box .loss}
 :::
 ::: {.fragment .pinn-back}
 ↺ gradiente → aggiorna la rete
@@ -49,8 +49,9 @@
 Il controllore fisico di cui la rete stima **5 dei 7** parametri `[v0, T, s0, a, b]`; genera l'accelerazione `â`.
 :::
 ::: {.eq .math}
-$$ s^{*} = s_0 + \max\!\big(0,\ vT + \tfrac{v\,\Delta v}{2\sqrt{a\,b}}\big), \quad v_\text{free}=a\big(1-(\tfrac{v}{v_0})^4\big) $$
-$$ \hat a = (1-c)\,a_\text{IIDM} + c\big[a_\text{CAH}+b\tanh(\cdots)\big] \in [-9,\ a] $$
+$$ s^{*} = s_0 + \max\!\big(0,\ vT + \tfrac{v\,\Delta v}{2\sqrt{a\,b}}\big), \quad z=\tfrac{s^{*}}{s} $$
+$$ a_\text{IIDM}=a\,(1-z^2)\ \text{(car-following)}, \quad a_\text{CAH}=\min(a_l,a)-\tfrac{\operatorname{ReLU}(\Delta v)^2}{2\,s} $$
+$$ \hat a = (1-c)\,a_\text{IIDM} + c\big[a_\text{CAH}+b\tanh\!\big(\tfrac{a_\text{IIDM}-a_\text{CAH}}{b}\big)\big] \in [-9,\ a] $$
 :::
 :::
 :::

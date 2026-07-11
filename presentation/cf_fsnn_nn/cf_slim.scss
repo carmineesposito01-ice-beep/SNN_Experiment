@@ -46,15 +46,15 @@ $font-size-root: 18px;
 .reveal .twocol .side > p { font-size: 0.56em; line-height: 1.34; margin: 5px 0; }
 .reveal .slides section > p { font-size: 0.56em; line-height: 1.36; }
 // Animazione PINN step-through (fragment): vettori/valori che scorrono nella pipeline
-.reveal .pinn { display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 0.5em; line-height: 1.22; margin-top: 30px; }
+.reveal .pinn { display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 0.47em; line-height: 1.2; margin-top: 30px; }
 .reveal .pinn-row > p { margin: 1px 0; }
 .reveal .pinn-row { display: flex; flex-direction: column; align-items: center; gap: 2px; }
-.reveal .pinn-box { display: inline-block; padding: 4px 12px; border-radius: 7px; border: 1.5px solid #6C7683; background: #1B2029; font-weight: 700; color: #EAF1F7; }
+.reveal .pinn-box { display: inline-block; padding: 5px 14px; border-radius: 8px; border: 1.5px solid #6C7683; background: linear-gradient(180deg,#242C37,#161A21); box-shadow: 0 2px 7px rgba(0,0,0,0.45); font-weight: 700; color: #EAF1F7; }
 .reveal .pinn-box.net { border-color: #56B4E9; }
 .reveal .pinn-box.mod { border-color: #E69F00; }
 .reveal .pinn-box.loss { border-color: #CC79A7; }
-.reveal .pinn-vec { font-family: ui-monospace, 'Courier New', monospace; color: #9FD3F2; font-size: 0.94em; }
+.reveal .pinn-vec { display: inline-block; font-family: ui-monospace, 'Courier New', monospace; color: #9FD3F2; font-size: 0.94em; background: rgba(255,255,255,0.05); padding: 2px 9px; border-radius: 6px; }
 .reveal .pinn-vec.par { color: #FFD27A; }
-.reveal .pinn-eq { font-family: ui-monospace, 'Courier New', monospace; color: #C7D0DA; font-size: 0.9em; }
+.reveal .pinn-eq { display: inline-block; font-family: ui-monospace, 'Courier New', monospace; color: #C7D0DA; font-size: 0.88em; background: rgba(255,255,255,0.04); padding: 2px 9px; border-radius: 6px; }
 .reveal .pinn-ar { color: #8A93A0; font-size: 1.05em; line-height: 1; }
-.reveal .pinn-back { color: #2ECC71; font-weight: 700; margin-top: 2px; }
+.reveal .pinn-back { color: #2ECC71; font-weight: 700; margin-top: 5px; background: rgba(46,204,113,0.12); border: 1px solid rgba(46,204,113,0.45); border-radius: 20px; padding: 3px 15px; }
