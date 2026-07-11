@@ -24,8 +24,9 @@ vs SNN ~800), NON da AC≪MAC; termica non-problema (Tj~26°C). Bit-exact funzio
 **AZIONE 1 — Report Fase B (via skill `create-report`).** Ripartibile da qui, dati pronti.
 - Sorgente = `document/FPGA_PHASE_B_POWER.md` (contenuto già assemblato) + `matlab/axi/build/phase_b/results.csv`.
 - Template/stile = **`document/FPGA_REPORT.md`** + **`document/VALIDATION_REPORT_v3.md`** (⚠️ su QUESTO branch i
-  report esistenti sono in `document/`; in `report/` ci sono solo `report_1..4`; `report/FPGA_REPORT.md` è il
-  *target di merge* su `main`, non un file leggibile qui). Stessa procedura degli altri report.
+  report sono in `document/`; su `main` la documentazione è stata **riordinata** — i report spostati — e la
+  **divergenza di layout si riconcilia al MERGE**. Qui, e per generare il report, leggi/scrivi in `document/`).
+  Stessa procedura degli altri report.
 - Contenuto atteso: scopo/metodo (3 livelli fedeltà) · correttezza funzionale · risorse/timing · potenza sistema
   (static 92%, E realizzata≫algoritmica) · costanti e_MAC≈e_AC · confronto SNN-vs-ANN + letteratura (compattezza
   ~5-65×) · tabella claim (3 correzioni + reframe) · termica · onestà+Fase C. Figure: breakdown potenza · attribuz.
