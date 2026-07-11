@@ -20,26 +20,23 @@
 ↓
 :::
 ::: {.fragment .pinn-row}
-[Rete]{.pinn-box .net}
+[Rete · ciclo 1]{.pinn-box .net}
 
-[v₀=26.5 · T=1.63 · s₀=2.45 · a=1.01 · b=1.71]{.pinn-vec .par}
-:::
-::: {.fragment .pinn-ar}
-↓
+[v₀=31 · T=1.2 · s₀=1.7 · a=0.7 · b=2.5]{.pinn-vec .par}
 :::
 ::: {.fragment .pinn-row}
-[Modello di car-following]{.pinn-box .mod}
-
-[s\* ≈ 91 · a_IIDM = −8.2 · a_CAH = −0.4]{.pinn-eq}
-:::
-::: {.fragment .pinn-ar}
-↓ &nbsp; [â = blend ≈ −2.2 m/s²]{.pinn-vec}
-:::
-::: {.fragment .pinn-row}
-[â vs a_obs(−2.1) → loss ≈ 0.01]{.pinn-box .loss}
+[Modello → â = −0.7 → loss = 2.0]{.pinn-box .loss}
 :::
 ::: {.fragment .pinn-back}
-↺ gradiente → aggiorna la rete
+↺ il gradiente della loss affina i pesi
+:::
+::: {.fragment .pinn-row}
+[Rete · ciclo 2 — parametri diversi]{.pinn-box .net}
+
+[v₀=27 · T=1.5 · s₀=2.3 · a=0.95 · b=1.8]{.pinn-vec .par}
+:::
+::: {.fragment .pinn-row}
+[Modello → â = −1.9 → loss = 0.04 ↓]{.pinn-box .loss2}
 :::
 :::
 :::
