@@ -11,8 +11,60 @@ Perché il **backprop classico non funziona** sulle reti spiking:
 
 ::: {.twocol}
 ::: {.vis}
-[▶ animazione BPTT — clic per sfogliare i passaggi, con le variabili del codice (da rifare)]{.pill}
-![](assets/manim/bptt_training.gif)
+
+```{=html}
+<div class="bptt" id="bptt">
+  <div class="pl-head">
+    <button class="pl-btn" id="bp-btn" onclick="bpttToggle(event)">▶ avvia</button>
+    <span class="pl-cyc" id="bp-phase">srotola nel tempo</span>
+  </div>
+  <div class="bp-time">
+    <div class="bp-tick" id="bp-t0"><span class="bp-lab">t₁</span><span class="bp-v">V .4</span><span class="bp-s">·</span></div>
+    <div class="bp-tick" id="bp-t1"><span class="bp-lab">t₂</span><span class="bp-v">V .9</span><span class="bp-s">·</span></div>
+    <div class="bp-tick" id="bp-t2"><span class="bp-lab">t₃</span><span class="bp-v">V 1.0</span><span class="bp-s bp-spk">↑</span></div>
+    <div class="bp-tick" id="bp-t3"><span class="bp-lab">t₄</span><span class="bp-v">V .3</span><span class="bp-s">·</span></div>
+    <div class="bp-tick" id="bp-t4"><span class="bp-lab">t₅</span><span class="bp-v">V 1.0</span><span class="bp-s bp-spk">↑</span></div>
+  </div>
+  <div class="bp-acc">Σ&nbsp;∂ℒ/∂W = <b id="bp-accv">0.00</b><span class="bp-hint" id="bp-hint"></span></div>
+  <div class="bp-foot">indietro nel tempo, ogni tick passa per <b>(U·V)ᵀ</b>; allo spike solo grazie a <b>σ′</b>. Memoria ∝ <b>T</b>.</div>
+</div>
+<script>
+(function(){
+  var TN=5, SP=[0,0,1,0,1], accBwd=["0.18","0.25","0.52","0.59","0.64"];
+  var mode="idle", i=0, playing=false, t=null;
+  function g(id){return document.getElementById(id);}
+  function tk(k){return g("bp-t"+k);}
+  function clrAll(){for(var k=0;k<TN;k++){var e=tk(k); if(e){e.classList.remove("fwd");e.classList.remove("bwd");}}}
+  function reset(){clrAll(); i=0; if(g("bp-accv"))g("bp-accv").textContent="0.00"; if(g("bp-hint"))g("bp-hint").textContent=""; if(g("bp-phase"))g("bp-phase").textContent="forward →";}
+  function stop(done){playing=false; if(t){clearTimeout(t);t=null;} if(done)mode="done"; var b=g("bp-btn"); if(b)b.textContent=done?"↻ rivedi":"▶ riprendi";}
+  function step(){
+    if(!playing)return;
+    var L=g("bptt"); if(!L||L.offsetParent===null){stop(false);return;}
+    if(mode==="fwd"){
+      clrAll(); if(g("bp-phase"))g("bp-phase").textContent="forward →";
+      var e=tk(i); if(e)e.classList.add("fwd"); i++;
+      if(i>=TN){ mode="bwd"; i=0; t=setTimeout(step,520); } else { t=setTimeout(step,470); }
+    } else if(mode==="bwd"){
+      clrAll(); if(g("bp-phase"))g("bp-phase").textContent="← backward";
+      var k=TN-1-i; var e=tk(k); if(e)e.classList.add("bwd");
+      if(g("bp-accv"))g("bp-accv").textContent=accBwd[i];
+      if(g("bp-hint"))g("bp-hint").textContent = SP[k] ? " ← σ′ ✓ · (U·V)ᵀ" : " ← (U·V)ᵀ";
+      i++;
+      if(i>=TN){ t=setTimeout(function(){ clrAll(); if(g("bp-phase"))g("bp-phase").textContent="fatto"; if(g("bp-hint"))g("bp-hint").textContent=" (somma sui tick)"; stop(true); },700); }
+      else { t=setTimeout(step,660); }
+    }
+  }
+  window.bpttToggle=function(ev){
+    if(ev){ev.stopPropagation(); if(ev.preventDefault)ev.preventDefault();}
+    var b=g("bp-btn");
+    if(playing){ playing=false; if(t){clearTimeout(t);t=null;} if(b)b.textContent="▶ riprendi"; return; }
+    if(mode==="done"||mode==="idle"){ reset(); mode="fwd"; i=0; }
+    playing=true; if(b)b.textContent="⏸ pausa"; step();
+  };
+})();
+</script>
+```
+
 :::
 ::: {.side}
 ::: {.explain}
@@ -74,8 +126,69 @@ Parte 3 · Risultati BPTT
 
 ::: {.twocol}
 ::: {.vis}
-[▶ animazione EventProp — clic per sfogliare i passaggi, con le variabili del codice (da rifare)]{.pill}
-![](assets/manim/eventprop_adjoint.gif)
+
+```{=html}
+<div class="evp" id="evp">
+  <div class="pl-head">
+    <button class="pl-btn" id="ev-btn" onclick="evpToggle(event)">▶ avvia</button>
+    <span class="pl-cyc" id="ev-phase">integrazione λ · T→0</span>
+  </div>
+  <div class="ev-lamwrap">
+    <span class="ev-lamlabel">λ =</span>
+    <span class="ev-lamval" id="ev-lamval">0.20</span>
+    <div class="ev-bar"><div class="ev-barfill" id="ev-barfill"></div></div>
+  </div>
+  <div class="ev-note" id="ev-note">λ inizializzata al tempo T dalla loss</div>
+  <div class="ev-axis">
+    <span class="ev-ev" id="ev-e0">T</span>
+    <span class="ev-ev ev-leak" id="ev-e1">leak</span>
+    <span class="ev-ev ev-spk" id="ev-e2">spike ↑</span>
+    <span class="ev-ev ev-leak" id="ev-e3">leak</span>
+    <span class="ev-ev ev-spk" id="ev-e4">spike ↑</span>
+    <span class="ev-ev ev-leak" id="ev-e5">leak</span>
+    <span class="ev-ev ev-spk" id="ev-e6">spike ↑</span>
+    <span class="ev-ev" id="ev-e7">0</span>
+  </div>
+  <div class="ev-foot">tra gli spike solo <b>leak</b>; il gradiente entra come <b>salto</b> agli spike. Memoria ∝ <b>#spike</b>.</div>
+</div>
+<script>
+(function(){
+  var E=[
+    {lam:"0.20", w:26,  note:"λ = ∂ℒ/∂s : inizializzata al tempo T dalla loss", c:""},
+    {lam:"0.14", w:18,  note:"tra gli spike: solo leak  λ ← (1−Δt/τ)·λ",       c:"leak"},
+    {lam:"0.41", w:52,  note:"allo spike: salto  λ += (λ + ∂ℒ/∂s)/(V′−θ)",     c:"spk"},
+    {lam:"0.29", w:37,  note:"leak (solo decadimento tra un evento e l'altro)", c:"leak"},
+    {lam:"0.63", w:80,  note:"allo spike: salto",                               c:"spk"},
+    {lam:"0.44", w:56,  note:"leak",                                            c:"leak"},
+    {lam:"0.78", w:100, note:"allo spike: salto",                               c:"spk"},
+    {lam:"0.55", w:70,  note:"→ t = 0 : gradiente esatto pronto",               c:""}
+  ];
+  var i=0, playing=false, done=false, t=null;
+  function g(id){return document.getElementById(id);}
+  function clr(){for(var k=0;k<E.length;k++){var e=g("ev-e"+k); if(e)e.classList.remove("cur");}}
+  function paint(k){var c=E[k]; if(!c)return; if(g("ev-lamval"))g("ev-lamval").textContent=c.lam; if(g("ev-barfill"))g("ev-barfill").style.width=c.w+"%"; if(g("ev-note"))g("ev-note").textContent=c.note; clr(); var m=g("ev-e"+k); if(m)m.classList.add("cur");}
+  function stop(d){playing=false; if(t){clearTimeout(t);t=null;} done=d; var b=g("ev-btn"); if(b)b.textContent=d?"↻ rivedi":"▶ riprendi";}
+  function step(){
+    if(!playing)return; var L=g("evp"); if(!L||L.offsetParent===null){stop(false);return;}
+    var c=E[i]; paint(i);
+    if(g("ev-phase"))g("ev-phase").textContent = (i===0?"λ @ T":(i>=E.length-1?"t = 0 · fatto":(c.c==="spk"?"salto (spike)":"leak")));
+    if(c.c==="spk"){ L.classList.add("jump"); setTimeout(function(){L.classList.remove("jump");},260); }
+    i++;
+    if(i>=E.length){ stop(true); return; }
+    t=setTimeout(step, E[i-1].c==="spk"?840:650);
+  }
+  window.evpToggle=function(ev){
+    if(ev){ev.stopPropagation(); if(ev.preventDefault)ev.preventDefault();}
+    var b=g("ev-btn");
+    if(playing){ playing=false; if(t){clearTimeout(t);t=null;} if(b)b.textContent="▶ riprendi"; return; }
+    if(done||i>=E.length){ i=0; done=false; }
+    playing=true; if(b)b.textContent="⏸ pausa"; step();
+  };
+  if(g("ev-lamval")) paint(0);
+})();
+</script>
+```
+
 :::
 ::: {.side}
 ::: {.explain}
