@@ -1,67 +1,109 @@
-## Obiettivo — parametri di car-following da segnali V2X, su FPGA
+## Obiettivo {.act1}
 
-::: {.twocol}
-::: {.vis}
-[▶ illustrazione — placeholder]{.pill}
-![](figures/v2x.png)
-:::
-::: {.side}
 ::: {.explain}
-Un sistema **DSP** con **AI-acceleration** che, a bordo veicolo, genera i **5 parametri** di un modello di
-car-following (**ACC-IIDM**) a partire dai **segnali V2X** — su hardware **FPGA**.
-:::
-::: {.eq}
-segnali V2X  →  [ SNN su FPGA ]  →  `[v0, T, s0, a, b]`  →  controllo ACC
-:::
-:::
+Realizzare un sistema **DSP** con **AI-acceleration** che genera i **parametri di un modello di car-following**
+a partire da **segnali V2X**, su hardware **FPGA** a bordo veicolo.
 :::
 
-::: {.notes}
-Placeholder illustrazione: in rifinitura, schema dedicato "FPGA che riceve V2X e restituisce i 5 parametri".
+::: {.flowrow}
+::: {.card}
+[Segnali V2X]{.card-title}
+
+- gap `s`
+- velocità `v`
+- Δv (verso il leader)
+- velocità leader `vl`
+:::
+::: {.arrow}
+→
+:::
+::: {.card}
+[FPGA — PYNQ-Z1]{.card-title}
+SoC Zynq-7020: la SNN gira nella logica programmabile.
+
+- 53.200 LUT · 106.400 FF
+- 220 DSP48 · 140 BRAM (36 Kb)
+- 2× ARM Cortex-A9 @ 650 MHz
+
+*Rete a pesi po2 → 0 DSP, <1% BRAM.*
+:::
+::: {.arrow}
+→
+:::
+::: {.card}
+[Modello ACC-IIDM]{.card-title}
+I 5 parametri stimati alimentano il controllore fisico.
+
+- uscita: `[v0, T, s0, a, b]`
+- → accelerazione `a(t)`
+:::
 :::
 
 ::: {.footerbar}
-Il progetto · obiettivo
+Il progetto · Obiettivo
 :::
 
-## Perché una rete neurale?
+## Perché una rete neurale? {.act1}
 
 ::: {.threecol}
-::: {.card}
-[Velocità d'inferenza]{.card-title}
-Un passo si calcola in **microsecondi**: mappa diretta ingresso→parametri, senza ottimizzazione iterativa online.
+::: {.card .fragment}
+[Approssima mappe complesse]{.card-title}
+Con abbastanza unità approssima qualunque funzione continua non-lineare: nessun estimatore analitico da derivare a mano.
 :::
-::: {.card}
-[Oltre il deterministico]{.card-title}
-La natura **probabilistica** della rete abilita comportamenti diversi dal classico stimatore deterministico — si adatta a pattern di guida non catturati da regole fisse.
+::: {.card .fragment}
+[Impara dai dati]{.card-title}
+Apprende la mappa dagli esempi. L'alternativa classica — **calibrare** per ottimizzazione il modello noto — va rifatta per ogni traiettoria; la rete inferisce in **un solo passaggio**.
 :::
-::: {.card}
-[Problema inverso appreso]{.card-title}
-Impara il **mapping inverso** traiettoria→parametri dai dati, dove l'inversione analitica sarebbe mal posta.
+::: {.card .fragment}
+[Generalizza]{.card-title}
+Buone prestazioni su traiettorie e stili non visti della stessa distribuzione, non solo sui casi enumerati.
 :::
+:::
+
+::: {.threecol}
+::: {.card .fragment}
+[Robusta al rumore]{.card-title}
+Degrada in modo graduale su segnali imperfetti; l'inversione classica può amplificarne il rumore. *(La tenuta al packet-loss V2X viene però dall'handler hold-last, non dalla rete nuda.)*
+:::
+::: {.card .fragment}
+[Elabora serie temporali]{.card-title}
+Assorbe la sequenza multi-canale (gap, v, Δv, vl nel tempo) grazie allo stato/memoria interna — la forza nativa di una rete con stato.
+:::
+::: {.card .fragment}
+[Un solo forward]{.card-title}
+A inferenza è una singola passata a costo fisso: adatta a un controllore a bordo, in tempo reale.
+:::
+:::
+
+::: {.explain .fragment}
+La scelta di una rete **spiking** è motivata più avanti — da **energia** e **target FPGA** — non da questi vantaggi di accuratezza.
 :::
 
 ::: {.footerbar}
-Il progetto · perché una NN
+Il progetto · Perché una rete neurale
 :::
 
-## Perché una FPGA?
+## Perché una FPGA? {.act1}
 
 ::: {.threecol}
-::: {.card}
+::: {.card .fragment}
 [Determinismo temporale]{.card-title}
-Nessun ramo dipendente dai dati → **WCET == BCET**, jitter zero. Hard-real-time by design.
+La logica è **cablata**: le interconnessioni configurabili fissano il **cammino fisico** del segnale, che percorre sempre lo stesso percorso → **latenza costante, indipendente dal dato**. Niente OS né scheduler.
+
+*Deadline di controllo 100 ms (10 Hz), utilizzo ~0,1%.*
 :::
-::: {.card}
-[Basso consumo]{.card-title}
-Datapath dedicato, sinapsi **po2 = shift** (0 DSP): energia proporzionale agli eventi, non al clock.
+::: {.card .fragment}
+[Efficienza per architettura]{.card-title}
+La GPU spende energia in migliaia di core general-purpose, memoria e fetch/decode. L'FPGA configura un **datapath dedicato** (dataflow): i dati fluiscono on-chip, niente istruzioni.
+
+*~5–8× vs ANN densa (nostro report). A supporto: letteratura fino a ~2.3× perf/Watt su FPGA datacenter vs GPU.*
 :::
-::: {.card}
-[Fast-prototyping]{.card-title}
-Riconfigurabile in ore, non mesi: iterazione rapida rispetto all'**ASIC**, a parità di determinismo.
+::: {.card .fragment}
+[I/O diretto "any-to-any"]{.card-title}
+GPU e NPU discrete sono **co-processori**: round-trip su host/PCIe dentro il loop. La logica FPGA interfaccia **direttamente** sensori e bus di campo — es. **CAN** glue-less — senza host nell'anello di controllo.
 :::
 :::
 
 ::: {.footerbar}
-Il progetto · perché FPGA
+Il progetto · Perché una FPGA
 :::

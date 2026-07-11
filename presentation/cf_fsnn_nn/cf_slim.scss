@@ -19,3 +19,16 @@ $font-size-root: 18px;
 .reveal .twocol .vis img { max-height: 40vh; }
 .reveal .twocol .side { gap: 7px; }
 .reveal .footerbar { margin-top: 5px; padding-top: 4px; }
+
+/* ===== Rifinitura Presentation_NN ===== */
+// Fusione figure: le figure chiare vivono in un pannello bianco INTENZIONALE (niente bande grezze)
+.reveal .twocol .vis.light { background: #EEF1F4; border-color: #C7D0DA; padding: 12px; }
+.reveal .twocol .vis.light img { border-radius: 5px; background: #FFFFFF; }
+// Diagramma a blocchi orizzontale con frecce (slide Obiettivo)
+.reveal .flowrow { display: flex; align-items: stretch; gap: 10px; }
+.reveal .flowrow .card { flex: 1 1 0; min-width: 0; }
+.reveal .flowrow .arrow { display: flex; align-items: center; justify-content: center; flex: 0 0 26px; color: var(--accent); font-size: 1.5em; font-weight: 700; }
+// Evidenziazione a fragment: il riquadro attivo si "illumina" (stile animazioni PowerPoint)
+.reveal .card.fragment { opacity: 0.28; transition: opacity 0.25s, box-shadow 0.25s, border-color 0.25s; }
+.reveal .card.fragment.visible { opacity: 1; }
+.reveal .card.fragment.current-fragment { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
