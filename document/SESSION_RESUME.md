@@ -7,6 +7,12 @@
 
 ## ⚡ RIPRESA A FREDDO — Fase B/C (2 azioni indipendenti, NON dipendono dal contesto vivo) — 2026-07-11
 
+> **RUOLO DI QUESTO FILE:** è il **punto d'ingresso di ripresa + lo STATO** del track `Simulink_Importer` (NON la
+> procedura generale — quella è la skill `session-reprise`). Chi riprende a freddo legge QUI e segue i puntatori.
+> **Repo:** `D:\Project_MBSE\1.Reti Neurali\Rete_SNN_Test\CF_FSNN` · **worktree/branch:** `Simulink_Importer` @
+> `.worktrees/Simulink_Importer` · push libero su `origin`. (Il track ① Simulatore vive su `Simulator`, lo studio
+> EventProp su `main` con master `EVENTPROP_STATUS.md` — QUESTO file copre SOLO il track ② HDL/Simulink_Importer.)
+
 **FASE B (validazione del report FPGA) = CHIUSA.** Deliverable **`document/FPGA_PHASE_B_POWER.md`** (numeri +
 tabella claim + re-tag + §9 protocollo Fase C + §8 fonti letteratura). Dati grezzi + CSV in
 `matlab/axi/build/phase_b/` (`util_*`/`timing_*`/`power_*`.rpt, `results.csv`). Spec+piano:
@@ -35,6 +41,51 @@ vs SNN ~800), NON da AC≪MAC; termica non-problema (Tj~26°C). Bit-exact funzio
   unit-test col **MOCK** → tutto VERDE **senza board**. Test: `python -m pytest matlab/axi/phase_c/tests/ -v` (numpy, no torch).
 - Esecuzione reale sulla board = runbook in `document/FPGA_PHASE_C_REPORT.md` quando arriva la PYNQ-Z1 (solo
   total-board delta idle-vs-inferenza; i 9 mW PL < risoluzione → upper-bound + P_deploy totale).
+
+### 🛠️ MODI DI LAVORO (vincoli del track — rispettarli sempre)
+- **NIENTE workaround:** se un numero/comportamento non torna si indaga la **CAUSA** (come il bug leak-division,
+  la doppia /n_ticks, i 38 DSP elettivi) — non si aggira né si "aggiusta il numero".
+- **Cura costante della documentazione:** ogni milestone aggiorna il deliverable + questo file + la memoria. I
+  documenti del repo **devono bastare da soli** (la memoria dell'assistente è supplemento, non dipendenza).
+- **Design prima del codice:** nuove funzionalità → `superpowers:brainstorming` → `writing-plans` →
+  `executing-plans`. Non saltare all'implementazione.
+- **VHDL mai a mano** per i datapath (HDL Coder single-source da `snn_core`, o port 1:1 come il plant). **Core SNN
+  congelato:** parità double ~2e-6 dopo ogni modifica a `snn_core`/`snn_types`.
+- **Lavoro lungo Vivado/HW = checkpoint-driven:** run in background, ci si ferma ai checkpoint per far validare
+  all'utente prima di proseguire.
+- **Commit** conventional e chiari, **senza `Co-Authored-By`**. Push libero (Azure dismesso).
+
+### 🎙️ TONO / STILE (riprendere come se la chat non fosse mai finita)
+Tecnico e rigoroso ma **onesto senza overclaiming**: numeri con provenienza, caveat espliciti, si dichiara cosa
+è stima vs misura. **Decisi:** si agisce e si raccomanda un'opzione (niente survey infinite); si chiede solo
+quando la scelta è genuinamente dell'utente. **In italiano.** Diretti sui findings scomodi (es. "il vantaggio del
+report è giusto per il motivo sbagliato") senza addolcirli. Checkpoint espliciti sul lavoro lungo. L'utente è
+competente (MBSE/SNN/FPGA): niente spiegazioni base non richieste.
+
+### 📋 PROMPT DI RIPRESA (copia-incolla in una nuova chat dopo il /clear)
+> Volutamente una **guida a LEGGERE i documenti**, non un dump di informazioni.
+
+```
+Riprendi il progetto CF_FSNN, track HDL / Simulink_Importer. Non ho contesto in questa chat (post-clear):
+NON chiedermi lo stato — ricostruiscilo dai documenti.
+
+Repo: D:\Project_MBSE\1.Reti Neurali\Rete_SNN_Test\CF_FSNN
+Worktree/branch: .worktrees\Simulink_Importer  (branch Simulink_Importer)
+
+1. git -C ".worktrees\Simulink_Importer" pull ; poi git status e git log --oneline -8 per lo stato reale.
+2. Leggi PRIMA document/SESSION_RESUME.md -> blocco "RIPRESA A FREDDO - Fase B/C": e' il punto d'ingresso
+   (stato, branch, le AZIONI pendenti coi puntatori, MODI DI LAVORO, TONO). Segui i puntatori che indica
+   (deliverable FPGA_PHASE_B_POWER.md, spec/piani in docs/superpowers/, ecc.): LEGGI i doc, non ricostruire a memoria.
+3. La tua memoria (MEMORY.md + memorie) e' gia' caricata: contesto supplementare, non dipendenza.
+
+Poi, PRIMA di lavorare, dimmi in breve: (a) stato attuale, (b) le azioni pendenti (dovrebbero essere 2:
+report Fase B via skill create-report, e/o esecuzione harness Fase C via superpowers:executing-plans),
+(c) i modi di lavoro e il tono che adotterai - e ASPETTA la mia conferma su cosa fare.
+
+Adotta i MODI DI LAVORO e il TONO descritti in SESSION_RESUME (in sintesi: niente workaround -> indaga la
+CAUSA; cura costante della documentazione; design prima del codice via skill superpowers; VHDL mai a mano /
+core SNN congelato; commit senza Co-Authored-By; tono tecnico, onesto senza overclaiming, decisi, in italiano).
+```
 
 ---
 
