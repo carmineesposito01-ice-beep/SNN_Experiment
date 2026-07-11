@@ -131,60 +131,83 @@ Parte 3 · Risultati BPTT
 <div class="evp" id="evp">
   <div class="pl-head">
     <button class="pl-btn" id="ev-btn" onclick="evpToggle(event)">▶ avvia</button>
-    <span class="pl-cyc" id="ev-phase">integrazione λ · T→0</span>
+    <span class="pl-cyc" id="ev-phase">adjoint λ · integra T→0</span>
   </div>
-  <div class="ev-lamwrap">
-    <span class="ev-lamlabel">λ =</span>
-    <span class="ev-lamval" id="ev-lamval">0.20</span>
-    <div class="ev-bar"><div class="ev-barfill" id="ev-barfill"></div></div>
+  <svg viewBox="0 0 300 150" class="ev-svg" id="ev-svg" preserveAspectRatio="xMidYMid meet">
+    <line x1="30" y1="16" x2="30" y2="140" class="ev-ax"/>
+    <line x1="30" y1="140" x2="294" y2="140" class="ev-ax"/>
+    <text x="9" y="22" class="ev-axl">λ</text>
+    <text x="24" y="149" class="ev-axl">T</text>
+    <text x="286" y="149" class="ev-axl">0</text>
+    <line class="ev-spg" id="ev-sp0" x1="82" y1="16" x2="82" y2="140"/>
+    <line class="ev-spg" id="ev-sp1" x1="160" y1="16" x2="160" y2="140"/>
+    <line class="ev-spg" id="ev-sp2" x1="238" y1="16" x2="238" y2="140"/>
+    <text x="70" y="13" class="ev-spt">spike</text>
+    <text x="148" y="13" class="ev-spt">spike</text>
+    <text x="226" y="13" class="ev-spt">spike</text>
+    <polyline id="ev-curve" class="ev-curve" points=""/>
+    <circle id="ev-cursor" class="ev-cursor" cx="30" cy="116" r="3.2"/>
+  </svg>
+  <div class="ev-readout">
+    <span>λ(t) = <b id="ev-lam">0.20</b></span>
+    <span>∂ℒ/∂W = <b id="ev-grad">0.00</b></span>
   </div>
-  <div class="ev-note" id="ev-note">λ inizializzata al tempo T dalla loss</div>
-  <div class="ev-axis">
-    <span class="ev-ev" id="ev-e0">T</span>
-    <span class="ev-ev ev-leak" id="ev-e1">leak</span>
-    <span class="ev-ev ev-spk" id="ev-e2">spike ↑</span>
-    <span class="ev-ev ev-leak" id="ev-e3">leak</span>
-    <span class="ev-ev ev-spk" id="ev-e4">spike ↑</span>
-    <span class="ev-ev ev-leak" id="ev-e5">leak</span>
-    <span class="ev-ev ev-spk" id="ev-e6">spike ↑</span>
-    <span class="ev-ev" id="ev-e7">0</span>
-  </div>
-  <div class="ev-foot">tra gli spike solo <b>leak</b>; il gradiente entra come <b>salto</b> agli spike. Memoria ∝ <b>#spike</b>.</div>
+  <div class="ev-update" id="ev-update">poi aggiorna i pesi:&nbsp; <b>W ← W − η · ∂ℒ/∂W</b></div>
+  <div class="ev-foot">tra gli spike solo <b>leak</b>; a ogni <b>spike</b> λ salta e versa un contributo al gradiente dei pesi. Memoria ∝ <b>#spike</b>.</div>
 </div>
 <script>
 (function(){
-  var E=[
-    {lam:"0.20", w:26,  note:"λ = ∂ℒ/∂s : inizializzata al tempo T dalla loss", c:""},
-    {lam:"0.14", w:18,  note:"tra gli spike: solo leak  λ ← (1−Δt/τ)·λ",       c:"leak"},
-    {lam:"0.41", w:52,  note:"allo spike: salto  λ += (λ + ∂ℒ/∂s)/(V′−θ)",     c:"spk"},
-    {lam:"0.29", w:37,  note:"leak (solo decadimento tra un evento e l'altro)", c:"leak"},
-    {lam:"0.63", w:80,  note:"allo spike: salto",                               c:"spk"},
-    {lam:"0.44", w:56,  note:"leak",                                            c:"leak"},
-    {lam:"0.78", w:100, note:"allo spike: salto",                               c:"spk"},
-    {lam:"0.55", w:70,  note:"→ t = 0 : gradiente esatto pronto",               c:""}
+  var P=[
+    {t:10,l:0.20},{t:9.5,l:0.185},{t:9,l:0.17},{t:8.5,l:0.15},{t:8,l:0.13},
+    {t:8,l:0.40,spike:1,acc:"0.12"},
+    {t:7,l:0.34},{t:6,l:0.29},{t:5,l:0.24},
+    {t:5,l:0.60,spike:1,acc:"0.31"},
+    {t:4,l:0.51},{t:3,l:0.43},{t:2,l:0.37},
+    {t:2,l:0.78,spike:1,acc:"0.52"},
+    {t:1,l:0.66},{t:0,l:0.55}
   ];
-  var i=0, playing=false, done=false, t=null;
+  function X(t){return 30+(10-t)*26;}
+  function Y(l){return 140-l*120;}
+  var i=0, sp=0, playing=false, done=false, t=null, pts="";
   function g(id){return document.getElementById(id);}
-  function clr(){for(var k=0;k<E.length;k++){var e=g("ev-e"+k); if(e)e.classList.remove("cur");}}
-  function paint(k){var c=E[k]; if(!c)return; if(g("ev-lamval"))g("ev-lamval").textContent=c.lam; if(g("ev-barfill"))g("ev-barfill").style.width=c.w+"%"; if(g("ev-note"))g("ev-note").textContent=c.note; clr(); var m=g("ev-e"+k); if(m)m.classList.add("cur");}
+  function reset(){
+    i=0; sp=0; pts="";
+    if(g("ev-curve"))g("ev-curve").setAttribute("points","");
+    if(g("ev-lam"))g("ev-lam").textContent="0.20";
+    if(g("ev-grad"))g("ev-grad").textContent="0.00";
+    if(g("ev-cursor")){g("ev-cursor").setAttribute("cx",X(10));g("ev-cursor").setAttribute("cy",Y(0.20));}
+    for(var k=0;k<3;k++){var s=g("ev-sp"+k); if(s)s.classList.remove("hit");}
+    if(g("ev-update"))g("ev-update").classList.remove("on");
+    if(g("ev-phase"))g("ev-phase").textContent="adjoint λ · integra T→0";
+  }
   function stop(d){playing=false; if(t){clearTimeout(t);t=null;} done=d; var b=g("ev-btn"); if(b)b.textContent=d?"↻ rivedi":"▶ riprendi";}
   function step(){
     if(!playing)return; var L=g("evp"); if(!L||L.offsetParent===null){stop(false);return;}
-    var c=E[i]; paint(i);
-    if(g("ev-phase"))g("ev-phase").textContent = (i===0?"λ @ T":(i>=E.length-1?"t = 0 · fatto":(c.c==="spk"?"salto (spike)":"leak")));
-    if(c.c==="spk"){ L.classList.add("jump"); setTimeout(function(){L.classList.remove("jump");},260); }
+    var p=P[i];
+    pts += (pts?" ":"")+X(p.t).toFixed(1)+","+Y(p.l).toFixed(1);
+    if(g("ev-curve"))g("ev-curve").setAttribute("points",pts);
+    if(g("ev-cursor")){g("ev-cursor").setAttribute("cx",X(p.t));g("ev-cursor").setAttribute("cy",Y(p.l));}
+    if(g("ev-lam"))g("ev-lam").textContent=p.l.toFixed(2);
+    if(p.spike){
+      if(g("ev-phase"))g("ev-phase").textContent="salto allo spike → gradiente";
+      if(g("ev-grad"))g("ev-grad").textContent=p.acc;
+      var s=g("ev-sp"+sp); if(s)s.classList.add("hit"); sp++;
+      L.classList.add("jump"); setTimeout(function(){L.classList.remove("jump");},320);
+    } else if(i>0){
+      if(g("ev-phase"))g("ev-phase").textContent="leak (decadimento)";
+    }
     i++;
-    if(i>=E.length){ stop(true); return; }
-    t=setTimeout(step, E[i-1].c==="spk"?840:650);
+    if(i>=P.length){ if(g("ev-phase"))g("ev-phase").textContent="aggiorna i pesi"; if(g("ev-update"))g("ev-update").classList.add("on"); stop(true); return; }
+    t=setTimeout(step, P[i-1].spike?780:130);
   }
   window.evpToggle=function(ev){
     if(ev){ev.stopPropagation(); if(ev.preventDefault)ev.preventDefault();}
     var b=g("ev-btn");
     if(playing){ playing=false; if(t){clearTimeout(t);t=null;} if(b)b.textContent="▶ riprendi"; return; }
-    if(done||i>=E.length){ i=0; done=false; }
+    if(done||i>=P.length){ reset(); }
     playing=true; if(b)b.textContent="⏸ pausa"; step();
   };
-  if(g("ev-lamval")) paint(0);
+  reset();
 })();
 </script>
 ```

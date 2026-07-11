@@ -85,19 +85,23 @@ $font-size-root: 18px;
 .reveal .bp-hint { color: #E69F00; font-weight: 700; font-family: inherit; }
 .reveal .bp-foot { text-align: center; margin-top: 8px; color: #9aa5b3; font-size: 0.92em; }
 .reveal .bp-foot b { color: #C7D0DA; }
-// Animazione EventProp — adjoint λ all'indietro (T→0): tra spike solo leak, salto agli spike (event-driven)
-.reveal .evp { margin: 10px auto 0; max-width: 430px; font-size: 0.47em; line-height: 1.25; }
-.reveal .ev-lamwrap { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
-.reveal .ev-lamlabel { font-weight: 700; color: #C7D0DA; }
-.reveal .ev-lamval { font-family: ui-monospace,'Courier New',monospace; font-weight: 700; color: #2ECC71; min-width: 46px; }
-.reveal .ev-bar { flex: 1 1 auto; height: 12px; background: rgba(255,255,255,0.07); border-radius: 6px; overflow: hidden; }
-.reveal .ev-barfill { height: 100%; width: 26%; background: linear-gradient(90deg,#56B4E9,#2ECC71); border-radius: 6px; transition: width .45s ease, background .2s; }
-.reveal #evp.jump .ev-barfill { background: linear-gradient(90deg,#E69F00,#E67E22); }
-.reveal .ev-note { text-align: center; margin-top: 8px; font-family: ui-monospace,'Courier New',monospace; color: #9FD3F2; font-size: 0.95em; min-height: 1.3em; }
-.reveal .ev-axis { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; gap: 3px; }
-.reveal .ev-ev { flex: 1 1 0; text-align: center; font-size: 0.84em; font-weight: 700; color: #8A93A0; border: 1px solid #3a434e; border-radius: 6px; padding: 3px 1px; transition: transform .2s, box-shadow .2s, background .2s; }
-.reveal .ev-ev.ev-spk { color: #E69F00; border-color: rgba(230,159,0,0.4); }
-.reveal .ev-ev.ev-leak { color: #7fb2d6; }
-.reveal .ev-ev.cur { transform: translateY(-2px) scale(1.06); box-shadow: 0 0 0 2px currentColor, 0 0 12px rgba(255,255,255,0.15); background: rgba(255,255,255,0.05); }
-.reveal .ev-foot { text-align: center; margin-top: 9px; color: #9aa5b3; font-size: 0.92em; }
+// Animazione EventProp — grafico animato λ(t): leak tra gli spike, salto agli spike; il gradiente accumulato aggiorna i pesi
+.reveal .evp { margin: 6px auto 0; max-width: 390px; font-size: 0.46em; line-height: 1.2; }
+.reveal .ev-svg { width: 100%; height: auto; display: block; }
+.reveal .ev-ax { stroke: #5a6570; stroke-width: 1; }
+.reveal .ev-axl { fill: #9aa5b3; font-size: 9px; font-family: ui-monospace,monospace; }
+.reveal .ev-spg { stroke: rgba(230,159,0,0.22); stroke-width: 1; stroke-dasharray: 3 3; transition: stroke .2s; }
+.reveal .ev-spg.hit { stroke: #E69F00; stroke-width: 1.4; stroke-dasharray: none; }
+.reveal .ev-spt { fill: #8a7340; font-size: 7px; font-family: ui-monospace,monospace; text-anchor: start; }
+.reveal .ev-curve { fill: none; stroke: #2ECC71; stroke-width: 2.2; stroke-linejoin: round; stroke-linecap: round; }
+.reveal #evp.jump .ev-curve { stroke: #E69F00; }
+.reveal .ev-cursor { fill: #EAF1F7; stroke: #2ECC71; stroke-width: 1.5; }
+.reveal #evp.jump .ev-cursor { stroke: #E69F00; }
+.reveal .ev-readout { display: flex; justify-content: space-around; margin-top: 6px; font-family: ui-monospace,'Courier New',monospace; color: #C7D0DA; }
+.reveal .ev-readout b { color: #9FD3F2; }
+.reveal #ev-grad { color: #2ECC71; }
+.reveal .ev-update { text-align: center; margin-top: 7px; color: #6C7683; font-family: ui-monospace,'Courier New',monospace; transition: color .3s, background .3s, border-color .3s; padding: 3px 6px; border: 1px solid transparent; border-radius: 7px; }
+.reveal .ev-update.on { color: #EAF1F7; background: rgba(46,204,113,0.2); border-color: rgba(46,204,113,0.6); box-shadow: 0 0 12px rgba(46,204,113,0.32); }
+.reveal .ev-update b { color: #2ECC71; }
+.reveal .ev-foot { text-align: center; margin-top: 8px; color: #9aa5b3; font-size: 0.92em; }
 .reveal .ev-foot b { color: #C7D0DA; }
