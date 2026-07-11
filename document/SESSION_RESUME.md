@@ -5,6 +5,39 @@
 
 ---
 
+## ⚡ RIPRESA A FREDDO — Fase B/C (2 azioni indipendenti, NON dipendono dal contesto vivo) — 2026-07-11
+
+**FASE B (validazione del report FPGA) = CHIUSA.** Deliverable **`document/FPGA_PHASE_B_POWER.md`** (numeri +
+tabella claim + re-tag + §9 protocollo Fase C + §8 fonti letteratura). Dati grezzi + CSV in
+`matlab/axi/build/phase_b/` (`util_*`/`timing_*`/`power_*`.rpt, `results.csv`). Spec+piano:
+`docs/superpowers/{specs,plans}/2026-07-10-fpga-phase-b-power*`. **Findings:** DSP 0→38 (elettivi, 0-DSP
+realizzabile), Fmax 100-200→~8.5 MHz, **e_MAC≈e_AC su FPGA** (non 5× Horowitz), energia realizzata≫algoritmica
+(static domina 92%), **vantaggio SNN ~5-65× ma da COMPATTEZZA modello** (letteratura NN car-following ~7k-100k MAC
+vs SNN ~800), NON da AC≪MAC; termica non-problema (Tj~26°C). Bit-exact funzionale già provato (HDL phase, err=0).
+
+**AZIONE 1 — Report Fase B (via skill `create-report`).** Ripartibile da qui, dati pronti.
+- Sorgente = `document/FPGA_PHASE_B_POWER.md` (contenuto già assemblato) + `matlab/axi/build/phase_b/results.csv`.
+- Template/stile = `report/FPGA_REPORT.md` + `report/VALIDATION_REPORT_v3.md` (stessa procedura degli altri report).
+- Contenuto atteso: scopo/metodo (3 livelli fedeltà) · correttezza funzionale · risorse/timing · potenza sistema
+  (static 92%, E realizzata≫algoritmica) · costanti e_MAC≈e_AC · confronto SNN-vs-ANN + letteratura (compattezza
+  ~5-65×) · tabella claim (3 correzioni + reframe) · termica · onestà+Fase C. Figure: breakdown potenza · attribuz.
+  38 DSP + test 0-DSP · E realizzata-vs-algoritmica · e_MAC-vs-e_AC · SNN-vs-ANN + scaling letteratura · compattezza · tabella.
+- **4 CAVEAT ONESTI da portare:** (a) costanti per-op order-of-magnitude (floor mW); (b) ANN random→energia del
+  datapath, capacità dalla letteratura; (c) vantaggio = range 5-65×, numero esatto=training (non fatto); (d) tutto
+  stima Vivado, non silicio (Fase C).
+
+**AZIONE 2 — Eseguire l'harness Fase C (design-for-later, board PYNQ-Z1 in arrivo).** Ripartibile da qui.
+- Piano (codice completo, 8 task) = `docs/superpowers/plans/2026-07-11-fpga-phase-c-silicon-validation.md`;
+  spec = `docs/superpowers/specs/2026-07-11-fpga-phase-c-silicon-validation-design.md`.
+- Eseguire via `superpowers:executing-plans` (o subagent-driven): scrive generatore riferimenti MATLAB
+  (`gen_phase_c_reference.m`, rete fixed) + harness Python in `matlab/axi/phase_c/` (driver `SnnDonatello` + mock,
+  plant ACC-IIDM **numpy** PS-friendly, sweep funzionale, closed-loop network-in-the-loop, potenza 3-stati) +
+  unit-test col **MOCK** → tutto VERDE **senza board**. Test: `python -m pytest matlab/axi/phase_c/tests/ -v` (numpy, no torch).
+- Esecuzione reale sulla board = runbook in `document/FPGA_PHASE_C_REPORT.md` quando arriva la PYNQ-Z1 (solo
+  total-board delta idle-vs-inferenza; i 9 mW PL < risoluzione → upper-bound + P_deploy totale).
+
+---
+
 ## 🎯 Stato attuale (2026-07-10 — **Simulink_Importer / fase ②-HDL: B2 REALIZZATO — SNN 6.9% LUT bit-exact**)
 
 > **✅ B2 (SNN Donatello time-multiplexata, `hdl.RAM`) REALIZZATA E VERIFICATA (commit `f20e812`).** Da **44% → 6.9%
