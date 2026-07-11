@@ -97,6 +97,9 @@ $font-size-root: 18px;
 .reveal #evp.jump .ev-curve { stroke: #E69F00; }
 .reveal .ev-cursor { fill: #EAF1F7; stroke: #2ECC71; stroke-width: 1.5; }
 .reveal #evp.jump .ev-cursor { stroke: #E69F00; }
+.reveal .ev-fwd { fill: none; stroke: #56B4E9; stroke-width: 1.8; stroke-linejoin: round; stroke-linecap: round; opacity: 0.92; transition: opacity .4s; }
+.reveal #evp.bwd .ev-fwd { opacity: 0.3; }
+.reveal .ev-xt { fill: #E69F00; font-size: 8px; font-family: ui-monospace,monospace; font-weight: 700; }
 .reveal .ev-readout { display: flex; justify-content: space-around; margin-top: 6px; font-family: ui-monospace,'Courier New',monospace; color: #C7D0DA; }
 .reveal .ev-readout b { color: #9FD3F2; }
 .reveal #ev-grad { color: #2ECC71; }
