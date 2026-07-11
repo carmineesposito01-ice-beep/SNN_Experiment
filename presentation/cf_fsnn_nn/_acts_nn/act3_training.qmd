@@ -1,1 +1,137 @@
-<!-- act3_training — popolato nei task successivi -->
+# Parte 3 — Addestramento {.divider .act3}
+
+## Training — BPTT {.act3}
+::: {.explain}
+**Perché il backprop classico non basta.** Lo spike è un gradino: derivata nulla quasi ovunque → il gradiente muore. Serve il **surrogato** (campana liscia nel backward) e propagare l'errore **indietro nel tempo**.
+:::
+
+
+::: {.progress-dots}
+[]{.dot .filled} []{.dot} []{.dot}
+:::
+
+::: {.twocol}
+::: {.vis}
+[▶ animato nel deck]{.pill}
+![](assets/manim/bptt_training.gif)
+:::
+::: {.side}
+::: {.explain}
+Il metodo **standard**. Il *reverse* non è un backprop normale — il gradiente:
+
+- torna indietro attraverso [ogni tick]{.accent}, passando ogni volta per la ricorrenza $(U\!\cdot\!V)^{\!\top}$;
+- **somma** i contributi su tutti i tick → memoria $\propto T$;
+- allo spike (derivata del gradino = 0) passa solo grazie al [surrogato]{.accent} $\sigma'$.
+
+Ricetta stabile: **gradient clipping** a norma 1.0 (non negoziabile su SNN).
+:::
+::: {.eq .math}
+$$ \text{surrogato:}\quad \tfrac{\partial S}{\partial V} \approx \sigma'(V-\theta) = \tfrac{1}{(1+\gamma|V-\theta|)^2},\ \gamma{=}1 $$
+$$ \tfrac{\partial\mathcal{L}}{\partial W} = \textstyle\sum_t \tfrac{\partial\mathcal{L}}{\partial V_t}\,\tfrac{\partial V_t}{\partial W}\quad(\text{somma sui tick}) $$
+:::
+::: {.notes}
+Il punto chiave che spesso sfugge: il reverse di BPTT non è un backprop classico. (1) Il gradiente torna
+indietro attraverso ogni singolo tick dell'unroll (seq_len × 10 tick interni), non attraverso un grafo a
+profondità fissa. (2) A ogni passo attraversa la ricorrenza a basso rango, cioè la trasposta $(U\!\cdot\!V)^\top$
+— è da qui che nascono vanishing/exploding, ed è il motivo del clipping obbligatorio. (3) I contributi di tutti
+i tick vengono sommati nel gradiente dei pesi, quindi la memoria cresce con T (O(T·N)). (4) Il gradino dello
+spike ha derivata nulla: il surrogato $\sigma'(V-\theta)=1/(1+\gamma|V-\theta|)^2$ con $\gamma=1$ (alzato da 0.3
+per stringere il kernel e frenare l'esplosione) lo sostituisce solo nel backward — forward resta binario. Il
+surrogato risolve la non-differenziabilità (spaziale), BPTT il credit assignment temporale: ortogonali, usati
+insieme.
+:::
+:::
+:::
+
+::: {.footerbar}
+Parte 3 · Training — BPTT
+:::
+
+## BPTT — risultati {.act3}
+
+::: {.twocol}
+::: {.card}
+[Risultato]{.card-title}
+Accuratezza media **73%**. Migliore **Leonardo 77.53%** (NRMSE 0.225); Raffaello 69.34% (NRMSE 0.307, `v0` sbagliato a 0.499).
+:::
+::: {.card}
+[Pro / Contro]{.card-title}
+
+- **+** standard, robusto, largamente diffuso
+- **−** ρ>1 (1.16 / 2.99): espansivo → non FPGA-safe in virgola fissa
+- **−** 10/32 neuroni morti · memoria ∝ durata `T`
+:::
+:::
+
+::: {.explain}
+BPTT ottiene reti valide sul software ma **espansive**: la ricorrenza amplifica lo stato, un problema sul silicio.
+:::
+
+::: {.footerbar}
+Parte 3 · risultati BPTT
+:::
+
+## Training — EventProp {.act3}
+
+::: {.progress-dots}
+[]{.dot .filled} []{.dot} []{.dot}
+:::
+
+::: {.twocol}
+::: {.vis}
+[▶ animato nel deck]{.pill}
+![](assets/manim/eventprop_adjoint.gif)
+:::
+::: {.side}
+::: {.explain}
+L'alternativa **esatta** al surrogato — ha prodotto il campione Donatello. Una variabile *adjoint* $\lambda$
+integrata [all'indietro nel tempo]{.accent} ($T\to0$) che **salta solo agli spike**:
+
+- gradiente [*esatto*]{.accent}, non distorto dal surrogato;
+- tra gli spike solo leak → memoria $\propto$ **#spike**, non $T$;
+- **contrattivo** se ρ<1 (l'adjoint converge).
+:::
+::: {.eq .math}
+$$ \text{tra spike:}\quad \lambda \leftarrow (1-\tfrac{\Delta t}{\tau})\,\lambda\qquad(\text{leak}) $$
+$$ \text{allo spike:}\quad \lambda \mathrel{+}= \tfrac{\lambda + \partial\mathcal{L}/\partial s}{V' - \theta}\qquad(\text{salto}) $$
+:::
+::: {.notes}
+EventProp (Wunderlich & Pehle) calcola il gradiente ESATTO di una rete spiking, senza l'approssimazione del
+surrogato. Introduce variabili adjoint (λ_V, λ_I) inizializzate al tempo finale T dalla loss e integrate
+all'indietro nel tempo (da T verso 0): è l'analogo continuo del backprop. Tra uno spike e l'altro l'adjoint
+evolve solo per leak (decadimento liscio); l'informazione di gradiente entra come un SALTO esattamente agli
+istanti di spike (event-driven). Conseguenza: il costo è O(#spike), non O(T) come BPTT — niente grafo srotolato
+da conservare. Ed è contrattivo per costruzione: l'adjoint propaga attraverso Rᵀ e converge solo se ρ<1, lo
+stesso vincolo spettrale che rende lo stato fixed-point limitato. Non a caso i due champion EventProp
+(Donatello, Michelangelo) hanno ρ<1 e 0 neuroni morti; Donatello è il candidato al deploy.
+:::
+:::
+:::
+
+::: {.footerbar}
+Parte 3 · Training — EventProp
+:::
+
+## EventProp — risultati {.act3}
+
+::: {.twocol}
+::: {.card}
+[Risultato]{.card-title}
+Accuratezza media **82%**. Migliore **Donatello 84.75%** (NRMSE **0.152**, la più bassa); Michelangelo 79.18% (NRMSE 0.208).
+:::
+::: {.card}
+[Pro / Contro]{.card-title}
+
+- **+** gradiente **esatto** · **ρ<1** (0.05 / 0.39): contrattivo → FPGA-safe
+- **+** 0 neuroni morti · memoria ∝ #spike
+- **−** richiede ρ<1 per convergere (vincolo spettrale)
+:::
+:::
+
+::: {.explain}
+EventProp dà **stabilità per costruzione** (ρ<1) e la miglior identificazione: ha prodotto il candidato **Donatello**.
+:::
+
+::: {.footerbar}
+Parte 3 · risultati EventProp
+:::
