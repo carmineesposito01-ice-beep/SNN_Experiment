@@ -1,1 +1,189 @@
-<!-- act5_fpga — popolato nei task successivi -->
+# Parte 5 — Idoneità FPGA {.divider .act3}
+
+## T5 · Quantizzazione: come è quantizzata la rete {.act3}
+
+::: {.threecol}
+::: {.card}
+[Pesi → potenze-di-2]{.card-title}
+13 livelli `{±1/16 … ±2, 0}`. La moltiplicazione diventa uno shift → 0 DSP. Assorbiti dal QAT in training.
+:::
+::: {.card}
+[Stato → fixed-point]{.card-title}
+Membrana, fatica e correnti in virgola fissa. Con ρ<1 lo stato resta limitato: niente overflow del datapath.
+:::
+::: {.card}
+[64 soglie → float]{.card-title}
+`base` + `jump` ALIF (32+32) restano in fp: pochi valori, costo trascurabile, massima libertà di adattamento.
+:::
+:::
+
+::: {.twocol}
+::: {.vis}
+![](figures/state_ranges.png)
+:::
+::: {.vis}
+![](figures/eq_qmn.png)
+:::
+:::
+
+::: {.explain}
+Tre regimi, uno per blocco: [i pesi]{.accent} pagano il costo dei moltiplicatori → po2; [lo stato]{.accent}
+deve solo restare limitato → fixed-point; [le soglie]{.accent} sono poche e delicate → restano float. La
+quantizzazione non è un post-processing: è nata nel training (QAT).
+:::
+
+::: {.notes}
+Il datapath è quantizzato in modo eterogeneo, per blocco, secondo cosa costa davvero. I pesi vanno in potenze
+di due (13 livelli) perché è lì che si paga il costo dei moltiplicatori: una moltiplicazione po2 è uno shift,
+quindi zero DSP. Lo stato interno (membrana, fatica, correnti) va in fixed-point: non deve essere preciso, deve
+solo restare limitato, e il vincolo ρ<1 lo garantisce. Le 64 soglie ALIF (base e jump, 32+32) restano in
+floating point: sono pochi valori delicati e apprendibili, il loro costo è trascurabile ma la loro libertà di
+adattamento conta. Tutto questo è assorbito nel quantization-aware training, non applicato dopo.
+:::
+
+::: {.footerbar}
+Parte 5 · T5 schema di quantizzazione
+:::
+
+## T5 · Stabilità spettrale: ρ<1 tiene lo stato limitato {.act3}
+
+::: {.twocol}
+::: {.vis}
+![](figures/discriminant.png)
+:::
+::: {.side}
+::: {.explain}
+Il discriminante di deploy è il [raggio spettrale]{.accent} $\rho(U\!\cdot\!V)$: dice se la ricorrenza in
+virgola fissa resta limitata ($\rho<1$) o se gli errori di arrotondamento si amplificano ciclo dopo ciclo
+($\rho>1$). EventProp la tiene [contrattiva]{.accent} (ρ 0.05–0.39); BPTT è espansivo (ρ 1.16–2.99). Sotto 1
+= FPGA-safe.
+:::
+::: {.eq}
+`ρ ≜ σ_max( po2(U)·po2(V) )`
+
+`ρ<1 EventProp:  Donatello 0.05 · Michelangelo 0.39`
+
+`ρ>1 BPTT:  Leonardo 1.16 · Raffaello 2.99`
+
+`ρ<1  →  FPGA-safe`
+:::
+::: {.notes}
+ρ è il raggio spettrale (spectral radius) della ricorrenza a rango basso U·V. Con EventProp resta contrattivo
+(ρ<1): lo stato in virgola fissa resta limitato e l'adjoint converge in modo garantito. Con BPTT invece ρ>1
+(regime espansivo): in fixed-point gli errori di arrotondamento si amplificano ciclo dopo ciclo fino a saturare
+il datapath. La stessa soglia ρ<1 governa anche la salute della rete — neuroni morti e saturi — che è il tema
+della slide successiva.
+:::
+:::
+:::
+
+::: {.footerbar}
+Parte 5 · T5 discriminante ρ<1
+:::
+
+## T5 · Timing: microsecondi contro una deadline di 100 ms {.act3}
+
+::: {.explain}
+Un passo della rete costa [microsecondi]{.accent}; la deadline di controllo è 100 ms → budget usato ~0,1%. E
+poiché non c'è alcun ramo dipendente dai dati, il caso peggiore coincide col migliore: [WCET == BCET]{.accent},
+jitter zero. L'hard-real-time è regalato dall'architettura, non conquistato a fatica.
+:::
+
+::: {.threecol}
+::: {.card}
+[Latenza]{.card-title}
+~µs per passo contro una deadline di 100 ms → budget temporale ~0,1%.
+:::
+::: {.card}
+[Determinismo]{.card-title}
+Nessun branch dipendente dai dati → il caso peggiore = il caso migliore (WCET == BCET).
+:::
+::: {.card}
+[Jitter]{.card-title}
+Zero: ogni passo dura esattamente uguale. Hard-real-time by design.
+:::
+:::
+
+::: {.notes}
+Il margine temporale è enorme: un passo della rete si esegue in microsecondi, contro una deadline di controllo
+di 100 ms, quindi il budget temporale usato è intorno allo 0,1%. Il punto qualitativo però è il determinismo:
+poiché non ci sono rami dipendenti dai dati (nessun if sui valori, la struttura di calcolo è fissa), il tempo
+di esecuzione nel caso peggiore coincide con quello nel caso migliore — WCET == BCET. Il jitter è quindi zero:
+un requisito hard-real-time che di solito si conquista a fatica, qui è regalato dall'architettura.
+:::
+
+::: {.footerbar}
+Parte 5 · T5 timing (WCET == BCET)
+:::
+
+## T5 · Energia: il vantaggio viene dall'operazione {.act3}
+
+::: {.twocol}
+::: {.vis}
+![](figures/energy_ann.png)
+:::
+::: {.side}
+::: {.explain}
+Contro una ANN densa di pari compito il vantaggio è di circa [5–8×]{.accent}. Viene dall'*operazione*, non
+dalla sparsità: l'accumulo (AC) di una SNN costa meno del multiply-accumulate (MAC) di una ANN, e i pesi
+potenze-di-due azzerano i DSP (moltiplicazione → shift). I numeri sono [stime Horowitz]{.accent} (per-op,
+45 nm), non consumo misurato.
+:::
+::: {.eq}
+`vantaggio ≈ 5–8× (op-count) · 4.8–6× (6-tier) — stesso ordine`
+
+`origine:  AC < MAC   +   0 DSP (po2 → shift)`
+
+`E = stima Horowitz (per-op, 45 nm)`
+:::
+::: {.notes}
+Il confronto è contro una ANN densa di pari compito e il vantaggio energetico è di circa 5–8×. La sorgente va
+detta con precisione perché è controintuitiva: non nasce dalla sparsità, nasce da due fatti puramente hardware.
+Primo: l'accumulo (AC) di una SNN costa meno del multiply-accumulate (MAC) di una ANN. Secondo: i pesi in
+potenze di due azzerano l'uso dei DSP, perché la moltiplicazione diventa uno shift. I numeri di energia sono
+stime Horowitz (costo per operazione a 45 nm), non consumo misurato: un ordine di grandezza affidabile, non una
+fattura elettrica.
+:::
+:::
+:::
+
+::: {.footerbar}
+Parte 5 · T5 energia vs ANN (AC < MAC)
+:::
+
+## T5 · Robustezza ai bit-flip (SEU): TMR mirato, non totale {.act3}
+
+::: {.twocol}
+::: {.vis}
+![](figures/seu.png)
+:::
+::: {.side}
+::: {.explain}
+Un [SEU]{.accent} (bit-flip da radiazione) è il guasto che la ISO 26262 impone per l'automotive. Iniettando
+flip nei pesi quantizzati, la rete non produce collisioni fino a 8 flip: la ridondanza dei 32 neuroni assorbe i
+guasti sparsi. Ma il [readout]{.accent} è critico — un flip lì sposta un parametro fisico — quindi basta un TMR
+mirato solo sul readout, non sull'intera rete. Il più fragile è Leonardo.
+:::
+::: {.eq}
+`0 collisioni  fino a  8 bit-flip`
+
+`criticità:  readout  ≫  hidden`
+`→ TMR mirato sul readout (non totale)`
+
+`più fragile:  Leonardo`
+:::
+::: {.notes}
+Un SEU (Single-Event Upset) è il classico bit-flip indotto da radiazione, ed è il guasto che la ISO 26262
+impone di considerare per l'automotive. Iniettando flip nei bit dei pesi quantizzati, la rete non produce
+alcuna collisione fino a 8 flip: la ridondanza intrinseca dei 32 neuroni assorbe i guasti sparsi. Ma non tutti
+i bit pesano uguale. Il readout — l'ultimo layer LI che decodifica i 5 parametri fisici — è la parte più
+critica: un flip lì sposta direttamente un parametro in uscita. La conseguenza progettuale è precisa: basta un
+TMR (Triple Modular Redundancy) mirato solo sul readout, non la triplicazione dell'intera rete, con enorme
+risparmio di area. Tra i champion, Leonardo è il più fragile ai flip.
+:::
+:::
+:::
+
+::: {.footerbar}
+Parte 5 · T5 SEU / ISO 26262
+:::
