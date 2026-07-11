@@ -3,7 +3,7 @@
 ## Algoritmo PINN {.act2}
 
 ::: {.explain}
-**Cos'è.** Una *Physics-Informed Neural Network*: la rete non predice il prossimo punto, ma i **parametri** di un modello fisico noto; la fisica entra nella **loss** come ponte e regolarizzatore. **Perché qui:** vogliamo produrre parametri → usiamo un modello per generarli, addestriamo la rete a predirli, e li **valutiamo con lo stesso modello**.
+**Cos'è.** Una *Physics-Informed Neural Network*: la rete non predice il prossimo punto, ma i **parametri** di un modello fisico noto; la fisica entra nella **loss** come ponte e regolarizzatore. **Perché qui:** vogliamo i **parametri** di un modello fisico noto → la **rete li predice**, il **modello li converte in accelerazione**, e l'**errore sull'accelerazione** li corregge.
 :::
 
 ::: {.twocol}

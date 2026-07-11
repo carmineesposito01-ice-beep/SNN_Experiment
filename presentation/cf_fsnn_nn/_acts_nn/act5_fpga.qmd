@@ -13,7 +13,7 @@ Membrana, fatica e correnti in virgola fissa. Con ρ<1 lo stato resta limitato: 
 :::
 ::: {.card}
 [64 soglie → float]{.card-title}
-`base` + `jump` ALIF (32+32) restano in fp: pochi valori, costo trascurabile, massima libertà di adattamento.
+`base` + `salto` ALIF (32+32) restano in fp: pochi valori, costo trascurabile, massima libertà di adattamento.
 :::
 :::
 
@@ -36,7 +36,7 @@ quantizzazione non è un post-processing: è nata nel training (QAT).
 Il datapath è quantizzato in modo eterogeneo, per blocco, secondo cosa costa davvero. I pesi vanno in potenze
 di due (13 livelli) perché è lì che si paga il costo dei moltiplicatori: una moltiplicazione po2 è uno shift,
 quindi zero DSP. Lo stato interno (membrana, fatica, correnti) va in fixed-point: non deve essere preciso, deve
-solo restare limitato, e il vincolo ρ<1 lo garantisce. Le 64 soglie ALIF (base e jump, 32+32) restano in
+solo restare limitato, e il vincolo ρ<1 lo garantisce. Le 64 soglie ALIF (base e salto, 32+32) restano in
 floating point: sono pochi valori delicati e apprendibili, il loro costo è trascurabile ma la loro libertà di
 adattamento conta. Tutto questo è assorbito nel quantization-aware training, non applicato dopo.
 :::
@@ -130,7 +130,7 @@ potenze-di-due azzerano i DSP (moltiplicazione → shift). I numeri sono [stime 
 45 nm), non consumo misurato.
 :::
 ::: {.eq}
-`vantaggio ≈ 5–8× (op-count) · 4.8–6× (6-tier) — stesso ordine`
+`vantaggio ≈ 5–8× (op-count) e 4.8–6× (6-tier) — stesso ordine`
 
 `origine:  AC < MAC   +   0 DSP (po2 → shift)`
 

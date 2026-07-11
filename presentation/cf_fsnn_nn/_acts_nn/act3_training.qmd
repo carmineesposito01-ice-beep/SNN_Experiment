@@ -252,9 +252,9 @@ Parte 3 · Risultati BPTT
 :::
 ::: {.side}
 ::: {.explain}
-L'alternativa **esatta** al surrogato. L'aggiunto **λ** (del potenziale $V$) torna [indietro]{.accent} ($T\to0$): è **costruito dai salti agli spike** (dove entra l'**errore** $\partial\mathcal{L}/\partial s$ = uscita − target) e **decade** tra uno spike e l'altro. Qui `drive` = corrente in ingresso e $V_k=\alpha_m V_{k-1}+\text{drive}_k$.
+L'alternativa **esatta** al surrogato. L'aggiunto **λ** (del potenziale $V$) torna [indietro]{.accent} ($T\to0$): è **costruito dai salti agli spike** (dove entra l'**errore** $\partial\mathcal{L}/\partial s$ che arriva dall'uscita) e **decade** tra uno spike e l'altro. Qui `drive` = corrente in ingresso e $V_k=\alpha_m V_{k-1}+\text{drive}_k$.
 
-- gradiente [*esatto*]{.accent} — derivata reale al crossing, `drive`$-\theta\approx V'(t^*)$;
+- gradiente [*esatto*]{.accent} (niente surrogato) — il salto divide per il denominatore di crossing `drive`$-\theta$;
 - **contrattivo** se ρ<1 (l'adjoint converge).
 :::
 ::: {.eq .math}
@@ -291,7 +291,7 @@ Metrica = **loss di ricostruzione** (`val_data`) + **NRMSE**. Fronte multi-obiet
 - **+** spettralmente **contrattivo** (ρ 0.05 / 0.39) → FPGA-safe
 - **+** **0 neuroni morti**
 - **+** backward **manuale** (`autograd.Function`, no grafo autograd) → più **leggero** di BPTT
-- **−** gli **spike marginali** possono far esplodere il gradiente (denominatore $\propto V'(t^*) \to 0$)
+- **−** gli **spike marginali** possono far esplodere il gradiente (denominatore $(\text{drive}-\theta)\to 0$)
 :::
 :::
 
@@ -300,7 +300,7 @@ Nessun vincitore secco: è un **fronte di Pareto**. Il candidato al deploy vince
 :::
 
 ::: {.notes}
-Il salto dell'adjoint allo spike è ∝ 1/denom, con denom ∝ V'(t*) (derivata del potenziale al crossing, soglia adattiva). Uno spike marginale attraversa la soglia "appena" → denom→0 → il gradiente esplode (~1e17 senza stabilizzazione); la soglia adattiva ALIF stringe ancora il denom. La CURA non sono i clamp (failsafe), ma il VINCOLO SPETTRALE in loss (σ*≈1.5) che tiene ρ<1 — la stessa ρ della ricorrenza low-rank. Multi-obiettivo: il candidato al deploy ha NRMSE 0.152 e ρ=0.05 ma val_data 0.346 (fisica peggiore), mentre su val_data guidano il champion BPTT (0.1926) e un altro EventProp (0.2031). Numeri single-seed.
+Il salto dell'adjoint allo spike è ∝ 1/denom, con denom = drive − θ (nel codice drive − V_th_eff): la discretizzazione del crossing del potenziale, non esattamente V'(t*) — che sarebbe drive/(1−α_m) − θ. Uno spike marginale attraversa la soglia "appena" → denom→0 → il gradiente esplode (~1e17 senza stabilizzazione); la soglia adattiva ALIF stringe ancora il denom. La CURA non sono i clamp (failsafe), ma il VINCOLO SPETTRALE in loss (σ*≈1.5) che tiene ρ<1 — la stessa ρ della ricorrenza low-rank. Multi-obiettivo: il candidato al deploy ha NRMSE 0.152 e ρ=0.05 ma val_data 0.346 (fisica peggiore), mentre su val_data guidano il champion BPTT (0.1926) e un altro EventProp (0.2031). Numeri single-seed.
 :::
 
 ::: {.footerbar}
