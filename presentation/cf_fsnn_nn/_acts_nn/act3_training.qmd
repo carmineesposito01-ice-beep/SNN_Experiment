@@ -48,7 +48,7 @@ Perché il **backprop classico non funziona** sulle reti spiking:
       clrAll(); if(g("bp-phase"))g("bp-phase").textContent="← backward";
       var k=TN-1-i; var e=tk(k); if(e)e.classList.add("bwd");
       if(g("bp-accv"))g("bp-accv").textContent=accBwd[i];
-      if(g("bp-hint"))g("bp-hint").textContent = SP[k] ? " ← σ′ ✓ · (U·V)ᵀ" : " ← (U·V)ᵀ";
+      if(g("bp-hint"))g("bp-hint").textContent = SP[k] ? " ← σ′ (max) · (U·V)ᵀ" : " ← σ′ · (U·V)ᵀ";
       i++;
       if(i>=TN){ t=setTimeout(function(){ clrAll(); if(g("bp-phase"))g("bp-phase").textContent="fatto"; if(g("bp-hint"))g("bp-hint").textContent=" (somma sui tick)"; stop(true); },700); }
       else { t=setTimeout(step,660); }
@@ -264,7 +264,7 @@ $$ \text{allo spike:}\ \ \lambda_k=\underbrace{\alpha_m\lambda_{k+1}}_{\text{lea
 $$ \text{pesi:}\ \ \tfrac{\partial\mathcal{L}}{\partial W}\mathrel{+}=-\lambda_k\,x_k^{\top} $$
 :::
 ::: {.notes}
-EventProp (Wunderlich & Pehle 2021) calcola il gradiente ESATTO di una rete spiking, senza l'approssimazione del surrogato. Introduce variabili adjoint inizializzate al tempo finale T dalla loss e integrate all'indietro (da T verso 0). Tra uno spike e l'altro l'adjoint evolve solo per leak; l'informazione di gradiente entra come un SALTO agli istanti di spike (event-driven). Costo O(#spike), non O(T). Contrattivo per costruzione: l'adjoint propaga attraverso Rᵀ e converge solo se ρ<1 — lo stesso vincolo spettrale che rende lo stato fixed-point limitato. I due champion EventProp hanno ρ<1 e 0 neuroni morti; uno è il candidato al deploy.
+EventProp (Wunderlich & Pehle 2021) calcola il gradiente ESATTO di una rete spiking, senza l'approssimazione del surrogato. L'adjoint λ (del potenziale V) parte da 0 e viene integrato all'indietro (da T verso 0): tra uno spike e l'altro evolve solo per leak, e l'informazione di gradiente entra come un SALTO agli istanti di spike (l'errore ∂ℒ/∂s diviso per la pendenza drive−θ). Il metodo continuo avrebbe costo O(#spike); questa implementazione discreta itera comunque ogni tick (O(T)), ma con backward MANUALE (torch.autograd.Function custom, senza grafo autograd sui tick) — più leggera e più veloce di BPTT. Contrattivo per costruzione: l'adjoint propaga attraverso Rᵀ e converge solo se ρ<1 — lo stesso vincolo spettrale che rende lo stato fixed-point limitato. I due champion EventProp hanno ρ<1 e 0 neuroni morti; uno è il candidato al deploy.
 :::
 :::
 :::
@@ -290,7 +290,7 @@ Metrica = **loss di ricostruzione** (`val_data`) + **NRMSE**. Fronte multi-obiet
 - **+** gradiente **esatto** (non surrogato)
 - **+** spettralmente **contrattivo** (ρ 0.05 / 0.39) → FPGA-safe
 - **+** **0 neuroni morti**
-- **+** memoria ∝ #spike (non $T$)
+- **+** backward **manuale** (`autograd.Function`, no grafo autograd) → più **leggero** di BPTT
 - **−** gli **spike marginali** possono far esplodere il gradiente (denominatore $\propto V'(t^*) \to 0$)
 :::
 :::

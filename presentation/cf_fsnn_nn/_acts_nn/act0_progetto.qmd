@@ -1,8 +1,8 @@
 ## Obiettivo {.act1}
 
 ::: {.explain}
-Realizzare un sistema **DSP** con **AI-acceleration** che genera i **parametri di un modello di car-following**
-a partire da **segnali V2X**, su hardware **FPGA** a bordo veicolo.
+Realizzare un **sistema di elaborazione a bordo veicolo**, con **accelerazione neurale**, che genera i **parametri di un modello di car-following**
+a partire da **segnali V2X**, su hardware **FPGA**.
 :::
 
 ::: {.flowrow}

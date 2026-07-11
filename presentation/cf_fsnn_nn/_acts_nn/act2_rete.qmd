@@ -105,7 +105,7 @@ Ibrida: continuo → spiking → continuo, in 864 parametri.
 - **OUTPUT** (5) — integratori a perdita (LI), senza soglia; il readout è la tensione.
 :::
 ::: {.eq}
-**864 pesi** = `fc` 128 + ricorrenza `U·V` 512 + soglie ALIF 64 + `out` 160
+**864 parametri** = `fc` 128 + ricorrenza `U·V` 512 + soglie ALIF 64 + `out` 160
 :::
 :::
 :::
@@ -192,9 +192,9 @@ La ricorrenza tra i 32 neuroni **non** è una matrice piena 32×32, ma è fattor
 
 **Perché e quali vantaggi:**
 
-- **Costo dimezzato**: 1024 → **512** moltiplicazioni/tick
+- **Costo dimezzato a rango 8**: 1024 → **512** moltiplicazioni/tick (a **rango 16** resta pieno)
 - **Rango 8 = regolarizzatore**: limita la dinamica di feedback, frena la crescita del raggio spettrale ρ
-- **ρ controllato** → mappa **contrattiva** (ρ<1): stato limitato, sicura in virgola fissa su FPGA
+- **ρ<1 raggiungibile**: il rango basso frena ρ; la **contrattività** (stato limitato, FPGA-safe) la fissa poi un **vincolo spettrale in addestramento**, non l'architettura da sola
 
 ::: {.eq .math}
 $$ \underbrace{W\,s}_{32\times32\,=\,1024} \;\to\; \underbrace{z=V s}_{256}\ \text{poi}\ \underbrace{U z}_{256} \;=\; 512\ \ (\tfrac12) $$
@@ -204,7 +204,7 @@ $$ \text{si calcola } U(Vs),\ \text{mai } (UV)s\ \Rightarrow\ U\!\cdot\!V\ \text
 :::
 
 ::: {.notes}
-Regola: per una matrice N×N piena il costo è N²; una fattorizzazione a rango r costa 2·N·r → conviene se r < N/2. Per N=32 il break-even è r=16; a rango 8 → 512 vs 1024 (metà). Nota onesta: due dei champion usano rango 16, dove 2·N·r = N² e il risparmio in moltiplicazioni svanisce (resta solo il vincolo di rango sulla dinamica). ρ nel codice è approssimato dalla norma spettrale σ_max (limite superiore del raggio spettrale). Init ortogonale (gain 0.2), U e V quantizzate po2 separatamente, vincolo spettrale con soglia σ*≈1.5 → ricorrenza contrattiva per costruzione.
+Regola: per una matrice N×N piena il costo è N²; una fattorizzazione a rango r costa 2·N·r → conviene se r < N/2. Per N=32 il break-even è r=16; a rango 8 → 512 vs 1024 (metà). Nota onesta: due dei champion (entrambi EventProp), incluso il candidato al deploy, usano rango 16 (~1400 parametri) → 2·N·r = N² e il dimezzamento svanisce (resta solo il vincolo di rango sulla dinamica). Quindi i valori "864 parametri / 512-per-tick" valgono per il rango 8, non per la rete effettivamente deployata. ρ nel codice è approssimato dalla norma spettrale σ_max (limite superiore del raggio spettrale). Init ortogonale (gain 0.2), U e V quantizzate po2 separatamente. La contrattività ρ<1 NON è garantita dall'architettura: i champion BPTT sulla stessa ricorrenza low-rank restano espansivi (ρ 1.16–2.99); ρ<1 lo ottiene il vincolo spettrale (soglia σ*≈1.5) nella loss di EventProp (Parte 3).
 :::
 
 ::: {.footerbar}

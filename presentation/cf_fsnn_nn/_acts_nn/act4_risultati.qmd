@@ -105,6 +105,7 @@ Non tutti i parametri sono ugualmente identificabili. Il gap di standstill `s0` 
 direttamente nel gap statico. `v0` e `b` sono i più ostici: `v0` si osserva solo dove il veicolo va davvero
 libero (free-flow), `b` solo nelle frenate. È per questo che `Raffaello`, sbagliando proprio `v0`, si porta
 dietro la distorsione del diagramma fondamentale a livello macroscopico.
+**T4 / Identificabilità (Fisher)** — è il livello che regge il "perché" del fronte di Pareto e del ritornello "NRMSE bassa ≠ guida sicura": la matrice di Fisher è a **rango pieno (5/5)** — tutti i parametri in linea di principio identificabili — ma **fortemente mal-condizionata**, con numero di condizionamento ~1.6·10⁹ (problema "sloppy") e ~29 combinazioni di **equifinalità** (parametri diversi, traiettorie quasi indistinguibili; `s0` il meno identificabile, `T` il più). Ecco perché due champion con NRMSE diverse possono guidare in modo simile.
 :::
 
 ::: {.footerbar}
