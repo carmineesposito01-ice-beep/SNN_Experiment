@@ -96,14 +96,14 @@ Parte 2 · Layer d'ingresso
 :::
 ::: {.side}
 ::: {.explain}
-Il neurone [adaptive-LIF]{.accent} integra la corrente, perde carica per leak, spara sopra la soglia effettiva e ne *affatica* la soglia a ogni spike. `base` e `salto` sono apprendibili per-neurone.
+Il neurone [adaptive-LIF]{.accent} integra, perde carica per leak, spara sopra la soglia effettiva e ne *affatica* la soglia a ogni spike (`base` e `salto` apprendibili per-neurone).
 :::
 
-**Perché ALIF e non un LIF comune** (dai report):
+**Perché ALIF e non un LIF** (dai report):
 
-- **Memoria a due scale**: membrana veloce; fatica lenta (cresce solo agli spike, mai resettata → integra la storia di firing)
-- **Sparsità + stabilità**: la fatica regola la frequenza di scarica; azzerarla fa divergere il training
-- **Economico su FPGA**: 2 stati/neurone; la fatica riusa lo stesso leak a bit-shift
+- **Memoria a due scale**: membrana veloce, fatica lenta (integra la storia di firing)
+- **Sparsità + stabilità**: la fatica regola la scarica; azzerarla fa divergere il training
+- **Economico su FPGA**: 2 stati/neurone, leak a bit-shift
 
 ::: {.eq .math}
 $$ V \leftarrow V - \tfrac{V}{8} + I_\text{in} + I_\text{rec}, \quad \theta_\text{eff}=\text{base}+\max(0,\text{fatica}) $$
@@ -205,15 +205,13 @@ Parte 2 · Decode
 :::
 ::: {.side}
 ::: {.explain}
-I pesi sono vincolati a [potenze di due]{.accent} (**13 livelli**): su FPGA moltiplicare diventa un **bit-shift** → 0 moltiplicatori.
+Pesi vincolati a [potenze di due]{.accent} (**13 livelli**): su FPGA la moltiplicazione diventa un **bit-shift** (0 moltiplicatori). Costo sul plateau: solo ~0.2%.
 :::
 
-**Straight-Through Estimator** — `round` non è derivabile, quindi:
+**Straight-Through Estimator** (`round` non è derivabile):
 
-- **forward**: si usa il peso **quantizzato** `w_q` (shift)
-- **backward**: la quantizzazione è attraversata come **identità** → il gradiente aggiorna il peso fp sottostante
-
-Costo di accuratezza misurato sul plateau: solo ~0.2%.
+- **forward**: peso **quantizzato** `w_q` (shift)
+- **backward**: quantizzazione attraversata come **identità** → aggiorna il peso fp sottostante
 
 ::: {.eq .math}
 $$ w_q = \text{sign}(w)\cdot 2^{\text{clamp}(\text{round}(\log_2|w|),\,-4,\,1)}\cdot\mathbb{1}[\,|w|>2^{-5}\,] $$

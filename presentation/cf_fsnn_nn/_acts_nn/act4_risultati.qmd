@@ -8,15 +8,15 @@
 :::
 ::: {.side}
 ::: {.explain}
-Quattro reti caratterizzate **per-metrica**, non un generico "migliore": due addestrate con **BPTT**, due con **EventProp**. Riferimento = l'oracolo **Master Splinter** (il modello con i parametri veri).
+Quattro reti caratterizzate **per-metrica**: due con **BPTT**, due con **EventProp**. Riferimento = l'oracolo **Master Splinter** (parametri veri).
 :::
 
 - **Leonardo** (BPTT) — conservativo, miglior fisica (val_data 0.1926)
 - **Raffaello** (BPTT) — aggressivo, `v0` mis-identificato
-- **Donatello** (EventProp) — equilibrato, NRMSE minima (0.152), ρ 0.05
+- **Donatello** (EventProp) — equilibrato, NRMSE minima 0.152, ρ 0.05
 - **Michelangelo** (EventProp) — conservativo, ρ 0.39
 
-Chi "vince" lo decidono i **sei livelli** di valutazione, non un numero solo.
+Chi "vince" lo decidono i **sei livelli**, non un numero solo.
 :::
 :::
 
