@@ -131,11 +131,13 @@ Parte 3 · Risultati BPTT
 <div class="evp" id="evp">
   <div class="pl-head">
     <button class="pl-btn" id="ev-btn" onclick="evpToggle(event)">▶ avvia</button>
-    <span class="pl-cyc" id="ev-phase">forward · x(t)</span>
+    <span class="pl-cyc" id="ev-phase">forward · V(t)</span>
   </div>
   <svg viewBox="0 0 300 150" class="ev-svg" id="ev-svg" preserveAspectRatio="xMidYMid meet">
     <line x1="30" y1="16" x2="30" y2="140" class="ev-ax"/>
     <line x1="30" y1="140" x2="294" y2="140" class="ev-ax"/>
+    <line x1="30" y1="40" x2="290" y2="40" class="ev-th"/>
+    <text x="283" y="36" class="ev-thl">θ</text>
     <text x="9" y="22" class="ev-axl">λ</text>
     <text x="24" y="149" class="ev-axl">0</text>
     <text x="286" y="149" class="ev-axl">T</text>
@@ -160,8 +162,13 @@ Parte 3 · Risultati BPTT
 <script>
 (function(){
   var F=[
-    {t:0,v:0.10},{t:1,v:0.16},{t:2,v:0.24,spk:1},{t:3,v:0.30},{t:4,v:0.38},
-    {t:5,v:0.48,spk:1},{t:6,v:0.55},{t:7,v:0.63},{t:8,v:0.72,spk:1},{t:9,v:0.80},{t:10,v:0.85}
+    {t:0,v:0.00},{t:1,v:0.62},
+    {t:2,v:1.05,spk:1},{t:2,v:0.05},
+    {t:3,v:0.52},{t:4,v:0.88},
+    {t:5,v:1.07,spk:1},{t:5,v:0.07},
+    {t:6,v:0.52},{t:7,v:0.90},
+    {t:8,v:1.08,spk:1},{t:8,v:0.08},
+    {t:9,v:0.55},{t:10,v:0.80}
   ];
   var B=[
     {t:10,l:0.20},{t:9.5,l:0.185},{t:9,l:0.17},{t:8.5,l:0.15},{t:8,l:0.13},
@@ -173,7 +180,7 @@ Parte 3 · Risultati BPTT
     {t:1,l:0.66},{t:0,l:0.55}
   ];
   function X(t){return 30+t*26;}
-  function Y(v){return 140-v*120;}
+  function Y(v){return 140-v*100;}
   var mode="idle", fi=0, bi=0, sp=0, playing=false, t=null, fpts="", bpts="";
   function g(id){return document.getElementById(id);}
   function reset(){
@@ -181,13 +188,13 @@ Parte 3 · Risultati BPTT
     if(g("ev-fwd"))g("ev-fwd").setAttribute("points","");
     if(g("ev-curve"))g("ev-curve").setAttribute("points","");
     if(g("ev-grad"))g("ev-grad").textContent="0.00";
-    if(g("ev-r1"))g("ev-r1").textContent="forward: calcola x(t)";
-    if(g("ev-cursor")){g("ev-cursor").setAttribute("cx",X(0));g("ev-cursor").setAttribute("cy",Y(0.10));}
+    if(g("ev-r1"))g("ev-r1").textContent="forward: V integra e spara";
+    if(g("ev-cursor")){g("ev-cursor").setAttribute("cx",X(0));g("ev-cursor").setAttribute("cy",Y(0.0));}
     for(var k=0;k<3;k++){var s=g("ev-sp"+k); if(s)s.classList.remove("hit");}
     if(g("ev-update"))g("ev-update").classList.remove("on");
     if(g("ev-xt"))g("ev-xt").setAttribute("opacity","0");
     var L=g("evp"); if(L)L.classList.remove("bwd");
-    if(g("ev-phase"))g("ev-phase").textContent="forward · x(t)";
+    if(g("ev-phase"))g("ev-phase").textContent="forward · V(t)";
   }
   function stop(d){playing=false; if(t){clearTimeout(t);t=null;} var b=g("ev-btn"); if(b)b.textContent=d?"↻ rivedi":"▶ riprendi";}
   function step(){
@@ -197,7 +204,7 @@ Parte 3 · Risultati BPTT
       fpts += (fpts?" ":"")+X(p.t).toFixed(1)+","+Y(p.v).toFixed(1);
       if(g("ev-fwd"))g("ev-fwd").setAttribute("points",fpts);
       if(g("ev-cursor")){g("ev-cursor").setAttribute("cx",X(p.t));g("ev-cursor").setAttribute("cy",Y(p.v));}
-      if(g("ev-phase"))g("ev-phase").textContent="forward · x(t) e spike";
+      if(g("ev-phase"))g("ev-phase").textContent="forward · V integra e spara";
       if(p.spk){ var s=g("ev-sp"+sp); if(s)s.classList.add("hit"); sp++; }
       fi++;
       if(fi>=F.length){ mode="pre"; if(g("ev-r1"))g("ev-r1").textContent="x(T) → λ(T) = ∂ℒ/∂s"; if(g("ev-xt"))g("ev-xt").setAttribute("opacity","1"); if(g("ev-phase"))g("ev-phase").textContent="λ(T) dallo stato finale x(T)"; t=setTimeout(step,1400); return; }
@@ -243,8 +250,9 @@ integrata [all'indietro nel tempo]{.accent} ($T\to0$) che **salta solo agli spik
 - **contrattivo** se ρ<1 (l'adjoint converge).
 :::
 ::: {.eq .math}
-$$ \text{tra spike:}\quad \lambda \leftarrow (1-\tfrac{\Delta t}{\tau})\,\lambda\qquad(\text{leak}) $$
-$$ \text{allo spike:}\quad \lambda \mathrel{+}= \tfrac{\lambda + \partial\mathcal{L}/\partial s}{V' - \theta}\qquad(\text{salto}) $$
+$$ \lambda(T)=\left.\tfrac{\partial\mathcal{L}}{\partial s}\right|_{x(T)}\quad(\text{adjoint iniziale, dallo stato finale } x(T)) $$
+$$ \text{leak: }\ \lambda_k=\alpha_m\,\lambda_{k+1}\ ;\qquad \text{salto: }\ \lambda_k \mathrel{+}= \tfrac{\lambda_{k+1}+\partial\mathcal{L}/\partial s}{\text{drive}-\theta} $$
+$$ \text{pesi: }\ \tfrac{\partial\mathcal{L}}{\partial W}\mathrel{-}=\lambda_k\,x_k^{\top}\quad(\text{accumula a ogni tick}) $$
 :::
 ::: {.notes}
 EventProp (Wunderlich & Pehle 2021) calcola il gradiente ESATTO di una rete spiking, senza l'approssimazione del surrogato. Introduce variabili adjoint inizializzate al tempo finale T dalla loss e integrate all'indietro (da T verso 0). Tra uno spike e l'altro l'adjoint evolve solo per leak; l'informazione di gradiente entra come un SALTO agli istanti di spike (event-driven). Costo O(#spike), non O(T). Contrattivo per costruzione: l'adjoint propaga attraverso Rᵀ e converge solo se ρ<1 — lo stesso vincolo spettrale che rende lo stato fixed-point limitato. I due champion EventProp hanno ρ<1 e 0 neuroni morti; uno è il candidato al deploy.

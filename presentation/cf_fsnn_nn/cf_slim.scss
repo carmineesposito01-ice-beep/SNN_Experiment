@@ -100,6 +100,8 @@ $font-size-root: 18px;
 .reveal .ev-fwd { fill: none; stroke: #56B4E9; stroke-width: 1.8; stroke-linejoin: round; stroke-linecap: round; opacity: 0.92; transition: opacity .4s; }
 .reveal #evp.bwd .ev-fwd { opacity: 0.3; }
 .reveal .ev-xt { fill: #E69F00; font-size: 8px; font-family: ui-monospace,monospace; font-weight: 700; }
+.reveal .ev-th { stroke: #CC79A7; stroke-width: 1; stroke-dasharray: 4 3; opacity: 0.6; }
+.reveal .ev-thl { fill: #CC79A7; font-size: 8px; font-family: ui-monospace,monospace; }
 .reveal .ev-readout { display: flex; justify-content: space-around; margin-top: 6px; font-family: ui-monospace,'Courier New',monospace; color: #C7D0DA; }
 .reveal .ev-readout b { color: #9FD3F2; }
 .reveal #ev-grad { color: #2ECC71; }
