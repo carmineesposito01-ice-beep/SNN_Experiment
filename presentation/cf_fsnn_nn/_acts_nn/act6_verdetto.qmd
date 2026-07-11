@@ -1,1 +1,53 @@
-<!-- act6_verdetto — popolato nei task successivi -->
+# Verdetto {.divider .act3}
+
+## Il candidato al deploy è Donatello {.act3}
+
+::: {.twocol}
+::: {.vis}
+![](figures/champions_roster.png)
+:::
+::: {.vis}
+![](figures/readiness_radar.png)
+:::
+::: {.side}
+::: {.explain}
+Il verdetto pesa **tutti i livelli** insieme. Il candidato è [Donatello]{.accent}, che vince dove conta:
+
+- **T0 / T4 — identificazione** — NRMSE minima **0.152**, accuratezza **84.75%** (la più alta).
+- **T1–T3 — comportamento** — in anello chiuso [sicuro quanto l'oracolo]{.accent}.
+- **T5 — hardware** — ρ **0.05** (il più contrattivo), **0 neuroni morti** → FPGA-safe.
+
+Gli altri: fronte di **Pareto** — un [trade-off]{.accent}, non un dominatore su ogni asse.
+:::
+::: {.eq}
+`Donatello    ρ0.05  84.75%  0 dead  → DEPLOY`
+
+`Michelangelo ρ0.39  79.18%  0 dead  → runner-up`
+
+`Leonardo     ρ1.16  77.53% 31% dead → best SW`
+
+`Raffaello    ρ2.99  69.34% 31% dead → sconsigliato`
+:::
+::: {.notes}
+Il verdetto pesa insieme tutte le dimensioni: qualità di identificazione (T0 accuratezza, T4 Fisher), sicurezza
+in anello chiuso (T1 safety, T2 robustezza, T3 traffico) e idoneità hardware (T5). Il candidato al deploy è
+Donatello: ρ 0.05 (il più contrattivo del gruppo), NRMSE minimo 0.152, accuratezza 84.75%, 0 neuroni morti — e
+in anello chiuso è sicuro quanto l'oracolo. Michelangelo è il runner-up EventProp, ben bilanciato. Leonardo è
+il miglior software puro e il più umano nel comportamento, ma è espansivo (ρ 1.16, 31% morti) — costoso in
+hardware. Raffaello è la baseline aggressiva: il suo v0 mal identificato distorce il diagramma fondamentale,
+per cui il deploy è sconsigliato.
+:::
+:::
+:::
+
+::: {.footerbar}
+Verdetto · verdetto di deploy · Pareto = trade-off
+:::
+
+# Fine {.divider .act3}
+
+::: {.explain}
+Grazie dell'attenzione.
+
+*Restiamo a disposizione per domande.*
+:::
