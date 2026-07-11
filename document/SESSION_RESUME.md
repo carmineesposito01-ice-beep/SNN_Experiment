@@ -23,7 +23,9 @@ vs SNN ~800), NON da AC≪MAC; termica non-problema (Tj~26°C). Bit-exact funzio
 
 **AZIONE 1 — Report Fase B (via skill `create-report`).** Ripartibile da qui, dati pronti.
 - Sorgente = `document/FPGA_PHASE_B_POWER.md` (contenuto già assemblato) + `matlab/axi/build/phase_b/results.csv`.
-- Template/stile = `report/FPGA_REPORT.md` + `report/VALIDATION_REPORT_v3.md` (stessa procedura degli altri report).
+- Template/stile = **`document/FPGA_REPORT.md`** + **`document/VALIDATION_REPORT_v3.md`** (⚠️ su QUESTO branch i
+  report esistenti sono in `document/`; in `report/` ci sono solo `report_1..4`; `report/FPGA_REPORT.md` è il
+  *target di merge* su `main`, non un file leggibile qui). Stessa procedura degli altri report.
 - Contenuto atteso: scopo/metodo (3 livelli fedeltà) · correttezza funzionale · risorse/timing · potenza sistema
   (static 92%, E realizzata≫algoritmica) · costanti e_MAC≈e_AC · confronto SNN-vs-ANN + letteratura (compattezza
   ~5-65×) · tabella claim (3 correzioni + reframe) · termica · onestà+Fase C. Figure: breakdown potenza · attribuz.
@@ -39,8 +41,12 @@ vs SNN ~800), NON da AC≪MAC; termica non-problema (Tj~26°C). Bit-exact funzio
   (`gen_phase_c_reference.m`, rete fixed) + harness Python in `matlab/axi/phase_c/` (driver `SnnDonatello` + mock,
   plant ACC-IIDM **numpy** PS-friendly, sweep funzionale, closed-loop network-in-the-loop, potenza 3-stati) +
   unit-test col **MOCK** → tutto VERDE **senza board**. Test: `python -m pytest matlab/axi/phase_c/tests/ -v` (numpy, no torch).
-- Esecuzione reale sulla board = runbook in `document/FPGA_PHASE_C_REPORT.md` quando arriva la PYNQ-Z1 (solo
-  total-board delta idle-vs-inferenza; i 9 mW PL < risoluzione → upper-bound + P_deploy totale).
+- Esecuzione reale sulla board = runbook in `document/FPGA_PHASE_C_REPORT.md` (⚠️ **non ancora presente — lo crea
+  l'AZIONE 2**) quando arriva la PYNQ-Z1 (solo total-board delta idle-vs-inferenza; i 9 mW PL < risoluzione →
+  upper-bound + P_deploy totale).
+
+> **Dopo le 2 azioni**, la prossima **fase di progetto** è l'**integrazione dei limiti/segnali V2I in Simulink**
+> attorno alla rete (le menzioni "Prossimo: V2I" nel log storico sotto si riferiscono a QUESTA, non alle 2 azioni pendenti).
 
 ### 🛠️ MODI DI LAVORO (vincoli del track — rispettarli sempre)
 - **NIENTE workaround:** se un numero/comportamento non torna si indaga la **CAUSA** (come il bug leak-division,
@@ -102,7 +108,7 @@ core SNN congelato; commit senza Co-Authored-By; tono tecnico, onesto senza over
 > SAIF `report_power` High-confidence. **3 correzioni al report**: DSP 0→38 (elettivi, 0-DSP realizzabile), Fmax
 > 100-200→~8.5 MHz, **e_MAC≈e_AC su FPGA** (non il 5× Horowitz); + energia realizzata ≫ algoritmica (static domina
 > 92%). **Vantaggio SNN ri-inquadrato**: reale ~5-65× ma da **compattezza modello** (letteratura NN car-following
-> ~7k-100k MAC vs SNN ~800), NON da AC≪MAC. Fase C (silicio) rinviata-predisposta. **Prossimo:** integrazione V2I in Simulink.
+> ~7k-100k MAC vs SNN ~800), NON da AC≪MAC. Fase C (silicio) rinviata-predisposta. **Prossima FASE progetto (dopo le 2 azioni pendenti in testa al file):** integrazione V2I in Simulink.
 > (Storia po2→shift/44% sotto.)
 
 > ⚠️ **WORKTREE PARALLELO — NON è il track principale `main`.** Sei nel worktree
