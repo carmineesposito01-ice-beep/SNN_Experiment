@@ -1,1 +1,213 @@
-<!-- act4_risultati — popolato nei task successivi -->
+# Parte 4 — Risultati {.divider .act3}
+
+## Quattro campioni, un oracolo, nessun "migliore" assoluto {.act3}
+
+::: {.twocol}
+::: {.vis}
+![](figures/champions_roster_intro.png)
+:::
+::: {.side}
+::: {.explain}
+Quattro reti [caratterizzate per-metrica]{.accent}, non un generico "best": due addestrate con BPTT, due con
+EventProp, tutte misurate contro l'oracolo `Master Splinter` (l'ACC-IIDM con i parametri veri). Ogni rete
+eccelle su assi diversi — chi vince lo decidono i sei livelli, non un numero solo.
+:::
+::: {.eq}
+BPTT: Leonardo · Raffaello
+EventProp: Donatello · Michelangelo
+oracolo: Master Splinter (ACC-IIDM, param veri)
+:::
+:::
+:::
+
+::: {.notes}
+Le quattro reti sono addestrate con due algoritmi diversi: back-propagation-through-time (BPTT) e EventProp.
+L'oracolo `Master Splinter` è il modello ACC-IIDM con i parametri veri e fissa il limite superiore di
+riferimento. I quattro campioni coprono un fronte di trade-off: due EventProp (`Donatello`, `Michelangelo`)
+e due BPTT (`Leonardo`, `Raffaello`). Volutamente NON anticipo qui il vincitore: l'obiettivo della Parte 3 è
+mostrare come la scelta emerga dai sei livelli di valutazione, non da un singolo numero.
+:::
+
+::: {.footerbar}
+Parte 4 · i quattro campioni
+:::
+
+## Come li valutiamo: sei livelli, dal reporting all'FPGA {.act3}
+
+::: {.explain}
+La valutazione sale per [sei livelli]{.accent}, ognuno una domanda diversa. La metrica primaria non è la
+NRMSE sui parametri ma il [comportamento in anello chiuso]{.accent} (`val_data`): una rete può identificare
+bene e guidare male.
+:::
+
+::: {.notes}
+Il punto chiave: una identificazione numericamente buona può comunque guidare male in anello chiuso, quindi la
+NRMSE sui parametri è solo il punto di partenza, non il verdetto. I sei livelli della gerarchia sono: T0
+metriche di loss (accuratezza e NRMSE per-parametro riferite all'oracolo), T1 safety (collisioni, coda), T2
+robustezza (plant fisico e canale V2X), T3 traffico (micro/meso/macro), T4 identificabilità (Fisher
+Information Matrix), T5 FPGA-friendly (go/no-go hardware).
+:::
+
+::: {.threecol}
+::: {.card}
+[T0 · Metriche di Loss]{.card-title}
+Accuratezza e NRMSE per-parametro, riferite all'oracolo (=0). Il punto di partenza.
+:::
+::: {.card}
+[T1 · Safety]{.card-title}
+Collisioni, gap minimo, margine di frenata; string stability della coda.
+:::
+::: {.card}
+[T2 · Robustezza]{.card-title}
+Plant fisico (asciutto/bagnato/ghiaccio) e canale V2X (perdita pacchetti).
+:::
+:::
+
+::: {.threecol}
+::: {.card}
+[T3 · Traffico]{.card-title}
+Micro → meso → macro: onde stop-and-go, diagramma fondamentale.
+:::
+::: {.card}
+[T4 · Identificabilità]{.card-title}
+Fisher Information Matrix: quali parametri sono realmente osservabili.
+:::
+::: {.card}
+[T5 · FPGA-Friendly]{.card-title}
+Fixed-point, po2, ρ<1, timing, SEU: il go/no-go hardware.
+:::
+:::
+
+::: {.footerbar}
+Parte 4 · gerarchia di valutazione a 6 livelli
+:::
+
+## T0 · Accuratezza: la mappa dei cinque parametri {.act3}
+
+::: {.twocol}
+::: {.vis}
+![](figures/accuracy_heatmap.png)
+:::
+::: {.side}
+::: {.explain}
+NRMSE per-canale (`v0, T, s0, a, b`), oracolo a zero. `Donatello` è il [più basso e uniforme]{.accent}
+(0.093–0.215); `Raffaello` crolla su `v0` (0.499), e quella mis-identificazione distorce a valle il
+diagramma fondamentale.
+:::
+::: {.eq}
+oracolo → NRMSE = 0 (riferimento)
+facile: s0 · ostici: v0, b
+Donatello 0.093–0.215 · Raffaello v0 = 0.499
+:::
+:::
+:::
+
+::: {.notes}
+Non tutti i parametri sono ugualmente identificabili. Il gap di standstill `s0` è il più facile perché entra
+direttamente nel gap statico. `v0` e `b` sono i più ostici: `v0` si osserva solo dove il veicolo va davvero
+libero (free-flow), `b` solo nelle frenate. È per questo che `Raffaello`, sbagliando proprio `v0`, si porta
+dietro la distorsione del diagramma fondamentale a livello macroscopico.
+:::
+
+::: {.footerbar}
+Parte 4 · T0 accuratezza per-parametro
+:::
+
+## T1 · Sicurezza: il residuo è fisica dello scenario, non la rete {.act3}
+
+::: {.twocol}
+::: {.vis}
+![](figures/safety_delta.png)
+:::
+::: {.side}
+::: {.explain}
+Negli scenari benigni le reti fanno [0 collisioni]{.accent}. Il residuo compare solo in scenari
+*fisicamente inevitabili* (cut-in stretti, hard-brake): lì la collisione della rete è ≈ quella dell'oracolo
+(7.56%) e il TTC è ≥ oracolo — semmai le reti sono più caute. La sicurezza si legge come Δ vs oracolo, non
+in assoluto.
+:::
+::: {.eq}
+scenari benigni → 0 collisioni
+inevitabili: rete ≈ oracolo (7.56%)
+TTC rete ≥ oracolo → più cauti
+:::
+:::
+:::
+
+::: {.notes}
+Punto di onestà: nella grande maggioranza degli scenari le reti non collidono affatto (0%). Il residuo di
+collisioni emerge solo negli scenari fisicamente forzati — un cut-in a distanza impossibile, una frenata
+d'emergenza del leader — dove anche l'oracolo con i parametri veri collide (7.56%). Per questo il verdetto di
+sicurezza va sempre letto in forma differenziale (Δ rete − oracolo): se la rete pareggia l'oracolo, ha
+raggiunto il limite fisico raggiungibile su quello scenario, e il TTC ≥ oracolo dice che semmai frena prima.
+:::
+
+::: {.footerbar}
+Parte 4 · T1 sicurezza closed-loop (Δ vs oracolo)
+:::
+
+## T2 · Robustezza: plant e canale sono limiti esterni, non la rete {.act3}
+
+::: {.twocol}
+::: {.vis}
+![](figures/plant.png)
+:::
+::: {.side}
+::: {.explain}
+Cambiando il *plant* fisico (asciutto → bagnato → ghiaccio) la collisione sale (≈8% → 27% → 59%), ma
+[sale anche per l'oracolo]{.accent}, semmai di più (ghiaccio: champion ~59%, oracolo 63.70%): è la fisica del
+veicolo a togliere margine, non l'identificazione. Sul canale V2X conta la strategia di *hold*: con
+[hold-last]{.accent} la collisione resta ≈8%, in modalità blind sale a ≈67% — robustezza dell'handler I/O.
+:::
+::: {.eq}
+plant: asciutto 8% · bagnato 27% · ghiaccio 59% (oracolo 63.70%)
+canale: hold-last 8% · blind 67%
+→ limiti esterni (plant, handler), non la SNN
+:::
+:::
+:::
+
+::: {.notes}
+Due fonti di degrado, entrambe esterne alla rete. Primo, il plant: sul ghiaccio rete e oracolo cedono insieme
+(champion ~59.26%, oracolo 63.70% — semmai leggermente peggio), con i champion che tengono un margine di
+frenata leggermente migliore. È la fisica del veicolo a togliere il margine, non la SNN. Secondo, il canale
+V2X: hold-last significa mantenere l'ultimo stato ricevuto quando un pacchetto si perde; è quel meccanismo
+dell'handler I/O, non il modello appreso, a evitare le collisioni quando il V2X cade (≈8% con hold-last vs
+≈67% in blind). Coerente con la lettura differenziale usata ovunque: la degradazione non va imputata alla rete.
+:::
+
+::: {.footerbar}
+Parte 4 · T2 robustezza (plant + canale V2X)
+:::
+
+## T3 · Traffico: micro → meso → macro, l'onda stop-and-go si smorza {.act3}
+
+::: {.threecol}
+::: {.vis}
+![](figures/string.png)
+:::
+::: {.vis style="background:#FFFFFF"}
+![](assets/results/meso_spacetime.png)
+:::
+::: {.vis}
+![](figures/macro_fd.png)
+:::
+:::
+
+::: {.explain}
+Salendo di scala il plotone resta stabile: gain testa→coda [< 1]{.accent} (micro), l'onda stop-and-go si
+smorza (meso), il diagramma fondamentale segue l'oracolo (macro). Eccezione `Raffaello`: gonfia `v0` (≈107
+vs 74 km/h) e sposta in alto la curva flusso-densità.
+:::
+
+::: {.notes}
+Il collegamento tra le scale: il gain testa→coda < 1 è la condizione di string stability, che a livello
+mesoscopico si vede come attenuazione dell'onda stop-and-go che si propaga all'indietro lungo la coda. Il caso
+`Raffaello` chiude il cerchio con la slide sull'accuratezza: la mis-identificazione di `v0` (0.499) si
+propaga fino al macro, spostando in alto la curva flusso-densità del diagramma fondamentale. Un errore locale
+sul parametro diventa così un errore di sistema a scala macroscopica.
+:::
+
+::: {.footerbar}
+Parte 4 · T3 traffico micro→meso→macro
+:::
