@@ -358,8 +358,80 @@ Parte 2 · Layer nascosto (low-rank)
 
 ::: {.twocol}
 ::: {.vis}
-[▶ animazione: neuroni-serbatoio, gli spike alzano il livello → segnale continuo (da creare)]{.pill}
-![](figures/eq_li.png)
+
+```{=html}
+<div class="lowrap" id="lowrap">
+  <div class="pl-head">
+    <button class="pl-btn" id="lo-btn" onclick="loToggle(event)">▶ avvia</button>
+    <span class="pl-cyc" id="lo-badge">V ← β·V + I</span>
+  </div>
+  <svg viewBox="0 0 360 200" id="lo-svg" class="lo-svg" preserveAspectRatio="xMidYMid meet"></svg>
+  <div class="lo-foot" id="lo-foot">gli spike (dagli ALIF) alzano il livello; la perdita β lo abbassa → tensione continua = readout</div>
+</div>
+<script>
+(function(){
+  var NS="http://www.w3.org/2000/svg";
+  function g(id){return document.getElementById(id);}
+  function mk(t,a){var e=document.createElementNS(NS,t);for(var k in a)e.setAttribute(k,a[k]);return e;}
+  var N=44, BETA=0.86, ISP=0.34;
+  var SP=[0,0,1,0,1,0,0,1,0,1,0,0,1,0,0,1,1,0,0,1,0,1,0,0,1,0,0,1,0,1,0,0,1,0,1,0,0,1,0,0,1,0,1,0];
+  var TX0=120, TX1=322, TY0=52, TY1=166;
+  var TKX=46, TKY0=52, TKY1=166, TKW=30;
+  function xk(k){return TX0+(k/(N-1))*(TX1-TX0);}
+  function yV(v){return TY1-v*(TY1-TY0);}
+  var svg=g("lo-svg");
+  if(svg && !svg.getAttribute("data-built")){
+    svg.setAttribute("data-built","1");
+    function txt(x,y,s,c){var e=mk("text",{x:x,y:y,"class":c});e.textContent=s;svg.appendChild(e);}
+    txt(180,20,"V ← β·V + I        o = σ(V)","lo-formula");
+    svg.appendChild(mk("rect",{x:TKX,y:TKY0,width:TKW,height:TKY1-TKY0,rx:4,"class":"lo-tank"}));
+    svg.appendChild(mk("rect",{x:TKX,y:TKY1,width:TKW,height:0,"class":"lo-fill",id:"lo-fill"}));
+    txt(TKX+TKW/2,TKY0-6,"V (serbatoio)","lo-lab"); txt(TKX+TKW/2,TKY1+13,"×5 LI","lo-note");
+    svg.appendChild(mk("polygon",{points:(TKX-15)+","+(TKY0+9)+" "+(TKX-3)+","+(TKY0+5)+" "+(TKX-3)+","+(TKY0+13),"class":"lo-spin",id:"lo-spin"}));
+    svg.appendChild(mk("line",{x1:TX0,y1:TY1,x2:TX1,y2:TY1,"class":"lo-ax"}));
+    svg.appendChild(mk("line",{x1:TX0,y1:TY0,x2:TX0,y2:TY1,"class":"lo-ax"}));
+    txt(TX1-2,TY1+13,"tempo","lo-axl"); txt(TX0-2,TY0-3,"V","lo-axl");
+    txt(222,38,"spike in (dagli ALIF) ↑     perdita ↓","lo-hdr");
+    svg.appendChild(mk("g",{id:"lo-marks"}));
+    svg.appendChild(mk("polyline",{points:"","class":"lo-trace",id:"lo-tr"}));
+  }
+  var k=0, V=0, pts=[], playing=false, t=null;
+  function drawTank(){ var fh=V*(TKY1-TKY0); var f=g("lo-fill"); if(f){f.setAttribute("y",(TKY1-fh).toFixed(1)); f.setAttribute("height",fh.toFixed(1));} }
+  function reset(){
+    k=0; V=0; pts=[];
+    var tr=g("lo-tr"); if(tr)tr.setAttribute("points","");
+    var m=g("lo-marks"); if(m)while(m.firstChild)m.removeChild(m.firstChild);
+    var fl=g("lo-spin"); if(fl)fl.style.opacity="0";
+    drawTank();
+    if(g("lo-badge"))g("lo-badge").textContent="V ← β·V + I";
+  }
+  function stop(){playing=false; if(t){clearTimeout(t);t=null;} var b=g("lo-btn"); if(b)b.textContent="▶ riprendi";}
+  function step(){
+    if(!playing)return; var W=g("lowrap"); if(!W||W.offsetParent===null){stop();return;}
+    if(k>=N){ t=setTimeout(function(){ if(!playing)return; reset(); step(); },1300); return; }
+    var sp=SP[k];
+    V=BETA*V+(sp?ISP:0); if(V>1)V=1;
+    var fl=g("lo-spin"); if(fl)fl.style.opacity=(sp?"1":"0");
+    if(sp){ var m=g("lo-marks"); if(m)m.appendChild(mk("line",{x1:xk(k),y1:TY0-9,x2:xk(k),y2:TY0-1,"class":"lo-spike"})); }
+    pts.push(xk(k).toFixed(1)+","+yV(V).toFixed(1));
+    var tr=g("lo-tr"); if(tr)tr.setAttribute("points",pts.join(" "));
+    drawTank();
+    if(g("lo-badge"))g("lo-badge").textContent="t "+(k+1)+"/"+N+(sp?" · spike ↑":" · perdita ↓");
+    k++;
+    t=setTimeout(step,150);
+  }
+  window.loToggle=function(ev){
+    if(ev){ev.stopPropagation(); if(ev.preventDefault)ev.preventDefault();}
+    var b=g("lo-btn");
+    if(playing){ stop(); return; }
+    if(k>=N)reset();
+    playing=true; if(b)b.textContent="⏸ pausa"; step();
+  };
+  reset();
+})();
+</script>
+```
+
 :::
 ::: {.side}
 ::: {.explain}

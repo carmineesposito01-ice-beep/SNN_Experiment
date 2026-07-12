@@ -154,6 +154,21 @@ $font-size-root: 18px;
 .reveal #liwrap.playing .li-mesh { animation: acflow 0.9s linear infinite; }
 .reveal .li-note { fill: #E69F00; font-size: 6.5px; font-family: ui-monospace,monospace; text-anchor: middle; font-style: italic; }
 .reveal .li-foot { text-align: center; margin-top: 8px; color: #9aa5b3; font-size: 0.92em; min-height: 1.3em; }
+// Animazione layer d'uscita (LI serbatoio): spike arancioni (dagli ALIF) alzano il livello -> tensione continua blu = readout
+.reveal .lowrap { margin: 6px auto 0; max-width: 430px; font-size: 0.5em; line-height: 1.2; }
+.reveal .lo-svg { width: 100%; height: auto; display: block; }
+.reveal .lo-formula { fill: #EAF1F7; font-size: 11px; font-family: ui-monospace,monospace; text-anchor: middle; font-weight: 700; }
+.reveal .lo-hdr { fill: #9aa5b3; font-size: 7px; font-family: ui-monospace,monospace; text-anchor: middle; }
+.reveal .lo-lab { fill: #9aa5b3; font-size: 7px; font-family: ui-monospace,monospace; text-anchor: middle; }
+.reveal .lo-ax { stroke: #5a6570; stroke-width: 1; }
+.reveal .lo-axl { fill: #9aa5b3; font-size: 7px; font-family: ui-monospace,monospace; text-anchor: middle; }
+.reveal .lo-tank { fill: rgba(86,180,233,0.05); stroke: #56B4E9; stroke-width: 1.3; }
+.reveal .lo-fill { fill: #56B4E9; fill-opacity: 0.55; transition: y .12s linear, height .12s linear; }
+.reveal .lo-trace { fill: none; stroke: #56B4E9; stroke-width: 1.8; }
+.reveal .lo-spike { stroke: #E69F00; stroke-width: 1.4; }
+.reveal .lo-spin { fill: #E69F00; opacity: 0; }
+.reveal .lo-note { fill: #9aa5b3; font-size: 6.5px; font-family: ui-monospace,monospace; text-anchor: middle; font-style: italic; }
+.reveal .lo-foot { text-align: center; margin-top: 8px; color: #9aa5b3; font-size: 0.9em; min-height: 1.3em; }
 // Animazione decode: tensione LI grezza V -> sigmoide -> o in (0,1) -> riscala nel range fisico -> parametro
 .reveal .decwrap { margin: 4px auto 0; max-width: 500px; font-size: 0.5em; line-height: 1.25; }
 .reveal .de-col { display: flex; flex-direction: column; align-items: center; gap: 6px; margin-top: 8px; }
