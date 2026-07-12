@@ -42,14 +42,14 @@ def test_identificazione_hides_input(qapp):
     area, docks = _build_area()
     apply_identificazione(area, docks)
     vis = visible_docks(area)
-    assert "Input" not in vis
+    assert not ({"gap", "ego", "Δv", "leader"} & vis)   # the 4 input docks are hidden
     assert {"v0", "T", "s0", "a", "b"} <= vis
 
 
 def test_neuro_debug_shows_netstate_and_spikerate(qapp):
     area, docks = _build_area()
     apply_neuro_debug(area, docks)
-    assert {"NetState", "SpikeRate", "Input"} <= visible_docks(area)
+    assert {"NetState", "SpikeRate", "gap", "ego", "Δv", "leader"} <= visible_docks(area)
 
 
 def test_guida_shows_trajectory_and_safety(qapp):
@@ -61,7 +61,7 @@ def test_guida_shows_trajectory_and_safety(qapp):
 
 def test_preset_then_overview_restores_all(qapp):
     area, docks = _build_area()
-    apply_identificazione(area, docks)   # hides v_mem
+    apply_identificazione(area, docks)   # hides the input docks
     apply_overview(area, docks)
     assert visible_docks(area) == set(DOCK_ORDER)
 

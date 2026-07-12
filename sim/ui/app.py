@@ -1,7 +1,8 @@
 """SimApp -- main window with three modes (a QStackedWidget): a Live cockpit, a Meso/Macro analysis
-page, and a Post-run dashboard. The Live cockpit is a dockable workspace (pyqtgraph DockArea) of 14
-docks (Road, NetState, SpikeRate, Input, Trajectory, Safety, Events, Inspector, SynOps + the 5
-identified params v0/T/s0/a/b) + champion/scenario controls + View/Layout menus (presets + persistence),
+page, and a Post-run dashboard. The Live cockpit is a dockable workspace (pyqtgraph DockArea) of 17
+docks (Road, NetState, SpikeRate, Trajectory, Safety, Events, Inspector, SynOps + the 4 input docks
+gap/ego/Δv/leader + the 5 identified params v0/T/s0/a/b) + champion/scenario controls + View/Layout
+menus (presets + persistence),
 driven by a fixed-timestep QTimer loop, with a status bar (incl. network firing %)."""
 import os
 
@@ -24,7 +25,8 @@ from sim.ui.layout import (DOCK_ORDER, LAYOUT_PATH, PRESETS, apply_overview, loa
 from sim.ui.loop import SimLoop
 from sim.ui.panels import (PARAM_COLORS, PARAM_NAMES, PARAM_UNITS, EventTimelinePanel,
                            NeuronGraphPanel, NeuronInspectorPanel, ParamPanel, SafetyPanel,
-                           SpikeRatePanel, SynOpsPanel, TrajectoryPanel, InputPanel)
+                           SpikeRatePanel, SynOpsPanel, TrajectoryPanel,
+                           InputChannelPanel, INPUT_CHANNELS)
 from sim.ui.meso_page import MesoMacroPage
 from sim.ui.postrun_page import PostRunPage
 from sim.ui.platoon import platoon_metrics, run_fundamental_diagram, run_platoon
@@ -68,7 +70,8 @@ class SimApp(QMainWindow):
         self._topdown = TopDownView()
         self._netstate = NeuronGraphPanel()
         self._spikerate = SpikeRatePanel()
-        self._input = InputPanel()
+        self._inputs = {name: InputChannelPanel(key, name, unit, color)   # one dock per input, like the params
+                        for key, name, unit, color in INPUT_CHANNELS}
         self._trajectory = TrajectoryPanel()
         self._safety = SafetyPanel()
         self._timeline = EventTimelinePanel()
@@ -81,7 +84,7 @@ class SimApp(QMainWindow):
         # NB: SpikeRate is intentionally NOT X-linked to the params — in tab-stacked presets a linked
         # param can be a hidden tab, whose stale range would corrupt SpikeRate's axis. A unified time
         # cursor is a Phase-3b (scrub) concern; here each time-series autoranges to its own data.
-        self._ts_panels = [*self._params, self._input, self._spikerate, self._trajectory,
+        self._ts_panels = [*self._params, *self._inputs.values(), self._spikerate, self._trajectory,
                            self._safety, self._timeline, self._inspector, self._synops]
         self._apply_champion_topology()              # topology into NetState/Inspector/SynOps (re-run on swap)
         self._timeline.set_on_seek(self._seek_to)
@@ -92,7 +95,7 @@ class SimApp(QMainWindow):
         self._auto_stopping = False  # set when the episode ends on its own -> stop WITHOUT eager reconstruct
 
         widgets = {"Road": self._topdown, "NetState": self._netstate, "SpikeRate": self._spikerate,
-                   "Input": self._input, "Trajectory": self._trajectory, "Safety": self._safety,
+                   **self._inputs, "Trajectory": self._trajectory, "Safety": self._safety,
                    "Events": self._timeline, "Inspector": self._inspector, "SynOps": self._synops,
                    "v0": self._params[0], "T": self._params[1],
                    "s0": self._params[2], "a": self._params[3], "b": self._params[4]}
@@ -435,7 +438,7 @@ class SimApp(QMainWindow):
     def _clear_panels(self):
         """Blank every cockpit panel (empty buffers early-return in update_frame, so a redraw would
         NOT clear the old curves) and reset the road's integrated ego position."""
-        for p in (*self._params, self._input, self._spikerate, self._trajectory,
+        for p in (*self._params, *self._inputs.values(), self._spikerate, self._trajectory,
                   self._safety, self._timeline, self._synops, self._netstate):
             p.clear()
         self._topdown.reset()
@@ -491,7 +494,9 @@ class SimApp(QMainWindow):
         for name, p in zip(("v0", "T", "s0", "a", "b"), self._params):
             if self._dock_on(name):
                 p.update_frame(probe)
-        if self._dock_on("Input"): self._input.update_frame(traj)   # the 4 inputs (physical) from the traj buffer
+        for name, p in self._inputs.items():           # one dock per input, fed from the traj buffer
+            if self._dock_on(name):
+                p.update_frame(traj)
         if self._dock_on("SpikeRate"): self._spikerate.update_frame(probe)
         if self._dock_on("SynOps"): self._synops.update_frame(probe)
         if self._dock_on("Trajectory"): self._trajectory.update_frame(traj)
