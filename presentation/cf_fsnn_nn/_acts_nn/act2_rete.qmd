@@ -109,7 +109,7 @@ Parte 2 · Algoritmo PINN
   var NS="http://www.w3.org/2000/svg";
   function g(id){return document.getElementById(id);}
   function mk(tag,a){var e=document.createElementNS(NS,tag);for(var k in a)e.setAttribute(k,a[k]);return e;}
-  var IN=[{x:46,y:66,l:"a_lead"},{x:46,y:104,l:"v"},{x:46,y:142,l:"Δv"},{x:46,y:180,l:"gap"}];
+  var IN=[{x:46,y:66,l:"s"},{x:46,y:104,l:"v"},{x:46,y:142,l:"Δv"},{x:46,y:180,l:"vl"}];
   var HCOL=[98,112,126,140], HROW=[50,69,88,107,126,145,164,183];
   var HID=[]; for(var r=0;r<HROW.length;r++){for(var c=0;c<HCOL.length;c++){HID.push({x:HCOL[c],y:HROW[r],row:r});}}
   var OUT=[{x:250,y:58},{x:250,y:90},{x:250,y:122},{x:250,y:154},{x:250,y:186}];
@@ -209,8 +209,64 @@ Parte 2 · Architettura
 
 ::: {.twocol}
 ::: {.vis}
-[▶ animazione: gli ingressi eccitano i neuroni (da creare)]{.pill}
-![](assets/manim/architecture_flow.gif)
+
+```{=html}
+<div class="liwrap" id="liwrap">
+  <div class="pl-head">
+    <button class="pl-btn" id="li-btn" onclick="liToggle(event)">▶ avvia</button>
+    <span class="pl-cyc" id="li-badge">I = W·x</span>
+  </div>
+  <svg viewBox="0 0 360 200" id="li-svg" class="li-svg" preserveAspectRatio="xMidYMid meet"></svg>
+  <div class="li-foot" id="li-foot">i 4 segnali V2X (continui) → corrente continua nei 32 ALIF · nessuno spike qui</div>
+</div>
+<script>
+(function(){
+  var NS="http://www.w3.org/2000/svg";
+  function g(id){return document.getElementById(id);}
+  function mk(t,a){var e=document.createElementNS(NS,t);for(var k in a)e.setAttribute(k,a[k]);return e;}
+  var LAB=["s","v","Δv","vl"];
+  var INY=[60,86,112,138], CURY=[52,70,88,106,124,142,160,178];
+  var IX0=46, IW=68, CX0=214, CW=118, BH=12;
+  var W=[
+    [0.8,-0.3,0.5,0.2,-0.6,0.4,-0.2,0.7],
+    [-0.4,0.6,0.3,-0.5,0.4,0.2,0.6,-0.3],
+    [0.5,0.4,-0.6,0.3,0.2,-0.5,0.4,0.3],
+    [-0.3,0.5,0.2,0.6,-0.4,0.3,-0.5,0.4]
+  ];
+  var FREQ=[0.9,1.3,0.7,1.1], PH=[0,1.5,3.0,4.5];
+  var svg=g("li-svg");
+  if(svg && !svg.getAttribute("data-built")){
+    svg.setAttribute("data-built","1");
+    function txt(x,y,s,c){var e=mk("text",{x:x,y:y,"class":c});e.textContent=s;svg.appendChild(e);}
+    for(var i=0;i<4;i++){ for(var j=0;j<CURY.length;j++){ svg.appendChild(mk("line",{x1:IX0+IW,y1:INY[i],x2:CX0,y2:CURY[j],"class":"li-mesh"})); } }
+    txt(180,22,"I = W · x","li-formula");
+    txt(80,42,"ingresso V2X (continuo)","li-hdr");
+    txt(273,42,"corrente → 32 ALIF","li-hdr");
+    for(var i2=0;i2<4;i2++){ txt(IX0-6,INY[i2]+3,LAB[i2],"li-lab"); svg.appendChild(mk("rect",{x:IX0,y:INY[i2]-BH/2,width:IW,height:BH,rx:3,"class":"li-track"})); svg.appendChild(mk("rect",{x:IX0,y:INY[i2]-BH/2,width:1,height:BH,rx:2,"class":"li-inbar",id:"li-in"+i2})); }
+    for(var j2=0;j2<CURY.length;j2++){ svg.appendChild(mk("rect",{x:CX0,y:CURY[j2]-BH/2,width:CW,height:BH,rx:3,"class":"li-track"})); svg.appendChild(mk("rect",{x:CX0,y:CURY[j2]-BH/2,width:1,height:BH,rx:2,"class":"li-curbar",id:"li-cur"+j2})); }
+    txt(273,196,"analogico · continuo (niente spike)","li-note");
+  }
+  var phase=0, playing=false, timer=null;
+  function frame(){
+    var Wp=g("liwrap"); if(!Wp||Wp.offsetParent===null){stop();return;}
+    var x=[];
+    for(var i=0;i<4;i++){ x[i]=0.5+0.4*Math.sin(phase*FREQ[i]+PH[i]); var e=g("li-in"+i); if(e)e.setAttribute("width",Math.max(1,x[i]*IW).toFixed(1)); }
+    for(var j=0;j<CURY.length;j++){ var s=0; for(var k=0;k<4;k++)s+=W[k][j]*(x[k]-0.5); var Ij=0.5+0.65*s; if(Ij<0.04)Ij=0.04; if(Ij>1)Ij=1; var c=g("li-cur"+j); if(c)c.setAttribute("width",Math.max(1,Ij*CW).toFixed(1)); }
+    phase+=0.07;
+  }
+  function stop(){playing=false; if(timer){clearInterval(timer);timer=null;} var Wp=g("liwrap"); if(Wp)Wp.classList.remove("playing"); var b=g("li-btn"); if(b)b.textContent="▶ riprendi";}
+  window.liToggle=function(ev){
+    if(ev){ev.stopPropagation(); if(ev.preventDefault)ev.preventDefault();}
+    var b=g("li-btn"); var Wp=g("liwrap");
+    if(playing){ stop(); return; }
+    playing=true; if(Wp)Wp.classList.add("playing"); if(b)b.textContent="⏸ pausa";
+    if(!timer)timer=setInterval(frame,50);
+  };
+  frame();
+})();
+</script>
+```
+
 :::
 ::: {.side}
 ::: {.explain}
