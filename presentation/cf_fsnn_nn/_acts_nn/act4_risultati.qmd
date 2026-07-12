@@ -188,7 +188,7 @@ Parte 4 · T2 robustezza (plant + canale V2X)
 ![](figures/string.png)
 :::
 ::: {.vstack}
-::: {.vis .light}
+::: {.vis}
 ![](assets/results/meso_spacetime.png)
 :::
 ::: {.vis}

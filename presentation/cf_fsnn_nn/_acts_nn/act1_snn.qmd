@@ -3,7 +3,7 @@
 ## Reti Neurali — Come funziona? {.act1}
 
 ::: {.twocol}
-::: {.vis .light}
+::: {.vis}
 [▶ figura: principio NN — da creare]{.pill}
 ![](assets/img/membrane.png)
 :::
