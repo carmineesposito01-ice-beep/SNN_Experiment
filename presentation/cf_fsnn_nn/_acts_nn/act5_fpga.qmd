@@ -241,7 +241,73 @@ Parte 5 · T5 energia vs ANN (AC < MAC)
 
 ::: {.twocol}
 ::: {.vis}
-![](figures/seu.png)
+
+```{=html}
+<div class="bf-stack">
+<img src="figures/seu.png" class="bf-img" alt="SEU: mappa di sensibilita per bit"/>
+<div class="bfwrap" id="bfwrap">
+  <div class="pl-head">
+    <button class="pl-btn" id="bf-btn" onclick="bfToggle(event)">▶ avvia</button>
+    <span class="pl-cyc" id="bf-badge">bit-flip su un peso po2</span>
+  </div>
+  <svg viewBox="0 0 360 92" id="bf-svg" class="bf-svg" preserveAspectRatio="xMidYMid meet"></svg>
+  <div class="bf-foot" id="bf-foot">flip sui bit alti (esponente/segno) → grande Δ = readout critico; sui bit bassi = assorbito</div>
+</div>
+</div>
+<script>
+(function(){
+  var NS="http://www.w3.org/2000/svg";
+  function g(id){return document.getElementById(id);}
+  function mk(t,a){var e=document.createElementNS(NS,t);for(var k in a)e.setAttribute(k,a[k]);return e;}
+  var NB=8, X0=40, CW=22, CGAP=4, CY=18, CH=22;
+  var BASE=[0,1,0,1,1,0,1,0];
+  var SEQ=[7,5,0,6,3,1,4,2];
+  var DX0=40, DW=180, DY=64, DBH=8;
+  function cellX(i){return X0+i*(CW+CGAP);}
+  var svg=g("bf-svg");
+  if(svg && !svg.getAttribute("data-built")){
+    svg.setAttribute("data-built","1");
+    function txt(x,y,s,c,id){var o={x:x,y:y,"class":c};if(id)o.id=id;var e=mk("text",o);e.textContent=s;svg.appendChild(e);return e;}
+    txt(X0,12,"peso po2 — 8 bit (MSB → LSB)","bf-lab");
+    for(var i=0;i<NB;i++){ svg.appendChild(mk("rect",{x:cellX(i),y:CY,width:CW,height:CH,rx:2,"class":"bf-cell"+(BASE[i]?" one":""),id:"bf-c"+i})); }
+    txt(cellX(0)+CW/2,CY+CH+9,"MSB","bf-bitlab"); txt(cellX(NB-1)+CW/2,CY+CH+9,"LSB","bf-bitlab");
+    svg.appendChild(mk("circle",{cx:X0,cy:CY-8,r:4,"class":"bf-part",id:"bf-part"}));
+    txt(DX0,DY-4,"|Δ parametro|","bf-lab");
+    svg.appendChild(mk("rect",{x:DX0,y:DY,width:DW,height:DBH,rx:3,"class":"bf-dtrack"}));
+    svg.appendChild(mk("rect",{x:DX0,y:DY,width:1,height:DBH,rx:2,"class":"bf-dbar",id:"bf-dbar"}));
+    txt(288,DY+7,"","bf-verd","bf-verd");
+  }
+  var idx=0, playing=false, t=null;
+  function restore(p){ var c=g("bf-c"+p); if(c){ c.classList.remove("flip"); if(BASE[p])c.classList.add("one"); else c.classList.remove("one"); } }
+  function reset(){ for(var p=0;p<NB;p++)restore(p); var db=g("bf-dbar"); if(db)db.setAttribute("width",1); var v=g("bf-verd"); if(v)v.textContent=""; var pt=g("bf-part"); if(pt)pt.style.opacity="0"; if(g("bf-badge"))g("bf-badge").textContent="bit-flip su un peso po2"; }
+  function stop(){playing=false; if(t){clearTimeout(t);t=null;} var b=g("bf-btn"); if(b)b.textContent="▶ riprendi";}
+  function step(){
+    if(!playing)return; var W=g("bfwrap"); if(!W||W.offsetParent===null){stop();return;}
+    var p=SEQ[idx%SEQ.length];
+    var cx=cellX(p)+CW/2;
+    var pt=g("bf-part"); if(pt){pt.setAttribute("cx",cx);pt.setAttribute("cy",CY-8);pt.style.opacity="1";}
+    if(g("bf-badge"))g("bf-badge").textContent="radiazione → bit "+p;
+    t=setTimeout(function(){ if(!playing)return;
+      var c=g("bf-c"+p); if(c){ c.classList.add("flip"); c.classList.toggle("one"); }
+      if(pt)pt.style.opacity="0";
+      var d=Math.pow(2,-p); var crit=d>0.25;
+      var db=g("bf-dbar"); if(db){db.setAttribute("width",Math.max(2,d*DW).toFixed(1)); db.setAttribute("fill",crit?"#E74C3C":"#2ECC71");}
+      var v=g("bf-verd"); if(v){v.textContent=crit?"critico ✗":"assorbito ✓"; v.setAttribute("fill",crit?"#E74C3C":"#2ECC71");}
+      if(g("bf-badge"))g("bf-badge").textContent="bit "+p+(crit?" (alto) → critico":" (basso) → assorbito");
+      t=setTimeout(function(){ if(!playing)return; restore(p); idx++; t=setTimeout(step,450); },1500);
+    },380);
+  }
+  window.bfToggle=function(ev){
+    if(ev){ev.stopPropagation(); if(ev.preventDefault)ev.preventDefault();}
+    var b=g("bf-btn");
+    if(playing){ stop(); return; }
+    playing=true; if(b)b.textContent="⏸ pausa"; step();
+  };
+  reset();
+})();
+</script>
+```
+
 :::
 ::: {.side}
 ::: {.explain}

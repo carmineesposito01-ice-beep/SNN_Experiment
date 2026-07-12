@@ -185,6 +185,24 @@ $font-size-root: 18px;
 .reveal .rho-flag { font-size: 8px; font-family: ui-monospace,monospace; font-weight: 700; text-anchor: middle; opacity: 0; transition: opacity .3s ease; }
 .reveal .rho-flag.on { opacity: 1; }
 .reveal .rho-foot { text-align: center; margin-top: 8px; color: #9aa5b3; font-size: 0.88em; min-height: 1.3em; }
+// Animazione bit-flip SEU: particella colpisce un bit del peso po2 -> Delta grande su bit alti (critico) / piccolo su bassi (assorbito)
+.reveal .bfwrap { margin: 4px auto 0; max-width: 400px; font-size: 0.5em; line-height: 1.2; }
+.reveal .bf-svg { width: 100%; height: auto; display: block; }
+.reveal .bf-lab { fill: #9aa5b3; font-size: 7px; font-family: ui-monospace,monospace; }
+.reveal .bf-cell { fill: rgba(255,255,255,0.04); stroke: #56B4E9; stroke-width: 1; transition: fill .15s ease, stroke .15s ease; }
+.reveal .bf-cell.one { fill: rgba(86,180,233,0.55); }
+.reveal .bf-cell.flip { stroke: #E74C3C; stroke-width: 2; }
+.reveal .bf-cell.flip.one { fill: rgba(231,76,60,0.55); }
+.reveal .bf-cell.flip:not(.one) { fill: rgba(231,76,60,0.18); }
+.reveal .bf-bitlab { fill: #6c7683; font-size: 6px; font-family: ui-monospace,monospace; text-anchor: middle; }
+.reveal .bf-part { fill: #E74C3C; opacity: 0; }
+.reveal .bf-val { fill: #cfe8fb; font-size: 8px; font-family: ui-monospace,monospace; }
+.reveal .bf-dbar { fill: #E69F00; transition: width .25s ease, fill .25s ease; }
+.reveal .bf-dtrack { fill: rgba(255,255,255,0.06); }
+.reveal .bf-verd { font-size: 8px; font-family: ui-monospace,monospace; font-weight: 700; text-anchor: middle; }
+.reveal .bf-foot { text-align: center; margin-top: 6px; color: #9aa5b3; font-size: 0.86em; min-height: 1.2em; }
+.reveal .bf-stack { display: flex; flex-direction: column; align-items: center; gap: 10px; width: 100%; }
+.reveal .bf-img { max-width: 92%; height: auto; border-radius: 6px; }
 // Animazione decode: tensione LI grezza V -> sigmoide -> o in (0,1) -> riscala nel range fisico -> parametro
 .reveal .decwrap { margin: 4px auto 0; max-width: 500px; font-size: 0.5em; line-height: 1.25; }
 .reveal .de-col { display: flex; flex-direction: column; align-items: center; gap: 6px; margin-top: 8px; }
