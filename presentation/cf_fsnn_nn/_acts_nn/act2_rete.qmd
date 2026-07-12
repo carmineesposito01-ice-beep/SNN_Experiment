@@ -153,8 +153,6 @@ Parte 2 · Algoritmo PINN
   function stop(){playing=false; if(t){clearTimeout(t);t=null;} var W=g("archwrap"); if(W)W.classList.remove("playing"); var b=g("ar-btn"); if(b)b.textContent="▶ riprendi";}
   function decodePhase(){
     clrFire(); var w=g("archwrap"); if(w)w.classList.remove("rec");
-    var mx=1; for(var i=0;i<drive.length;i++)mx=Math.max(mx,drive[i]);
-    for(var di=0;di<DEC.length;di++){var d=g("ac-dec"+di);if(d)d.style.fillOpacity=(0.12+0.68*drive[di]/mx).toFixed(2); var op=g("ac-od"+di); if(op)op.style.opacity=(0.2+0.7*drive[di]/mx).toFixed(2);}
     if(g("ar-tick"))g("ar-tick").textContent="decode";
     if(g("ar-foot"))g("ar-foot").textContent="decodifica σ: ogni tensione LI → parametro IDM [v0, T, s0, a, b]";
     t=setTimeout(function(){ if(!playing)return; tick=0; drive=[0,0,0,0,0]; clearFills(); step(); }, 1700);
@@ -166,7 +164,7 @@ Parte 2 · Algoritmo PINN
     var fs=SPK[tick]||[];
     fs.forEach(function(hi){ var e=g("ac-hid"+hi); if(e)e.classList.add("fire"); var row=HID[hi].row; var ho=svg.querySelectorAll(".ac-ho.hoR"+row); for(var k=0;k<ho.length;k++)ho[k].classList.add("on"); [hi%5,(hi+2)%5].forEach(function(oi){drive[oi]++;}); });
     W.classList.add("rec");
-    for(var oi=0;oi<OUT.length;oi++){var e2=g("ac-out"+oi);if(e2)e2.style.fillOpacity=Math.min(1,0.12+drive[oi]*0.05).toFixed(2); var op=g("ac-od"+oi); if(op)op.style.opacity=Math.min(0.9,0.15+drive[oi]*0.045).toFixed(2);}
+    for(var oi=0;oi<OUT.length;oi++){var lum=Math.min(0.9,0.15+drive[oi]*0.045); var e2=g("ac-out"+oi);if(e2)e2.style.fillOpacity=Math.min(1,0.12+drive[oi]*0.05).toFixed(2); var op=g("ac-od"+oi); if(op)op.style.opacity=lum.toFixed(2); var dc=g("ac-dec"+oi); if(dc)dc.style.fillOpacity=lum.toFixed(2);}
     tick++;
     if(g("ar-tick"))g("ar-tick").textContent="tick "+tick+"/"+SPK.length;
     if(g("ar-foot"))g("ar-foot").textContent="gli ALIF sopra soglia SPARANO (spike sparsi ~15%); i LI integrano → tensione";
