@@ -21,8 +21,13 @@ Membrana, fatica e correnti in virgola fissa. Con ρ<1 lo stato resta limitato: 
 ::: {.vis}
 ![](figures/state_ranges.png)
 :::
-::: {.vis}
-![](figures/eq_qmn.png)
+::: {.side}
+::: {.eq .math}
+$$ x_{Qm.n} = \frac{k}{2^{n}}, \qquad k \in \mathbb{Z} $$
+$$ x \in \left[\,-2^{m-1},\ 2^{m-1} - 2^{-n}\,\right] $$
+:::
+
+Virgola fissa **Qm.n**: `m` bit interi, `n` frazionari. Lo stato ci sta perché ρ<1 lo tiene nel range → niente overflow del datapath.
 :::
 :::
 
