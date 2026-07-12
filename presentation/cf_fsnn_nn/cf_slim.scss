@@ -115,21 +115,27 @@ $font-size-root: 18px;
 // Animazione spike-illumination (architettura): V2X (corrente) -> ALIF che sparano spike -> LI che accumulano
 .reveal .archwrap { margin: 6px auto 0; max-width: 400px; font-size: 0.5em; line-height: 1.2; }
 .reveal .arch-svg { width: 100%; height: auto; display: block; }
-.reveal .ac-rec { fill: none; stroke: #2ECC71; stroke-width: 1; opacity: 0.22; stroke-dasharray: 3 3; transition: opacity .2s; }
-.reveal #archwrap.rec .ac-rec { opacity: 0.75; }
-.reveal .ac-ih { stroke: #56B4E9; stroke-width: 0.6; opacity: 0.08; transition: opacity .15s, stroke-width .15s; }
-.reveal .ac-ih.on { opacity: 0.4; stroke-width: 0.9; }
+.reveal .ac-rec { fill: none; stroke: #E69F00; stroke-width: 1; opacity: 0.22; stroke-dasharray: 3 3; transition: opacity .2s; }
+.reveal #archwrap.rec .ac-rec { opacity: 0.7; }
+.reveal .ac-ih { stroke: #8a93a0; stroke-width: 0.6; opacity: 0.08; transition: opacity .15s, stroke-width .15s; }
+.reveal .ac-ih.on { opacity: 0.42; stroke-width: 0.9; stroke: #c7d0da; }
 .reveal .ac-ho { stroke: #6C7683; stroke-width: 0.7; opacity: 0.12; transition: opacity .15s, stroke .15s, stroke-width .15s; }
 .reveal .ac-ho.on { opacity: 0.95; stroke: #E69F00; stroke-width: 1.5; }
-.reveal .ac-in { fill: #56B4E9; fill-opacity: 0.5; stroke: #56B4E9; stroke-width: 1.2; transition: fill-opacity .15s; }
-.reveal .ac-in.pulse { fill-opacity: 1; }
-.reveal .ac-hid { fill: #262d38; stroke: #6C7683; stroke-width: 1.2; transition: fill .12s, stroke .12s, stroke-width .12s; }
-.reveal .ac-hid.fire { fill: #E69F00; stroke: #ffd27a; stroke-width: 2.2; }
-.reveal .ac-out { fill: #2ECC71; fill-opacity: 0.14; stroke: #2ECC71; stroke-width: 1.2; transition: fill-opacity .3s, stroke-width .15s; }
+.reveal .ac-od { stroke: #6C7683; stroke-width: 0.8; opacity: 0.14; transition: opacity .2s, stroke .2s, stroke-width .2s; }
+.reveal .ac-od.on { opacity: 0.95; stroke: #2ECC71; stroke-width: 1.6; }
+.reveal .ac-in { fill: #8a93a0; fill-opacity: 0.35; stroke: #8a93a0; stroke-width: 1.2; transition: fill-opacity .15s; }
+.reveal .ac-in.pulse { fill-opacity: 0.9; }
+.reveal .ac-hid { fill: #E69F00; fill-opacity: 0.16; stroke: #E69F00; stroke-width: 1.2; transition: fill-opacity .12s, stroke .12s, stroke-width .12s; }
+.reveal .ac-hid.fire { fill-opacity: 1; stroke: #ffd27a; stroke-width: 2.2; }
+.reveal .ac-out { fill: #56B4E9; fill-opacity: 0.14; stroke: #56B4E9; stroke-width: 1.2; transition: fill-opacity .3s, stroke-width .15s; }
 .reveal .ac-out.pulse { stroke-width: 2.4; }
+.reveal .ac-dec { fill: #2ECC71; fill-opacity: 0.16; stroke: #2ECC71; stroke-width: 1.2; transition: fill-opacity .3s, stroke-width .2s; }
+.reveal .ac-dec.pulse { fill-opacity: 0.9; stroke-width: 2.4; }
 .reveal .ac-lab { fill: #c7d0da; font-size: 9px; font-family: ui-monospace,monospace; text-anchor: middle; font-weight: 700; }
 .reveal .ac-sub { fill: #8a93a0; font-size: 7px; font-family: ui-monospace,monospace; text-anchor: middle; }
-.reveal .ac-rlab { fill: #2ECC71; font-size: 6.5px; font-family: ui-monospace,monospace; text-anchor: middle; opacity: 0.85; }
+.reveal .ac-rlab { fill: #E69F00; font-size: 6.5px; font-family: ui-monospace,monospace; text-anchor: middle; opacity: 0.85; }
+.reveal .ac-plab { fill: #2ECC71; font-size: 7px; font-family: ui-monospace,monospace; text-anchor: start; font-weight: 700; opacity: 0; transition: opacity .3s ease; }
+.reveal .ac-plab.on { opacity: 1; }
 .reveal .ar-foot { text-align: center; margin-top: 8px; color: #9aa5b3; font-size: 0.95em; min-height: 1.3em; }
 // Animazione decode: tensione LI grezza V -> sigmoide -> o in (0,1) -> riscala nel range fisico -> parametro
 .reveal .decwrap { margin: 4px auto 0; max-width: 500px; font-size: 0.5em; line-height: 1.25; }

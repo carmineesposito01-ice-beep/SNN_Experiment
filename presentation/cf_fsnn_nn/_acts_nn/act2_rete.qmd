@@ -101,32 +101,38 @@ Parte 2 · Algoritmo PINN
     <button class="pl-btn" id="ar-btn" onclick="archToggle(event)">▶ avvia</button>
     <span class="pl-cyc" id="ar-tick">tick 0</span>
   </div>
-  <svg viewBox="0 0 320 244" id="arch-svg" class="arch-svg" preserveAspectRatio="xMidYMid meet"></svg>
-  <div class="ar-foot" id="ar-foot">V2X (corrente continua) → 32 ALIF che sparano spike → 5 integratori LI</div>
+  <svg viewBox="0 0 360 244" id="arch-svg" class="arch-svg" preserveAspectRatio="xMidYMid meet"></svg>
+  <div class="ar-foot" id="ar-foot">V2X (corrente) → 32 ALIF (spike) → 5 LI (tensioni) → decode (5 parametri)</div>
 </div>
 <script>
 (function(){
   var NS="http://www.w3.org/2000/svg";
   function g(id){return document.getElementById(id);}
   function mk(tag,a){var e=document.createElementNS(NS,tag);for(var k in a)e.setAttribute(k,a[k]);return e;}
-  var IN=[{x:40,y:56},{x:40,y:104},{x:40,y:152},{x:40,y:200}];
-  var HID=[]; for(var r=0;r<4;r++){HID.push({x:128,y:56+r*48});HID.push({x:168,y:56+r*48});}
-  var OUT=[{x:282,y:44},{x:282,y:82},{x:282,y:120},{x:282,y:158},{x:282,y:196}];
+  var IN=[{x:34,y:56},{x:34,y:104},{x:34,y:152},{x:34,y:200}];
+  var HID=[]; for(var r=0;r<4;r++){HID.push({x:104,y:56+r*48});HID.push({x:144,y:56+r*48});}
+  var OUT=[{x:224,y:44},{x:224,y:82},{x:224,y:120},{x:224,y:158},{x:224,y:196}];
+  var DEC=[{x:300,y:44},{x:300,y:82},{x:300,y:120},{x:300,y:158},{x:300,y:196}];
+  var PARN=["v0","T","s0","a","b"];
   var SPK=[[2,5],[0,3,6],[1,4],[2,7],[0,5,6],[3,4],[1,2,7],[0,6]];
   var svg=g("arch-svg");
   if(svg && !svg.getAttribute("data-built")){
     svg.setAttribute("data-built","1");
-    svg.appendChild(mk("path",{d:"M114,54 C92,110 92,150 114,206",class:"ac-rec"}));
+    svg.appendChild(mk("path",{d:"M90,54 C68,110 68,150 90,206",class:"ac-rec"}));
     IN.forEach(function(i){HID.forEach(function(h){svg.appendChild(mk("line",{x1:i.x,y1:i.y,x2:h.x,y2:h.y,"class":"ac-ih"}));});});
     HID.forEach(function(h,hi){[hi%5,(hi+2)%5].forEach(function(oi){var o=OUT[oi];svg.appendChild(mk("line",{x1:h.x,y1:h.y,x2:o.x,y2:o.y,"class":"ac-ho h"+hi}));});});
+    OUT.forEach(function(o,oi){var d=DEC[oi];svg.appendChild(mk("line",{x1:o.x,y1:o.y,x2:d.x,y2:d.y,"class":"ac-od d"+oi}));});
     IN.forEach(function(i,ii){svg.appendChild(mk("circle",{cx:i.x,cy:i.y,r:7,"class":"ac-in",id:"ac-in"+ii}));});
     HID.forEach(function(h,hi){svg.appendChild(mk("circle",{cx:h.x,cy:h.y,r:7,"class":"ac-hid",id:"ac-hid"+hi}));});
     OUT.forEach(function(o,oi){svg.appendChild(mk("circle",{cx:o.x,cy:o.y,r:8,"class":"ac-out",id:"ac-out"+oi}));});
+    DEC.forEach(function(d,di){svg.appendChild(mk("circle",{cx:d.x,cy:d.y,r:8,"class":"ac-dec",id:"ac-dec"+di}));});
     function lab(x,y,tx,c){var e=mk("text",{x:x,y:y,"class":c});e.textContent=tx;svg.appendChild(e);}
-    lab(40,24,"V2X","ac-lab"); lab(40,232,"ingresso (4)","ac-sub");
-    lab(148,24,"ALIF","ac-lab"); lab(148,232,"nascosto (32)","ac-sub");
-    lab(282,24,"LI","ac-lab"); lab(282,232,"uscita (5)","ac-sub");
-    lab(100,124,"ricorrenza","ac-rlab");
+    DEC.forEach(function(d,di){lab(d.x+13,d.y+3,PARN[di],"ac-plab");});
+    lab(34,24,"V2X","ac-lab"); lab(34,232,"ingresso (4)","ac-sub");
+    lab(124,24,"ALIF","ac-lab"); lab(124,232,"nascosto (32)","ac-sub");
+    lab(224,24,"LI","ac-lab"); lab(224,232,"uscita (5)","ac-sub");
+    lab(300,24,"decode","ac-lab"); lab(300,232,"parametri (5)","ac-sub");
+    lab(78,124,"ricorrenza","ac-rlab");
   }
   var tick=0, phase=0, playing=false, done=false, t=null, drive=[0,0,0,0,0];
   function clr(){
@@ -158,8 +164,17 @@ Parte 2 · Algoritmo PINN
       for(var oi=0;oi<OUT.length;oi++){var e=g("ac-out"+oi);if(e){e.classList.add("pulse"); e.style.fillOpacity=Math.min(1,0.14+drive[oi]*0.11).toFixed(2);}}
       if(g("ar-foot"))g("ar-foot").textContent="gli integratori LI accumulano gli spike → tensioni di membrana";
       phase=0; tick++;
-      if(tick>=SPK.length){ t=setTimeout(function(){ clr(); if(g("ar-foot"))g("ar-foot").textContent="le 5 tensioni finali → decode → [v0, T, s0, a, b]"; if(g("ar-tick"))g("ar-tick").textContent="fatto"; stop(true); },520); return; }
+      if(tick>=SPK.length){ phase=3; t=setTimeout(step,450); return; }
       t=setTimeout(step,300); return;
+    }
+    if(phase===3){
+      for(var oi2=0;oi2<OUT.length;oi2++){var eo=g("ac-out"+oi2);if(eo)eo.classList.add("pulse");}
+      var od=svg.querySelectorAll(".ac-od"); for(var k2=0;k2<od.length;k2++)od[k2].classList.add("on");
+      for(var di2=0;di2<DEC.length;di2++){var ed=g("ac-dec"+di2);if(ed)ed.classList.add("pulse");}
+      var pl=svg.querySelectorAll(".ac-plab"); for(var m2=0;m2<pl.length;m2++)pl[m2].classList.add("on");
+      if(g("ar-foot"))g("ar-foot").textContent="decode: ogni tensione LI → parametro fisico [v0, T, s0, a, b]";
+      if(g("ar-tick"))g("ar-tick").textContent="decode";
+      stop(true); return;
     }
   }
   window.archToggle=function(ev){
@@ -182,6 +197,7 @@ Ibrida: continuo → spiking → continuo, in 864 parametri.
 - **INPUT** (4) — i segnali V2X entrano come [corrente continua]{.accent} ($I=Wx$), non spike.
 - **HIDDEN** (32) — neuroni **ALIF spiking**: l'unico strato che spara.
 - **OUTPUT** (5) — integratori a perdita (LI), senza soglia; il readout è la tensione.
+- **DECODE** (5) — ogni tensione → parametro fisico via σ e riscalamento.
 :::
 ::: {.eq}
 **864 parametri** = `fc` 128 + ricorrenza `U·V` 512 + soglie ALIF 64 + `out` 160
