@@ -328,9 +328,13 @@ Parte 2 · Layer d'uscita (LI)
     <div class="de-in" id="de-in"><span id="de-inval">V = —</span><span class="de-arr de-arr-in">⟶</span></div>
     <div class="de-core">
       <svg viewBox="0 0 240 140" id="dec-svg" class="dec-svg" preserveAspectRatio="xMidYMid meet"></svg>
-      <div class="de-read" id="de-read"></div>
+      <div class="de-read">
+        <div class="de-eq"><span class="de-gen">o = σ(V)</span><span class="de-sub" id="de-sub-o"></span></div>
+        <div class="de-eq"><span class="de-gen">p = min + o·(max−min)</span><span class="de-sub" id="de-sub-p"></span></div>
+      </div>
+      <div class="de-barrow"><span class="de-bnd" id="de-lo"></span><div class="de-track"><div class="de-mark" id="de-mark"></div></div><span class="de-bnd" id="de-hi"></span></div>
     </div>
-    <div class="de-out" id="de-out"><span class="de-arr de-arr-out">⟶</span><span class="de-outval" id="de-outval">—</span></div>
+    <div class="de-out" id="de-out"><span class="de-outval" id="de-outval">—</span><span class="de-arr de-arr-out">⟶</span></div>
   </div>
 </div>
 <script>
@@ -380,7 +384,8 @@ Parte 2 · Layer d'uscita (LI)
     ["de-vln","de-hln"].forEach(function(id){var e=g(id);if(e){e.setAttribute("x1",PL.x0);e.setAttribute("y1",PL.y1);e.setAttribute("x2",PL.x0);e.setAttribute("y2",PL.y1);}});
     if(g("de-dot")){g("de-dot").setAttribute("cx",PL.x0);g("de-dot").setAttribute("cy",PL.y1);}
     if(g("de-dotx")){g("de-dotx").setAttribute("cx",PL.x0);g("de-dotx").setAttribute("cy",PL.y1);}
-    if(g("de-read"))g("de-read").innerHTML="";
+    ["de-sub-o","de-sub-p"].forEach(function(id){var e=g(id);if(e){e.innerHTML="";e.classList.remove("on");}});
+    if(g("de-lo"))g("de-lo").textContent=""; if(g("de-hi"))g("de-hi").textContent=""; if(g("de-mark"))g("de-mark").style.left="0%";
   }
   function resetIO(){
     var din=g("de-in"),dout=g("de-out");
@@ -406,13 +411,18 @@ Parte 2 · Layer d'uscita (LI)
     if(body&&su){ body.appendChild(su); su.style.display=""; }
     resetTrace(); resetIO();
   }
-  function traceParam(p){
+  function traceInput(p){ var xv=xV(p.V); if(g("de-dotx")){g("de-dotx").setAttribute("cx",xv);g("de-dotx").setAttribute("cy",PL.y1);} }
+  function showGeneral(p){ if(g("de-lo"))g("de-lo").textContent=p.lo; if(g("de-hi"))g("de-hi").textContent=p.hi; }
+  function traceCurve(p){
     var xv=xV(p.V), yo=yO(p.o);
-    if(g("de-dotx")){g("de-dotx").setAttribute("cx",xv);g("de-dotx").setAttribute("cy",PL.y1);}
     var vln=g("de-vln"); if(vln){vln.setAttribute("x1",xv);vln.setAttribute("y1",PL.y1);vln.setAttribute("x2",xv);vln.setAttribute("y2",yo);}
     var hln=g("de-hln"); if(hln){hln.setAttribute("x1",xv);hln.setAttribute("y1",yo);hln.setAttribute("x2",PL.x0);hln.setAttribute("y2",yo);}
     if(g("de-dot")){g("de-dot").setAttribute("cx",xv);g("de-dot").setAttribute("cy",yo);}
-    if(g("de-read"))g("de-read").innerHTML="σ("+p.V.toFixed(2)+") = "+p.o.toFixed(2)+"<br>"+p.lo+" + "+p.o.toFixed(2)+"·"+p.w+" = <b>"+p.val+"</b>";
+  }
+  function substitute(p){
+    var so=g("de-sub-o"); if(so){so.innerHTML=" = σ("+p.V.toFixed(2)+") = <b>"+p.o.toFixed(2)+"</b>"; so.classList.add("on");}
+    var sp=g("de-sub-p"); if(sp){sp.innerHTML=" = "+p.lo+" + "+p.o.toFixed(2)+"·"+p.w+" = <b>"+p.val+" "+p.u+"</b>"; sp.classList.add("on");}
+    if(g("de-mark"))g("de-mark").style.left=(p.o*100).toFixed(0)+"%";
   }
   function finalize(){
     collapseAll(); var su=g("de-sigunit"); if(su)su.style.display="none";
@@ -426,16 +436,18 @@ Parte 2 · Layer d'uscita (LI)
     var p=P[i];
     if(g("de-badge"))g("de-badge").textContent="decodifica "+(i+1)+"/5 · "+p.n;
     activate(i);
-    t=setTimeout(function(){ if(!playing)return; showIn(p);
-      t=setTimeout(function(){ if(!playing)return; traceParam(p);
-        t=setTimeout(function(){ if(!playing)return; showOut(p);
-          t=setTimeout(function(){ if(!playing)return;
-            var v=g("de-bval"+i); if(v){v.textContent=p.val+" "+p.u; v.classList.remove("de-dim"); v.classList.add("de-done");}
-            i++;
-            t=setTimeout(step,320);
-          },950);
-        },800);
-      },450);
+    t=setTimeout(function(){ if(!playing)return; showIn(p); traceInput(p);
+      t=setTimeout(function(){ if(!playing)return; showGeneral(p);
+        t=setTimeout(function(){ if(!playing)return; traceCurve(p); substitute(p);
+          t=setTimeout(function(){ if(!playing)return; showOut(p);
+            t=setTimeout(function(){ if(!playing)return;
+              var v=g("de-bval"+i); if(v){v.textContent=p.val+" "+p.u; v.classList.remove("de-dim"); v.classList.add("de-done");}
+              i++;
+              t=setTimeout(step,320);
+            },900);
+          },700);
+        },700);
+      },500);
     },320);
   }
   function arrive(){
