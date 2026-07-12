@@ -325,11 +325,12 @@ Parte 2 · Layer d'uscita (LI)
   <div class="de-col" id="de-col"></div>
   <div class="de-foot" id="de-foot">ogni uscita passa per una sigmoide → riscalata nel range fisico del parametro</div>
   <div class="de-sigunit" id="de-sigunit" style="display:none">
-    <svg viewBox="0 0 240 140" id="dec-svg" class="dec-svg" preserveAspectRatio="xMidYMid meet"></svg>
-    <div class="de-sigright">
+    <div class="de-in" id="de-in"><span id="de-inval">V = —</span><span class="de-arr de-arr-in">⟶</span></div>
+    <div class="de-core">
+      <svg viewBox="0 0 240 140" id="dec-svg" class="dec-svg" preserveAspectRatio="xMidYMid meet"></svg>
       <div class="de-read" id="de-read"></div>
-      <div class="de-barrow"><span class="de-bnd" id="de-lo"></span><div class="de-track"><div class="de-mark" id="de-mark"></div></div><span class="de-bnd" id="de-hi"></span></div>
     </div>
+    <div class="de-out" id="de-out"><span class="de-arr de-arr-out">⟶</span><span class="de-outval" id="de-outval">—</span></div>
   </div>
 </div>
 <script>
@@ -379,14 +380,21 @@ Parte 2 · Layer d'uscita (LI)
     ["de-vln","de-hln"].forEach(function(id){var e=g(id);if(e){e.setAttribute("x1",PL.x0);e.setAttribute("y1",PL.y1);e.setAttribute("x2",PL.x0);e.setAttribute("y2",PL.y1);}});
     if(g("de-dot")){g("de-dot").setAttribute("cx",PL.x0);g("de-dot").setAttribute("cy",PL.y1);}
     if(g("de-dotx")){g("de-dotx").setAttribute("cx",PL.x0);g("de-dotx").setAttribute("cy",PL.y1);}
-    if(g("de-mark"))g("de-mark").style.left="0%"; if(g("de-lo"))g("de-lo").textContent=""; if(g("de-hi"))g("de-hi").textContent=""; if(g("de-read"))g("de-read").innerHTML="";
+    if(g("de-read"))g("de-read").innerHTML="";
   }
+  function resetIO(){
+    var din=g("de-in"),dout=g("de-out");
+    if(din)din.classList.remove("on"); if(dout)dout.classList.remove("on");
+    if(g("de-inval"))g("de-inval").textContent="V = —"; if(g("de-outval"))g("de-outval").textContent="—";
+  }
+  function showIn(p){ if(g("de-inval"))g("de-inval").textContent="V = "+p.V.toFixed(2); var d=g("de-in"); if(d)d.classList.add("on"); }
+  function showOut(p){ if(g("de-outval"))g("de-outval").textContent=p.n+" = "+p.val+" "+p.u; var d=g("de-out"); if(d)d.classList.add("on"); }
   function collapseAll(){ for(var j=0;j<P.length;j++){var b=g("de-blk"+j); if(b){b.classList.remove("de-active");b.classList.remove("de-arrive");}} }
   function reset(){
     i=0; collapseAll();
     for(var j=0;j<P.length;j++){var v=g("de-bval"+j); if(v){v.textContent="—"; v.classList.add("de-dim"); v.classList.remove("de-done");}}
     var su=g("de-sigunit"); if(su)su.style.display="none";
-    resetTrace();
+    resetTrace(); resetIO();
     if(g("de-badge"))g("de-badge").textContent="5 uscite → 5 parametri";
     if(g("de-foot"))g("de-foot").textContent="ogni uscita passa per una sigmoide → riscalata nel range fisico del parametro";
   }
@@ -396,7 +404,7 @@ Parte 2 · Layer d'uscita (LI)
     var blk=g("de-blk"+k); if(blk)blk.classList.add("de-active");
     var body=g("de-bbody"+k); var su=g("de-sigunit");
     if(body&&su){ body.appendChild(su); su.style.display=""; }
-    resetTrace();
+    resetTrace(); resetIO();
   }
   function traceParam(p){
     var xv=xV(p.V), yo=yO(p.o);
@@ -404,8 +412,7 @@ Parte 2 · Layer d'uscita (LI)
     var vln=g("de-vln"); if(vln){vln.setAttribute("x1",xv);vln.setAttribute("y1",PL.y1);vln.setAttribute("x2",xv);vln.setAttribute("y2",yo);}
     var hln=g("de-hln"); if(hln){hln.setAttribute("x1",xv);hln.setAttribute("y1",yo);hln.setAttribute("x2",PL.x0);hln.setAttribute("y2",yo);}
     if(g("de-dot")){g("de-dot").setAttribute("cx",xv);g("de-dot").setAttribute("cy",yo);}
-    if(g("de-read"))g("de-read").innerHTML="σ("+p.V.toFixed(2)+") = "+p.o.toFixed(2)+"<br>"+p.n+" = "+p.lo+" + "+p.o.toFixed(2)+"·"+p.w+" = <b>"+p.val+" "+p.u+"</b>";
-    if(g("de-lo"))g("de-lo").textContent=p.lo; if(g("de-hi"))g("de-hi").textContent=p.hi; if(g("de-mark"))g("de-mark").style.left=(p.o*100).toFixed(0)+"%";
+    if(g("de-read"))g("de-read").innerHTML="σ("+p.V.toFixed(2)+") = "+p.o.toFixed(2)+"<br>"+p.lo+" + "+p.o.toFixed(2)+"·"+p.w+" = <b>"+p.val+"</b>";
   }
   function finalize(){
     collapseAll(); var su=g("de-sigunit"); if(su)su.style.display="none";
@@ -419,16 +426,17 @@ Parte 2 · Layer d'uscita (LI)
     var p=P[i];
     if(g("de-badge"))g("de-badge").textContent="decodifica "+(i+1)+"/5 · "+p.n;
     activate(i);
-    t=setTimeout(function(){
-      if(!playing)return;
-      traceParam(p);
-      t=setTimeout(function(){
-        if(!playing)return;
-        var v=g("de-bval"+i); if(v){v.textContent=p.val+" "+p.u; v.classList.remove("de-dim"); v.classList.add("de-done");}
-        i++;
-        t=setTimeout(step,320);
-      },1350);
-    },300);
+    t=setTimeout(function(){ if(!playing)return; showIn(p);
+      t=setTimeout(function(){ if(!playing)return; traceParam(p);
+        t=setTimeout(function(){ if(!playing)return; showOut(p);
+          t=setTimeout(function(){ if(!playing)return;
+            var v=g("de-bval"+i); if(v){v.textContent=p.val+" "+p.u; v.classList.remove("de-dim"); v.classList.add("de-done");}
+            i++;
+            t=setTimeout(step,320);
+          },950);
+        },800);
+      },450);
+    },320);
   }
   function arrive(){
     if(g("de-badge"))g("de-badge").textContent="il segnale arriva · 5 uscite";
