@@ -131,3 +131,22 @@ $font-size-root: 18px;
 .reveal .ac-sub { fill: #8a93a0; font-size: 7px; font-family: ui-monospace,monospace; text-anchor: middle; }
 .reveal .ac-rlab { fill: #2ECC71; font-size: 6.5px; font-family: ui-monospace,monospace; text-anchor: middle; opacity: 0.85; }
 .reveal .ar-foot { text-align: center; margin-top: 8px; color: #9aa5b3; font-size: 0.95em; min-height: 1.3em; }
+// Animazione decode: tensione LI grezza V -> sigmoide -> o in (0,1) -> riscala nel range fisico -> parametro
+.reveal .decwrap { margin: 6px auto 0; max-width: 380px; font-size: 0.5em; line-height: 1.25; }
+.reveal .dec-svg { width: 100%; height: auto; display: block; }
+.reveal .de-ax { stroke: #5a6570; stroke-width: 1; }
+.reveal .de-sig { fill: none; stroke: #56B4E9; stroke-width: 2; }
+.reveal .de-guide { stroke: #4a5560; stroke-width: 0.7; stroke-dasharray: 3 3; }
+.reveal .de-axl { fill: #9aa5b3; font-size: 8px; font-family: ui-monospace,monospace; text-anchor: end; }
+.reveal .de-axl2 { fill: #8a93a0; font-size: 7px; font-family: ui-monospace,monospace; text-anchor: middle; }
+.reveal .de-tr { stroke: #E69F00; stroke-width: 1.4; stroke-dasharray: 3 2; transition: all .45s ease; }
+.reveal .de-dot { fill: #E69F00; stroke: #ffd27a; stroke-width: 1.2; transition: cx .45s ease, cy .45s ease; }
+.reveal .de-dotx { fill: #56B4E9; transition: cx .45s ease; }
+.reveal .de-read { text-align: center; margin-top: 6px; font-family: ui-monospace,'Courier New',monospace; color: #c7d0da; font-size: 0.95em; min-height: 1.3em; }
+.reveal .de-read b { color: #2ECC71; }
+.reveal .de-barrow { display: flex; align-items: center; gap: 6px; margin-top: 6px; font-family: ui-monospace,monospace; color: #9aa5b3; font-size: 0.9em; }
+.reveal .de-track { position: relative; flex: 1 1 auto; height: 8px; background: rgba(255,255,255,0.07); border-radius: 4px; }
+.reveal .de-mark { position: absolute; top: -2px; left: 0; width: 4px; height: 12px; background: #2ECC71; border-radius: 2px; transition: left .45s ease; transform: translateX(-2px); }
+.reveal .de-list { text-align: center; margin-top: 8px; font-family: ui-monospace,'Courier New',monospace; color: #9FD3F2; font-size: 0.98em; }
+.reveal .de-list b { color: #FFD27A; }
+.reveal .de-dim { color: #5a6570; }
