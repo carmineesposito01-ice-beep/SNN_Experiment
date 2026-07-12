@@ -79,7 +79,7 @@ La logica è **cablata**: le interconnessioni configurabili fissano il **cammino
 [Efficienza per architettura]{.card-title}
 La GPU spende energia in migliaia di core general-purpose, memoria e fetch/decode. L'FPGA configura un **datapath dedicato** (dataflow): i dati fluiscono on-chip, niente istruzioni.
 
-*~5–8× vs ANN densa (nostro report). A supporto: letteratura fino a ~2.3× perf/Watt su FPGA datacenter vs GPU.*
+*~2.3× perf/Watt su FPGA datacenter vs GPU (letteratura). Ortogonale, a livello di operazione: l'SNN (AC<MAC) rende ~5–8× vs ANN densa, indipendente dall'hardware.*
 :::
 ::: {.card .fragment}
 [I/O diretto "any-to-any"]{.card-title}

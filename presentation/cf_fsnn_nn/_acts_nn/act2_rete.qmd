@@ -75,7 +75,8 @@ Il controllore fisico di cui la rete stima **5 dei 7** parametri `[v0, T, s0, a,
 :::
 ::: {.eq .math}
 $$ s^{*} = s_0 + \max\!\big(0,\ vT + \tfrac{v\,\Delta v}{2\sqrt{a\,b}}\big), \quad z=\tfrac{s^{*}}{s} $$
-$$ a_\text{IIDM}=a\,(1-z^2)\ \text{(car-following)}, \quad a_\text{CAH}=\min(a_l,a)-\tfrac{\operatorname{ReLU}(\Delta v)^2}{2\,s} $$
+$$ a_\text{IIDM}=\underbrace{a\big[1-(\tfrac{v}{v_0})^4\big]}_{\text{free-flow }(v_0)}\ \text{o}\ \underbrace{a\,(1-z^2)}_{\text{car-following}} $$
+$$ a_\text{CAH}=\min(a_l,a)-\tfrac{\operatorname{ReLU}(\Delta v)^2}{2\,s} $$
 $$ \hat a = (1-c)\,a_\text{IIDM} + c\big[a_\text{CAH}+b\tanh\!\big(\tfrac{a_\text{IIDM}-a_\text{CAH}}{b}\big)\big] \in [-9,\ a] $$
 :::
 :::

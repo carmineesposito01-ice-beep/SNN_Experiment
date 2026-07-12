@@ -12,7 +12,7 @@ Quattro reti caratterizzate **per-metrica**: due con **BPTT**, due con **EventPr
 :::
 
 - **Leonardo** (BPTT) — conservativo, miglior fisica (val_data 0.1926)
-- **Raffaello** (BPTT) — aggressivo, `v0` mis-identificato
+- **Raffaello** (BPTT) — aggressivo, `v0` mal identificato
 - **Donatello** (EventProp) — equilibrato, NRMSE minima 0.152, ρ 0.05
 - **Michelangelo** (EventProp) — conservativo, ρ 0.39
 
@@ -89,7 +89,7 @@ Parte 4 · Gerarchia di valutazione (6 livelli)
 ::: {.side}
 ::: {.explain}
 NRMSE per-canale (`v0, T, s0, a, b`), oracolo a zero. `Donatello` è il [più basso e uniforme]{.accent}
-(0.093–0.215); `Raffaello` crolla su `v0` (0.499), e quella mis-identificazione distorce a valle il
+(0.093–0.215); `Raffaello` crolla su `v0` (0.499), e quella identificazione errata distorce a valle il
 diagramma fondamentale.
 :::
 ::: {.eq}
@@ -105,7 +105,7 @@ Non tutti i parametri sono ugualmente identificabili. Il gap di standstill `s0` 
 direttamente nel gap statico. `v0` e `b` sono i più ostici: `v0` si osserva solo dove il veicolo va davvero
 libero (free-flow), `b` solo nelle frenate. È per questo che `Raffaello`, sbagliando proprio `v0`, si porta
 dietro la distorsione del diagramma fondamentale a livello macroscopico.
-**T4 / Identificabilità (Fisher)** — è il livello che regge il "perché" del fronte di Pareto e del ritornello "NRMSE bassa ≠ guida sicura": la matrice di Fisher è a **rango pieno (5/5)** — tutti i parametri in linea di principio identificabili — ma **fortemente mal-condizionata**, con numero di condizionamento ~1.6·10⁹ (problema "sloppy") e ~29 combinazioni di **equifinalità** (parametri diversi, traiettorie quasi indistinguibili; `s0` il meno identificabile, `T` il più). Ecco perché due champion con NRMSE diverse possono guidare in modo simile.
+**T4 / Identificabilità (Fisher)** — è il livello che regge il "perché" del fronte di Pareto e del ritornello "NRMSE bassa ≠ guida sicura": la matrice di Fisher è a **rango pieno (5/5)** — tutti i parametri in linea di principio identificabili — ma **fortemente mal-condizionata**, con numero di condizionamento ~1.6·10⁹ (problema "sloppy") e ~29 combinazioni di **equifinalità** (parametri diversi, traiettorie quasi indistinguibili; `s0` il meno identificabile *localmente*, `T` il più). «Meno identificabile» è nel senso LOCALE della FIM (sensibilità più debole, molto scambiabile nel manifold sloppy) e NON contraddice l'NRMSE bassa di `s0` vista sopra: recuperarlo empiricamente resta facile, ma la sua sensibilità locale è la più piccola. Ecco perché due champion con NRMSE diverse possono guidare in modo simile.
 :::
 
 ::: {.footerbar}
@@ -202,7 +202,7 @@ vs 74 km/h) e sposta in alto la curva flusso-densità.
 ::: {.notes}
 Il collegamento tra le scale: il gain testa→coda < 1 è la condizione di string stability, che a livello
 mesoscopico si vede come attenuazione dell'onda stop-and-go che si propaga all'indietro lungo la coda. Il caso
-`Raffaello` chiude il cerchio con la slide sull'accuratezza: la mis-identificazione di `v0` (0.499) si
+`Raffaello` chiude il cerchio con la slide sull'accuratezza: l'identificazione errata di `v0` (0.499) si
 propaga fino al macro, spostando in alto la curva flusso-densità del diagramma fondamentale. Un errore locale
 sul parametro diventa così un errore di sistema a scala macroscopica.
 :::
