@@ -169,6 +169,22 @@ $font-size-root: 18px;
 .reveal .lo-spin { fill: #E69F00; opacity: 0; }
 .reveal .lo-note { fill: #9aa5b3; font-size: 6.5px; font-family: ui-monospace,monospace; text-anchor: middle; font-style: italic; }
 .reveal .lo-foot { text-align: center; margin-top: 8px; color: #9aa5b3; font-size: 0.9em; min-height: 1.3em; }
+// Animazione stabilita spettrale: errore ricorrenza fixed-point - rho<1 smorza (verde), rho>1 esplode fino overflow (rosso)
+.reveal .rhowrap { margin: 6px auto 0; max-width: 420px; font-size: 0.5em; line-height: 1.2; }
+.reveal .rho-svg { width: 100%; height: auto; display: block; }
+.reveal .rho-ax { stroke: #5a6570; stroke-width: 1; }
+.reveal .rho-axl { fill: #9aa5b3; font-size: 7px; font-family: ui-monospace,monospace; text-anchor: middle; }
+.reveal .rho-ceil { stroke: #E69F00; stroke-width: 1; stroke-dasharray: 4 3; opacity: 0.85; }
+.reveal .rho-ceill { fill: #E69F00; font-size: 6.5px; font-family: ui-monospace,monospace; text-anchor: end; }
+.reveal .rho-safe { fill: none; stroke: #2ECC71; stroke-width: 2; }
+.reveal .rho-expl { fill: none; stroke: #E74C3C; stroke-width: 2; }
+.reveal .rho-dotg { fill: #2ECC71; stroke: #baf7d0; stroke-width: 1; }
+.reveal .rho-dotr { fill: #E74C3C; stroke: #ffc4bd; stroke-width: 1; }
+.reveal .rho-lgs { fill: #2ECC71; font-size: 7.5px; font-family: ui-monospace,monospace; }
+.reveal .rho-lge { fill: #E74C3C; font-size: 7.5px; font-family: ui-monospace,monospace; }
+.reveal .rho-flag { font-size: 8px; font-family: ui-monospace,monospace; font-weight: 700; text-anchor: middle; opacity: 0; transition: opacity .3s ease; }
+.reveal .rho-flag.on { opacity: 1; }
+.reveal .rho-foot { text-align: center; margin-top: 8px; color: #9aa5b3; font-size: 0.88em; min-height: 1.3em; }
 // Animazione decode: tensione LI grezza V -> sigmoide -> o in (0,1) -> riscala nel range fisico -> parametro
 .reveal .decwrap { margin: 4px auto 0; max-width: 500px; font-size: 0.5em; line-height: 1.25; }
 .reveal .de-col { display: flex; flex-direction: column; align-items: center; gap: 6px; margin-top: 8px; }

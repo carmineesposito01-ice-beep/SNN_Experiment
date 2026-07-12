@@ -45,11 +45,87 @@ adattamento conta. Tutto questo è assorbito nel quantization-aware training, no
 Parte 5 · T5 schema di quantizzazione
 :::
 
-## T5 · Stabilità spettrale: ρ<1 tiene lo stato limitato {.act3}
+## T5 — FPGA-Friendly [Stabilità Spettrale] {.act3}
 
 ::: {.twocol}
 ::: {.vis}
-![](figures/discriminant.png)
+
+```{=html}
+<div class="rhowrap" id="rhowrap">
+  <div class="pl-head">
+    <button class="pl-btn" id="rho-btn" onclick="rhoToggle(event)">▶ avvia</button>
+    <span class="pl-cyc" id="rho-badge">errore vs cicli</span>
+  </div>
+  <svg viewBox="0 0 360 196" id="rho-svg" class="rho-svg" preserveAspectRatio="xMidYMid meet"></svg>
+  <div class="rho-foot" id="rho-foot">l'errore di arrotondamento nella ricorrenza fixed-point: ρ&lt;1 lo smorza, ρ&gt;1 lo amplifica ciclo dopo ciclo → overflow</div>
+</div>
+<script>
+(function(){
+  var NS="http://www.w3.org/2000/svg";
+  function g(id){return document.getElementById(id);}
+  function mk(t,a){var e=document.createElementNS(NS,t);for(var k in a)e.setAttribute(k,a[k]);return e;}
+  var K=10, E0=0.02, RS=0.39, RE=2.99, CEIL=1.0, YMAX=1.25;
+  var PX0=54, PX1=338, PY0=48, PY1=164;
+  function xk(k){return PX0+(k/K)*(PX1-PX0);}
+  function yE(e){var v=e>YMAX?YMAX:e; return PY1-(v/YMAX)*(PY1-PY0);}
+  var svg=g("rho-svg");
+  if(svg && !svg.getAttribute("data-built")){
+    svg.setAttribute("data-built","1");
+    function txt(x,y,s,c){var e=mk("text",{x:x,y:y,"class":c});e.textContent=s;svg.appendChild(e);}
+    svg.appendChild(mk("line",{x1:PX0,y1:PY1,x2:PX1,y2:PY1,"class":"rho-ax"}));
+    svg.appendChild(mk("line",{x1:PX0,y1:PY0,x2:PX0,y2:PY1,"class":"rho-ax"}));
+    var yc=yE(CEIL);
+    svg.appendChild(mk("line",{x1:PX0,y1:yc,x2:PX1,y2:yc,"class":"rho-ceil"}));
+    txt(PX1,yc-3,"overflow (saturazione fixed-point)","rho-ceill");
+    txt((PX0+PX1)/2,PY1+15,"cicli della ricorrenza →","rho-axl");
+    txt(PX0-3,PY0-3,"|errore|","rho-axl");
+    txt(PX0+8,PY0+8,"ρ = 0.39 · EventProp","rho-lgs");
+    txt(PX0+8,PY0+20,"ρ = 2.99 · BPTT","rho-lge");
+    svg.appendChild(mk("polyline",{points:"","class":"rho-safe",id:"rho-safe"}));
+    svg.appendChild(mk("polyline",{points:"","class":"rho-expl",id:"rho-expl"}));
+    svg.appendChild(mk("circle",{cx:PX0,cy:PY1,r:3.2,"class":"rho-dotg",id:"rho-dg"}));
+    svg.appendChild(mk("circle",{cx:PX0,cy:PY1,r:3.2,"class":"rho-dotr",id:"rho-dr"}));
+    txt(206,62,"OVERFLOW ✗","rho-flag rho-lge");var fe=svg.lastChild;fe.setAttribute("id","rho-fe");
+    txt(258,156,"limitato ✓","rho-flag rho-lgs");var fs=svg.lastChild;fs.setAttribute("id","rho-fs");
+  }
+  var k=0, ps=[], pe=[], playing=false, t=null;
+  function setflag(id,on){var e=g(id);if(e){if(on)e.classList.add("on");else e.classList.remove("on");}}
+  function reset(){
+    k=0; ps=[]; pe=[];
+    var a=g("rho-safe"); if(a)a.setAttribute("points","");
+    var b=g("rho-expl"); if(b)b.setAttribute("points","");
+    if(g("rho-dg")){g("rho-dg").setAttribute("cx",PX0);g("rho-dg").setAttribute("cy",PY1);}
+    if(g("rho-dr")){g("rho-dr").setAttribute("cx",PX0);g("rho-dr").setAttribute("cy",PY1);}
+    setflag("rho-fe",false); setflag("rho-fs",false);
+    if(g("rho-badge"))g("rho-badge").textContent="errore vs cicli";
+  }
+  function stop(){playing=false; if(t){clearTimeout(t);t=null;} var b=g("rho-btn"); if(b)b.textContent="▶ riprendi";}
+  function step(){
+    if(!playing)return; var W=g("rhowrap"); if(!W||W.offsetParent===null){stop();return;}
+    if(k>K){ setflag("rho-fs",true); t=setTimeout(function(){ if(!playing)return; reset(); step(); },1600); return; }
+    var eg=E0*Math.pow(RS,k), ee=E0*Math.pow(RE,k);
+    ps.push(xk(k).toFixed(1)+","+yE(eg).toFixed(1)); pe.push(xk(k).toFixed(1)+","+yE(ee).toFixed(1));
+    var a=g("rho-safe"); if(a)a.setAttribute("points",ps.join(" "));
+    var b=g("rho-expl"); if(b)b.setAttribute("points",pe.join(" "));
+    if(g("rho-dg")){g("rho-dg").setAttribute("cx",xk(k).toFixed(1));g("rho-dg").setAttribute("cy",yE(eg).toFixed(1));}
+    if(g("rho-dr")){g("rho-dr").setAttribute("cx",xk(k).toFixed(1));g("rho-dr").setAttribute("cy",yE(ee).toFixed(1));}
+    if(ee>=CEIL) setflag("rho-fe",true);
+    if(g("rho-badge"))g("rho-badge").textContent="ciclo "+k+"/"+K;
+    k++;
+    t=setTimeout(step,440);
+  }
+  window.rhoToggle=function(ev){
+    if(ev){ev.stopPropagation(); if(ev.preventDefault)ev.preventDefault();}
+    var b=g("rho-btn");
+    if(playing){ stop(); return; }
+    if(k>K)reset();
+    playing=true; if(b)b.textContent="⏸ pausa"; step();
+  };
+  reset();
+})();
+</script>
+```
+
 :::
 ::: {.side}
 ::: {.explain}
