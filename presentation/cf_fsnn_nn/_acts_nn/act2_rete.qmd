@@ -99,92 +99,85 @@ Parte 2 · Algoritmo PINN
 <div class="archwrap" id="archwrap">
   <div class="pl-head">
     <button class="pl-btn" id="ar-btn" onclick="archToggle(event)">▶ avvia</button>
-    <span class="pl-cyc" id="ar-tick">tick 0</span>
+    <span class="pl-cyc" id="ar-tick">tick 0/8</span>
   </div>
-  <svg viewBox="0 0 360 244" id="arch-svg" class="arch-svg" preserveAspectRatio="xMidYMid meet"></svg>
-  <div class="ar-foot" id="ar-foot">V2X (corrente) → 32 ALIF (spike) → 5 LI (tensioni) → decode (5 parametri)</div>
+  <svg viewBox="0 0 384 214" id="arch-svg" class="arch-svg" preserveAspectRatio="xMidYMid meet"></svg>
+  <div class="ar-foot" id="ar-foot">INPUT continuo → HIDDEN ALIF (spike sparsi) → OUTPUT LI (integra) → decode σ</div>
 </div>
 <script>
 (function(){
   var NS="http://www.w3.org/2000/svg";
   function g(id){return document.getElementById(id);}
   function mk(tag,a){var e=document.createElementNS(NS,tag);for(var k in a)e.setAttribute(k,a[k]);return e;}
-  var IN=[{x:34,y:56},{x:34,y:104},{x:34,y:152},{x:34,y:200}];
-  var HID=[]; for(var r=0;r<4;r++){HID.push({x:104,y:56+r*48});HID.push({x:144,y:56+r*48});}
-  var OUT=[{x:224,y:44},{x:224,y:82},{x:224,y:120},{x:224,y:158},{x:224,y:196}];
-  var DEC=[{x:300,y:44},{x:300,y:82},{x:300,y:120},{x:300,y:158},{x:300,y:196}];
-  var PARN=["v0","T","s0","a","b"];
-  var SPK=[[2,5],[0,3,6],[1,4],[2,7],[0,5,6],[3,4],[1,2,7],[0,6]];
+  var IN=[{x:46,y:66,l:"a_lead"},{x:46,y:104,l:"v"},{x:46,y:142,l:"Δv"},{x:46,y:180,l:"gap"}];
+  var HCOL=[98,112,126,140], HROW=[50,69,88,107,126,145,164,183];
+  var HID=[]; for(var r=0;r<HROW.length;r++){for(var c=0;c<HCOL.length;c++){HID.push({x:HCOL[c],y:HROW[r],row:r});}}
+  var OUT=[{x:250,y:58},{x:250,y:90},{x:250,y:122},{x:250,y:154},{x:250,y:186}];
+  var DEC=[{y:58,n:"b",rg:"0.5–3"},{y:90,n:"a",rg:"0.3–2.5"},{y:122,n:"s0",rg:"1–5"},{y:154,n:"T",rg:"0.5–2.5"},{y:186,n:"v0",rg:"8–45"}];
+  var DECX=298, DECW=66, DECH=22;
+  var SPK=[[3,9,14,22,27],[1,7,12,19,25,30],[4,10,16,21,28],[0,8,13,20,26,31],[2,6,11,17,23,29],[5,9,15,18,24],[1,7,14,23,27,30],[3,10,16,20,25,28]];
   var svg=g("arch-svg");
   if(svg && !svg.getAttribute("data-built")){
     svg.setAttribute("data-built","1");
-    svg.appendChild(mk("path",{d:"M90,54 C68,110 68,150 90,206",class:"ac-rec"}));
-    IN.forEach(function(i){HID.forEach(function(h){svg.appendChild(mk("line",{x1:i.x,y1:i.y,x2:h.x,y2:h.y,"class":"ac-ih"}));});});
-    HID.forEach(function(h,hi){[hi%5,(hi+2)%5].forEach(function(oi){var o=OUT[oi];svg.appendChild(mk("line",{x1:h.x,y1:h.y,x2:o.x,y2:o.y,"class":"ac-ho h"+hi}));});});
-    OUT.forEach(function(o,oi){var d=DEC[oi];svg.appendChild(mk("line",{x1:o.x,y1:o.y,x2:d.x,y2:d.y,"class":"ac-od d"+oi}));});
-    IN.forEach(function(i,ii){svg.appendChild(mk("circle",{cx:i.x,cy:i.y,r:7,"class":"ac-in",id:"ac-in"+ii}));});
-    HID.forEach(function(h,hi){svg.appendChild(mk("circle",{cx:h.x,cy:h.y,r:7,"class":"ac-hid",id:"ac-hid"+hi}));});
-    OUT.forEach(function(o,oi){svg.appendChild(mk("circle",{cx:o.x,cy:o.y,r:8,"class":"ac-out",id:"ac-out"+oi}));});
-    DEC.forEach(function(d,di){svg.appendChild(mk("circle",{cx:d.x,cy:d.y,r:8,"class":"ac-dec",id:"ac-dec"+di}));});
-    function lab(x,y,tx,c){var e=mk("text",{x:x,y:y,"class":c});e.textContent=tx;svg.appendChild(e);}
-    DEC.forEach(function(d,di){lab(d.x+13,d.y+3,PARN[di],"ac-plab");});
-    lab(34,24,"V2X","ac-lab"); lab(34,232,"ingresso (4)","ac-sub");
-    lab(124,24,"ALIF","ac-lab"); lab(124,232,"nascosto (32)","ac-sub");
-    lab(224,24,"LI","ac-lab"); lab(224,232,"uscita (5)","ac-sub");
-    lab(300,24,"decode","ac-lab"); lab(300,232,"parametri (5)","ac-sub");
-    lab(78,124,"ricorrenza","ac-rlab");
+    IN.forEach(function(i){ for(var r=0;r<HROW.length;r++){ svg.appendChild(mk("line",{x1:i.x+9,y1:i.y,x2:HCOL[0]-6,y2:HROW[r],"class":"ac-ih"})); } });
+    for(var rr=0;rr<HROW.length;rr++){ (function(r){ OUT.forEach(function(o){ svg.appendChild(mk("line",{x1:HCOL[3]+6,y1:HROW[r],x2:o.x-10,y2:o.y,"class":"ac-ho hoR"+r})); }); })(rr); }
+    svg.appendChild(mk("path",{d:"M150,54 C184,86 184,150 152,182","class":"ac-rec"}));
+    svg.appendChild(mk("polygon",{points:"152,185 145,173 159,173","class":"ac-recarrow"}));
+    OUT.forEach(function(o,oi){ svg.appendChild(mk("line",{x1:o.x+10,y1:o.y,x2:DECX-2,y2:DEC[oi].y,"class":"ac-od"})); });
+    IN.forEach(function(i,ii){ svg.appendChild(mk("circle",{cx:i.x,cy:i.y,r:9,"class":"ac-in",id:"ac-in"+ii})); });
+    HID.forEach(function(h,hi){ svg.appendChild(mk("circle",{cx:h.x,cy:h.y,r:6,"class":"ac-hid",id:"ac-hid"+hi})); });
+    OUT.forEach(function(o,oi){ svg.appendChild(mk("circle",{cx:o.x,cy:o.y,r:10,"class":"ac-out",id:"ac-out"+oi})); });
+    DEC.forEach(function(d,di){ svg.appendChild(mk("rect",{x:DECX,y:d.y-DECH/2,width:DECW,height:DECH,rx:5,"class":"ac-dec",id:"ac-dec"+di})); });
+    function txt(x,y,tx,c){var e=mk("text",{x:x,y:y,"class":c});e.textContent=tx;svg.appendChild(e);}
+    IN.forEach(function(i){ txt(i.x-15,i.y+3,i.l,"ac-inlab"); });
+    DEC.forEach(function(d){ txt(DECX+7,d.y+3,d.n,"ac-declab"); txt(DECX+DECW-6,d.y+3,d.rg,"ac-decrange"); });
+    txt(46,14,"INPUT","ac-lab"); txt(46,25,"continuo","ac-sub");
+    txt(119,14,"HIDDEN · ALIF","ac-lab hid"); txt(119,25,"spiking (sparso ~15%)","ac-sub");
+    txt(250,14,"OUTPUT · LI","ac-lab out"); txt(250,25,"integratore","ac-sub");
+    txt(331,14,"decode · σ","ac-lab dec"); txt(331,25,"parametri IDM","ac-sub");
+    txt(174,116,"U·V","ac-rlab"); txt(174,126,"ricorrente","ac-rlab");
+    txt(120,206,"I = W·x","ac-eqlab");
   }
-  var tick=0, phase=0, playing=false, done=false, t=null, drive=[0,0,0,0,0];
-  function clr(){
-    for(var hi=0;hi<HID.length;hi++){var e=g("ac-hid"+hi);if(e)e.classList.remove("fire");}
-    var on=svg.querySelectorAll(".on"); for(var i=0;i<on.length;i++)on[i].classList.remove("on");
-    var pu=svg.querySelectorAll(".pulse"); for(var j=0;j<pu.length;j++)pu[j].classList.remove("pulse");
+  var tick=0, playing=false, done=false, t=null, drive=[0,0,0,0,0];
+  function clrFire(){ for(var hi=0;hi<HID.length;hi++){var e=g("ac-hid"+hi);if(e)e.classList.remove("fire");} var on=svg.querySelectorAll(".ac-ho.on"); for(var i=0;i<on.length;i++)on[i].classList.remove("on"); }
+  function reset(){
+    tick=0; drive=[0,0,0,0,0]; clrFire();
     var w=g("archwrap"); if(w)w.classList.remove("rec");
+    for(var oi=0;oi<OUT.length;oi++){var e=g("ac-out"+oi);if(e)e.style.fillOpacity="0.12";}
+    for(var di=0;di<DEC.length;di++){var d=g("ac-dec"+di);if(d)d.style.fillOpacity="0.06";}
+    if(g("ar-tick"))g("ar-tick").textContent="tick 0/"+SPK.length;
+    if(g("ar-foot"))g("ar-foot").textContent="INPUT continuo → HIDDEN ALIF (spike sparsi) → OUTPUT LI (integra) → decode σ";
   }
-  function resetFills(){ drive=[0,0,0,0,0]; for(var oi=0;oi<OUT.length;oi++){var e=g("ac-out"+oi);if(e)e.style.fillOpacity="0.14";} }
   function stop(d){playing=false; if(t){clearTimeout(t);t=null;} done=d; var b=g("ar-btn"); if(b)b.textContent=d?"↻ rivedi":"▶ riprendi";}
+  function decodePhase(){
+    clrFire(); var w=g("archwrap"); if(w)w.classList.remove("rec");
+    var mx=1; for(var i=0;i<drive.length;i++)mx=Math.max(mx,drive[i]);
+    for(var di=0;di<DEC.length;di++){var d=g("ac-dec"+di);if(d)d.style.fillOpacity=(0.12+0.68*drive[di]/mx).toFixed(2);}
+    if(g("ar-tick"))g("ar-tick").textContent="decode";
+    if(g("ar-foot"))g("ar-foot").textContent="decodifica σ: ogni tensione LI → parametro IDM [v0, T, s0, a, b]";
+    stop(true);
+  }
   function step(){
     if(!playing)return; var W=g("archwrap"); if(!W||W.offsetParent===null){stop(false);return;}
-    clr();
-    if(phase===0){
-      if(g("ar-tick"))g("ar-tick").textContent="tick "+(tick+1)+"/"+SPK.length;
-      for(var ii=0;ii<IN.length;ii++){var e=g("ac-in"+ii);if(e)e.classList.add("pulse");}
-      var ih=svg.querySelectorAll(".ac-ih"); for(var i=0;i<ih.length;i++)ih[i].classList.add("on");
-      if(g("ar-foot"))g("ar-foot").textContent="ingresso: la corrente V2X entra nei neuroni (I = W·x)";
-      phase=1; t=setTimeout(step,320); return;
-    }
-    if(phase===1){
-      var fs=SPK[tick]||[];
-      fs.forEach(function(hi){ var e=g("ac-hid"+hi); if(e)e.classList.add("fire"); var ho=svg.querySelectorAll(".ac-ho.h"+hi); for(var k=0;k<ho.length;k++)ho[k].classList.add("on"); [hi%5,(hi+2)%5].forEach(function(oi){drive[oi]++;}); });
-      W.classList.add("rec");
-      if(g("ar-foot"))g("ar-foot").textContent="gli ALIF sopra soglia SPARANO: spike sparsi lungo i collegamenti";
-      phase=2; t=setTimeout(step,450); return;
-    }
-    if(phase===2){
-      for(var oi=0;oi<OUT.length;oi++){var e=g("ac-out"+oi);if(e){e.classList.add("pulse"); e.style.fillOpacity=Math.min(1,0.14+drive[oi]*0.11).toFixed(2);}}
-      if(g("ar-foot"))g("ar-foot").textContent="gli integratori LI accumulano gli spike → tensioni di membrana";
-      phase=0; tick++;
-      if(tick>=SPK.length){ phase=3; t=setTimeout(step,450); return; }
-      t=setTimeout(step,300); return;
-    }
-    if(phase===3){
-      for(var oi2=0;oi2<OUT.length;oi2++){var eo=g("ac-out"+oi2);if(eo)eo.classList.add("pulse");}
-      var od=svg.querySelectorAll(".ac-od"); for(var k2=0;k2<od.length;k2++)od[k2].classList.add("on");
-      for(var di2=0;di2<DEC.length;di2++){var ed=g("ac-dec"+di2);if(ed)ed.classList.add("pulse");}
-      var pl=svg.querySelectorAll(".ac-plab"); for(var m2=0;m2<pl.length;m2++)pl[m2].classList.add("on");
-      if(g("ar-foot"))g("ar-foot").textContent="decode: ogni tensione LI → parametro fisico [v0, T, s0, a, b]";
-      if(g("ar-tick"))g("ar-tick").textContent="decode";
-      stop(true); return;
-    }
+    clrFire();
+    if(tick>=SPK.length){ decodePhase(); return; }
+    var fs=SPK[tick]||[];
+    fs.forEach(function(hi){ var e=g("ac-hid"+hi); if(e)e.classList.add("fire"); var row=HID[hi].row; var ho=svg.querySelectorAll(".ac-ho.hoR"+row); for(var k=0;k<ho.length;k++)ho[k].classList.add("on"); [hi%5,(hi+2)%5].forEach(function(oi){drive[oi]++;}); });
+    W.classList.add("rec");
+    for(var oi=0;oi<OUT.length;oi++){var e2=g("ac-out"+oi);if(e2)e2.style.fillOpacity=Math.min(1,0.12+drive[oi]*0.05).toFixed(2);}
+    tick++;
+    if(g("ar-tick"))g("ar-tick").textContent="tick "+tick+"/"+SPK.length;
+    if(g("ar-foot"))g("ar-foot").textContent="gli ALIF sopra soglia SPARANO (spike sparsi ~15%); i LI integrano → tensione";
+    t=setTimeout(step, 720);
   }
   window.archToggle=function(ev){
     if(ev){ev.stopPropagation(); if(ev.preventDefault)ev.preventDefault();}
     var b=g("ar-btn");
     if(playing){ playing=false; if(t){clearTimeout(t);t=null;} if(b)b.textContent="▶ riprendi"; return; }
-    if(done){ tick=0; phase=0; done=false; resetFills(); clr(); }
+    if(done){ reset(); done=false; }
     playing=true; if(b)b.textContent="⏸ pausa"; step();
   };
-  resetFills();
+  reset();
 })();
 </script>
 ```
