@@ -1,6 +1,6 @@
 # Parte 5 — Idoneità FPGA {.divider .act3}
 
-## T5 · Quantizzazione: come è quantizzata la rete {.act3}
+## T5 — FPGA-Friendly [Quantizzazione] {.act3}
 
 ::: {.threecol}
 ::: {.card}
@@ -157,18 +157,19 @@ della slide successiva.
 Parte 5 · T5 discriminante ρ<1
 :::
 
-## T5 · Timing: microsecondi contro una deadline di 100 ms {.act3}
+## T5 — FPGA-Friendly [Timing] {.act3}
 
 ::: {.explain}
-Un passo della rete costa [microsecondi]{.accent}; la deadline di controllo è 100 ms → budget usato ~0,1%. E
-poiché non c'è alcun ramo dipendente dai dati, il caso peggiore coincide col migliore: [WCET == BCET]{.accent},
-jitter zero. L'hard-real-time è regalato dall'architettura, non conquistato a fatica.
+Un'**inferenza** costa **42.6 µs** — 341 cicli × 125 ns (clock [8 MHz]{.accent}, sintesi Fase B) — contro una
+deadline di controllo di 100 ms → budget usato ~[0,04%]{.accent}. E poiché non c'è alcun ramo dipendente dai
+dati, il caso peggiore coincide col migliore: [WCET == BCET]{.accent}, jitter zero. L'hard-real-time è regalato
+dall'architettura, non conquistato a fatica.
 :::
 
 ::: {.threecol}
 ::: {.card}
 [Latenza]{.card-title}
-~µs per passo contro una deadline di 100 ms → budget temporale ~0,1%.
+341 cicli × 125 ns = **42.6 µs**/inferenza (8 MHz) contro 100 ms → budget ~0,04%.
 :::
 ::: {.card}
 [Determinismo]{.card-title}
@@ -176,13 +177,14 @@ Nessun branch dipendente dai dati → il caso peggiore = il caso migliore (WCET 
 :::
 ::: {.card}
 [Jitter]{.card-title}
-Zero: ogni passo dura esattamente uguale. Hard-real-time by design.
+Zero: ogni inferenza dura esattamente uguale. Hard-real-time by design.
 :::
 :::
 
 ::: {.notes}
-Il margine temporale è enorme: un passo della rete si esegue in microsecondi, contro una deadline di controllo
-di 100 ms, quindi il budget temporale usato è intorno allo 0,1%. Il punto qualitativo però è il determinismo:
+Il margine temporale è enorme: un'inferenza si esegue in 42.6 µs (341 cicli × 125 ns @ 8 MHz, misurato in
+sintesi Fase B), contro una deadline di controllo di 100 ms, quindi il budget temporale usato è intorno allo
+0,04%. Il punto qualitativo però è il determinismo:
 poiché non ci sono rami dipendenti dai dati (nessun if sui valori, la struttura di calcolo è fissa), il tempo
 di esecuzione nel caso peggiore coincide con quello nel caso migliore — WCET == BCET. Il jitter è quindi zero:
 un requisito hard-real-time che di solito si conquista a fatica, qui è regalato dall'architettura.
@@ -192,7 +194,7 @@ un requisito hard-real-time che di solito si conquista a fatica, qui è regalato
 Parte 5 · T5 timing (WCET == BCET)
 :::
 
-## T5 · Energia: il vantaggio viene dall'operazione {.act3}
+## T5 — FPGA-Friendly [Energia] {.act3}
 
 ::: {.twocol}
 ::: {.vis}
@@ -200,25 +202,28 @@ Parte 5 · T5 timing (WCET == BCET)
 :::
 ::: {.side}
 ::: {.explain}
-Contro una ANN densa di pari compito il vantaggio è di circa [5–8×]{.accent}. Viene dall'*operazione*, non
-dalla sparsità: l'accumulo (AC) di una SNN costa meno del multiply-accumulate (MAC) di una ANN, e i pesi
-potenze-di-due azzerano i DSP (moltiplicazione → shift). I numeri sono [stime Horowitz]{.accent} (per-op,
-45 nm), non consumo misurato.
+Contro una **ANN densa (MLP) di pari compito** il vantaggio *stimato* è ~[5–8×]{.accent}. **Come si stima**: la
+SNN conta le `SynOps = Σ(spike × fan-out)`, la ANN le `N_MAC` (moltiplicazioni-accumulo); l'energia **per
+operazione** è il modello [Horowitz]{.accent} (45 nm): `e_MAC ≈ 4.6 pJ`, `e_AC ≈ 0.9 pJ`. Il guadagno per-op
+viene da `AC < MAC` + 0 DSP (po2 → shift).
 :::
 ::: {.eq}
-`vantaggio ≈ 5–8× (op-count) e 4.8–6× (6-tier) — stesso ordine`
+`vantaggio ≈ (N_MAC·e_MAC)/(SynOps·e_AC) ≈ 5–8×`
 
-`origine:  AC < MAC   +   0 DSP (po2 → shift)`
+`e_MAC ≈ 4.6 pJ · e_AC ≈ 0.9 pJ  (Horowitz 2014, 45 nm)`
 
-`E = stima Horowitz (per-op, 45 nm)`
+`⚠ stima per-operazione — la sintesi Fase B trova e_MAC ≈ e_AC su FPGA:`
+`il guadagno reale viene dalla compattezza (~800 op vs 7k–100k in letteratura)`
 :::
 ::: {.notes}
 Il confronto è contro una ANN densa di pari compito e il vantaggio energetico è di circa 5–8×. La sorgente va
 detta con precisione perché è controintuitiva: non nasce dalla sparsità, nasce da due fatti puramente hardware.
 Primo: l'accumulo (AC) di una SNN costa meno del multiply-accumulate (MAC) di una ANN. Secondo: i pesi in
 potenze di due azzerano l'uso dei DSP, perché la moltiplicazione diventa uno shift. I numeri di energia sono
-stime Horowitz (costo per operazione a 45 nm), non consumo misurato: un ordine di grandezza affidabile, non una
-fattura elettrica.
+stime Horowitz (costo per operazione a 45 nm), non consumo misurato. ATTENZIONE: la sintesi Fase B sul silicio
+rivede questa lettura — su FPGA e_MAC ≈ e_AC, quindi il vantaggio per-operazione NON regge; a pari scala
+l'energia di calcolo SNN vs ANN è comparabile, e il guadagno reale (~5–65×) viene dalla compattezza del modello
+(~800 operazioni vs 7k–100k delle reti car-following in letteratura), non dall'operazione.
 :::
 :::
 :::
@@ -227,7 +232,7 @@ fattura elettrica.
 Parte 5 · T5 energia vs ANN (AC < MAC)
 :::
 
-## T5 · Robustezza ai bit-flip (SEU): TMR mirato, non totale {.act3}
+## T5 — FPGA-Friendly [SEU] {.act3}
 
 ::: {.twocol}
 ::: {.vis}
