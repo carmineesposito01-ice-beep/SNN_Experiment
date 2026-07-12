@@ -25,6 +25,9 @@ $font-size-root: 18px;
 // Fusione figure: le figure chiare vivono in un pannello bianco INTENZIONALE (niente bande grezze)
 .reveal .twocol .vis.light { background: #EEF1F4; border-color: #C7D0DA; padding: 12px; }
 .reveal .twocol .vis.light img { border-radius: 5px; background: #FFFFFF; }
+.reveal .twocol .vstack { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 8px; justify-content: center; }
+.reveal .twocol .vstack .vis { margin: 0; }
+.reveal .twocol .vstack .vis img { max-height: 190px; width: auto; max-width: 100%; }
 // Diagramma a blocchi orizzontale con frecce (slide Obiettivo)
 .reveal .flowrow { display: flex; align-items: stretch; gap: 10px; }
 .reveal .flowrow .card { flex: 1 1 0; min-width: 0; }

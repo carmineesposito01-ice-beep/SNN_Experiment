@@ -80,7 +80,7 @@ Valutazione basata su **6 livelli**, ognuno una domanda diversa.
 Parte 4 · Gerarchia di valutazione (6 livelli)
 :::
 
-## T0 · Accuratezza: la mappa dei cinque parametri {.act3}
+## T0 — Metriche di Loss [NRMSE] {.act3}
 
 ::: {.twocol}
 ::: {.vis}
@@ -92,9 +92,11 @@ NRMSE per-canale (`v0, T, s0, a, b`), oracolo a zero. `Donatello` è il [più ba
 (0.093–0.215); `Raffaello` crolla su `v0` (0.499), e quella identificazione errata distorce a valle il
 diagramma fondamentale.
 :::
+::: {.eq .math}
+$$ \mathrm{NRMSE}_p = \frac{\mathrm{RMSE}_p}{p_{\max}-p_{\min}}, \quad \mathrm{RMSE}_p = \sqrt{\tfrac{1}{N}\textstyle\sum_i (\hat p_i - p_i)^2} $$
+:::
 ::: {.eq}
-oracolo → NRMSE = 0 (riferimento)
-facile: s0 · ostici: v0, b
+oracolo → NRMSE = 0 · facile: s0 · ostici: v0, b
 Donatello 0.093–0.215 · Raffaello v0 = 0.499
 :::
 :::
@@ -112,7 +114,7 @@ dietro la distorsione del diagramma fondamentale a livello macroscopico.
 Parte 4 · T0 accuratezza per-parametro
 :::
 
-## T1 · Sicurezza: il residuo è fisica dello scenario, non la rete {.act3}
+## T1 — Safety {.act3}
 
 ::: {.twocol}
 ::: {.vis}
@@ -145,7 +147,7 @@ raggiunto il limite fisico raggiungibile su quello scenario, e il TTC ≥ oracol
 Parte 4 · T1 sicurezza closed-loop (Δ vs oracolo)
 :::
 
-## T2 · Robustezza: plant e canale sono limiti esterni, non la rete {.act3}
+## T2 — Robustezza {.act3}
 
 ::: {.twocol}
 ::: {.vis}
@@ -179,17 +181,19 @@ dell'handler I/O, non il modello appreso, a evitare le collisioni quando il V2X 
 Parte 4 · T2 robustezza (plant + canale V2X)
 :::
 
-## T3 · Traffico: micro → meso → macro, l'onda stop-and-go si smorza {.act3}
+## T3 — Traffico [Micro→Meso→Macro] {.act3}
 
-::: {.threecol}
+::: {.twocol}
 ::: {.vis}
 ![](figures/string.png)
 :::
+::: {.vstack}
 ::: {.vis .light}
 ![](assets/results/meso_spacetime.png)
 :::
 ::: {.vis}
 ![](figures/macro_fd.png)
+:::
 :::
 :::
 
