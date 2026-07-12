@@ -4,9 +4,6 @@
 
 ::: {.twocol}
 ::: {.vis}
-![](figures/champions_roster.png)
-:::
-::: {.vis}
 ![](figures/readiness_radar.png)
 :::
 ::: {.side}
@@ -42,6 +39,12 @@ per cui il deploy è sconsigliato.
 
 ::: {.footerbar}
 Verdetto · Verdetto di deploy · Pareto = trade-off
+:::
+
+# Fine {.divider .act3}
+
+::: {.explain}
+Grazie dell'attenzione.
 :::
 
 ## Riferimenti (1/2) {.act3}
@@ -102,12 +105,4 @@ Riferimenti · 1/2
 
 ::: {.footerbar}
 Riferimenti · 2/2
-:::
-
-# Fine {.divider .act3}
-
-::: {.explain}
-Grazie dell'attenzione.
-
-*Restiamo a disposizione per domande.*
 :::
