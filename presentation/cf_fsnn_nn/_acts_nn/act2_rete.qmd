@@ -320,12 +320,17 @@ Parte 2 · Layer d'uscita (LI)
 <div class="decwrap" id="decwrap">
   <div class="pl-head">
     <button class="pl-btn" id="de-btn" onclick="decToggle(event)">▶ avvia</button>
-    <span class="pl-cyc" id="de-badge">decode</span>
+    <span class="pl-cyc" id="de-badge">5 uscite → 5 parametri</span>
   </div>
-  <svg viewBox="0 0 240 178" id="dec-svg" class="dec-svg" preserveAspectRatio="xMidYMid meet"></svg>
-  <div class="de-read" id="de-read">o = σ(V);  p = min + o·(max−min)</div>
-  <div class="de-barrow"><span class="de-bnd" id="de-lo"></span><div class="de-track"><div class="de-mark" id="de-mark"></div></div><span class="de-bnd" id="de-hi"></span></div>
-  <div class="de-list" id="de-list">v0=— · T=— · s0=— · a=— · b=—</div>
+  <div class="de-col" id="de-col"></div>
+  <div class="de-foot" id="de-foot">ogni uscita passa per una sigmoide → riscalata nel range fisico del parametro</div>
+  <div class="de-sigunit" id="de-sigunit" style="display:none">
+    <svg viewBox="0 0 240 140" id="dec-svg" class="dec-svg" preserveAspectRatio="xMidYMid meet"></svg>
+    <div class="de-sigright">
+      <div class="de-read" id="de-read"></div>
+      <div class="de-barrow"><span class="de-bnd" id="de-lo"></span><div class="de-track"><div class="de-mark" id="de-mark"></div></div><span class="de-bnd" id="de-hi"></span></div>
+    </div>
+  </div>
 </div>
 <script>
 (function(){
@@ -339,7 +344,17 @@ Parte 2 · Layer d'uscita (LI)
     {n:"a",  V:-0.76, o:0.32, lo:0.3, hi:2.5, w:2.2, val:"1.0", u:"m/s²"},
     {n:"b",  V:-0.08, o:0.48, lo:0.5, hi:3.0, w:2.5, val:"1.7", u:"m/s²"}
   ];
-  var PL={x0:44,x1:196,y0:28,y1:148};
+  var THUMB='<svg viewBox="0 0 30 18" class="de-thumbsvg"><polyline points="2,15.3 6.3,14.3 10.7,12.2 15,9 19.3,5.8 23.7,3.7 28,2.7"/></svg>';
+  var col=g("de-col");
+  if(col&&!col.getAttribute("data-built")){
+    col.setAttribute("data-built","1");
+    P.forEach(function(p,k){
+      var blk=document.createElement("div"); blk.className="de-blk"; blk.id="de-blk"+k;
+      blk.innerHTML='<div class="de-bhd"><span class="de-thumb">'+THUMB+'</span><span class="de-bname">'+p.n+'</span><span class="de-bval de-dim" id="de-bval'+k+'">—</span></div><div class="de-bbody" id="de-bbody'+k+'"></div>';
+      col.appendChild(blk);
+    });
+  }
+  var PL={x0:44,x1:196,y0:20,y1:112};
   function xV(v){return PL.x0+(v+4)/8*(PL.x1-PL.x0);}
   function yO(o){return PL.y1-o*(PL.y1-PL.y0);}
   var svg=g("dec-svg");
@@ -352,45 +367,84 @@ Parte 2 · Layer d'uscita (LI)
     svg.appendChild(mk("polyline",{points:pts,"class":"de-sig"}));
     function lab(x,y,tx,c,extra){var o={x:x,y:y,"class":c};if(extra)for(var k in extra)o[k]=extra[k];var e=mk("text",o);e.textContent=tx;svg.appendChild(e);}
     lab(PL.x0-5,PL.y0+3,"1","de-axl"); lab(PL.x0-5,PL.y1+3,"0","de-axl");
-    lab(14,(PL.y0+PL.y1)/2,"o = σ(V)","de-axl2",{transform:"rotate(-90 14 "+((PL.y0+PL.y1)/2)+")"});
+    lab(13,(PL.y0+PL.y1)/2,"o=σ(V)","de-axl2",{transform:"rotate(-90 13 "+((PL.y0+PL.y1)/2)+")"});
     lab((PL.x0+PL.x1)/2,PL.y1+18,"V (tensione LI grezza)","de-axl2");
     svg.appendChild(mk("line",{id:"de-vln","class":"de-tr",x1:PL.x0,y1:PL.y1,x2:PL.x0,y2:PL.y1}));
     svg.appendChild(mk("line",{id:"de-hln","class":"de-tr",x1:PL.x0,y1:PL.y1,x2:PL.x0,y2:PL.y1}));
     svg.appendChild(mk("circle",{id:"de-dotx","class":"de-dotx",cx:PL.x0,cy:PL.y1,r:3}));
     svg.appendChild(mk("circle",{id:"de-dot","class":"de-dot",cx:PL.x0,cy:PL.y1,r:4}));
   }
-  var i=0, playing=false, done=false, t=null, res=["—","—","—","—","—"];
-  function showList(){ if(g("de-list"))g("de-list").innerHTML=P.map(function(p,k){return (res[k]==="—"?"<span class='de-dim'>"+p.n+"=—</span>":"<b>"+p.n+"="+res[k]+"</b>");}).join(" · "); }
-  function reset(){ i=0; res=["—","—","—","—","—"]; showList();
-    if(g("de-read"))g("de-read").textContent="o = σ(V);  p = min + o·(max−min)";
+  var i=0, playing=false, done=false, t=null;
+  function resetTrace(){
     ["de-vln","de-hln"].forEach(function(id){var e=g(id);if(e){e.setAttribute("x1",PL.x0);e.setAttribute("y1",PL.y1);e.setAttribute("x2",PL.x0);e.setAttribute("y2",PL.y1);}});
     if(g("de-dot")){g("de-dot").setAttribute("cx",PL.x0);g("de-dot").setAttribute("cy",PL.y1);}
     if(g("de-dotx")){g("de-dotx").setAttribute("cx",PL.x0);g("de-dotx").setAttribute("cy",PL.y1);}
-    if(g("de-mark"))g("de-mark").style.left="0%"; if(g("de-lo"))g("de-lo").textContent=""; if(g("de-hi"))g("de-hi").textContent="";
-    if(g("de-badge"))g("de-badge").textContent="decode";
+    if(g("de-mark"))g("de-mark").style.left="0%"; if(g("de-lo"))g("de-lo").textContent=""; if(g("de-hi"))g("de-hi").textContent=""; if(g("de-read"))g("de-read").innerHTML="";
+  }
+  function collapseAll(){ for(var j=0;j<P.length;j++){var b=g("de-blk"+j); if(b){b.classList.remove("de-active");b.classList.remove("de-arrive");}} }
+  function reset(){
+    i=0; collapseAll();
+    for(var j=0;j<P.length;j++){var v=g("de-bval"+j); if(v){v.textContent="—"; v.classList.add("de-dim"); v.classList.remove("de-done");}}
+    var su=g("de-sigunit"); if(su)su.style.display="none";
+    resetTrace();
+    if(g("de-badge"))g("de-badge").textContent="5 uscite → 5 parametri";
+    if(g("de-foot"))g("de-foot").textContent="ogni uscita passa per una sigmoide → riscalata nel range fisico del parametro";
   }
   function stop(d){playing=false;if(t){clearTimeout(t);t=null;}done=d;var b=g("de-btn");if(b)b.textContent=d?"↻ rivedi":"▶ riprendi";}
-  function step(){
-    if(!playing)return; var W=g("decwrap"); if(!W||W.offsetParent===null){stop(false);return;}
-    var p=P[i]; var xv=xV(p.V), yo=yO(p.o);
-    if(g("de-badge"))g("de-badge").textContent="parametro "+(i+1)+"/5 · "+p.n;
+  function activate(k){
+    collapseAll();
+    var blk=g("de-blk"+k); if(blk)blk.classList.add("de-active");
+    var body=g("de-bbody"+k); var su=g("de-sigunit");
+    if(body&&su){ body.appendChild(su); su.style.display=""; }
+    resetTrace();
+  }
+  function traceParam(p){
+    var xv=xV(p.V), yo=yO(p.o);
     if(g("de-dotx")){g("de-dotx").setAttribute("cx",xv);g("de-dotx").setAttribute("cy",PL.y1);}
     var vln=g("de-vln"); if(vln){vln.setAttribute("x1",xv);vln.setAttribute("y1",PL.y1);vln.setAttribute("x2",xv);vln.setAttribute("y2",yo);}
     var hln=g("de-hln"); if(hln){hln.setAttribute("x1",xv);hln.setAttribute("y1",yo);hln.setAttribute("x2",PL.x0);hln.setAttribute("y2",yo);}
     if(g("de-dot")){g("de-dot").setAttribute("cx",xv);g("de-dot").setAttribute("cy",yo);}
-    if(g("de-read"))g("de-read").innerHTML="σ("+p.V.toFixed(2)+")="+p.o.toFixed(2)+" → <b>"+p.n+"</b> = "+p.lo+" + "+p.o.toFixed(2)+"·"+p.w+" = <b>"+p.val+" "+p.u+"</b>";
+    if(g("de-read"))g("de-read").innerHTML="σ("+p.V.toFixed(2)+") = "+p.o.toFixed(2)+"<br>"+p.n+" = "+p.lo+" + "+p.o.toFixed(2)+"·"+p.w+" = <b>"+p.val+" "+p.u+"</b>";
     if(g("de-lo"))g("de-lo").textContent=p.lo; if(g("de-hi"))g("de-hi").textContent=p.hi; if(g("de-mark"))g("de-mark").style.left=(p.o*100).toFixed(0)+"%";
-    res[i]=p.val; showList();
-    i++;
-    if(i>=P.length){ t=setTimeout(function(){ if(g("de-badge"))g("de-badge").textContent="fatto · 5 parametri"; if(g("de-read"))g("de-read").innerHTML="i 5 parametri → <b>modello di car-following</b>"; stop(true); },1000); return; }
-    t=setTimeout(step,1250);
+  }
+  function finalize(){
+    collapseAll(); var su=g("de-sigunit"); if(su)su.style.display="none";
+    if(g("de-badge"))g("de-badge").textContent="fatto · 5 parametri";
+    if(g("de-foot"))g("de-foot").textContent="i 5 valori alimentano il modello di car-following (ACC-IIDM)";
+    stop(true);
+  }
+  function step(){
+    if(!playing)return; var W=g("decwrap"); if(!W||W.offsetParent===null){stop(false);return;}
+    if(i>=P.length){ finalize(); return; }
+    var p=P[i];
+    if(g("de-badge"))g("de-badge").textContent="decodifica "+(i+1)+"/5 · "+p.n;
+    activate(i);
+    t=setTimeout(function(){
+      if(!playing)return;
+      traceParam(p);
+      t=setTimeout(function(){
+        if(!playing)return;
+        var v=g("de-bval"+i); if(v){v.textContent=p.val+" "+p.u; v.classList.remove("de-dim"); v.classList.add("de-done");}
+        i++;
+        t=setTimeout(step,320);
+      },1350);
+    },300);
+  }
+  function arrive(){
+    if(g("de-badge"))g("de-badge").textContent="il segnale arriva · 5 uscite";
+    for(var j=0;j<P.length;j++){var b=g("de-blk"+j); if(b)b.classList.add("de-arrive");}
+    t=setTimeout(function(){
+      for(var j=0;j<P.length;j++){var b=g("de-blk"+j); if(b)b.classList.remove("de-arrive");}
+      if(!playing)return; step();
+    },700);
   }
   window.decToggle=function(ev){
     if(ev){ev.stopPropagation(); if(ev.preventDefault)ev.preventDefault();}
     var b=g("de-btn");
     if(playing){ playing=false; if(t){clearTimeout(t);t=null;} if(b)b.textContent="▶ riprendi"; return; }
     if(done){ reset(); }
-    playing=true; if(b)b.textContent="⏸ pausa"; step();
+    playing=true; if(b)b.textContent="⏸ pausa";
+    if(i===0){ arrive(); } else { step(); }
   };
   reset();
 })();
