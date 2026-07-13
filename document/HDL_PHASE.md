@@ -121,7 +121,7 @@ Config in `make_hdl.m`: `LoopOptimization='StreamLoops'`, `ConstantMultiplierOpt
 - ⏳ **Streaming ÷32** dei neuroni: BLOCCATO da RAM-mapping (accessi non-scalari) — §8 punto 2 / §9.
 - ✅ **Vivado 2026.1 + ④ synth & P&R REALI** (2026-07-10, vedi §0): Donatello routa, DSP 32/220, ~5 MHz
   (non-vincolante). **Cosim ③ ✅ PASSED** (xsim, `TEST COMPLETED (PASSED)`, bit-esatto vs golden, 2026-07-10).
-- ⏳ **Decode (sigmoid)**: ESCLUSO dall'RTL → **LUT in fabric** (deciso), non ancora implementato.
+- ✅ **Decode (sigmoid)**: implementato (`snn_decode_hdl.m`, σ-LUT, `test_decode` err 0.002) e **dentro `snn_top_b2_flat`** (`snn_top_b2` = `snn_b2_fsm` → `snn_decode_hdl`) → è nelle risorse Fase B e nel bitstream. *(Correzione 2026-07-13: la voce precedente "escluso / non implementato" era stale.)*
 - ⏳ **Altri 3 champion**: wrapper generati; RTL prodotto solo per Donatello.
 
 ## §7 File (worktree)
@@ -146,7 +146,7 @@ Config in `make_hdl.m`: `LoopOptimization='StreamLoops'`, `ConstantMultiplierOpt
    rearchitecting esplicito (`hdl.RAM`/FSM time-multiplex), **senza retraining** ma sostanziale, per un guadagno
    **solo estetico** (target PYNQ-Z1 fisso, energia device-static-dominata, V2I piccolo). Analisi completa in
    **`HDL_ARCHITECTURE_STUDY.md`**. Riapribile se il target cambia.
-3. **Decode → LUT** (`coder.approximate` su σ) come stadio separato + parità decode-approx vs esatto.
+3. ✅ **[FATTO] Decode → LUT** (`snn_decode_hdl.m`, σ-LUT): è già uno stadio dentro `snn_top_b2`; la Fase B ha sintetizzato `snn_top_b2_flat` = SNN+decode (parità decode `test_decode` 0.002).
 4. **Altri 3 champion:** `make_hdl('Michelangelo'|'Raffaello'|'Leonardo')`.
 5. **Cosim** (quando c'è un simulatore): il TB auto verifica RTL vs golden bit-esatto (anello ③).
 6. **Registrazione custom-board PYNQ-Z1** + eventuale ri-profilazione Qm.n.
