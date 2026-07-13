@@ -1,21 +1,22 @@
 ## Obiettivo {.act1}
 
 ::: {.explain}
-Realizzare un **sistema di elaborazione a bordo veicolo**, con **accelerazione neurale**, che genera i **parametri di un modello di car-following**
-a partire da **segnali V2X**, su hardware **FPGA**.
+Realizzare un **sistema di elaborazione a bordo veicolo** tramite **AI-Acceleration**, che generi i **parametri** di un modello di **car-following**, su hardware **FPGA**, a partire da segnali **V2X**.
 :::
 
 ::: {.flowrow}
 ::: {.card}
 [Segnali V2X]{.card-title}
-Informazioni scambiate tra i veicoli vicini, usate come ingresso del sistema.
+
+- V2V (Vehicle-to-Vehicle)
+- V2I (Vehicle-to-Infrastructure)
 :::
 ::: {.arrow}
 →
 :::
 ::: {.card}
 [FPGA — PYNQ-Z1]{.card-title}
-SoC Zynq-7020: l'acceleratore che **genera i parametri**.
+SoC Zynq-7020:
 
 - 53.200 LUT · 106.400 FF
 - 220 DSP48 · 140 BRAM (36 Kb)
@@ -26,7 +27,7 @@ SoC Zynq-7020: l'acceleratore che **genera i parametri**.
 :::
 ::: {.card}
 [Modello di car-following]{.card-title}
-Riceve i parametri stimati e ne riproduce il **comportamento di guida**.
+Riceve i parametri stimati ed attua il **car-following**.
 :::
 :::
 
@@ -38,27 +39,16 @@ Il progetto · Obiettivo
 
 ::: {.threecol}
 ::: {.card .fragment}
-[Approssima mappe complesse]{.card-title}
-Con abbastanza unità approssima qualunque funzione continua non-lineare: nessun estimatore analitico da derivare a mano.
+[Apprendimento guidato]{.card-title}
+Forniti di dati, possono apprenderne la logica senza bisogno di calibrazioni specifiche per scenario di funzionamento.
 :::
 ::: {.card .fragment}
-[Impara dai dati]{.card-title}
-Apprende la mappa dagli esempi. L'alternativa classica — **calibrare** per ottimizzazione il modello noto — va rifatta per ogni traiettoria; la rete inferisce in **un solo passaggio**.
+[Generalizzazione]{.card-title}
+Capacità di generalizzare il loro funzionamento anche a dati diversi da quelli di addestramento.
 :::
 ::: {.card .fragment}
-[Generalizza]{.card-title}
-Buone prestazioni su traiettorie e stili non visti della stessa distribuzione, non solo sui casi enumerati.
-:::
-:::
-
-::: {.twocol}
-::: {.card .fragment}
-[Robusta al rumore]{.card-title}
-Degrada in modo graduale su segnali imperfetti, mentre un'inversione classica può amplificarne il rumore. *(La tenuta al packet-loss viene però dal gestore hold-last, non dalla rete nuda.)*
-:::
-::: {.card .fragment}
-[Elabora serie temporali]{.card-title}
-Assorbe la sequenza multi-canale nel tempo grazie allo stato/memoria interna — la forza nativa di una rete con stato.
+[Comportamenti non-lineari]{.card-title}
+Per la loro natura probabilistica, sono in grado di manifestare comportamenti diversi da quelli previsti (es. car-following più/meno conservativo).*
 :::
 :::
 
@@ -71,19 +61,15 @@ Il progetto · Perché una rete neurale
 ::: {.threecol}
 ::: {.card .fragment}
 [Determinismo temporale]{.card-title}
-La logica è **cablata**: le interconnessioni configurabili fissano il **cammino fisico** del segnale, che percorre sempre lo stesso percorso → **latenza costante, indipendente dal dato**. Niente OS né scheduler.
-
-*Deadline di controllo 100 ms (10 Hz), utilizzo ~0,1%.*
+La logica è **cablata**: le interconnessioni configurabili fissano il **cammino fisico** del segnale → **latenza costante, indipendente dal dato**.
 :::
 ::: {.card .fragment}
 [Efficienza per architettura]{.card-title}
-La GPU spende energia in migliaia di core general-purpose, memoria e fetch/decode. L'FPGA configura un **datapath dedicato** (dataflow): i dati fluiscono on-chip, niente istruzioni.
-
-*~2.3× perf/Watt su FPGA datacenter vs GPU (letteratura). Ortogonale, a livello di operazione: l'SNN (AC<MAC) rende ~5–8× vs ANN densa, indipendente dall'hardware.*
+La GPU utilizza migliaia di core general-purpose, memoria e fetch/decode. L'FPGA configura un **datapath dedicato** (dataflow): i dati fluiscono on-chip, con possibilità di ottimizzazioni mirate.
 :::
 ::: {.card .fragment}
 [I/O diretto "any-to-any"]{.card-title}
-GPU e NPU discrete sono **co-processori**: round-trip su host/PCIe dentro il loop. La logica FPGA interfaccia **direttamente** sensori e bus di campo — es. **CAN** glue-less — senza host nell'anello di controllo.
+GPU e NPU sono **co-processori**: round-trip su host/PCIe dentro il loop. La logica FPGA interfaccia **direttamente** sensori e bus di campo — es. **CAN** glue-less — senza host nell'anello di controllo.
 :::
 :::
 

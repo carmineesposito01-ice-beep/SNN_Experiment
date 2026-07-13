@@ -6,8 +6,8 @@
 Perché il **backprop classico non funziona** sulle reti spiking:
 :::
 
-- lo spike è un **gradino** → derivata nulla   ⟶   **gradiente surrogato** (campana liscia nel backward)
-- lo spike dipende da input di **molti passi prima**   ⟶   propagare l'errore **indietro nel tempo** (BPTT)
+- lo spike è un **gradino** → derivata nulla   ⟶   **Soluzione: gradiente surrogato** (funzione che approssima il gradino nel backward)
+- lo spike dipende dagli **input ricevuti nel tempo**   ⟶   **Soluzione: Propagare l'errore *indietro nel tempo*** (BPTT)
 
 ::: {.twocol}
 ::: {.vis}
@@ -68,11 +68,11 @@ Perché il **backprop classico non funziona** sulle reti spiking:
 :::
 ::: {.side}
 ::: {.explain}
-**BPTT** (Back-Propagation Through Time) srotola la rete nel tempo. Il *reverse* non è un backprop normale — il gradiente:
+**BPTT** (Back-Propagation Through Time): *srotola* lo stato della rete nel tempo
 
-- torna indietro attraverso [ogni tick]{.accent}, passando ogni volta per la ricorrenza $(U\!\cdot\!V)^{\!\top}$
+- effettua il reverse per [ogni tick]{.accent}, passando ogni volta per la ricorrenza $(U\!\cdot\!V)^{\!\top}$
 - **somma** i contributi su tutti i tick → memoria $\propto T$
-- allo spike (derivata del gradino = 0) passa solo grazie al [surrogato]{.accent} $\sigma'$
+- errore calcolato tramite la [surrogata]{.accent} $\sigma'$ (fast-sigmoid)
 :::
 ::: {.eq .math}
 $$ \tfrac{\partial S}{\partial V} \approx \sigma'(V-\theta) = \tfrac{1}{(1+\gamma|V-\theta|)^2} $$
@@ -96,22 +96,22 @@ Parte 3 · Training — BPTT
 [Risultato]{.card-title}
 Metrica primaria = **loss di ricostruzione** (`val_data`), con la **NRMSE** sui parametri come lente diagnostica.
 
-- `val_data` migliore: **0.1926** (la fisica più fedele in assoluto)
-- NRMSE media: **0.225**; l'altra rete BPTT crolla su `v0` (0.499)
+- `val_data` migliore: **0.1926**
+- NRMSE media: **0.225**;
 :::
 ::: {.card}
 [Pro / Contro]{.card-title}
 
-- **+** metodo standard, robusto, largamente diffuso
+- **+** metodo standard, robusto, largamente documentato
 - **−** approssima il gradiente con una funzione **surrogata**
 - **−** spettralmente **espansivo** (ρ 1.16 / 2.99): non FPGA-safe in virgola fissa
-- **−** ~31% di **neuroni morti**
+- **−** residuo di **neuroni morti**
 - **−** memoria ∝ durata `T`
 :::
 :::
 
 ::: {.explain}
-BPTT ottiene reti valide sul software ma **espansive** (ρ>1): la ricorrenza amplifica lo stato — un problema sul silicio.
+Il BPTT permette di ottenere reti valide su software ma **espansive** (ρ>1): la ricorrenza amplifica lo stato — un problema (relativo) sul silicio.
 :::
 
 ::: {.notes}
@@ -252,10 +252,11 @@ Parte 3 · Risultati BPTT
 :::
 ::: {.side}
 ::: {.explain}
-L'alternativa **esatta** al surrogato. L'aggiunto **λ** (del potenziale $V$) torna [indietro]{.accent} ($T\to0$): è **costruito dai salti agli spike** (dove entra l'**errore** $\partial\mathcal{L}/\partial s$ che arriva dall'uscita) e **decade** tra uno spike e l'altro. Qui `drive` = corrente in ingresso e $V_k=\alpha_m V_{k-1}+\text{drive}_k$.
+L'alternativa **esatta** al surrogato, che lega la loss alla pendenza del potenziale di membrana alla soglia e agli spike:
 
-- gradiente [*esatto*]{.accent} (niente surrogato) — il salto divide per il denominatore di attraversamento `drive`$-\theta$;
-- **contrattivo** se ρ<1 (l'adjoint converge).
+- utilizzo di una **Funzione Aggiunta** *λ(V)*, che viene fatta tornare [indietro]{.accent} ($T\to0$):
+- λ(V) salta **allo spike** e **decade** tra uno spike e l'altro per leak;
+- aggiornamento dei pesi tramite $\partial\mathcal{L}/\partial s$ legato alla Funzione Aggiunta.
 :::
 ::: {.eq .math}
 $$ \text{forward:}\ \ V_k=\alpha_m V_{k-1}+\text{drive}_k,\quad V_k>\theta\Rightarrow s_k{=}1,\quad V_k\mathrel{-}=\theta $$
@@ -278,10 +279,10 @@ Parte 3 · Training — EventProp
 ::: {.twocol}
 ::: {.card}
 [Risultato]{.card-title}
-Metrica = **loss di ricostruzione** (`val_data`) + **NRMSE**. Fronte multi-obiettivo:
+Metrica = **loss di ricostruzione** (`val_data`) + **NRMSE**.
 
-- **NRMSE migliore del gruppo: 0.152** (identificazione più accurata)
-- `val_data` più fisico tra gli EventProp: **0.2031**
+- **NRMSE migliore del gruppo: 0.152**
+- `val_data`: **0.2031**
 - in media EventProp batte BPTT sull'identificazione
 :::
 ::: {.card}
@@ -290,13 +291,13 @@ Metrica = **loss di ricostruzione** (`val_data`) + **NRMSE**. Fronte multi-obiet
 - **+** gradiente **esatto** (non surrogato)
 - **+** spettralmente **contrattivo** (ρ 0.05 / 0.39) → FPGA-safe
 - **+** **0 neuroni morti**
-- **+** backward **manuale** (`autograd.Function`, no grafo autograd) → più **leggero** di BPTT
+- **+** backward **manuale** (`autograd.Function`, no grafo autograd) → più **leggero** e **veloce** di BPTT
 - **−** gli **spike marginali** possono far esplodere il gradiente (denominatore $(\text{drive}-\theta)\to 0$)
 :::
 :::
 
 ::: {.explain}
-Nessun vincitore secco: è un **fronte di Pareto**. Il candidato al deploy vince su NRMSE + stabilità (ρ) + 0 morti, **non** sulla loss di ricostruzione — dove guidano altre reti.
+Nessun vincitore secco: è un **fronte di Pareto**.
 :::
 
 ::: {.notes}

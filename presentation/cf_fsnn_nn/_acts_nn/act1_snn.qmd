@@ -4,18 +4,16 @@
 
 ::: {.twocol}
 ::: {.vis}
-[▶ figura: principio NN — da creare]{.pill}
-![](assets/img/membrane.png)
+![](assets/img/nn_structure.png)
 :::
 ::: {.side}
 ::: {.explain}
-Una rete è fatta di **neuroni** collegati da **pesi**: il comportamento **emerge dai pesi**, non da regole fisse, e si impara dagli esempi.
-:::
+Una rete neurale è composta da strati di neuroni che s'interfacciano tra loro. 
 
-- Ogni neurone **combina gli ingressi pesati** e applica una non-linearità
-- Impilando più strati, rappresenta relazioni via via più complesse
-- L'**uscita** dipende interamente dai valori dei **pesi**
+- Ogni neurone produce un'uscita sulla base degli ingressi pesati
+- Impilando più strati, si possono rappresentare relazioni sempre più complesse
 - L'**addestramento** regola i pesi finché l'uscita non è quella desiderata
+:::
 :::
 :::
 
@@ -34,9 +32,9 @@ Parte 1 · Principio di funzionamento
 ::: {.explain}
 Tre modi diversi di *comportarsi*:
 
-- **Percettrone** — soglia netta, uscita binaria: nessuna sfumatura.
-- **ANN** — valore reale continuo e [differenziabile]{.accent}: da qui il backprop.
-- **SNN** — comunica con *spike* discreti e ha uno **stato interno che integra nel tempo**: è il *quando* a portare l'informazione.
+- **Percettrone** — Uscita binaria
+- **ANN** — Valore reale continuo (informazione codificata nell'ampiezza)
+- **SNN** — Uscita come treni di *spike* discreti (informazione codificata nel tempo).
 :::
 ::: {.eq .math}
 $$
@@ -63,12 +61,12 @@ Parte 1 · Tre generazioni
 ::: {.cmp}
 | asse | Percettrone | ANN | SNN |
 |---|---|---|---|
-| comunicazione | uscita binaria (soglia) | valore reale continuo | spike (evento) |
-| stato / memoria | assente | assente (feed-forward) | potenziale $V$ che integra |
+| comunicazione | uscita binaria | valore reale continuo | spikes |
+| stato / memoria | assente | assente (feed-forward) | potenziale di membrana $V$ |
 | calcolo | somma pesata + soglia | moltiplica-accumula (MAC) | accumula su evento (AC) |
 | differenziabilità | assente (gradino) | nativa ($\sigma$ liscia) | assente (gradino) |
 | hardware | — | GPU / TPU | neuromorfico / FPGA |
-| costo | — | $\propto$ tempo (clock) | $\propto$ eventi (spike) |
+| costo energetico | — | $\propto$ tempo (clock) | $\propto$ eventi (spike) |
 :::
 
 ::: {.notes}

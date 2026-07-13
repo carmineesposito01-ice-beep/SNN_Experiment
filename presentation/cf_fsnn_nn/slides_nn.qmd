@@ -1,6 +1,6 @@
 ---
-title: "CF-SNN — Rete spiking per il Car-Following"
-subtitle: "Accelerazione neurale su FPGA · dai segnali V2X ai parametri di controllo"
+title: "CF-SNN — Car-Following Spiking Neural Network"
+subtitle: "Una rete spiking per il car-following"
 format:
   revealjs:
     theme: [../_shared/theme/cf_dark.scss, cf_slim.scss]

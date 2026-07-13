@@ -8,13 +8,12 @@
 :::
 ::: {.side}
 ::: {.explain}
-Il verdetto pesa **tutti i livelli** insieme. Il candidato è [Donatello]{.accent}, che vince dove conta:
+Il verdetto pesa **tutti i livelli** insieme. Il candidato è [Donatello]{.accent}, che vince in:
 
 - **T0 / T4 — identificazione** — NRMSE minima **0.152**, accuratezza **84.75%** (la più alta).
 - **T1–T3 — comportamento** — in anello chiuso [sicuro quanto l'oracolo]{.accent}.
 - **T5 — hardware** — ρ **0.05** (il più contrattivo), **0 neuroni morti** → FPGA-safe.
 
-Gli altri: fronte di **Pareto** — un [trade-off]{.accent}, non un dominatore su ogni asse.
 :::
 ::: {.eq}
 `Donatello    ρ0.05  84.75%  0 dead  → DEPLOY`
@@ -39,6 +38,118 @@ per cui il deploy è sconsigliato.
 
 ::: {.footerbar}
 Verdetto · Verdetto di deploy · Pareto = trade-off
+:::
+
+# Appendice — Fase B (post-sintesi) {.divider .act3}
+
+## Appendice · Risorse occupate (Donatello B2) {.act3}
+
+::: {.twocol}
+::: {.cmp}
+| risorsa | valore | % Zynq-7020 |
+|---|---|---|
+| LUT (logic) | 4223 | 7.9% |
+| Slice Reg (FF) | 1584 | 1.5% |
+| Block RAM | 1 tile | 0.71% |
+| **DSP** | **38** | 17.3% |
+:::
+::: {.side}
+::: {.explain}
+Sintesi **OOC** su `xc7z020` (PYNQ-Z1). I **38 DSP** sono **elettivi** — adder/accumulatori larghi, **non** moltiplicatori sinaptici: le sinapsi po2 restano shift. Con `-max_dsp 0` il design chiude a **0 DSP / 9910 LUT** (18.6%): la premessa "0 DSP" è realizzabile.
+:::
+:::
+:::
+
+::: {.notes}
+Stime Vivado post-implementazione (SAIF), non silicio.
+:::
+
+::: {.footerbar}
+Appendice · risorse (OOC, xc7z020)
+:::
+
+## Appendice · Potenza ed energia {.act3}
+
+::: {.threecol}
+::: {.card}
+[Potenza @ 8 MHz]{.card-title}
+Totale **112 mW** = dinamica **9 mW** + statica **103 mW**. La **statica domina (92%)**: leakage del chip, comune a qualunque design sul 7020.
+:::
+::: {.card}
+[Energia / inferenza]{.card-title}
+E_dyn = 9 mW × 42.6 µs ≈ **384 nJ** (≈ 4.8 µJ totali). Il time-mux (341 cicli) allontana l'energia *realizzata* da quella *algoritmica* (~0.7 nJ).
+:::
+::: {.card}
+[Termica]{.card-title}
+Tj ≈ **26 °C** (+1.3° sull'ambiente): a scala mW la termica è un **non-problema**.
+:::
+:::
+
+::: {.explain}
+Timing (dal corpo): **42.6 µs/inf** = 341 cicli × 125 ns @ 8 MHz (Fmax lane ~8.5 MHz, unico punto operativo) contro una deadline di **100 ms**.
+:::
+
+::: {.notes}
+Potenza via SAIF (switching reale, confidenza HIGH); stime Vivado, non misura su silicio.
+:::
+
+::: {.footerbar}
+Appendice · potenza · energia · termica
+:::
+
+## Appendice · SNN vs ANN densa (a pari scala) {.act3}
+
+::: {.twocol}
+::: {.cmp}
+| | LUT | DSP | E_dyn/inf |
+|---|---|---|---|
+| ANN 1312-MAC | 708 | 1 | 328 nJ |
+| **SNN B2** | 4223 | 38 | 383 nJ |
+:::
+::: {.side}
+::: {.explain}
+A **pari scala e clock** l'energia di calcolo è **comparabile** — la ANN densa da 1312 MAC costa quanto la SNN. Ma quella ANN **non fa il task**: le reti car-following reali sono **~5–75× più grandi**. Da lì il vantaggio.
+:::
+::: {.eq}
+`MLP piccolo  ~7.4k MAC  → ~5×`
+
+`LSTM-100     ~40k MAC   → ~26×`
+
+`Bi-GRU-128   ~100k MAC  → ~65×`
+:::
+:::
+:::
+
+::: {.notes}
+SNN Donatello ≈ 800 pesi po2 (equivalente denso 1312 MAC). Vantaggio ~5–65× dalla compattezza del modello.
+:::
+
+::: {.footerbar}
+Appendice · SNN vs ANN (compattezza)
+:::
+
+## Appendice · Fase A (stime) → Fase B (Vivado reale) {.act3}
+
+::: {.cmp}
+| claim | Fase A (report) | Fase B (reale) | esito |
+|---|---|---|---|
+| DSP sinapsi | 0 | 38 elettivi (0-DSP realizzabile) | corretta |
+| Fmax | 100–200 MHz | ~8.5 MHz | corretta |
+| e_AC / e_MAC | 0.9 / 4.6 pJ (Horowitz) | e_MAC ≈ e_AC su FPGA | corretta |
+| energia / inf | ~0.4–1.2 nJ (op-count) | 383 nJ (static 92%) | corretta |
+| vantaggio vs ANN | 5–15× da AC < MAC | ~5–65× da **compattezza** | ri-inquadrata |
+:::
+
+::: {.explain}
+Il vantaggio energetico **è reale**, ma per un motivo diverso: su FPGA `e_MAC ≈ e_AC` (l'accumulo non è più economico del MAC), quindi **non** viene dal costo-per-operazione. Viene dal fatto che la **SNN è molto più compatta** (~800 operazioni) della ANN che *davvero* svolge il car-following (~7k–100k). Il "5–15×" del report era nel range giusto, per il motivo sbagliato.
+:::
+
+::: {.notes}
+Le tre correzioni di sostanza (DSP≠0, Fmax≪assunto, e_MAC≈e_AC) più la ri-inquadratura del vantaggio sono il valore della Fase B: un report che si auto-corregge con dati veri. Tutto post-sintesi Vivado (SAIF, confidenza HIGH), non silicio; la Fase C su PYNQ-Z1 è predisposta ma non eseguita.
+:::
+
+::: {.footerbar}
+Appendice · Fase A ↔ Fase B (confronto onesto)
 :::
 
 # Fine {.divider .act3}

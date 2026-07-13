@@ -3,7 +3,9 @@
 ## Algoritmo PINN {.act2}
 
 ::: {.explain}
-**Cos'è.** Una *Physics-Informed Neural Network*: la rete non predice il prossimo punto, ma i **parametri** di un modello fisico noto; la fisica entra nella **loss** come ponte e regolarizzatore. **Perché qui:** vogliamo i **parametri** di un modello fisico noto → la **rete li predice**, il **modello li converte in accelerazione**, e l'**errore sull'accelerazione** li corregge.
+**Cos'è una *Physics-Informed Neural Network?***: rete che sfrutta un modello fisico per il calcolo della loss (la fisica viene *iniettata* nel ciclo di training, facendo da meccanismo di regolazione.
+
+**Perchè usarla qui?**: la rete genera i parametri → il modello calcola l'accelerazione → l'errore modifica i pesi → la rete viene portata al punto da poter predirre i parametri *corretti* (l'obiettivo).
 :::
 
 ::: {.twocol}
@@ -24,7 +26,7 @@
       <div class="pl-arr">↓</div>
       <div class="pl-node pl-mod" id="pl-mod"><b>Modello car-following</b><span class="pl-val" id="pl-ahat">â = −0.7 m/s²</span></div>
       <div class="pl-arr">↓</div>
-      <div class="pl-node pl-loss" id="pl-loss"><b>Loss vs a_obs(−2.1)</b><span class="pl-val" id="pl-lossval">2.0</span><div class="pl-bar"><div class="pl-barfill" id="pl-lossbar"></div></div></div>
+      <div class="pl-node pl-loss" id="pl-loss"><b>Loss a_real vs a_obs(−2.1)</b><span class="pl-val" id="pl-lossval">2.0</span><div class="pl-bar"><div class="pl-barfill" id="pl-lossbar"></div></div></div>
     </div>
   </div>
 </div>
@@ -70,8 +72,8 @@
 :::
 ::: {.side}
 ::: {.card}
-[Modello di car-following: ACC-IIDM]{.card-title}
-Il controllore fisico di cui la rete stima **5 dei 7** parametri `[v0, T, s0, a, b]`; genera l'accelerazione `â`.
+[Modello di Car-Following: ACC-IIDM]{.card-title}
+Il controllore fisico di cui la rete stima **5 dei 7** parametri `[v0, T, s0, a, b]`; da essi, il modello genera l'accelerazione `â`.
 :::
 ::: {.eq .math}
 $$ s^{*} = s_0 + \max\!\big(0,\ vT + \tfrac{v\,\Delta v}{2\sqrt{a\,b}}\big), \quad z=\tfrac{s^{*}}{s} $$
@@ -184,15 +186,15 @@ Parte 2 · Algoritmo PINN
 :::
 ::: {.side}
 ::: {.explain}
-Ibrida: continuo → spiking → continuo, in 864 parametri.
+Architettura ibrida: continuo → spiking → continuo
 
 - **INPUT** (4) — i segnali V2X entrano come [corrente continua]{.accent} ($I=Wx$), non spike.
 - **HIDDEN** (32) — neuroni **ALIF spiking**: l'unico strato che spara.
 - **OUTPUT** (5) — integratori a perdita (LI), senza soglia; il readout è la tensione.
-- **DECODE** (5) — ogni tensione → parametro fisico via σ e riscalamento.
+- **DECODE** (5) — tensione → parametro fisico via σ e riscalamento.
 :::
 ::: {.eq}
-**864 parametri** = `fc` 128 + ricorrenza `U·V` 512 + soglie ALIF 64 + `out` 160
+**864 parametri** = `in` 128 + ricorrenza `U·V` 512 + soglie ALIF 64 + `out` 160
 :::
 :::
 :::
@@ -217,7 +219,7 @@ Parte 2 · Architettura
     <span class="pl-cyc" id="li-badge">I = W·x</span>
   </div>
   <svg viewBox="0 0 360 200" id="li-svg" class="li-svg" preserveAspectRatio="xMidYMid meet"></svg>
-  <div class="li-foot" id="li-foot">i 4 segnali V2X (continui) → corrente continua nei 32 ALIF · nessuno spike qui</div>
+  <div class="li-foot" id="li-foot">i 4 segnali V2X (continui) → corrente continua entra nei 32 ALIF</div>
 </div>
 <script>
 (function(){
@@ -270,7 +272,7 @@ Parte 2 · Architettura
 :::
 ::: {.side}
 ::: {.explain}
-I **4 segnali V2X** entrano come **corrente continua** (`I = W·x`), **non** come spike — è il ponte continuo→spiking:
+I **4 segnali V2X** entrano come **corrente continua** (`I = W·x`):
 :::
 
 - gap `s`
@@ -297,13 +299,13 @@ Parte 2 · Layer d'ingresso
 :::
 ::: {.side}
 ::: {.explain}
-Il neurone [adaptive-LIF]{.accent} integra, perde carica per leak, spara sopra la soglia effettiva e ne *affatica* la soglia a ogni spike (`base` e `salto` apprendibili per-neurone).
+Il neurone [Adaptive-LIF]{.accent} integra, perde carica per leak, spara sopra la soglia effettiva e si *affatica*. Tale fatica innalza la soglia per avere uno spike (`soglia_base` e `salto` come pesi del neurone).
 :::
 
-**Perché ALIF e non un LIF** (dai report):
+**Perché ALIF e non un LIF**:
 
-- **Memoria a due scale**: membrana veloce, fatica lenta (integra la storia di firing)
-- **Sparsità + stabilità**: la fatica regola la scarica; azzerarla fa divergere il training
+- **Memoria a due scale**: potenziale di membrana e fatica (influenzano il firing-rate)
+- **Sparsità**: la fatica riduce il firing-rate a regime (meccanismo di adattamento).
 - **Economico su FPGA**: 2 stati/neurone, leak a bit-shift
 
 ::: {.eq .math}
@@ -435,7 +437,7 @@ Parte 2 · Layer nascosto (low-rank)
 :::
 ::: {.side}
 ::: {.explain}
-**5 neuroni LI** (Leaky-Integrate, senza soglia): non sparano, **integrano** gli spike ricevuti e il readout è la loro **tensione** di membrana. Una **sigmoide** vincola ogni uscita nel suo intervallo.
+**5 neuroni LI** (Leaky-Integrate, senza soglia): questi neuroni non sparano, **integrano** gli spike ricevuti ed emettono come uscita la loro **tensione** di membrana. Una **sigmoide** vincola ogni uscita nel suo intervallo.
 :::
 ::: {.eq .math}
 $$ V^\text{out} \leftarrow \beta\,V^\text{out} + I, \qquad o = \sigma(V^\text{out}) \in (0,1) $$
@@ -610,7 +612,7 @@ Parte 2 · Layer d'uscita (LI)
 :::
 ::: {.side}
 ::: {.explain}
-Il **decode** mappa le 5 uscite normalizzate `(0,1)` nel **range fisico** di ciascun parametro — un riscalamento affine per-canale. È l'ultimo anello prima del modello di car-following.
+Il **decode** mappa le 5 uscite normalizzate `(0,1)` nel **range fisico** di ciascun parametro — un riscalamento affine per-canale.
 :::
 ::: {.eq .math}
 $$ o_k = \sigma(V_k) = \frac{1}{1+e^{-V_k}} \in (0,1) $$
@@ -632,7 +634,7 @@ Parte 2 · Decode
 :::
 ::: {.side}
 ::: {.explain}
-Pesi vincolati a [potenze di due]{.accent} (**13 livelli**): su FPGA la moltiplicazione diventa un **bit-shift** (0 moltiplicatori). Costo sul plateau: solo ~0.2%.
+Pesi vincolati a [potenze di due]{.accent} (**13 livelli**): su FPGA la moltiplicazione diventa un **bit-shift** (0 moltiplicatori).
 :::
 
 **Straight-Through Estimator** (`round` non è derivabile):
