@@ -120,4 +120,4 @@ function [raw, valid] = snn_b2_fsm(xn, start) %#codegen
   end
 end
 
-% ---- ROM pesi Donatello: in b2_donatello_rom.m (baked letterali, GENERATO da gen_b2_rom) ----
+% ---- ROM pesi del champion attivo: in b2_rom_active.m (baked, GENERATO da gen_b2_rom(name)) ----
