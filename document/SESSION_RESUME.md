@@ -21,7 +21,12 @@ realizzabile), Fmax 100-200→~8.5 MHz, **e_MAC≈e_AC su FPGA** (non 5× Horowi
 (static domina 92%), **vantaggio SNN ~5-65× ma da COMPATTEZZA modello** (letteratura NN car-following ~7k-100k MAC
 vs SNN ~800), NON da AC≪MAC; termica non-problema (Tj~26°C). Bit-exact funzionale già provato (HDL phase, err=0).
 
-**AZIONE 1 — Report Fase B (via skill `create-report`).** Ripartibile da qui, dati pronti.
+**AZIONE 1 — Report Fase B (via skill `create-report`) — ✅ FATTA (2026-07-13).** Deliverable in **`report/`**
+(scelta utente "sempre nella cartella report", NON in `document/` come ipotizzato sotto): `report/FPGA_PHASE_B_REPORT.{md,pdf}`
+(14 pag) + `report/figures_phase_b/` (9 figure) + generatore `scripts/build_fpga_phase_b_report.py` (sorgente unica → md+pdf,
+**deterministico**, ogni numero grounded su `matlab/axi/build/phase_b/results.csv`). Register impersonale, marker ●/○,
+4 caveat onesti; audit indipendente superato (2 fix: §1 punto operativo 8 vs Fmax 8.5 MHz, Wang 2018); QC visivo + `.md`
+byte-stabile. *(Specifica originale conservata sotto per tracciabilità.)*
 - Sorgente = `document/FPGA_PHASE_B_POWER.md` (contenuto già assemblato) + `matlab/axi/build/phase_b/results.csv`.
 - Template/stile = **`document/FPGA_REPORT.md`** + **`document/VALIDATION_REPORT_v3.md`** (⚠️ su QUESTO branch i
   report sono in `document/`; su `main` la documentazione è stata **riordinata** — i report spostati — e la
