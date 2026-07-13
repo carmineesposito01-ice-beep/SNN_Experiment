@@ -3,9 +3,9 @@ function [raw, valid] = snn_b2_fsm(xn, start) %#codegen
 %  Mirror BIT-EXACT dell'aritmetica di snn_core, serializzato: V/fatigue in hdl.RAM,
 %  pesi in ROM (coder.const), pipeline a 2 stadi per la latenza RAM (read->compute->write,
 %  1 sola chiamata RAM/ciclo). Streaming: start=1 -> nuova control-step; valid=1 -> raw pronto.
-  W = coder.const(b2_donatello_rom());
+  W = coder.const(b2_rom_active());
   T = snn_types('fixed', 13);
-  hidden = 32; nt = 10; rnk = 16; out = 5; sh = W.sh;
+  hidden = 32; nt = 10; rnk = coder.const(size(W.U, 2)); out = 5; sh = W.sh;
 
   persistent Vram fatram xbuf xnreg t_lr t_lr_nxt V_LI wacc ...
              tickc rc written phase ...
