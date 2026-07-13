@@ -1,15 +1,17 @@
-function gen_b2_rom()
-%GEN_B2_ROM  Genera b2_donatello_rom.m con i pesi Donatello BAKED come letterali
+function gen_b2_rom(name)
+%GEN_B2_ROM  Genera b2_rom_active.m con i pesi del champion `name` BAKED come letterali
 %  (costanti a codegen-time -> niente load(), niente ricorsione iofun). Come gen_hdl_tops.
+%  ROM attiva swappabile per champion: snn_b2_fsm chiama sempre b2_rom_active().
   here = fileparts(mfilename('fullpath'));
   d = load(fullfile(here, 'champions_export.mat')); champs = d.champions;
   if iscell(champs), champs = [champs{:}]; end
-  idx = find(arrayfun(@(c) strcmp(char(string(c.name)), 'Donatello'), champs), 1);
+  idx = find(arrayfun(@(c) strcmp(char(string(c.name)), name), champs), 1);
+  assert(~isempty(idx), 'champion %s non trovato in champions_export.mat', name);
   c = champs(idx);
-  fid = fopen(fullfile(here, 'b2_donatello_rom.m'), 'w');
+  fid = fopen(fullfile(here, 'b2_rom_active.m'), 'w');
   w = @(varargin) fprintf(fid, varargin{:});
-  w('function W = b2_donatello_rom() %%#codegen\n');
-  w('%%B2_DONATELLO_ROM  Pesi Donatello baked (letterali). GENERATO da gen_b2_rom.\n');
+  w('function W = b2_rom_active() %%#codegen\n');
+  w('%%B2_ROM_ACTIVE  Pesi del champion attivo (baked). GENERATO da gen_b2_rom(''%s'').\n', name);
   % pesi baked come fi (tipo che il datapath usa: fc/U/Wout=T.w Q2.13; Vr=T.acc Q5.13;
   % bth/tj=T.V Q5.13) -> niente cast float nel datapath. delays=double (solo indice).
   w('  W.fc = fi(%s, 1, 16, 13);\n',   mat2str(double(c.fc_weight), 17));
@@ -29,5 +31,5 @@ function gen_b2_rom()
   w('  W.DV = fi(%.17g, 1, 20, 13);\n',     nrm(3));
   w('end\n');
   fclose(fid);
-  fprintf('scritto b2_donatello_rom.m (Donatello, rank=%d)\n', c.rank);
+  fprintf('scritto b2_rom_active.m (%s, rank=%d)\n', name, c.rank);
 end
