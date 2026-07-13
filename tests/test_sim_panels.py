@@ -13,9 +13,7 @@ pytest.importorskip("pyqtgraph")
 
 from PySide6.QtWidgets import QApplication          # noqa: E402
 from sim.probe import AttributeProbe                # noqa: E402
-from sim.state import StepResult                    # noqa: E402
-from sim.ui.panels import InputChannelPanel, NeuronGraphPanel, ParamPanel, SpikeRatePanel  # noqa: E402
-from sim.ui.trajectory import TrajectoryBuffer      # noqa: E402
+from sim.ui.panels import NeuronGraphPanel, ParamPanel, SpikeRatePanel  # noqa: E402
 
 
 @pytest.fixture(scope="module")
@@ -31,22 +29,6 @@ def _probe(params, spikes=None):
         p.record(t, {"spikes": spk, "v_mem": np.linspace(0, 1, 8), "v_th_eff": np.ones(8)},
                  np.asarray(params, dtype=float))
     return p
-
-
-def _input_traj(gaps):
-    tb = TrajectoryBuffer(capacity=50)
-    for t, s in enumerate(gaps):
-        tb.record(StepResult(t=t, s=float(s), v=15.0, vl=13.0, dv=2.0, a_ego=-0.5,
-                             params=np.zeros(5), collided=False))
-    return tb
-
-
-def test_input_channel_panel_plots_and_titles(qapp):
-    panel = InputChannelPanel("s", "gap", "m", "#2e8b57")     # one input channel per dock (like a ParamPanel)
-    panel.update_frame(_input_traj([20.0, 19.0, 18.0, 17.0]))
-    assert list(panel._curve.getData()[1]) == [20.0, 19.0, 18.0, 17.0]   # reads its physical channel (gap)
-    assert panel.current_value() == 17.0                                 # live value = last sample
-    assert "gap = 17.00 m" in panel._plot.getPlotItem().titleLabel.text  # title shows name = value unit
 
 
 def test_param_panel_physical_value_and_title(qapp):
@@ -68,7 +50,6 @@ def test_param_panel_ground_truth(qapp):
 
 def test_line_panels_have_clip_to_view(qapp):
     # downsampling + clip keep the live plots cheap; clipToViewMode() reports the clip state
-    assert InputChannelPanel("s", "gap", "m", "#2e8b57")._plot.getPlotItem().clipToViewMode() is True
     assert ParamPanel(0, "v0", "m/s", "#d1495b")._plot.getPlotItem().clipToViewMode() is True
 
 

@@ -91,7 +91,7 @@ def test_dark_theme_applies(qapp):
 # --- Extension Phase 2: dockable shell ---
 def test_simapp_builds_docks(qapp):
     win = SimApp(CHAMP)
-    assert set(win._docks.keys()) == set(DOCK_ORDER)     # Road/NetState/SpikeRate/Trajectory/Safety/Events/Inspector/SynOps + 4 inputs + 5 params
+    assert set(win._docks.keys()) == set(DOCK_ORDER)     # Road/NetState/SpikeRate/Trajectory/Safety/Events/Inspector/SynOps + 5 params
     assert visible_docks(win._area) == set(DOCK_ORDER)   # Overview on startup (no layout_path)
 
 
@@ -119,16 +119,16 @@ def test_simapp_status_has_firing(qapp):
 
 def test_simapp_view_toggle_hides_and_shows_dock(qapp):
     win = SimApp(CHAMP)
-    win._set_dock_visible("gap", False)
-    assert "gap" not in visible_docks(win._area)
-    win._set_dock_visible("gap", True)
-    assert "gap" in visible_docks(win._area)
+    win._set_dock_visible("Trajectory", False)
+    assert "Trajectory" not in visible_docks(win._area)
+    win._set_dock_visible("Trajectory", True)
+    assert "Trajectory" in visible_docks(win._area)
 
 
 def test_simapp_apply_preset(qapp):
     win = SimApp(CHAMP)
     win.apply_preset("Identificazione")
-    assert "gap" not in visible_docks(win._area)
+    assert "NetState" not in visible_docks(win._area)
     win.apply_preset("Overview")
     assert visible_docks(win._area) == set(DOCK_ORDER)
 
@@ -180,7 +180,7 @@ def test_simapp_scrub_cursor(qapp):
 def test_simapp_builds_all_docks(qapp):
     win = SimApp(CHAMP)
     assert {"Events", "Inspector", "SynOps"} <= set(win._docks)
-    assert len(win._docks) == 17     # 8 fixed + 4 input docks + 5 param docks
+    assert len(win._docks) == 13     # 8 fixed docks + 5 param docks
 
 
 def test_simapp_deep_scrub_reconstructs_beyond_buffer(qapp):
@@ -422,7 +422,7 @@ def test_simapp_episode_has_gt_and_rho(qapp):
 
 def test_simapp_has_synops_dock(qapp):
     win = SimApp(CHAMP)
-    assert "SynOps" in win._docks and len(win._docks) == 17
+    assert "SynOps" in win._docks and len(win._docks) == 13
     assert win._synops._dims == (4, 32, 5, 8)
     assert abs(win._synops._ann_pj - (128 + 1024 + 160) * 4.6) < 1e-6          # R33 dense-ANN energy (pJ)
     win.select_scenario(0)

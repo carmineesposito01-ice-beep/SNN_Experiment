@@ -1,7 +1,7 @@
 """Standalone dockable live panels: NeuronGraphPanel (node-link SNN view), NeuronInspectorPanel
 (selected-neuron scope + dominant connections), SpikeRatePanel (% firing trend), SynOpsPanel
-(per-tick energy: SNN accumulate vs dense-ANN), InputChannelPanel (one network input in physical
-units, one dock each), ParamPanel (one identified param in physical units + dashed ground-truth), TrajectoryPanel
+(per-tick energy: SNN accumulate vs dense-ANN), ParamPanel (one identified param in physical units
++ dashed ground-truth), TrajectoryPanel
 (gap/speeds/accel), SafetyPanel (TTC/headway/DRAC), EventTimelinePanel (clickable injected events).
 Each panel exposes clear() so the app can blank it on a scenario/champion swap or Reset."""
 import numpy as np
@@ -443,59 +443,6 @@ class NeuronInspectorPanel(QWidget):
         self._vth.setData(vth)
         idx = np.nonzero(spk)[0]
         self._spk.setData([{"pos": (float(x), float(vm[x]))} for x in idx])
-
-
-# The 4 network inputs, each shown in its own dock (mirroring the 5 output param docks):
-# (traj key, display name, unit, colour).
-INPUT_CHANNELS = [("s", "gap", "m", "#2e8b57"), ("v", "ego", "m/s", "#2a7fb8"),
-                  ("dv", "Δv", "m/s", "#e8871e"), ("vl", "leader", "m/s", "#d1495b")]
-
-
-class InputChannelPanel(QWidget):
-    """One network INPUT over time, in its own box with a live-value title — the input-side twin of
-    ParamPanel (which shows one output param). Fed from the trajectory buffer; the 4 channels
-    (gap s m, ego v m/s, closing Δv m/s, leader v_l m/s) are the controller's real inputs. Replaces
-    the old stacked v_mem sample dock, now redundant with the neuron Inspector."""
-    def __init__(self, key, name, unit, color):
-        super().__init__()
-        self._key = key
-        self._name = name
-        self._unit = unit
-        self._last = None
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        self._plot = pg.PlotWidget(title=f"{name} ({unit})")
-        self._plot.setDownsampling(auto=True, mode="peak")   # render only what's visible/needed
-        self._plot.setClipToView(True)
-        self._plot.showGrid(x=False, y=True, alpha=0.2)
-        self._plot.getAxis("left").enableAutoSIPrefix(False)   # Δv~0.5 must read "0.5", not "500m"
-        self._curve = self._plot.plot(pen=pg.mkPen(color, width=2))
-        layout.addWidget(self._plot)
-        self._cursors = [_add_cursor(self._plot.getPlotItem())]
-
-    def set_cursor(self, x):
-        _set_cursor(self._cursors, x)
-
-    @property
-    def plot_item(self):
-        return self._plot.getPlotItem()
-
-    def current_value(self):
-        return self._last
-
-    def clear(self):
-        self._last = None
-        self._curve.setData([])
-        self._plot.setTitle(f"{self._name} ({self._unit})")
-
-    def update_frame(self, traj):
-        a = traj.arrays()
-        y = a.get(self._key)
-        if y is None or y.size == 0:
-            return
-        self._last = float(y[-1])
-        self._curve.setData(y)
-        self._plot.setTitle(f"{self._name} = {self._last:.2f} {self._unit}")
 
 
 class ParamPanel(QWidget):
