@@ -10,10 +10,16 @@
 
 ---
 
-## 🎯 Stato attuale (2026-07-10)
+## 🎯 Stato attuale (2026-07-13) — 🏁 MILESTONE: cockpit feature-complete
+
+> **MILESTONE (2026-07-13):** the Simulator track is **declared complete for this cycle** (user call).
+> The three-mode instrument — **Live cockpit + Meso/Macro analysis + Post-run dashboard** — is
+> feature-complete, hardened, and documented. The one remaining Phase-4 idea (float-vs-fixed A/B) is
+> **explicitly out of scope for this milestone** (it needs a fixed-point SW forward that doesn't exist).
+> Next is **merge to `main`** (coordinate with `Simulink_Importer`), not more cockpit features.
 
 **Worktree/branch**: `.worktrees/Simulator` on branch **`Simulator`** (it IS a git repo). All work
-committed + pushed to `origin/Simulator`. **142 sim tests green.** Core bit-identical.
+committed + pushed to `origin/Simulator` (HEAD `d9ee9c1`). **148 sim tests green.** Core bit-identical.
 
 **What it is**: a live plug&play GUI "digital twin" of the SNN car-following controller (ALIF,
 **4 inputs → 32 hidden → 5 params**, po2 weights, target FPGA PYNQ-Z1). **~800 weights** = the
@@ -21,8 +27,8 @@ connections (recurrent 32×32 factored low-rank dominates). **4 champions**:
 Raffaello(`R33_C2_A1_T12_fix`, BPTT) · Leonardo(`LS3_PEAK_R0_launch_d03`, BPTT) ·
 Donatello(`PE_t05_gp0002`, EventProp) · Michelangelo(`A_lr1e2_t06_r16`, EventProp).
 
-**Phases 1–3 DONE + CLOSED**: 14-dock live cockpit (Road · NetState node-link graph · SpikeRate ·
-**SynOps→energy (pJ)** · v_mem · Trajectory · Safety · Events · Inspector · 5 param docks), 4 presets,
+**Phases 1–3 DONE + CLOSED**: **13-dock** live cockpit (Road · NetState node-link graph · SpikeRate ·
+**SynOps→energy (pJ)** · Trajectory · Safety · Events · Inspector · 5 param docks), 4 presets,
 guarded persistence, **deep-scrub** (pause + global cursor + prefix-splice reconstruct), event-timeline
 (click→seek), neuron-inspector (click a neuron → its scope + fan-in/out highlight), champion selector.
 Then a **QA + optimization session**: fixed 2 real bugs (top-down speed>1 drift, scrub-source on Step);
@@ -76,19 +82,38 @@ perf via a 5-agent workflow — per-paint −30% (NetState freeze/LUT), redraw t
   (`metrics.synops_breakdown`) with thousands separators; TTC*/DRAC*/ISO imported from the frozen core (DRY);
   **hidden docks skip redraw** (visibility-gated); pen/brush LUTs; shortcut/dock tooltips. Core bit-identical
   throughout; **142 sim tests green** (was 136).
+- **COCKPIT POLISH → 🏁 MILESTONE (2026-07-13, commits `c381923`→`d9ee9c1`)**: 4 user-reported cockpit
+  fixes + one reverted experiment.
+  1. **Maximize soft-lock/drift fixed at root cause** (`c381923`): double-click-maximize then restore
+     re-showed preset-hidden docks (12→14) and cluttered the layout so other titles were hard to hit.
+     `restoreState` leaves pre-added docks that aren't in the saved state in place → restore now re-adds
+     **only the pre-maximize visible set** (`_pre_max_visible`). (Diagnosed with a real `QTest` double-click
+     probe; removed an unproven `_rewire_dock_labels` — `Dock.close()` keeps the same label, the filter
+     never drops. Teeth-having regression test.)
+  2. **Macro red-cross ×** on the fundamental diagram now carry their `wave_std` for a **hover tooltip** +
+     an on-panel **legend** (were unexplained). 3. **Meso curves clickable** → click a vehicle's curve to
+     **bold-white-highlight** it (dim the rest) in both space-time + velocity panels **and ring that car on
+     the road** (`sigVehicleClicked`/`highlight`, `PlatoonRoadView.highlight`).
+  4. **Input-dock experiment reverted** (`f07b191` add → `d9ee9c1` remove): briefly added a v_mem→Input dock
+     (then 4 gap/ego/Δv/leader docks), but gap/ego/leader/Δv are **already in the Trajectory dock** →
+     pure duplication that unbalanced the layout. Removed entirely; **the old v_mem dock is NOT restored**
+     (it was itself redundant with the Inspector). **Cockpit is back to 13 docks.**
+  **148 sim tests green; core bit-identical; render-verified on `windows`.** → **Simulator milestone reached.**
 
 ---
 
-## ▶️ Cosa fare adesso (RESUME — pick up at the float-vs-fixed A/B)
+## ▶️ Cosa fare adesso (RESUME — 🏁 milestone reached: next is MERGE)
 
-Meso/Macro DONE + v2; freeze fixed; dock-maximize added; **Phase 4 post-run seal + export DONE**. Only
-one Phase-4 piece remains, then merge:
+The cockpit is feature-complete and the track is at a **milestone**. Nothing more to build here for this
+cycle. Forward options, in order:
 
-1. `git -C "<worktree>" status` — must be clean on `Simulator` (pull if a remote is ahead).
-2. **Float-vs-fixed A/B** (the last Phase-4 piece): ⚠️ needs a **fixed-point Qm.n SW forward** that does
-   NOT exist in the simulator yet — scope it first (maybe port the fixed-point logic from the
-   `Simulink_Importer`/HDL track, which already did it for the FPGA). Design-before-code.
-3. Then **merge `Simulator`→`main`** (coordinate with the `Simulink_Importer` track).
+1. `git -C "<worktree>" status` — must be clean on `Simulator` (HEAD `d9ee9c1`; pull if a remote is ahead).
+2. **MERGE `Simulator`→`main`** (the milestone action) — coordinate with the `Simulink_Importer` track
+   (both have deferred their merge; sequence them so `main` lands a coherent state).
+3. **Post-milestone / optional — float-vs-fixed A/B**: the one deferred Phase-4 idea. ⚠️ needs a
+   **fixed-point Qm.n SW forward** that does NOT exist in the simulator yet — scope it first (candidate:
+   port the fixed-point logic from the `Simulink_Importer`/HDL track, which already did it for the FPGA).
+   Design-before-code. This is a **new study, not a milestone blocker**.
 
 **Meso page map** (reference): `sim/ui/meso_page.py` (scenario selector + road strip + 2×2 grid) ·
 `sim/ui/meso_panels.py` (`_MultiCurvePanel` base → `SpaceTimePanel`/`SpeedWavePanel`, `StringStabilityPanel`,
@@ -136,9 +161,11 @@ one Phase-4 piece remains, then merge:
   `AttributeProbe.from_frames`, `TrajectoryBuffer.results/from_results`). `record()`/`step()`/`infer()`
   bodies untouched.
 - **Live UI**: `sim/ui/{app,panels,layout,topdown,trajectory,metrics,reconstruct,loop,theme}.py`.
-  `app.py::SimApp` = 14-dock DockArea + champion/scenario selectors + mode toggle; `panels.py` = all
-  live panels (NeuronGraphPanel, SynOpsPanel=energy, ParamPanel, Trajectory/Safety, EventTimeline,
-  NeuronInspector, SpikeRate, Vmem).
+  `app.py::SimApp` = **13-dock** DockArea + champion/scenario selectors + **3-mode toggle**
+  (Live / Meso-Macro / Post-run); `panels.py` = all live panels (NeuronGraphPanel, SynOpsPanel=energy,
+  ParamPanel, Trajectory/Safety, EventTimeline, NeuronInspector, SpikeRate). **No standalone v_mem dock**
+  — the selected-neuron v_mem scope lives inside `NeuronInspectorPanel` (which is why a v_mem dock was
+  redundant). Post-run = `episode.py` (incremental `EpisodeSummary`) + `postrun_page.py` (dark card dashboard).
 - **Meso/Macro**: `sim/ui/{meso_page,meso_panels,platoon}.py`. **Reuses `utils/platoon_eval.py`**
   (validated, report-grade): `simulate_platoon`/`platoon_metrics` (MESO string stability),
   `simulate_ring`/`fundamental_diagram` (MACRO fundamental diagram, Edie). `sim/ui/platoon.py` adds the
@@ -166,4 +193,9 @@ one Phase-4 piece remains, then merge:
 - **Meso/Macro mode** ✅ (T1–T5 `4736b8b`→`628c20c`,`d9b16ff` + **page v2** `7fc4c2c`→`f003916`:
   `_MultiCurvePanel` base + velocity-wave `v(t)` panel replacing params, scenario selector driving the
   platoon head, `PlatoonRoadView` N-car road with slider+Play) + freeze-fix + dock-maximize +
-  **Phase 4 post-run seal + export** (`aa656ef`→`3569017`) → **NOW: Phase 4 float-vs-fixed A/B** → **merge to main**.
+  **Phase 4 post-run seal + export** (`aa656ef`→`3569017`, later a v2/v3 dark dashboard).
+- **QC hardening + cockpit polish → 🏁 MILESTONE (2026-07-13)**: 5-round cyclic QC (`89987b8`→`c924147`,
+  34 fixes, 142 tests) + cockpit polish (`c381923`→`d9ee9c1`: maximize-restore root-cause fix,
+  macro red-cross legend+hover, clickable meso curves→highlight, and an input-dock experiment added
+  then **reverted** as redundant with Trajectory → back to **13 docks**). **148 sim tests green.**
+  → **next: merge `Simulator`→`main`**; float-vs-fixed A/B deferred (post-milestone study).

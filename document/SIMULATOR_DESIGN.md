@@ -7,6 +7,15 @@
 > **piano di adozione** dagli strumenti esistenti (dalla ricerca web multi-agente del 2026-07-02).
 > **Prima di scrivere codice**, aprire una sessione di implementazione (writing-plans) su questo design.
 
+> **🏁 AGGIORNAMENTO (2026-07-13) — questo design È STATO IMPLEMENTATO ed ESTESO ben oltre l'MVP v1.**
+> L'MVP v1 qui descritto è stato costruito (Plans 1–4, 2026-07-06/07) e poi esteso fino a un cockpit a
+> **3 modi / 13 dock** (Live + Meso/Macro + Post-run) con deep-scrub, grafo node-link, energia SynOps,
+> selettore champion e dashboard post-run — ora a una **milestone** (2026-07-13, 148 test). **Questo file
+> resta come record storico del design iniziale.** Per lo **stato attuale** vedi
+> **`document/SIMULATOR_SESSION_RESUME.md`** + il roadmap `docs/superpowers/2026-07-07-simulator-extension-study.md`.
+> NB: alcune scelte v1 sono state superate — es. il raster spike → grafo node-link; il dock v_mem →
+> assorbito nell'Inspector (nessun dock v_mem separato).
+
 ---
 
 ## 0. Come riprendere (leggere prima questo)

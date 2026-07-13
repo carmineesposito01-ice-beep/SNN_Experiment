@@ -201,6 +201,18 @@ The core already computes these but shows none of them:
   dock (tested). 135 sim tests green. **Deferred: float-vs-fixed
   A/B** — needs a fixed-point Qm.n SW forward that does not exist yet (candidate: port from the
   Simulink_Importer/HDL track).
+- **Post-Phase-4 QC + cockpit polish → 🏁 MILESTONE (2026-07-13, commits `89987b8`→`d9ee9c1`).** A 5-round
+  cyclic QC hardening (34 fixes, `89987b8`→`c924147`; 142 tests) then 4 user-reported cockpit fixes
+  (`c381923`→`d9ee9c1`): **maximize-restore** root-cause fix (restore only the pre-maximize visible set —
+  `restoreState` leaves un-saved pre-added docks in place, so re-adding the full DOCK_ORDER made
+  preset-hidden docks reappear and unbalanced the layout); **macro red-cross** legend + hover tooltip;
+  **clickable meso curves** → bold-white highlight in both curve panels + the road view. One experiment —
+  a v_mem→Input dock, then 4 `gap/ego/Δv/leader` docks — was **reverted**: those signals are already in
+  the **Trajectory** dock, so it only duplicated the gap and unbalanced the layout; the cockpit is back to
+  **13 docks** (the old v_mem dock is not restored — redundant with the Inspector). **148 sim tests green;
+  core bit-identical.** The three-mode instrument (Live + Meso/Macro + Post-run) is **feature-complete for
+  this cycle** → the Simulator track is at a **milestone**; next is **merge to `main`** (coordinate with
+  `Simulink_Importer`). Float-vs-fixed A/B stays the one deferred Phase-4 idea (post-milestone study).
 - **Phase 5 (ambitions).** GT sliders / live UKF re-identification, video/GIF, scenario form editor,
   a–b ellipse (separate estimator module), optional QThread worker.
 

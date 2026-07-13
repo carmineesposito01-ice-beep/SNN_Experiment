@@ -1,6 +1,6 @@
 # CF_FSNN Simulator — how to run
 
-A live "digital twin" GUI of the SNN car-following controller: **Live** cockpit (14 docks) ·
+A live "digital twin" GUI of the SNN car-following controller: **Live** cockpit (13 docks) ·
 **Meso/Macro** analysis (platoon string-stability, fundamental diagram, road view) · **Post-run**
 report card (identification, safety, energy, ρ — with '?' formula tooltips).
 Stack: PySide6 6.11 + pyqtgraph 0.14 + torch (CPU) + numpy.
