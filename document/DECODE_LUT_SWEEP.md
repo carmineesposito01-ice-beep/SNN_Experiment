@@ -40,22 +40,28 @@ L'accuratezza satura a **83.97%** già da N=64; N=16 (84.06%) è entro il rumore
 di identificazione). Il **dmax vs 512** converge **quadraticamente** (÷~4-8 a ogni raddoppio di N): coerente con
 l'interpolazione lineare di una funzione liscia.
 
-## 4. Risultati — risorse (dimensionamento)
-La LUT memorizza N valori σ a Q1.14 (**16 bit/entry**) → **N × 16 bit**; il datapath d'interpolazione (5 canali:
-sottrazione offset, scala, indice, interp lineare, riscalamento affine) è **costante** con N.
+## 4. Risultati — risorse
+**(a) Dimensionamento del formato (naïve).** La σ-LUT contiene N valori a Q1.14 (16 bit) → **N × 16 bit** (256 bit a
+N=16, 8 192 bit a N=512). Come pura memoria sarebbe < 1 BRAM18 (18 Kbit) anche a N=512.
 
-| N | tabella LUT | contesto Zynq-7020 |
-|---|---|---|
-| 16  | 256 bit  | LUTRAM distribuita, trascurabile |
-| 32  | 512 bit  | LUTRAM distribuita |
-| 64  | 1 024 bit | LUTRAM distribuita |
-| 128 | 2 048 bit | LUTRAM / frazione di BRAM |
-| 256 | 4 096 bit | < ¼ di un BRAM18 (18 Kbit) |
-| 512 | 8 192 bit | < ½ di un BRAM18 |
+**(b) Realizzazione HDL Coder — *come viene resa davvero* (VHDL, Task 5).** HDL Coder mappa la tabella come **array
+costante indicizzato → logica combinatoria (mux tree), NON BRAM** (questo corregge l'ipotesi "BRAM" di (a)). Stima RTL
+del solo decode (`snn_decode_lut`, combinatorio, 0 errori/warning, conformance OK):
 
-Il costo **N-dipendente è trascurabile** in tutto il range: anche N=512 sta in **< 1 BRAM18**, e N≤64 comodamente
-in LUTRAM distribuita. *(Cifre da dimensionamento del formato; una sintesi Vivado OOC del decode-LUT-N confermerebbe
-gli assoluti col datapath — vedi §6.)*
+| N | Multipliers | Adders/Sub | Registers | Multiplexers | RAMs |
+|---|---|---|---|---|---|
+| 16  | 15 | 35 | 0 | 45 | 0 |
+| 32  | 15 | 35 | 0 | 50 | 0 |
+| 64  | 15 | 35 | 0 | 50 | 0 |
+| 128 | 15 | 35 | 0 | 50 | 0 |
+| 256 | 15 | 35 | 0 | 50 | 0 |
+| 512 | 15 | 35 | 0 | 50 | 0 |
+
+La stima RTL è **quasi N-indipendente** (15 mult / 35 add / ~50 mux, **0 RAM, 0 registri**): la dimensione della tabella
+è ripiegata nella costante e viene mappata a LUT dalla **sintesi**, non conteggiata dallo stimatore ad alto livello. La
+**curva risorse-vs-N reale** (conteggio LUT) richiede una **sintesi Vivado OOC** — *non eseguita in questa sessione
+(Vivado non installato qui); rinviata all'ambiente Vivado, come in Fase B.* In ogni caso il decode è **cheap**:
+combinatorio, poche decine di celle, **nessuna BRAM**. Tool: `matlab/make_hdl_decode_lut.m`.
 
 ## 5. Finding
 - **Accuratezza end-to-end piatta (~84%)** su N∈{16..512}: è dominata dalla rete, non dal decode. La sigmoide è
@@ -95,10 +101,12 @@ convergenza rapida). Builder: `matlab/build_hdl_variants.m`.
 
 ## 7. Stato / onestà
 - **Fatto**: `snn_decode_lut(raw,N)` (Task 1, bit-verified a N=256); `run_lut_sweep` (Task 2, curva 60-traj);
-  **6 blocchi `Donatello_LUT{N}` in libreria (Task 4), simulazione bit-exact**.
-- **Da fare (sessione HDL/Vivado)**: sintesi Vivado OOC del decode-LUT-N per N rappresentativi (conferma risorse
-  assolute col datapath, §4); **verifica HDL Coder** dei 6 blocchi (VHDL generato, LUT sintetizzata non `exp`) — Task 5;
-  figura. Piano: `docs/superpowers/plans/2026-07-14-sp1-decode-variants.md`.
+  **6 blocchi `Donatello_LUT{N}` in libreria (Task 4), simulazione bit-exact**; **verifica HDL Coder dei 6 decode
+  LUT-N (Task 5): 6/6 VHDL, 0 errori/warning, conformance OK, sigmoide = tabella costante (niente `exp`), decode
+  combinatorio ~N-flat (§4b)**.
+- **Da fare**: **sintesi Vivado OOC** del decode-LUT-N per N rappresentativi (risorse assolute LUT/FF, N-scaling reale) —
+  **rinviata: Vivado non disponibile in questa sessione** (come Fase B, va eseguita nell'ambiente Vivado); figura
+  accuratezza/risorse-vs-N. Piano: `docs/superpowers/plans/2026-07-14-sp1-decode-variants.md`.
 - **Onestà**: lo sweep di accuratezza è in double (isola l'effetto della dimensione); il fixed-point è bit-verificato a
-  parte (N=256 == `snn_decode_hdl`; i blocchi Simulink girano il fixed e sono bit-exact al riferimento). Le risorse sono
-  da **dimensionamento del formato**, non ancora da sintesi (HDL Coder/Vivado confermeranno gli assoluti). Tutto pre-silicio.
+  parte (N=256 == `snn_decode_hdl`; i blocchi Simulink girano il fixed e sono bit-exact al riferimento). Le risorse RTL
+  sono **stime HDL Coder** (§4b); gli **assoluti Vivado sono rinviati**. Tutto pre-silicio.
