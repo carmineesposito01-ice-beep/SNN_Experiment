@@ -13,6 +13,37 @@
 > `.worktrees/Simulink_Importer` · push libero su `origin`. (Il track ① Simulatore vive su `Simulator`, lo studio
 > EventProp su `main` con master `EVENTPROP_STATUS.md` — QUESTO file copre SOLO il track ② HDL/Simulink_Importer.)
 
+## ⚡ RIPRESA A FREDDO — B1.5 (validazione HW approfondita) + Libreria champion — 2026-07-14
+
+> **Stato più recente (in cima; il blocco Fase B/C sotto è il precedente).** ⚠️ Working tree: ci sono modifiche NON
+> mie non committate (`matlab/closed_loop_demo.slx`, `matlab/slblocks.m`) + commit `mpc-vs-snn` di un altro filone —
+> **non toccarli**. Artefatti generati sono gitignored (`snn_traj_fixed_r*_mex.*`, `b2_rom_active.m`, `codegen/`, `slprj/`).
+
+**B1.5 — validazione HW approfondita (Vivado/sim, pre-silicio).** Spec master (7 filoni → 4 sotto-studi a/b/c/d) =
+`docs/superpowers/specs/2026-07-13-fase-b1.5-design.md`.
+- **B1.5-a (fondamenta 4 champion + validazione funzionale)** — piano `docs/superpowers/plans/2026-07-13-fase-b1.5a-fondamenta.md`.
+  **Task 0-4 FATTI:** `gen_b2_rom(name)`→`b2_rom_active`; `snn_b2_fsm` **rango-parametrico** (`rnk=coder.const(size(W.U,2))`;
+  gate `run_b2_parity` = **0 mismatch su tutti e 4**, baseline rank-8 inclusi); validazione funzionale **via MEX**
+  (`snn_traj_fixed.m`+`build_traj_mex.m` → `snn_traj_fixed_r{16,8}_mex`; `run_b15a_validate.m`; helper `champ_weights.m`).
+  ⚠️ **GOTCHA: core `fi` interpretato = ~10h su 6 traj → OBBLIGO MEX.** `snn_core` reso codegen-safe (reset flag logico +
+  init per-variabile `isempty` + assert bound), **parità 0 preservata**. Metriche 6-traj coerenti col SW (Donatello acc
+  ~85%, Δfloat ≤0.09). **RESTA:** run completo **60-traj** (~24s), **Task Vivado 5-7** (sintesi/SAIF/cosim dei 4). Commit ~`0d759a7`.
+- **B1.5-b/c/d** (quantizzazione post-hoc+1QAT / SEU 2-livelli registri+config / stabilità-fixed-in-loop·AXI-latency·PVT):
+  solo nel master, **non ancora spec'd**.
+
+**SP1 — Libreria champion, varianti di decode (LUT sweep).** Spec `docs/superpowers/specs/2026-07-14-champion-library-expansion-design.md`,
+piano `docs/superpowers/plans/2026-07-14-sp1-decode-variants.md`. **Task 1-2 FATTI:** `snn_decode_lut(raw,N)` (N=256
+**bit-identico** a `snn_decode_hdl`); `run_lut_sweep` (forward MEX + decode-LUT-N double). **Finding:** accuratezza
+end-to-end **piatta ~85.2%** su N∈{16..512}; l'errore LUT (`dmax vs 512`) converge quadratico → **LUT piccola 32-64 basta**,
+256 è sovradimensionata. **RESTA:** Task 3-5 (risorse Vivado per N · 6 blocchi `Donatello_LUT{N}` in `snn_champions_lib.slx`
+via nuovo `build_hdl_variants.m` · verifica HDL Coder) + run 60 + figura. Commit `454327b`. *(Skill `fpga-expert` disponibile.)*
+
+**SP2 — Donatello + ACC-IIDM open-loop.** IN CODA (outline nel design SP1 §5): Donatello **LUT-256** + ACC-IIDM
+open-loop, plug&play HDL-ready, **NON chiudere il loop velocità interno** (la velocità arriva da fuori; il loop si chiude
+nel test). Avrà spec proprio; oggi `build_plant_lib.m`/`cf_plant_lib.slx` hanno l'ACC-IIDM **closed-loop** (da aprire).
+
+---
+
 **FASE B (validazione del report FPGA) = CHIUSA.** Deliverable **`document/FPGA_PHASE_B_POWER.md`** (numeri +
 tabella claim + re-tag + §9 protocollo Fase C + §8 fonti letteratura). Dati grezzi + CSV in
 `matlab/axi/build/phase_b/` (`util_*`/`timing_*`/`power_*`.rpt, `results.csv`). Spec+piano:
