@@ -57,21 +57,37 @@ del solo decode (`snn_decode_lut`, combinatorio, 0 errori/warning, conformance O
 | 256 | 15 | 35 | 0 | 50 | 0 |
 | 512 | 15 | 35 | 0 | 50 | 0 |
 
-La stima RTL è **quasi N-indipendente** (15 mult / 35 add / ~50 mux, **0 RAM, 0 registri**): la dimensione della tabella
-è ripiegata nella costante e viene mappata a LUT dalla **sintesi**, non conteggiata dallo stimatore ad alto livello. La
-**curva risorse-vs-N reale** (conteggio LUT) richiede una **sintesi Vivado OOC** — *non eseguita in questa sessione
-(Vivado non installato qui); rinviata all'ambiente Vivado, come in Fase B.* In ogni caso il decode è **cheap**:
-combinatorio, poche decine di celle, **nessuna BRAM**. Tool: `matlab/make_hdl_decode_lut.m`.
+La stima RTL è **quasi N-indipendente** (15 mult / 35 add / ~50 mux, **0 RAM, 0 registri**): lo stimatore ad alto
+livello ripiega la tabella nella costante. Tool: `matlab/make_hdl_decode_lut.m`.
+
+**(c) Sintesi Vivado OOC — assoluti reali (Task 3).** VHDL del decode-LUT-N sintetizzato out-of-context su
+**xc7z020clg400-1** (Vivado 2026.1); conteggio celle reali:
+
+| N | LUT | FF | DSP | CARRY | BRAM |
+|---|---|---|---|---|---|
+| 16  | 520  | 0 | 16 | 102 | 0 |
+| 32  | 575  | 0 | 16 | 102 | 0 |
+| 64  | 734  | 0 | 16 | 117 | 0 |
+| 128 | 928  | 0 | 16 | 117 | 0 |
+| 256 | 1167 | 0 | 16 | 117 | 0 |
+| 512 | 1732 | 0 | 16 | 117 | 0 |
+
+*Ora la N-dipendenza si vede*: la σ-LUT diventa **LUT distribuite** che crescono **520 → 1732** con N (la stima RTL (b)
+la nascondeva ripiegandola nella costante). DSP (16, le moltiplicazioni) e carry (~110, gli addizionatori) sono
+~N-indipendenti; **BRAM = 0** in tutto il range (confermata la correzione di (a): logica, non memoria). Contesto
+Zynq-7020 (53 200 LUT, 220 DSP): anche N=512 = **3.3 % delle LUT**, N=16 = **1.0 %**. Flusso: `scripts/figs_lut_sweep.py`
++ tcl OOC (part come Fase B). **Figura riassuntiva**: `document/decode_lut_sweep.png` (accuratezza / dmax / LUT-vs-N).
 
 ## 5. Finding
 - **Accuratezza end-to-end piatta (~84%)** su N∈{16..512}: è dominata dalla rete, non dal decode. La sigmoide è
   **liscia** e quindi facile da approssimare anche con poche coppie.
 - **Errore d'interpolazione** (dmax vs 512) piccolo e a convergenza rapida: **N=32 → 0.034**, **N=64 → 0.011**.
-- **Risorse trascurabili** in tutto il range (< 1 BRAM anche a 512).
-- **Compromesso soft**: entrambi gli assi (accuratezza, risorse) sono piatti/economici. Scelta pratica:
-  **32-64 punti** (errore d'interpolazione ≤ 0.03, minima logica) oppure **128** con margine a costo ~nullo. La
-  **256 attuale è sovradimensionata** per l'accuratezza, ma costa poco. Non c'è un vero vincolo che imponga una LUT
-  grande: la si può ridurre con serenità.
+- **Risorse piccole ma N-dipendenti** (sintesi Vivado reale §4c): LUT **520 → 1732** da N=16 a N=512 (≤ **3.3 %** del
+  Zynq-7020), **0 BRAM**, DSP (16) e carry (~110) ~costanti. Il costo della dimensione LUT è tutto in **LUT distribuite**.
+- **Compromesso ora quantificato**: essendo l'accuratezza piatta, ridurre N **risparmia LUT a costo nullo di
+  accuratezza** — es. **LUT-64 = 734 LUT vs LUT-256 = 1167 LUT (~37 % in meno)**, stessa accuratezza (83.98 vs 83.97 %).
+  Scelta pratica: **32-64 punti** (errore d'interpolazione ≤ 0.03). La **256 attuale è sovradimensionata**: ridurla a 64
+  libera ~430 LUT senza toccare l'accuratezza.
 
 ## 6. Blocchi di libreria `Donatello_LUT{N}` (HDL-ready, Task 4)
 Aggiunti a `snn_champions_lib.slx` 6 sottosistemi streaming **`Donatello_LUT{N}`** (N∈{16,32,64,128,256,512}),
@@ -100,13 +116,11 @@ Le differenze fra N (es. param 4: 0.837 → 0.823) sono l'errore d'interpolazion
 convergenza rapida). Builder: `matlab/build_hdl_variants.m`.
 
 ## 7. Stato / onestà
-- **Fatto**: `snn_decode_lut(raw,N)` (Task 1, bit-verified a N=256); `run_lut_sweep` (Task 2, curva 60-traj);
-  **6 blocchi `Donatello_LUT{N}` in libreria (Task 4), simulazione bit-exact**; **verifica HDL Coder dei 6 decode
-  LUT-N (Task 5): 6/6 VHDL, 0 errori/warning, conformance OK, sigmoide = tabella costante (niente `exp`), decode
-  combinatorio ~N-flat (§4b)**.
-- **Da fare**: **sintesi Vivado OOC** del decode-LUT-N per N rappresentativi (risorse assolute LUT/FF, N-scaling reale) —
-  **rinviata: Vivado non disponibile in questa sessione** (come Fase B, va eseguita nell'ambiente Vivado); figura
-  accuratezza/risorse-vs-N. Piano: `docs/superpowers/plans/2026-07-14-sp1-decode-variants.md`.
+- **Fatto (SP1 completo)**: `snn_decode_lut(raw,N)` (Task 1, bit-verified a N=256); `run_lut_sweep` (Task 2, 60-traj);
+  **risorse: dimensionamento + stima HDL Coder + sintesi Vivado OOC dei 6 N (Task 3, §4c)**; **6 blocchi
+  `Donatello_LUT{N}` in libreria (Task 4), simulazione bit-exact**; **verifica HDL Coder dei 6 decode LUT-N (Task 5):
+  6/6 VHDL, 0 errori/warning, sigmoide = tabella costante (niente `exp`)**; **figura (Task 6)** `document/decode_lut_sweep.png`.
 - **Onestà**: lo sweep di accuratezza è in double (isola l'effetto della dimensione); il fixed-point è bit-verificato a
-  parte (N=256 == `snn_decode_hdl`; i blocchi Simulink girano il fixed e sono bit-exact al riferimento). Le risorse RTL
-  sono **stime HDL Coder** (§4b); gli **assoluti Vivado sono rinviati**. Tutto pre-silicio.
+  parte (N=256 == `snn_decode_hdl`; i blocchi Simulink girano il fixed e sono bit-exact al riferimento). Le risorse §4c
+  sono **sintesi reale Vivado OOC** (post-synth, pre-place&route: il conteggio post-implementazione può variare di poco).
+  Tutto pre-silicio.

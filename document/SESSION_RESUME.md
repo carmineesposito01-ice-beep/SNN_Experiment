@@ -43,11 +43,13 @@ sorgente per il futuro report = `document/DECODE_LUT_SWEEP.md`** (scopo+metodo+d
 (i 4 base invariati); **tutti e 6 simulano bit-exact** (dmax=0 vs `snn_core`+decode; l'`hdl.RAM` gira nella MATLAB
 Function; done@≈341 clock). ROM Donatello via `gen_b2_rom('Donatello')`→`b2_rom_active` (gitignored, la rigenera il
 builder). Commit `a4e8d15`. **Task 5 (HDL Coder) FATTO:** i 6 decode `snn_decode_lut(·,N)` generano VHDL (0 errori/warning,
-conformance OK), sigmoide = **tabella costante (niente `exp`)**, decode **combinatorio ~N-flat** (15 mult / 35 add /
-~50 mux, 0 RAM, 0 reg); tool `make_hdl_decode_lut.m`, commit `c888e86`. **RESTA (rinviato — Vivado NON disponibile in
-questa sessione):** sintesi Vivado OOC del decode-LUT-N per gli assoluti LUT/FF (N-scaling reale) + figura
-accuratezza/risorse-vs-N. Doc sorgente report = `document/DECODE_LUT_SWEEP.md` (§4b risorse HDL, §6 blocchi, §7 stato).
-Commit `454327b`/`8f7f248`/`a4e8d15`/`c888e86`. *(Skill `fpga-expert` disponibile.)*
+conformance OK), sigmoide = **tabella costante (niente `exp`)**; tool `make_hdl_decode_lut.m`, commit `c888e86`.
+**Task 3 (sintesi Vivado OOC) + Task 6 (figura) FATTI:** i 6 decode sintetizzati su xc7z020 (Vivado 2026.1) → **LUT
+520→1732 con N, 0 BRAM, DSP=16, carry ~110** (la σ-LUT è logica distribuita, non BRAM); compromesso quantificato:
+**LUT-64=734 vs LUT-256=1167 (~37% in meno) a pari accuratezza**. Figura `document/decode_lut_sweep.png`, script
+`scripts/figs_lut_sweep.py`. **⇒ SP1 COMPLETO.** *(GOTCHA path: Vivado è in `C:\AMDDesignTools\2026.1\Vivado\bin\vivado.bat`,
+NON in C:\Xilinx/AMD.)* Doc sorgente report = `document/DECODE_LUT_SWEEP.md`. Commit
+`454327b`/`8f7f248`/`a4e8d15`/`c888e86`(+doc/figura). *(Skill `fpga-expert` disponibile. Prossimo: SP2 Donatello+ACC-IIDM open-loop.)*
 
 **SP2 — Donatello + ACC-IIDM open-loop.** IN CODA (outline nel design SP1 §5): Donatello **LUT-256** + ACC-IIDM
 open-loop, plug&play HDL-ready, **NON chiudere il loop velocità interno** (la velocità arriva da fuori; il loop si chiude
