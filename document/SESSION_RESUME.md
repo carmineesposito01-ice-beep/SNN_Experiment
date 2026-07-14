@@ -32,11 +32,15 @@
   solo nel master, **non ancora spec'd**.
 
 **SP1 — Libreria champion, varianti di decode (LUT sweep).** Spec `docs/superpowers/specs/2026-07-14-champion-library-expansion-design.md`,
-piano `docs/superpowers/plans/2026-07-14-sp1-decode-variants.md`. **Task 1-2 FATTI:** `snn_decode_lut(raw,N)` (N=256
-**bit-identico** a `snn_decode_hdl`); `run_lut_sweep` (forward MEX + decode-LUT-N double). **Finding:** accuratezza
-end-to-end **piatta ~85.2%** su N∈{16..512}; l'errore LUT (`dmax vs 512`) converge quadratico → **LUT piccola 32-64 basta**,
-256 è sovradimensionata. **RESTA:** Task 3-5 (risorse Vivado per N · 6 blocchi `Donatello_LUT{N}` in `snn_champions_lib.slx`
-via nuovo `build_hdl_variants.m` · verifica HDL Coder) + run 60 + figura. Commit `454327b`. *(Skill `fpga-expert` disponibile.)*
+piano `docs/superpowers/plans/2026-07-14-sp1-decode-variants.md`. **Task 1-2 + sweep 60-traj + dimensionamento risorse FATTI:**
+`snn_decode_lut(raw,N)` (N=256 **bit-identico** a `snn_decode_hdl`); `run_lut_sweep` (forward MEX + decode-LUT-N double,
+**60 traj in 4.8s**). **Finding (definitivo, 60 traj):** accuratezza end-to-end **piatta ~84%** (83.97% da N≥64; N=16=84.06%
+entro rumore) su N∈{16..512}; `dmax vs 512` converge **quadratico** (N=32→0.034, N=64→0.011); risorse = **N×16 bit** →
+**< 1 BRAM18 anche a 512** → compromesso **soft**, LUT 32-64 basta (256 sovradimensionata ma economica). **Documento
+sorgente per il futuro report = `document/DECODE_LUT_SWEEP.md`** (scopo+metodo+dati+risorse+onestà; commit `8f7f248`).
+**RESTA (sessione Vivado/Simulink/HDL Coder):** Task 3 sintesi Vivado OOC del decode-LUT-N (conferma risorse assolute col
+datapath) · Task 4 = 6 blocchi `Donatello_LUT{N}` in `snn_champions_lib.slx` via nuovo `build_hdl_variants.m` · Task 5
+verifica HDL Coder + figura. Commit `454327b`/`8f7f248`. *(Skill `fpga-expert` disponibile.)*
 
 **SP2 — Donatello + ACC-IIDM open-loop.** IN CODA (outline nel design SP1 §5): Donatello **LUT-256** + ACC-IIDM
 open-loop, plug&play HDL-ready, **NON chiudere il loop velocità interno** (la velocità arriva da fuori; il loop si chiude
