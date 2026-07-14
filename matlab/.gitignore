@@ -3,3 +3,6 @@ codegen/
 slprj/
 # ROM del champion attivo — generata da gen_b2_rom(<name>)
 b2_rom_active.m
+# MEX compilati — rigenerabili con build_traj_mex
+snn_traj_fixed_r16_mex.*
+snn_traj_fixed_r8_mex.*

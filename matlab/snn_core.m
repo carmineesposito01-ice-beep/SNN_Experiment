@@ -2,17 +2,22 @@ function raw = snn_core(xn, W, T, cmd)
 %SNN_CORE  Un passo di controllo = n_ticks tick SNN interni. Ritorna raw [5x1] (LI).
 %  Stato persistente (V, fatigue, s_prev, V_LI, x_buf) tra chiamate. 'reset' azzera.
   persistent V fatigue s_prev V_LI x_buf inited
-  % reset-only path (prima di una nuova sequenza): azzera lo stato e ritorna
-  if nargin >= 4 && strcmp(cmd, 'reset')
-    inited = []; raw = []; return;
+  if isempty(inited), inited = false; end   % persistent logico (codegen-safe: niente [])
+  % reset-only path: forza il re-init alla prossima chiamata e ritorna un raw dummy costante.
+  % Accetta la stringa 'reset' (interpretato) o un flag logico true (codegen).
+  if nargin >= 4 && ((ischar(cmd) && strcmp(cmd, 'reset')) || (islogical(cmd) && cmd))
+    inited = false; raw = zeros(5, 1, 'like', T.raw); return;
   end
   hidden = double(W.hidden); maxd = double(W.max_delay); nt = double(W.n_ticks); rnk = double(W.rank); out = 5;
-  if isempty(inited)
-    V = zeros(hidden, 1, 'like', T.V); fatigue = zeros(hidden, 1, 'like', T.fatigue);
-    s_prev = zeros(hidden, 1, 'like', T.V); V_LI = zeros(out, 1, 'like', T.raw);
-    x_buf = zeros(4, maxd, 'like', T.V);   % ring buffer: colonna d+1 = ritardo d
-    inited = true;
-  end
+  assert(hidden <= 32); assert(maxd <= 6); assert(nt <= 10); assert(rnk <= 16);  % bound codegen (no-op interpretato)
+  % init dello stato persistente: guard isempty PER VARIABILE (pattern codegen-safe);
+  % '|| ~inited' forza il re-init dopo un reset. Interpretato e codegen danno lo stesso stato.
+  if isempty(V)       || ~inited, V       = zeros(hidden, 1, 'like', T.V);       end
+  if isempty(fatigue) || ~inited, fatigue = zeros(hidden, 1, 'like', T.fatigue); end
+  if isempty(s_prev)  || ~inited, s_prev  = zeros(hidden, 1, 'like', T.V);       end
+  if isempty(V_LI)    || ~inited, V_LI    = zeros(out, 1, 'like', T.raw);        end
+  if isempty(x_buf)   || ~inited, x_buf   = zeros(4, maxd, 'like', T.V);         end  % ring buffer: colonna d+1 = ritardo d
+  inited = true;
 
   % pesi (gia' po2). Nel loop: fc/U via po2shift (fi->shift esatto), Vr/Wout gated dagli spike.
   W_po2 = cast(W.fc_weight, 'like', T.w);          % 32x4
