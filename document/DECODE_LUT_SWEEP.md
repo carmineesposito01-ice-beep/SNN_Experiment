@@ -67,11 +67,38 @@ gli assoluti col datapath — vedi §6.)*
   **256 attuale è sovradimensionata** per l'accuratezza, ma costa poco. Non c'è un vero vincolo che imponga una LUT
   grande: la si può ridurre con serenità.
 
-## 6. Stato / onestà
-- **Fatto**: `snn_decode_lut(raw,N)` (Task 1, bit-verified a N=256); `run_lut_sweep` (Task 2, curva 60-traj).
+## 6. Blocchi di libreria `Donatello_LUT{N}` (HDL-ready, Task 4)
+Aggiunti a `snn_champions_lib.slx` 6 sottosistemi streaming **`Donatello_LUT{N}`** (N∈{16,32,64,128,256,512}),
+accanto ai 4 blocchi champion base (Donatello/Leonardo/Michelangelo/Raffaello, **invariati**). Ogni blocco:
+- **Interfaccia**: `xn`(4, normalizzato) + `start` → `params`(5: v0,T,s0,a,b) + `done`. Streaming: `start=1` avvia una
+  control-step; `done=1` quando i `params` sono pronti (**≈341 clock/inferenza**, forward B2 time-multiplexato).
+- **Interni**: `snn_b2_fsm` (ROM Donatello, `hdl.RAM`) + `snn_decode_lut(raw, N)`. I 6 differiscono **solo per N**.
+- **Stile referenziato** (come il B2 deployato): la MATLAB Function chiama `snn_b2_fsm`/`snn_decode_lut` → questi
+  (+`snn_types`, `b2_rom_active`) devono stare sul path all'uso/sim/HDL. La ROM Donatello si (ri)genera con
+  `gen_b2_rom('Donatello')` (lo fa `build_hdl_variants.m`). *(I 4 blocchi base restano self-contained; i 6 LUT no — tradeoff scelto.)*
+
+**Validazione (Simulink)**: tutti e 6 i blocchi **simulano** (l'`hdl.RAM` gira dentro la MATLAB Function) e al primo
+`done` riproducono **bit-exact** (`dmax=0`) il riferimento `snn_core`+`snn_decode_lut(raw,N)`. I `params` al blocco
+(single control-step da reset, stesso `raw`) mostrano la convergenza con N:
+
+| N | params @ done (dal blocco Simulink) |
+|---|---|
+| 16  | [25.782, 1.6222, 2.7910, 0.83728, 1.7156] |
+| 32  | [25.739, 1.6295, 2.7786, 0.82886, 1.7135] |
+| 64  | [25.725, 1.6313, 2.7751, 0.82458, 1.7129] |
+| 128 | [25.723, 1.6315, 2.7749, 0.82349, 1.7128] |
+| 256 | [25.723, 1.6315, 2.7749, 0.82324, 1.7128] |
+| 512 | [25.723, 1.6315, 2.7749, 0.82300, 1.7128] |
+
+Le differenze fra N (es. param 4: 0.837 → 0.823) sono l'errore d'interpolazione LUT, coerente con §3 (piccolo, a
+convergenza rapida). Builder: `matlab/build_hdl_variants.m`.
+
+## 7. Stato / onestà
+- **Fatto**: `snn_decode_lut(raw,N)` (Task 1, bit-verified a N=256); `run_lut_sweep` (Task 2, curva 60-traj);
+  **6 blocchi `Donatello_LUT{N}` in libreria (Task 4), simulazione bit-exact**.
 - **Da fare (sessione HDL/Vivado)**: sintesi Vivado OOC del decode-LUT-N per N rappresentativi (conferma risorse
-  assolute col datapath); i 6 blocchi `Donatello_LUT{N}` in `snn_champions_lib.slx` (`build_hdl_variants.m`);
-  verifica HDL Coder (VHDL con LUT sintetizzata "nel modo previsto"). Piano: `docs/superpowers/plans/2026-07-14-sp1-decode-variants.md`.
-- **Onestà**: lo sweep di accuratezza è in double (isola l'effetto della dimensione); il fixed-point è
-  bit-verificato a parte (N=256 == `snn_decode_hdl`). Le risorse sono da **dimensionamento del formato**, non da
-  sintesi (la sintesi confermerà gli assoluti). Tutto pre-silicio.
+  assolute col datapath, §4); **verifica HDL Coder** dei 6 blocchi (VHDL generato, LUT sintetizzata non `exp`) — Task 5;
+  figura. Piano: `docs/superpowers/plans/2026-07-14-sp1-decode-variants.md`.
+- **Onestà**: lo sweep di accuratezza è in double (isola l'effetto della dimensione); il fixed-point è bit-verificato a
+  parte (N=256 == `snn_decode_hdl`; i blocchi Simulink girano il fixed e sono bit-exact al riferimento). Le risorse sono
+  da **dimensionamento del formato**, non ancora da sintesi (HDL Coder/Vivado confermeranno gli assoluti). Tutto pre-silicio.

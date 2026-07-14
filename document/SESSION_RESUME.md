@@ -38,9 +38,13 @@ piano `docs/superpowers/plans/2026-07-14-sp1-decode-variants.md`. **Task 1-2 + s
 entro rumore) su N∈{16..512}; `dmax vs 512` converge **quadratico** (N=32→0.034, N=64→0.011); risorse = **N×16 bit** →
 **< 1 BRAM18 anche a 512** → compromesso **soft**, LUT 32-64 basta (256 sovradimensionata ma economica). **Documento
 sorgente per il futuro report = `document/DECODE_LUT_SWEEP.md`** (scopo+metodo+dati+risorse+onestà; commit `8f7f248`).
-**RESTA (sessione Vivado/Simulink/HDL Coder):** Task 3 sintesi Vivado OOC del decode-LUT-N (conferma risorse assolute col
-datapath) · Task 4 = 6 blocchi `Donatello_LUT{N}` in `snn_champions_lib.slx` via nuovo `build_hdl_variants.m` · Task 5
-verifica HDL Coder + figura. Commit `454327b`/`8f7f248`. *(Skill `fpga-expert` disponibile.)*
+**Task 4 FATTO:** 6 blocchi streaming `Donatello_LUT{N}` (porte `xn`(4)+`start` → `params`(5)+`done`; interni
+`snn_b2_fsm`+`snn_decode_lut`, **stile referenziato**) aggiunti a `snn_champions_lib.slx` via nuovo `build_hdl_variants.m`
+(i 4 base invariati); **tutti e 6 simulano bit-exact** (dmax=0 vs `snn_core`+decode; l'`hdl.RAM` gira nella MATLAB
+Function; done@≈341 clock). ROM Donatello via `gen_b2_rom('Donatello')`→`b2_rom_active` (gitignored, la rigenera il
+builder). Commit `a4e8d15`. **RESTA (Vivado/HDL Coder):** Task 3 sintesi Vivado OOC del decode-LUT-N (risorse assolute
+col datapath) · Task 5 verifica HDL Coder dei 6 blocchi (VHDL, LUT sintetizzata non `exp`) + figura. Doc sorgente report
+= `document/DECODE_LUT_SWEEP.md` (ora con §6 blocchi + §7 stato). Commit `454327b`/`8f7f248`/`a4e8d15`. *(Skill `fpga-expert` disponibile.)*
 
 **SP2 — Donatello + ACC-IIDM open-loop.** IN CODA (outline nel design SP1 §5): Donatello **LUT-256** + ACC-IIDM
 open-loop, plug&play HDL-ready, **NON chiudere il loop velocità interno** (la velocità arriva da fuori; il loop si chiude
