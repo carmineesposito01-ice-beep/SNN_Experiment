@@ -1,7 +1,14 @@
 function test_b2_fsm()
 %TEST_B2_FSM  [B2] Equivalenza FSM vs snn_core (entrambi FIXED) su Donatello.
 %  Se coincidono bit-exact -> la FSM cycle-based implementa la stessa aritmetica.
+%  NB: copre solo i primi 12 control-step della sequenza golden -> per l'equivalenza VERA
+%  usare `run_b2_parity_dataset` (60 traiettorie x 1000 step). Vedi HDL_PHASE §2.1.
   here = fileparts(mfilename('fullpath'));
+  % snn_b2_fsm legge b2_rom_active(): senza rigenerarla il test userebbe il champion lasciato da un
+  % run precedente (es. Leonardo dopo run_b2_parity_dataset) e fallirebbe in modo SPURIO -> il test
+  % dipenderebbe dall'ordine d'esecuzione. Rigenerare sempre la ROM del champion sotto test.
+  gen_b2_rom('Donatello');
+  clear b2_rom_active snn_b2_fsm; rehash;
   d = load(fullfile(here, 'champions_export.mat')); champs = d.champions;
   if iscell(champs), champs = [champs{:}]; end
   idx = find(arrayfun(@(c) strcmp(char(string(c.name)), 'Donatello'), champs), 1);

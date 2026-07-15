@@ -1,6 +1,12 @@
 function test_top_b2()
 %TEST_TOP_B2  [B2] Parita' del top (SNN B2 + decode) vs snn_core(fixed)+decode esatto, su xn.
+%  NB: copre solo la sequenza golden -> per l'equivalenza VERA del forward usare
+%  `run_b2_parity_dataset` (60 traiettorie x 1000 step). Vedi HDL_PHASE §2.1.
   here = fileparts(mfilename('fullpath'));
+  % la ROM (b2_rom_active) e' stato GLOBALE: senza rigenerarla il test userebbe il champion
+  % lasciato da un run precedente -> fallimento spurio dipendente dall'ordine d'esecuzione.
+  gen_b2_rom('Donatello');
+  clear b2_rom_active snn_b2_fsm; rehash;
   d = load(fullfile(here, 'champions_export.mat')); champs = d.champions;
   if iscell(champs), champs = [champs{:}]; end
   idx = find(arrayfun(@(c) strcmp(char(string(c.name)), 'Donatello'), champs), 1);

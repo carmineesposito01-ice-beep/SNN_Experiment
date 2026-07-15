@@ -74,7 +74,11 @@ function [raw, valid] = snn_b2_fsm(xn, start) %#codegen
     for r = 1:rnk
       reci(:) = reci + cast(cast(W.U(i, r), 'like', T.w) * t_lr(r), 'like', T.accw);
     end
-    Vi  = cast(Vread - bitsra(Vread, sh), 'like', T.V) + cast(Ii + reci, 'like', T.V);
+    % (Ii+reci) RESTA in T.accw (Q8.17): il cast a T.V (Q5.13) buttava i 4 bit frazionari extra
+    % di accw PRIMA del confronto di soglia -> spike decisi diversamente da snn_core quando Vi cade
+    % entro ~2^-14 da eth (misurato: 82,4% dei control-step del dataset divergenti). Vedi HDL_PHASE §2.1.
+    % Come snn_core.m:64  ->  Vi = leaky(V(i), sh) + (Ii + reci);
+    Vi  = cast(Vread - bitsra(Vread, sh), 'like', T.V) + (Ii + reci);
     eth = cast(W.bth(i), 'like', T.V) + cast(max(fatread, cast(0,'like',T.fatigue)), 'like', T.V);
     si  = Vi >= eth;
     sib = cast(si, 'like', T.V);

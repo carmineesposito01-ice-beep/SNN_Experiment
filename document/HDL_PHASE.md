@@ -79,19 +79,32 @@ Portare i 4 champion SNN (Donatello, Michelangelo, Raffaello, Leonardo) su FPGA 
 come RTL **generato dallo STESSO codice** che ha la parità bit-accurata col PyTorch — non una
 riscrittura a mano. Delivery finale = HDL sintetizzabile e 0-DSP (pesi potenza-di-2 → shift).
 
-## §2 La catena 1:1 (4 anelli, ognuno con la sua garanzia)
+## §2 La catena 1:1 (5 anelli, ognuno con la sua garanzia)
 ```
-PyTorch(fp32) ─①─ MATLAB double ─②─ MATLAB fixed(fi Q?.13) ─③─ VHDL/RTL ─④─ silicio
-   parità 2e-6       quantizz. ≤0.028      HDL Coder BIT-ESATTO      sintesi (Vivado)
+PyTorch(fp32) ─①─ MATLAB double ─②─ MATLAB fixed (snn_core) ─②bis─ B2 serializzato (snn_b2_fsm) ─③─ VHDL/RTL ─④─ silicio
+   parità 2e-6      quantizz. ≤0.028        serializzazione 1 neurone/clock      HDL Coder BIT-ESATTO     sintesi (Vivado)
 ```
 - **①** FATTO: `run_parity_tests` ~2e-6 (roundoff float).
 - **②** quantizzazione INEVITABILE ma piccola (≤0.028 su v0 a f=13) — **non** è un fallimento di conversione.
+- **②bis** ⚠️ **anello introdotto dal B2 e per mesi NON elencato qui** (era implicito in «l'FSM è un mirror bit-exact»):
+  `snn_core` → `snn_b2_fsm`. Cancello corretto = **`run_b2_parity_dataset`** (60 traj × 1000 step × 4 champion →
+  **0/240.000**). Il vecchio `run_b2_parity` (golden **16 campioni**) era **cieco** e ha lasciato passare un bug reale
+  per mesi → **§2.1**. *Lezione: ogni anello aggiunto alla catena va (a) elencato qui e (b) dotato di un cancello
+  profondo quanto l'uso reale.*
 - **③** ✅ **verificato in cosim** (xsim, 2026-07-10): TB `raw_expected.dat` → `TEST COMPLETED (PASSED)`, RTL bit-esatto vs il fixed MATLAB. Non più solo garantito.
 - **④** ✅ **synth + P&R REALI** (Vivado 2026.1, 2026-07-10, §0): LUT 44%/slice 53%, DSP 32, 0 BRAM, ~5 MHz. Resta solo la sintesi degli altri 3 champion.
 
-## ⚠️ §2.1 La parità B2 NON è verificata come si credeva (MISURATO 2026-07-14)
+## ✅ §2.1 L'anello mancante della catena: `snn_core` → `snn_b2_fsm` (BUG TROVATO E CORRETTO 2026-07-14)
 
-> **La claim «`snn_b2_fsm` è una serializzazione bit-exact di `snn_core`» vale solo per ~16 passi.**
+> **In una riga**: il B2 ha aggiunto alla catena §2 un anello **non dichiarato** — la *serializzazione*
+> `snn_core → snn_b2_fsm` — il cui cancello era profondo **16 campioni** su un uso reale di **1000**.
+> Sotto quel velo, l'FSM **non era bit-exact**: 82,4 % dei control-step del dataset divergeva.
+> **Causa trovata (1 riga), corretta, e verificata su 240.000 control-step: ora 0 divergenze.**
+
+**Stato: RISOLTO.** `snn_b2_fsm.m:77` corretto; nuovo cancello `run_b2_parity_dataset` (60 traiettorie ×
+1000 step × 4 champion → **0/240.000**); costo in area **+5 LUT (+0,1 %)**. Cronologia e prove sotto.
+
+### Com'era (il velo)
 
 **Il buco di copertura.** Il cancello `run_b2_parity` — quello che dichiara *«0 mismatch su tutti e 4 i champion»* —
 gira sulla sequenza golden `c.x_phys`, che è lunga **16 campioni**. Anche la **cosim** di Fase B era su **16 campioni**.
@@ -149,6 +162,32 @@ si può escludere che in altri regimi/champion l'effetto sia peggiore.)*
    sistematico: uno spike flippa e il **leak lo dimentica** (misurato: 0,5 → 0,019 → 0,005 → … → 0). In regimi con `Vi`
    più spesso vicino alla soglia cresce la **frequenza** dei flip, non la **severità**. Coerente con l'impatto
    funzionale misurato (−0,007 punti). **Non può essere catastrofico**: non è divergente.
+
+### La correzione (applicata 2026-07-14)
+```matlab
+% snn_b2_fsm.m:77 — PRIMA
+Vi = cast(Vread - bitsra(Vread,sh),'like',T.V) + cast(Ii + reci, 'like', T.V);
+% DOPO — (Ii+reci) resta in accw, come snn_core.m:64
+Vi = cast(Vread - bitsra(Vread,sh),'like',T.V) + (Ii + reci);
+```
+
+| verifica | esito |
+|---|---|
+| **`run_b2_parity_dataset`** (NUOVO cancello: 60 traiettorie × 1000 step × **4 champion**) | **0 / 240.000** control-step divergenti · 0/60 traiettorie · max raw **0** |
+| `run_b2_parity` (cancello originale, golden 16 campioni) | 0 mismatch su tutti e 4 — **nessuna regressione** |
+| **Costo in area** (Vivado OOC, `xc7z020clg400-1`, stesso flusso) | `snn_top_b2` **4625 → 4630 LUT** = **+5 LUT (+0,1 %)** · FF 1584 = · DSP 38 = · BRAM 2 = · CARRY 545 → 543 |
+
+**Perché costa così poco**: tenere 4 bit frazionari in più tocca solo sommatore e comparatore della membrana; le
+moltiplicazioni (e quindi i DSP) non cambiano. *(Nota: i 4625 LUT non sono confrontabili con i 4223 di
+`results.csv` Fase B, che misura `util_b2_flat` — scopo diverso. È valido il **delta** 4625→4630, stessa sessione.)*
+
+### Conseguenze
+- **Il bitstream esistente è STALE**: è stato costruito con l'FSM difettosa → va rigenerato quando serve.
+- **Fase B regge**: +5 LUT è dentro il rumore; nessuna conclusione di potenza/area cambia.
+- **La cosim ③ restava valida** anche prima: verificava *VHDL == MATLAB fixed*, ed entrambi avevano lo stesso difetto.
+  L'anello rotto era **a monte**: `snn_core → snn_b2_fsm`, che §2 non elencava esplicitamente.
+- **Cancello da usare d'ora in poi**: `run_b2_parity_dataset` (il golden a 16 campioni **non basta** e non deve più
+  essere considerato una prova di equivalenza).
 
 > **Lezione di metodo**: un cancello verde va letto insieme a **su cosa gira**. 16 campioni di una sequenza non sono
 > una prova di equivalenza per un sistema con stato che evolve su 1000 passi.
