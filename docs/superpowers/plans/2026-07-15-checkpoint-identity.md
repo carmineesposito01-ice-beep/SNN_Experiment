@@ -92,7 +92,7 @@ def test_name_signature_names_unsupported_variants_instead_of_calling_them_basel
         name, supported, reason = _name_signature(build_model(variant).state_dict())
         assert name == expected, f"{variant} resolved to {name!r}"
         assert supported is False
-        assert reason and variant.split("_")[0] in reason.lower() or reason
+        assert reason, f"{variant} refused without a reason"
 
 
 def test_name_signature_unknown_signature():
@@ -611,9 +611,9 @@ def test_save_checkpoint_writes_a_self_describing_arch_field(tmp_path):
 
 
 def test_save_checkpoint_does_not_break_any_variant(tmp_path):
-    """TEETH: _CF_FSNN_VariantBase (core/network.py:703-713) sets only hidden_size and max_delay --
-    it has no rank/bit_shift. A plain model.rank would raise here and break the TRAINING of the
-    stacked/attn/wta variants: a failure outside the simulator that no sim test would ever catch."""
+    """TEETH: bit_shift exists ONLY on CF_FSNN_Net -- measured absent on 9 of the 10 variants below,
+    EventProp included. A plain model.bit_shift raises here and breaks TRAINING: a failure outside
+    the simulator that no sim test would ever catch. (hidden_size/rank/max_delay are on all of them.)"""
     import torch
     import train
     from core.network import build_model
@@ -669,8 +669,9 @@ def save_checkpoint(model, optimizer, epoch, val_loss, path):
         # deducibile dalla firma baseline (delays e' (H,IN) qualunque esso sia): veniva quindi
         # rimesso al default 6, scartando in silenzio le sinapsi con delay maggiore.
         # Si legge dal MODELLO, non da args: save_checkpoint non ha args, e i default CLI sono
-        # None (build_model li risolve contro la config). getattr: _CF_FSNN_VariantBase espone
-        # solo hidden_size/max_delay -> model.rank romperebbe il training di stacked/attn/wta.
+        # None (e' build_model a risolverli contro la config).
+        # getattr NON e' cautela di stile: bit_shift esiste SOLO su CF_FSNN_Net (misurato: assente
+        # su 9 varianti su 10, EventProp compreso) -> un accesso diretto romperebbe il training.
         'arch'       : {'class'      : type(model).__name__,
                         'hidden_size': getattr(model, 'hidden_size', None),
                         'rank'       : getattr(model, 'rank', None),
@@ -701,8 +702,8 @@ trained from now on.
 
 Read from the model, not from args: save_checkpoint has no args, the CLI defaults
 are None (build_model resolves them), and getattr is mandatory because
-_CF_FSNN_VariantBase exposes no rank/bit_shift -- model.rank would break the
-training of the stacked/attn/wta variants."
+bit_shift exists only on CF_FSNN_Net (measured: absent on 9 of 10 variants,
+EventProp included) -- a direct model.bit_shift would break their training."
 ```
 
 ---
@@ -1070,5 +1071,5 @@ git push origin Simulator
 ## Notes for whoever executes this
 
 - **The cross-check direction is the trap.** The inference is a lower bound. `declared > inferred` is normal; only `declared < inferred` is impossible. An earlier draft of the spec had this backwards and would have failed a normal case — the test in Task 2 pins both directions on purpose.
-- **`train.py` is not the simulator.** It runs the real Azure trainings. Task 1's `getattr` is not defensive padding: `_CF_FSNN_VariantBase` genuinely has no `rank`, and a plain attribute read breaks training for five variants. The test calls `save_checkpoint` on all of them for exactly this reason.
+- **`train.py` is not the simulator.** It runs the real Azure trainings. The `getattr` is not defensive padding — but mind WHICH attribute: `hidden_size`/`rank`/`max_delay` are on every variant, while **`bit_shift` exists only on `CF_FSNN_Net`** (measured: absent on 9 of 10, EventProp included). A direct `model.bit_shift` breaks training. An earlier draft of this plan blamed `rank`, and the test written against that wrong reason **passed a broken implementation** — right conclusion, wrong reason.
 - **Do not "support" the refused variants** because it looks easy. `attn`/`wta` do load through the frozen backend — and the graph then draws a readout path that ignores `Wq/Wk/Wv` and `inh_w_in`. It would not crash; it would lie. That is why they are refused.

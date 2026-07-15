@@ -128,9 +128,14 @@ Read the values **from the model, not from `args`** — three verified reasons:
     }, path)
 ```
 
-⚠️ **`getattr` is not defensive padding, it is required**: `_CF_FSNN_VariantBase._init_common`
-(`core/network.py:703-713`) sets **only** `hidden_size` and `max_delay` — `rank` and `bit_shift` do not
-exist on the stacked/attn/wta/multi_rate variants. `model.rank` would raise and break their training.
+⚠️ **`getattr` is required, but not for the reason an earlier draft of this spec gave.** That draft said
+`rank` is missing on the variants and `model.rank` would break their training. **Measured, that is
+false**: `hidden_size`, `rank` and `max_delay` are present on all 10 variants. What is actually missing
+is **`bit_shift` — absent on 9 of 10, EventProp included** (only `CF_FSNN_Net` has it). So a direct
+`model.bit_shift` raises and breaks training, while `model.rank` would have been harmless. Right
+conclusion, wrong reason — and the test written against the wrong reason **passed a broken
+implementation**. The test now targets `bit_shift`, and was confirmed to fail without the `getattr`
+(`AttributeError: 'CF_FSNN_Net_EventProp_Full' object has no attribute 'bit_shift'`).
 
 `class` rather than `variant`: `save_checkpoint` cannot see `--training_method` (`train.py:1213`, the
 single unified CLI for all 11 variants — note `--arch_variant` **does not exist** in the current trainer;
@@ -240,10 +245,10 @@ The resolver is pure → tested without Qt on synthetic state-dicts:
 7. **GUI survives a bad file** — opening a rubbish `.pt` shows a message and leaves the running champion
    in place (no torn-down cockpit, no traceback).
 8. **`arch` round-trip** — a checkpoint saved by the trainer resolves at level 1 with nothing inferred.
-9. **`save_checkpoint` survives every variant (teeth)** — call it on a model of each of the 11 variants
-   `build_model` can produce and assert it does not raise. `_CF_FSNN_VariantBase` has no `rank`/
-   `bit_shift`, so a plain `model.rank` breaks stacked/attn/wta **training** — a failure outside the
-   simulator entirely, which no sim test would ever catch.
+9. **`save_checkpoint` survives every variant (teeth)** — call it on a model of each variant
+   `build_model` can produce and assert it does not raise. **`bit_shift` exists only on
+   `CF_FSNN_Net`** (measured: absent on 9 of 10, EventProp included), so a direct `model.bit_shift`
+   breaks **training** — a failure outside the simulator entirely, which no sim test would catch.
 10. **Core bit-identity** — the frozen six untouched; full sim suite green.
 
 **Where the tests live**: `tests/test_champion_io.py` — `champion_io` is `utils/`, not `sim/`, and that

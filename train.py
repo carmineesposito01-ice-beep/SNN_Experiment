@@ -805,6 +805,20 @@ def save_checkpoint(model, optimizer, epoch, val_loss, path):
         'val_loss'   : val_loss,
         'model_state': model.state_dict(),
         'optim_state': optimizer.state_dict(),
+        # Checkpoint auto-descrittivo. Il .pt non ha mai portato metadata, e max_delay NON e'
+        # deducibile dalla firma baseline (delays e' (H,IN) qualunque esso sia): veniva quindi
+        # rimesso al default della config, scartando in silenzio le sinapsi con delay maggiore.
+        # Si legge dal MODELLO, non da args: save_checkpoint non ha args, e i default CLI sono
+        # None (e' build_model a risolverli contro la config).
+        # getattr NON e' cautela di stile: bit_shift esiste SOLO su CF_FSNN_Net (misurato: assente
+        # su 9 varianti su 10, EventProp compreso), quindi un accesso diretto alzerebbe qui e
+        # romperebbe il training. hidden_size/rank/max_delay ci sono su tutte -- il getattr li
+        # copre per uniformita' e per non dipendere da quel dettaglio.
+        'arch'       : {'class'      : type(model).__name__,
+                        'hidden_size': getattr(model, 'hidden_size', None),
+                        'rank'       : getattr(model, 'rank', None),
+                        'max_delay'  : getattr(model, 'max_delay', None),
+                        'bit_shift'  : getattr(model, 'bit_shift', None)},
     }, path)
 
 

@@ -214,3 +214,54 @@ def test_load_champion_still_loads_the_four_champions_identically():
         h = load_champion(os.path.join(REPO, "champions", tag, "best_model.pt"))
         assert h.variant == fam and h.topology["rank"] == rank
         assert h.identity.max_delay == 6
+
+
+# ---- the trainer writes a self-describing checkpoint ---------------------------------------------
+
+def test_save_checkpoint_writes_a_self_describing_arch_field(tmp_path):
+    import train
+    from core.network import build_model
+    from utils.champion_io import resolve_identity
+
+    model = build_model("baseline", hidden_size=32, rank=8, max_delay=12)
+    opt = torch.optim.SGD(model.parameters(), lr=0.1)
+    p = tmp_path / "ck.pt"
+    train.save_checkpoint(model, opt, epoch=3, val_loss=0.5, path=str(p))
+
+    ck = torch.load(p, map_location="cpu", weights_only=False)
+    assert ck["arch"]["max_delay"] == 12          # the RESOLVED value, not the CLI default (None)
+    assert ck["arch"]["hidden_size"] == 32 and ck["arch"]["rank"] == 8
+    assert ck["arch"]["class"] == "CF_FSNN_Net"
+    idy = resolve_identity(ck["model_state"], arch=ck["arch"])
+    assert idy.max_delay == 12 and idy.sources["max_delay"] == "arch"
+    assert idy.max_delay_p_underestimate is None      # level 1: nothing is inferred
+
+
+def test_save_checkpoint_does_not_break_any_variant(tmp_path):
+    """TEETH: bit_shift exists ONLY on CF_FSNN_Net -- measured absent on 9 of the 10 variants below,
+    EventProp included. A plain model.bit_shift raises here and breaks TRAINING: a failure outside
+    the simulator that no sim test would ever catch. (hidden_size/rank/max_delay are on all of them:
+    an earlier version of this docstring blamed rank, which was wrong.)"""
+    import train
+    from core.network import build_model
+    for variant in ("baseline", "eventprop_alif_full", "stacked_2", "stacked_2_skip",
+                    "stacked_3_thin", "attn", "wta", "multi_rate", "bptt_lif_simple",
+                    "eventprop_lif_simple"):
+        model = build_model(variant)
+        opt = torch.optim.SGD(model.parameters(), lr=0.1)
+        train.save_checkpoint(model, opt, epoch=0, val_loss=1.0,
+                              path=str(tmp_path / f"{variant}.pt"))   # must not raise
+        ck = torch.load(tmp_path / f"{variant}.pt", map_location="cpu", weights_only=False)
+        assert ck["arch"]["class"] == type(model).__name__
+
+
+def test_load_checkpoint_still_works_with_the_extra_key(tmp_path):
+    """Additive: train.py's own resume path reads by key (train.py:811-816)."""
+    import train
+    from core.network import build_model
+    model = build_model("baseline")
+    opt = torch.optim.SGD(model.parameters(), lr=0.1)
+    p = str(tmp_path / "ck.pt")
+    train.save_checkpoint(model, opt, epoch=7, val_loss=0.25, path=p)
+    epoch, val = train.load_checkpoint(build_model("baseline"), opt, p, "cpu")
+    assert epoch == 7 and abs(val - 0.25) < 1e-9
