@@ -59,3 +59,44 @@ def test_load_champion_strict_and_forward(name, expected_variant):
 def test_unknown_family_raises():
     with pytest.raises(ValueError):
         detect_family({"foo.bar": torch.zeros(1)})
+
+
+# ---- identity: naming every variant, refusing the unsupported ones BY NAME ----------------------
+
+def test_name_signature_recognises_the_two_supported_families():
+    from utils.champion_io import _name_signature
+    from core.network import build_model
+    for variant in ("baseline", "eventprop_alif_full"):
+        name, supported, reason = _name_signature(build_model(variant).state_dict())
+        assert name == variant and supported is True and reason is None
+
+
+def test_name_signature_names_unsupported_variants_instead_of_calling_them_baseline():
+    """Today attn/wta resolve to 'baseline' and are only saved by a torch RuntimeError about
+    tensors; stacked_* raises a generic ValueError. Naming them is what makes an honest refusal
+    possible."""
+    from utils.champion_io import _name_signature
+    from core.network import build_model
+    for variant, expected in (("attn", "attn"), ("wta", "wta"),
+                              ("stacked_2", "stacked_2"), ("stacked_2_skip", "stacked_2_skip"),
+                              ("stacked_3_thin", "stacked_3")):
+        name, supported, reason = _name_signature(build_model(variant).state_dict())
+        assert name == expected, f"{variant} resolved to {name!r}"
+        assert supported is False
+        assert reason, f"{variant} refused without a reason"
+
+
+def test_name_signature_unknown_signature():
+    from utils.champion_io import _name_signature
+    name, supported, reason = _name_signature({"nonsense.weight": None})
+    assert name == "unknown" and supported is False and "signature" in reason.lower()
+
+
+def test_multi_rate_is_accepted_as_baseline():
+    """multi_rate is numerically identical to baseline once loaded (ALIFCell.forward uses only
+    leak_div). It needs no dedicated handling -- but the resolver must not claim it recognised
+    the variant."""
+    from utils.champion_io import _name_signature
+    from core.network import build_model
+    name, supported, _ = _name_signature(build_model("multi_rate").state_dict())
+    assert name == "baseline" and supported is True

@@ -27,29 +27,59 @@ _EVENTPROP_READOUT = "layer_out.weight"
 _BASELINE_READOUT = "layer_out.fc_weight"
 
 
-def detect_family(state_dict) -> str:
-    """Return the ``build_model`` variant for a champion ``state_dict``.
+# Variants build_model can produce but the simulator cannot SHOW. Naming them is what separates
+# "I know what this is and cannot serve it" from "I have no idea what this is": today attn/wta carry
+# the baseline signature plus an extra block, so they are silently called "baseline" and only
+# strict=True stops them, with a message about tensors.
+_UNSUPPORTED = {
+    "attn": ("Wq", "the attention block Wq/Wk/Wv is not on the readout path the viewer draws"),
+    "wta": ("inh_w_in", "the lateral-inhibition weight inh_w_in is not shown by the viewer"),
+}
 
-    Primary discriminator is the readout key; it is then cross-checked against the ALIF
-    nesting signature (flat ``layer_hidden.base_threshold`` vs nested
-    ``layer_hidden.cell.base_threshold``) so a malformed/hybrid state-dict fails loudly
-    instead of loading wrong. Raises ``ValueError`` on unknown/ambiguous signatures.
-    """
+
+def _name_signature(state_dict):
+    """(name, supported, reason) for a state-dict. Never raises: the caller decides what to do."""
     keys = set(state_dict.keys())
+
+    # Stacked family: several hidden layers. The backend reads model.layer_hidden (singular), so
+    # these cannot be observed without a new backend -- out of scope, see the cycle-2 spec.
+    stacked_idx = [int(k.split(".")[1]) for k in keys if k.startswith("layers_hidden.")]
+    if stacked_idx:
+        n = max(stacked_idx) + 1
+        return (f"stacked_{n}", False,
+                f"stacked variant with {n} hidden layers: the viewer reads a single hidden layer")
+    if "skip_weight" in keys and any(k.startswith("layer_hidden_0.") for k in keys):
+        return ("stacked_2_skip", False,
+                "stacked variant with a skip connection: the viewer reads a single hidden layer")
+
+    # attn/wta = baseline signature PLUS an extra block -> must be tested BEFORE baseline.
+    for name, (marker, why) in _UNSUPPORTED.items():
+        if marker in keys:
+            return (name, False, why)
+
     ep_readout = _EVENTPROP_READOUT in keys
     bl_readout = _BASELINE_READOUT in keys
     flat_alif = "layer_hidden.base_threshold" in keys
     cell_alif = "layer_hidden.cell.base_threshold" in keys
-
     if ep_readout and not bl_readout and flat_alif and not cell_alif:
-        return "eventprop_alif_full"
+        return ("eventprop_alif_full", True, None)
     if bl_readout and not ep_readout and cell_alif and not flat_alif:
-        return "baseline"
-    raise ValueError(
-        "Cannot identify champion family from state-dict signature "
-        f"(readout: eventprop={ep_readout} baseline={bl_readout}; "
-        f"alif: flat={flat_alif} cell={cell_alif}). Keys: {sorted(keys)}"
-    )
+        return ("baseline", True, None)
+    return ("unknown", False,
+            f"unrecognised state-dict signature (readout: eventprop={ep_readout} "
+            f"baseline={bl_readout}; alif: flat={flat_alif} cell={cell_alif})")
+
+
+def detect_family(state_dict) -> str:
+    """Return the ``build_model`` variant for a champion ``state_dict``.
+
+    Thin wrapper over ``_name_signature`` for callers that want the family or a loud failure.
+    Raises ``ValueError`` on unknown/ambiguous/unsupported signatures.
+    """
+    name, supported, reason = _name_signature(state_dict)
+    if not supported:
+        raise ValueError(f"Cannot load this checkpoint: {name} — {reason}")
+    return name
 
 
 def _infer_topology(state_dict, variant) -> dict:
