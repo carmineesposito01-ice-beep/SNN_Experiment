@@ -20,5 +20,5 @@ function [p, accel] = snn_cl_step(x_phys, W, rst) %#codegen
   raw = snn_core(xn, W, T, false);
   pf  = snn_decode_lut(raw, 64);                            % 64 = decode del campione
   p   = double(pf(:));
-  accel = acc_iidm_open(x_phys(1), x_phys(2), x_phys(3), x_phys(4), p, rst);
+  accel = acc_iidm_open(x_phys(1), x_phys(2), x_phys(3), x_phys(4), p, rst, acc_types('double'));
 end

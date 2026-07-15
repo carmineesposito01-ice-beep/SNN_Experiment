@@ -46,6 +46,9 @@ function code = plant_code()
 %  E' l'unica fonte, condivisa col blocco SP2 `Donatello_ACC_IIDM`. Cancello: `run_plant_parity`.
   here = fileparts(mfilename('fullpath'));
   src = fileread(fullfile(here, 'acc_iidm_open.m'));
+  % acc_iidm_open e' type-parametrico (SP3) e chiama acc_types: va inlinato anche quello, se no la
+  % chart perde l'autosufficienza e il blocco non gira su una macchina senza il path del progetto.
+  srcT = fileread(fullfile(here, 'acc_types.m'));
   L = {
     'function out = PLANT(in)'
     '%#codegen'
@@ -64,7 +67,7 @@ function code = plant_code()
     '    rst = false;'
     '  end'
     '  dv = v - vl;'
-    '  accel = acc_iidm_open(s, v, dv, vl, [v0; T; s0; a; b], rst);'
+    '  accel = acc_iidm_open(s, v, dv, vl, [v0; T; s0; a; b], rst, acc_types(''double''));'
     '  % --- integrazione balistica (s usa la v vecchia) ---'
     '  v_old = v;'
     '  v = min(max(v + accel*DT, 0), 1.2*v0);'
@@ -74,5 +77,5 @@ function code = plant_code()
     ''
     '% ==== funzione locale INLINATA dal sorgente vero (build_plant_lib la legge a build-time) ===='
   };
-  code = [strjoin(L, newline) newline newline src];
+  code = [strjoin(L, newline) newline newline src newline newline srcT];
 end

@@ -1,4 +1,4 @@
-function accel = acc_iidm_open(s, v, dv, v_l, p, rst) %#codegen
+function accel = acc_iidm_open(s, v, dv, v_l, p, rst, T) %#codegen
 %ACC_IIDM_OPEN  ACC-IIDM **open-loop**: accel = f(stato, parametri). NON integra v ne' s.
 %  s, v, dv, v_l : stato fornito DA FUORI (il loop lo chiude il sistema che testa)
 %  p             : [v0; T; s0; a; b]
@@ -11,6 +11,12 @@ function accel = acc_iidm_open(s, v, dv, v_l, p, rst) %#codegen
 %  ⚠️ DA CHIAMARE **UNA VOLTA PER CONTROL-STEP** (DT = 0.1 s): il filtro OU stima a_l da Δv_l/DT.
 %     Chiamarla a ogni clock farebbe vedere Δv_l = 0 per 340 campioni su 341 -> a_l ~ 0, in silenzio.
 %     Vedi docs/superpowers/specs/2026-07-14-sp2-donatello-acc-iidm-design.md §5.
+%  T (opz.) : prototipi di tipo (acc_types). Assente/vuoto -> DOUBLE (riferimento + plant
+%             cf_plant_lib/ACC_IIDM); popolato -> FIXED (blocco HDL-ready Donatello_ACC_IIDM).
+%             Type-parametrico come snn_core: UNICA fonte, perche' due implementazioni della stessa
+%             matematica divergerebbero in silenzio (e' la lezione di HDL_PHASE §2.1).
+  if nargin < 7 || isempty(T), T = acc_types('double'); end
+  isFx = ~isa(T.out, 'double'); %#ok<NASGU>   % usato dal path fixed (SP3 Task 3)
   DT = 0.1; ALPHA = exp(-DT/1.0); COOL = 0.99;
   v0 = max(p(1), 1e-3); T = max(p(2), 1e-3); s0 = p(3); a = max(p(4), 1e-3); b = max(p(5), 1e-3);
 
