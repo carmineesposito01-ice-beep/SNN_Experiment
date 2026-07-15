@@ -44,11 +44,11 @@ PATH="$ENV:$ENV/Library/bin:$ENV/Scripts:$PATH" "$ENV/python.exe" -m pytest test
 | File | Responsibility |
 |---|---|
 | `sim/scenario_spec.py` | `Block.bias` + `effective_style` + per-block dispatch in `materialise` + JSON. Stays pure. ~+30 lines. |
-| `sim/ui/scenario_page.py` | The composer. The pad switches from editing the style to editing **this block's bias**, with the neutral as a second marker. Qt only. |
+| `sim/ui/scenario_page.py` | The composer, the complete widgets, the neutral's control. The pad switches from editing the style to editing **this block's bias**, with the neutral as a second marker. Qt only. |
 | `tests/test_sim_scenario_spec.py` | The bias, purely. |
 | `tests/test_sim_ui_smoke.py` | The composer. |
 
-Order: model → JSON → composer → verification.
+Order: model → JSON → **one owner for the params** → composer → the neutral's control → budget → verification.
 
 ---
 
@@ -328,11 +328,28 @@ value, so a list would break the round-trip while looking right."
 
 ---
 
-### Task 3: The block composer
+### Task 3: The params get ONE owner — the widgets
 
 **Files:**
-- Modify: `sim/ui/scenario_page.py` (whole page: `StylePad` + `ScenarioPage`)
+- Modify: `sim/ui/scenario_page.py` (`ScenarioPage.__init__`, `_params_for`)
 - Test: `tests/test_sim_ui_smoke.py` (append)
+
+⚠️ **Why this task exists.** The first draft of this plan kept the composed block's params in a
+`_composer_params` dict *beside* the widgets. Two owners for one state — the exact defect cycle 3 paid
+for (the pad that redrew the curve without moving the dot). It also crashed: MEASURED
+`KeyError: 'to_v'` when `compose_new` set the new kind while the dict still held the old kind's params.
+
+The fix is to delete the dict and DERIVE the params from the widgets. That only works if the widgets
+can represent every param — and MEASURED, they cannot:
+
+| block reopened | what Apply writes back | |
+|---|---|---|
+| `preset {"name": "hard_brake"}` | `{"name": "stop_and_go"}` | **lost** |
+| `sine {"amp": 5.0, "period": 60}` | `{"amp": 2.5, "period": 80}` | **lost** |
+
+`_params_for` hardcodes the preset name and the sine period. So **1 of the 9 library presets is
+reachable from the builder** — which quietly halves the original request ("combinazione di quelli
+esistenti"): today you can only combine `stop_and_go` with itself.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -348,6 +365,195 @@ def _spec3(blocks, a=2.0, b=4.0):
                         s_init=33.5, v_init=21.0)
 
 
+def test_every_library_preset_is_reachable_from_the_builder(qapp):
+    """MEASURED before this task: _params_for hardcoded "stop_and_go", so 1 preset of 9 was
+    reachable and 'combine the existing scenarios' meant combining one with itself."""
+    from sim.scenario import scenario_library
+    page = _page()
+    names = sorted(s.name for s in scenario_library(page._params_gt, N=600,
+                                                    rng=np.random.default_rng(0), include_tail=True))
+    have = sorted(page._preset.itemText(i) for i in range(page._preset.count()))
+    assert have == names, f"{len(have)} presets offered of {len(names)} in the library"
+    page._kind.setCurrentText("preset")
+    page._preset.setCurrentText("hard_brake")
+    assert page._params_for("preset") == {"name": "hard_brake"}     # not the hardcoded default
+
+
+def test_widgets_can_represent_every_kind_s_params(qapp):
+    """TEETH: this is what lets the params have ONE owner. A kind whose params the widgets cannot
+    express would force a shadow dict back into existence -- and silently rewrite blocks on Apply."""
+    page = _page()
+    for kind, params in [("preset", {"name": "cut_in"}), ("const", {"v": 12.0}),
+                         ("ramp", {"to_v": 3.5}), ("sine", {"amp": 5.0, "period": 60})]:
+        page._load_into_widgets(kind, 200, params, None)
+        assert page._params_for(kind) == params, f"{kind}: {page._params_for(kind)} != {params}"
+
+
+def test_changing_any_input_redraws_the_composer(qapp):
+    """'Build the piece while you see it' means every input is live -- not just the pad."""
+    from sim.scenario_spec import Block
+    page = _page()
+    page.set_spec(_spec3([Block("ramp", 300, {"to_v": 2.0})]))
+    page.compose_new("ramp", ticks=300, params={"to_v": 18.0})
+    for widget_change in (lambda: page._value.setValue(4.0),
+                          lambda: page._ticks.setValue(200),
+                          lambda: page._kind.setCurrentText("const")):
+        before = page._composer_curve.getOriginalDataset()[1].copy()
+        widget_change()
+        after = page._composer_curve.getOriginalDataset()[1]
+        assert not np.array_equal(before, after), "an input changed and the preview did not"
+```
+
+- [ ] **Step 2: Run to verify they fail**
+
+```bash
+ENV=C:/Miniconda/envs/cf_sim
+PATH="$ENV:$ENV/Library/bin:$ENV/Scripts:$PATH" "$ENV/python.exe" -m pytest tests/test_sim_ui_smoke.py -q -k "preset_is_reachable or represent_every_kind or redraws_the_composer"
+```
+
+Expected: FAIL — `AttributeError: 'ScenarioPage' object has no attribute '_preset'`.
+
+- [ ] **Step 3: Implement**
+
+In `sim/ui/scenario_page.py`, import the library and the kinds at the top:
+
+```python
+from sim.scenario import scenario_library
+from sim.scenario_spec import (A_MAX_RANGE, B_MAX_RANGE, _KINDS, Block, LeaderStyle, ScenarioSpec,
+                               materialise)
+```
+
+In `ScenarioPage.__init__`, replace the controls row (`:70-82`):
+
+```python
+        self._loading = False        # re-entrancy guard: setValue() fires valueChanged
+        controls = QHBoxLayout()
+        self._kind = QComboBox()
+        self._kind.addItems(list(_KINDS))
+        self._ticks = QSpinBox(); self._ticks.setRange(1, 600); self._ticks.setValue(150)
+        self._value = QDoubleSpinBox(); self._value.setRange(0.0, 40.0); self._value.setValue(5.0)
+        self._preset = QComboBox()
+        self._preset.addItems(sorted(s.name for s in scenario_library(
+            self._params_gt, N=self._N, rng=np.random.default_rng(0), include_tail=True)))
+        self._period = QSpinBox(); self._period.setRange(4, 600); self._period.setValue(80)
+        self._add = QPushButton("Aggiungi blocco"); self._add.clicked.connect(self._on_add)
+        self._del = QPushButton("Rimuovi"); self._del.clicked.connect(self._on_del)
+        self._use = QPushButton("Usa questo scenario"); self._use.clicked.connect(self._on_use)
+        self._value_lbl, self._period_lbl = QLabel("valore"), QLabel("periodo")
+        for w in (QLabel("blocco"), self._kind, QLabel("durata"), self._ticks,
+                  self._preset, self._value_lbl, self._value, self._period_lbl, self._period,
+                  self._add, self._del, self._use):
+            controls.addWidget(w)
+        controls.addStretch(1)
+        root.addLayout(controls)
+
+        # every input is live: "build the piece while you see it" is false if only the pad redraws
+        self._kind.currentTextChanged.connect(self._on_kind_changed)
+        for sig in (self._ticks.valueChanged, self._value.valueChanged,
+                    self._period.valueChanged, self._preset.currentTextChanged):
+            sig.connect(self._refresh_composer)
+```
+
+⚠️ `scenario_library` is already called on **every** `materialise` with a preset block
+(`_preset_samples`), inside the measured 3.68 ms — so calling it once at startup costs nothing new.
+
+Replace `_params_for` (`:129-132`) and add the kind-driven visibility:
+
+```python
+    def _params_for(self, kind):
+        """The params of the block being composed, DERIVED from the widgets.
+
+        The widgets are the only owner. A shadow dict beside them was tried and it did what two
+        owners always do: it crashed (new kind + old params) and it silently rewrote a reopened
+        block's params on Apply.
+        """
+        v = float(self._value.value())
+        return {"preset": {"name": self._preset.currentText()},
+                "const": {"v": v},
+                "ramp": {"to_v": v},
+                "sine": {"amp": v, "period": int(self._period.value())}}[kind]
+
+    def _on_kind_changed(self, kind):
+        """Show only the inputs this kind actually has: an input that does nothing is a lie."""
+        is_preset, is_sine = kind == "preset", kind == "sine"
+        self._preset.setVisible(is_preset)
+        for w in (self._value_lbl, self._value):
+            w.setVisible(not is_preset)
+        for w in (self._period_lbl, self._period):
+            w.setVisible(is_sine)
+        self._value_lbl.setText("ampiezza" if is_sine else "valore")
+        self._refresh_composer()
+
+    def _load_into_widgets(self, kind, ticks, params, bias):
+        """Write a block INTO the widgets -- they are the owner, so this is how a block is opened.
+
+        Guarded: each setValue/setCurrentText fires its signal, and refreshing four times while the
+        widgets are half-written is waste, not a bug (every intermediate state is still VALID,
+        because the params are derived, never stored).
+        """
+        self._loading = True
+        try:
+            self._kind.setCurrentText(kind)
+            self._ticks.setValue(int(ticks))
+            if kind == "preset":
+                self._preset.setCurrentText(str(params["name"]))
+            elif kind == "sine":
+                self._value.setValue(float(params["amp"]))
+                self._period.setValue(int(params["period"]))
+            else:
+                self._value.setValue(float(params["v" if kind == "const" else "to_v"]))
+            na, nb = self._pad._neutral
+            self._pad.set_point(na + (bias[0] if bias else 0.0),
+                                nb + (bias[1] if bias else 0.0), emit=False)
+        finally:
+            self._loading = False
+        self._on_kind_changed(kind)          # visibility + one refresh, once, at the end
+```
+
+⚠️ `sine`'s amplitude was `0.5 * value`; it is now the value itself. The halving was an arbitrary
+indirection that made `amp=5.0` unrepresentable (it needed `value=10.0`) — one number, one meaning.
+
+- [ ] **Step 4: Run to verify they pass**
+
+```bash
+ENV=C:/Miniconda/envs/cf_sim
+PATH="$ENV:$ENV/Library/bin:$ENV/Scripts:$PATH" "$ENV/python.exe" -m pytest tests/test_sim_ui_smoke.py -q -k "preset_is_reachable or represent_every_kind or redraws_the_composer"
+```
+
+Expected: PASS. These call `compose_new` / `_refresh_composer` / `_pad._neutral`, which Task 4 builds —
+so **run Tasks 3 and 4 as one red→green cycle** rather than leaving stubs behind. Task 3 is split out
+because it is a distinct decision with its own commit, not because it lands alone.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add sim/ui/scenario_page.py tests/test_sim_ui_smoke.py
+git commit -m "feat(sim): the composed block's params have one owner -- the widgets
+
+Derived from the widgets, never stored beside them. The shadow dict this replaces
+did what two owners always do: it crashed (KeyError when the kind changed before
+the params did) and it silently rewrote a reopened block on Apply.
+
+One owner forces the widgets to represent every param, which is how this fixes a
+measured cycle-3 limitation: the preset name was hardcoded, so 1 of the 9 library
+presets was reachable and 'combine the existing scenarios' meant combining
+stop_and_go with itself. The sine's period was hardcoded at 80 the same way.
+
+Every input is now live, not just the pad -- 'build the piece while you see it' is
+false if changing the duration does nothing."
+```
+
+---
+
+### Task 4: The block composer
+
+**Files:**
+- Modify: `sim/ui/scenario_page.py` (`StylePad` + `ScenarioPage`)
+- Test: `tests/test_sim_ui_smoke.py` (append + rewrite two cycle-3 tests)
+
+- [ ] **Step 1: Write the failing tests**
+
+```python
 def test_composer_preview_starts_where_the_previous_blocks_left_off(qapp):
     """TEETH: this is the claim the whole composer rests on. A preview that always started from
     v_init would look plausible and be a lie for every block after the first."""
@@ -373,26 +579,33 @@ def test_composer_preview_equals_the_scenario_slice_after_add(qapp):
 
 
 def test_composer_pad_edits_the_bias_and_shows_the_neutral(qapp):
-    from sim.scenario_spec import Block
+    from sim.scenario_spec import Block, LeaderStyle
     page = _page()
     page.set_spec(_spec3([Block("ramp", 600, {"to_v": 2.0})], a=2.0, b=4.0))
     page.compose_new("ramp", ticks=300, params={"to_v": 2.0})
-    page._pad.set_point(3.0, 7.0)              # the ABSOLUTE point the user drops
+    page._pad.set_point(3.0, 7.0)               # the ABSOLUTE point the user drops
     assert page._composer_bias() == (1.0, 3.0)  # stored as a bias off the neutral (2,4)
     assert page._pad._neutral == (2.0, 4.0)     # and the neutral is on screen as a second marker
+    assert page._spec.style == LeaderStyle(2.0, 4.0)   # the pad did NOT move the driver
 
 
-def test_clicking_a_timeline_row_reopens_it_in_the_composer(qapp):
+def test_reopening_a_row_round_trips_the_block_exactly(qapp):
+    """TEETH: MEASURED to corrupt before Task 3 -- a reopened preset came back as stop_and_go and a
+    sine came back with period 80. Reopen-then-Apply with no edit must be the identity."""
     from sim.scenario_spec import Block
     page = _page()
-    page.set_spec(_spec3([Block("ramp", 300, {"to_v": 2.0}),
-                          Block("const", 300, {"v": 8.0}, bias=(1.0, 2.0))]))
-    page._list.setCurrentRow(1)
-    page._on_row_selected(1)
-    assert page._composer_kind() == "const"
-    assert page._composer_bias() == (1.0, 2.0)  # its bias came back too
-    page._on_add()                              # Add acts as Apply on an open row
-    assert len(page._spec.blocks) == 2          # replaced, not appended
+    blocks = [Block("ramp", 150, {"to_v": 2.0}),
+              Block("preset", 150, {"name": "hard_brake"}),
+              Block("sine", 150, {"amp": 5.0, "period": 60}, bias=(1.0, 2.0)),
+              Block("const", 150, {"v": 8.0})]
+    page.set_spec(_spec3(blocks))
+    for i, original in enumerate(blocks):
+        page._on_row_selected(i)
+        assert page._composer_kind() == original.kind
+        assert page._composer_bias() == original.bias
+        page._on_add()                                    # Add acts as Apply on an open row
+        assert len(page._spec.blocks) == 4                # replaced, not appended
+        assert page._spec.blocks[i] == original, f"row {i}: {page._spec.blocks[i]} != {original}"
 
 
 def test_composer_does_not_break_the_existing_flow(qapp):
@@ -404,19 +617,49 @@ def test_composer_does_not_break_the_existing_flow(qapp):
     win._advance(0.2)
 ```
 
+**And rewrite the two cycle-3 tests whose MEANING changed** (`:639` and `:675`). Read them first: they
+encode "the pad moves the scenario's style", which is precisely what this cycle replaces. Do not delete
+the lesson — move it onto the new state:
+
+```python
+def test_scenario_page_style_pad_redraws_the_composer_not_the_scenario(qapp):
+    """Cycle 3: the pad WAS the scenario's style. Now it is the composed block's bias, so the
+    scenario must NOT move until Add -- and the composer must."""
+    from sim.scenario_spec import Block
+    page = _page()
+    page.set_spec(_spec3([Block("ramp", 600, {"to_v": 2.0})]))
+    page.compose_new("ramp", ticks=300, params={"to_v": 18.0})
+    scen_before = page._curve.getOriginalDataset()[1].copy()
+    comp_before = page._composer_curve.getOriginalDataset()[1].copy()
+    page.set_style(4.0, 9.0)                              # what dragging the pad calls
+    np.testing.assert_array_equal(page._curve.getOriginalDataset()[1], scen_before)
+    assert not np.array_equal(page._composer_curve.getOriginalDataset()[1], comp_before)
+
+
+def test_scenario_page_pad_never_disagrees_with_the_state(qapp):
+    """TEETH, carried over from cycle 3 where set_style redrew the curve WITHOUT moving the dot --
+    found by looking at a render, not by a test. The state it mirrors is now the BIAS."""
+    from sim.scenario_spec import Block
+    page = _page()
+    page.set_spec(_spec3([Block("ramp", 600, {"to_v": 2.0})], a=1.4, b=8.4))
+    page.compose_new("ramp", ticks=300, params={"to_v": 2.0})
+    page.set_style(3.6, 1.6)
+    assert (page._pad._a, page._pad._b) == (3.6, 1.6)               # the dot followed
+    assert page._composer_bias() == (2.2, -6.8)                     # 3.6-1.4, 1.6-8.4
+```
+
 - [ ] **Step 2: Run to verify they fail**
 
 ```bash
 ENV=C:/Miniconda/envs/cf_sim
-PATH="$ENV:$ENV/Library/bin:$ENV/Scripts:$PATH" "$ENV/python.exe" -m pytest tests/test_sim_ui_smoke.py -q -k composer
+PATH="$ENV:$ENV/Library/bin:$ENV/Scripts:$PATH" "$ENV/python.exe" -m pytest tests/test_sim_ui_smoke.py -q -k "composer or reopening or pad_never"
 ```
 
 Expected: FAIL — `AttributeError: 'ScenarioPage' object has no attribute 'compose_new'`.
 
 - [ ] **Step 3: Implement**
 
-**3a — the pad learns about the neutral.** In `sim/ui/scenario_page.py`, `StylePad.__init__`, after the
-dot is created:
+**4a — the pad learns about the neutral.** In `StylePad.__init__`, after `self._dot` is added:
 
 ```python
         self._neutral = (2.0, 4.0)
@@ -431,19 +674,36 @@ and a setter next to `set_point`:
 ```python
     def set_neutral(self, a, b):
         """The driver's character, drawn dimmer: the bright dot is where THIS block sits, and the
-        distance between them IS the bias."""
+        distance between the two dots IS the bias."""
         self._neutral = (float(a), float(b))
         self._neutral_dot.setData([self._neutral[0]], [self._neutral[1]])
 ```
 
-**3b — the composer.** Replace `ScenarioPage`'s action half. Add to `__init__`, after `self._pad` is
-wired:
+Clamp inside `set_point`, so the bright dot can never leave the plane when it is placed by arithmetic
+(`neutral + bias`) rather than by a click:
+
+```python
+    def set_point(self, a, b, emit=True):
+        """emit=False syncs the dot WITHOUT re-announcing: the page calls it when the point changed
+        from elsewhere, so the dot never disagrees with the curve. Announcing there would loop.
+
+        Clamped here, not at the callers: the point is now also placed as neutral+bias, and a bias
+        that would leave the plane is pinned at the edge (effective_style clamps identically).
+        """
+        self._a = float(np.clip(a, *A_MAX_RANGE))
+        self._b = float(np.clip(b, *B_MAX_RANGE))
+        self._dot.setData([self._a], [self._b])
+        if emit:
+            self.sigStyleChanged.emit(self._a, self._b)
+```
+
+**4b — the composer.** In `ScenarioPage.__init__`, after `self._pad` is wired into `mid`:
 
 ```python
         self._composer_row = None            # the timeline row being edited, or None for a new block
-        self._composer_params = None         # the params of the block being composed
         self._composer_plot = pg.PlotWidget()
         self._composer_plot.setLabel("left", "blocco", units="m/s")
+        self._composer_plot.setLabel("bottom", "tick del blocco")
         self._composer_plot.showGrid(x=False, y=True, alpha=0.2)
         self._composer_curve = self._composer_plot.plot(pen=pg.mkPen("#e8871e", width=2))
         mid.addWidget(self._composer_plot, stretch=1)
@@ -459,48 +719,43 @@ and the composer's methods:
 
     def _composer_bias(self):
         """The pad holds an ABSOLUTE point; the model stores the distance from the neutral. Showing
-        the absolute is what the user reasons about ("this block brakes at 7"); storing the bias is
-        what keeps one driver ("...which is 3 more than his usual")."""
-        a, b = self._pad._a, self._pad._b
+        the absolute is what one reasons about ("this block brakes at 7"); storing the difference is
+        what keeps ONE driver ("...which is 3 more than his usual")."""
         na, nb = self._pad._neutral
-        da, db = round(a - na, 6), round(b - nb, 6)
+        da, db = round(self._pad._a - na, 6), round(self._pad._b - nb, 6)
         return None if (da == 0.0 and db == 0.0) else (da, db)
+
+    def _composer_block(self):
+        kind = self._composer_kind()
+        return Block(kind, int(self._ticks.value()), self._params_for(kind),
+                     bias=self._composer_bias())
 
     def _start_speed(self, upto):
         """The speed the first `upto` blocks leave behind -- the composer's only coupling to the
         timeline, and what makes the small preview honest instead of decorative."""
-        if self._spec is None or upto <= 0:
-            return float(self._spec.v_init) if self._spec else 21.0
+        if self._spec is None:
+            return 21.0
+        if upto <= 0:
+            return float(self._spec.v_init)
         prefix = ScenarioSpec(name="_", blocks=self._spec.blocks[:upto], style=self._spec.style,
                               s_init=self._spec.s_init, v_init=self._spec.v_init)
         used = sum(b.ticks for b in prefix.blocks)
-        return float(materialise(prefix, self._params_gt, max(1, min(used, self._N))).v_leader[-1])
+        return float(materialise(prefix, self._params_gt,
+                                 max(1, min(used, self._N))).v_leader[-1])
 
     def compose_new(self, kind, ticks, params, bias=None):
-        """Open a NEW block in the composer (does not touch the timeline until Add)."""
+        """Open a NEW block in the composer. Nothing reaches the timeline until Add."""
         self._composer_row = None
-        self._kind.setCurrentText(kind)
-        self._ticks.setValue(int(ticks))
-        na, nb = self._pad._neutral
-        self._pad.set_point(na + (bias[0] if bias else 0.0), nb + (bias[1] if bias else 0.0))
-        self._composer_params = dict(params)
-        self._refresh_composer()
+        self._load_into_widgets(kind, ticks, params, bias)
 
-    def _composer_block(self):
-        return Block(self._composer_kind(), int(self._ticks.value()),
-                     dict(self._composer_params or self._params_for(self._composer_kind())),
-                     bias=self._composer_bias())
-
-    def _refresh_composer(self):
-        """Materialise a ONE-block spec from the speed the previous blocks leave behind."""
-        if self._spec is None:
-            self._composer_curve.setData([])
+    def _refresh_composer(self, *_):
+        """Materialise a ONE-block spec starting from the speed the previous blocks leave behind."""
+        if self._loading or self._spec is None:
             return
         blk = self._composer_block()
         upto = self._composer_row if self._composer_row is not None else len(self._spec.blocks)
-        v0 = self._start_speed(upto)
         one = ScenarioSpec(name="_", blocks=(blk,), style=self._spec.style,
-                           s_init=self._spec.s_init, v_init=v0)
+                           s_init=self._spec.s_init, v_init=self._start_speed(upto))
         self._composer_curve.setData(materialise(one, self._params_gt, blk.ticks).v_leader)
 
     def _on_row_selected(self, i):
@@ -508,37 +763,35 @@ and the composer's methods:
             return
         b = self._spec.blocks[i]
         self._composer_row = i
-        self._kind.setCurrentText(b.kind)
-        self._ticks.setValue(int(b.ticks))
-        self._composer_params = dict(b.params)
-        na, nb = self._pad._neutral
-        self._pad.set_point(na + (b.bias[0] if b.bias else 0.0), nb + (b.bias[1] if b.bias else 0.0))
-        self._refresh_composer()
+        self._load_into_widgets(b.kind, b.ticks, b.params, b.bias)
 ```
 
-Rewire `set_style` so the pad's movement now edits the **bias** and refreshes the composer, while the
-neutral keeps driving the scenario:
+⚠️ `_refresh_composer(self, *_)` swallows the argument Qt's `valueChanged(int)` /
+`currentTextChanged(str)` pass — it is connected directly to them.
+
+Rewire `set_style` — the pad now edits the block, not the driver:
 
 ```python
     def set_style(self, a_max, b_max):
-        """The pad moved: that is THIS BLOCK's point. The scenario's neutral is unchanged."""
-        self._pad.set_point(a_max, b_max, emit=False)
+        """The pad moved: that is THIS BLOCK's point, so only the composer redraws. The scenario's
+        neutral is unchanged -- it has its own control."""
+        self._pad.set_point(a_max, b_max, emit=False)   # the dot must never disagree with the state
         self._refresh_composer()
 ```
 
-and make `set_spec` seed the neutral:
+`set_spec` seeds the neutral and opens a fresh block:
 
 ```python
     def set_spec(self, spec):
         self._spec = spec
         self._pad.set_neutral(spec.style.a_max, spec.style.b_max)
-        self._pad.set_point(spec.style.a_max, spec.style.b_max, emit=False)
         self._refresh_list()
         self._refresh()
-        self._refresh_composer()
+        self.compose_new(self._kind.currentText(), int(self._ticks.value()),
+                         self._params_for(self._kind.currentText()))
 ```
 
-Finally `_on_add` appends **or replaces**:
+and `_on_add` appends **or replaces**:
 
 ```python
     def _on_add(self):
@@ -556,13 +809,8 @@ Finally `_on_add` appends **or replaces**:
         self._composer_row = None
         self._refresh_list()
         self._refresh()
+        self._refresh_composer()                      # the start speed moved
 ```
-
-⚠️ `set_spec` no longer emits through the pad (`emit=False`), so the old `sigStyleChanged` → `set_style`
-path no longer re-enters. Check `_refresh` is still called on every mutation — the cycle-3 tests
-(`test_scenario_page_preview_is_the_real_materialised_profile`, `..._style_pad_redraws_the_preview`)
-will tell you; **read them before adapting them**, because `set_style` deliberately no longer changes
-the scenario's style, and those two tests encode the old meaning.
 
 - [ ] **Step 4: Run to verify they pass**
 
@@ -571,8 +819,7 @@ ENV=C:/Miniconda/envs/cf_sim
 PATH="$ENV:$ENV/Library/bin:$ENV/Scripts:$PATH" "$ENV/python.exe" -m pytest tests/test_sim_ui_smoke.py -q
 ```
 
-Expected: PASS. Two cycle-3 tests will need their meaning updated (the pad edits a bias now, not the
-style) — that is intended blast radius, not breakage.
+Expected: PASS.
 
 - [ ] **Step 5: Commit**
 
@@ -580,20 +827,150 @@ style) — that is intended blast radius, not breakage.
 git add sim/ui/scenario_page.py tests/test_sim_ui_smoke.py
 git commit -m "feat(sim): the right panel becomes a block composer
 
-Build the piece while you see it: kind, params, and the 2-D pad now editing THIS
-block's bias with the neutral drawn dimmer -- the distance between the two dots IS
-the bias. The pad still shows an ABSOLUTE point because that is what one reasons
-about ('this block brakes at 7'); the model stores the difference, which is what
-keeps one driver.
+Build the piece while you see it: the 2-D pad now edits THIS block's bias, with the
+neutral drawn dimmer -- the distance between the two dots IS the bias. The pad still
+shows an ABSOLUTE point because that is what one reasons about ('this block brakes at
+7'); the model stores the difference, which is what keeps one driver.
 
 The small preview materialises a one-block spec starting from the speed the previous
 blocks leave behind: that coupling is the only thing that makes it honest instead of
-decorative, and a test pins that the slice you judged is the slice you get."
+decorative, and a test pins that the slice you judged is the slice you get.
+
+Two cycle-3 tests changed meaning, not lesson: the pad moved the scenario's style and
+now moves the block's bias, so they assert the scenario does NOT move until Add. The
+'dot never disagrees' teeth carry over onto the bias."
 ```
 
 ---
 
-### Task 4: The refresh still fits in a frame
+### Task 5: The neutral gets its own control
+
+**Files:**
+- Modify: `sim/ui/scenario_page.py`
+- Test: `tests/test_sim_ui_smoke.py` (append)
+
+⚠️ **Why this task exists.** The spec puts it in scope (§Scope IN, point 4) and the first draft of this
+plan had no task for it — the self-review checked the spec's 8 tests and never read its Scope. Without
+it the pad edits the bias and **nothing edits the neutral**: the driver's character becomes
+unreachable, frozen at whatever `set_spec` passed in.
+
+- [ ] **Step 1: Write the failing tests**
+
+```python
+def test_the_neutral_has_its_own_control(qapp):
+    """The pad edits the block's bias; without this the driver's character is unreachable."""
+    from sim.scenario_spec import Block, LeaderStyle
+    page = _page()
+    page.set_spec(_spec3([Block("ramp", 600, {"to_v": 2.0})], a=2.0, b=4.0))
+    before = page._curve.getOriginalDataset()[1].copy()
+    page._neu_a.setValue(4.0)
+    assert page._spec.style == LeaderStyle(4.0, 4.0)      # the driver really changed
+    assert page._pad._neutral == (4.0, 4.0)               # and the dim marker followed
+    assert not np.array_equal(page._curve.getOriginalDataset()[1], before)   # so did the scenario
+
+
+def test_moving_the_neutral_keeps_the_bias_and_carries_the_block(qapp):
+    """TEETH: the bias is stored as a DIFFERENCE, so moving the neutral must move every block with
+    it -- that is what "one driver" means. An implementation that kept the absolute would silently
+    turn the bias into a different number."""
+    from sim.scenario_spec import Block
+    page = _page()
+    page.set_spec(_spec3([Block("ramp", 600, {"to_v": 2.0})], a=2.0, b=4.0))
+    page.compose_new("ramp", ticks=300, params={"to_v": 18.0}, bias=(1.0, 2.0))
+    assert (page._pad._a, page._pad._b) == (3.0, 6.0)     # neutral + bias
+    page._neu_a.setValue(1.0)                             # the driver gets calmer
+    assert page._composer_bias() == (1.0, 2.0)            # the CIRCUMSTANCE is unchanged...
+    assert page._pad._a == 2.0                            # ...so the block's absolute followed: 1+1
+```
+
+- [ ] **Step 2: Run to verify they fail**
+
+```bash
+ENV=C:/Miniconda/envs/cf_sim
+PATH="$ENV:$ENV/Library/bin:$ENV/Scripts:$PATH" "$ENV/python.exe" -m pytest tests/test_sim_ui_smoke.py -q -k neutral
+```
+
+Expected: FAIL — `AttributeError: 'ScenarioPage' object has no attribute '_neu_a'`.
+
+- [ ] **Step 3: Implement**
+
+In `ScenarioPage.__init__`, in the controls row (before `self._add`):
+
+```python
+        self._neu_a = QDoubleSpinBox(); self._neu_a.setRange(*A_MAX_RANGE)
+        self._neu_b = QDoubleSpinBox(); self._neu_b.setRange(*B_MAX_RANGE)
+        self._neu_a.setSingleStep(0.1); self._neu_b.setSingleStep(0.1)
+        self._neu_a.setValue(2.0); self._neu_b.setValue(4.0)
+        for w in (self._neu_a, self._neu_b):
+            w.setToolTip("il neutro del guidatore: il pad muove il bias di QUESTO blocco")
+```
+
+adding `QLabel("neutro a/b"), self._neu_a, self._neu_b` to the widget loop, and wiring after it:
+
+```python
+        for sig in (self._neu_a.valueChanged, self._neu_b.valueChanged):
+            sig.connect(self._on_neutral_changed)
+```
+
+and the method:
+
+```python
+    def _on_neutral_changed(self, *_):
+        """The driver's character moved. The bias is a DIFFERENCE, so every block moves with him --
+        that is exactly what having one driver means, and it is why the block's absolute point on
+        the pad has to follow rather than stay put.
+        """
+        if self._loading or self._spec is None:
+            return
+        bias = self._composer_bias()                       # read BEFORE the neutral moves under it
+        a, b = float(self._neu_a.value()), float(self._neu_b.value())
+        self._spec = ScenarioSpec(name=self._spec.name, blocks=self._spec.blocks,
+                                  style=LeaderStyle(a, b), s_init=self._spec.s_init,
+                                  v_init=self._spec.v_init)
+        self._pad.set_neutral(a, b)
+        self._pad.set_point(a + (bias[0] if bias else 0.0),
+                            b + (bias[1] if bias else 0.0), emit=False)
+        self._refresh()
+        self._refresh_composer()
+```
+
+and make `set_spec` seed the two spinboxes without re-entering (add inside its body, before
+`_refresh_list`):
+
+```python
+        self._loading = True
+        self._neu_a.setValue(spec.style.a_max)
+        self._neu_b.setValue(spec.style.b_max)
+        self._loading = False
+```
+
+- [ ] **Step 4: Run to verify they pass**
+
+```bash
+ENV=C:/Miniconda/envs/cf_sim
+PATH="$ENV:$ENV/Library/bin:$ENV/Scripts:$PATH" "$ENV/python.exe" -m pytest tests/test_sim_ui_smoke.py -q
+```
+
+Expected: PASS.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add sim/ui/scenario_page.py tests/test_sim_ui_smoke.py
+git commit -m "feat(sim): the neutral gets its own control
+
+The pad now edits the block's bias, so without this the driver's character is
+unreachable -- frozen at whatever set_spec passed in. The spec had it in scope and
+the plan's self-review missed it: it checked the spec's tests and never read its Scope.
+
+Moving the neutral carries every block with it, because the bias is stored as a
+difference. That is what one driver means, and a test has teeth on it: the block's
+absolute point on the pad must follow the neutral while its bias stays put."
+```
+
+---
+
+### Task 6: The refresh still fits in a frame
 
 **Files:**
 - Test: `tests/test_sim_ui_smoke.py` (append)
@@ -601,7 +978,7 @@ decorative, and a test pins that the slice you judged is the slice you get."
 ⚠️ **Why this is a task and not a footnote.** The composer adds materialise calls to a budget that was
 already measured tight: `materialise` costs **3.68 ms** and the whole frame has **16.7 ms**.
 `_refresh_composer` calls it **twice** (`_start_speed` on the prefix, then the one-block preview) and
-`_refresh` a third time for the full scenario. That is ~11 ms of numpy before pyqtgraph draws anything.
+`_on_neutral_changed` adds `_refresh` on top. That is ~11 ms of numpy before pyqtgraph draws anything.
 It may fit — but "may" is exactly the word that has been wrong all session.
 
 - [ ] **Step 1: Write the test**
@@ -658,20 +1035,21 @@ full scenario). Asserts the PEAK, which is what the eye sees as a stutter."
 
 ---
 
-### Task 5: Full verification and docs
+### Task 7: Full verification and docs
 
 **Files:**
 - Modify: `document/SIMULATOR_SESSION_RESUME.md`
 
 - [ ] **Step 1: Run the full suite** — the 21 sim files + `tests/test_champion_io.py`.
 
-Expected: **PASS**, 224 baseline + the new ones (Task 1: 5, Task 2: 2, Task 3: 5, Task 4: 1 → expect **237**).
-Write the **real** number everywhere, never the predicted one.
+Expected: **PASS**, 224 baseline + the new ones (T1: 5, T2: 2, T3: 3, T4: 5, T5: 2, T6: 1 → expect
+**242**; two cycle-3 tests are rewritten, not added). Write the **real** number everywhere, never the
+predicted one.
 
 - [ ] **Step 2: Verify the frozen core and the invariant source**
 
 ```bash
-git diff --stat origin/Simulator -- sim/state.py sim/stepper.py sim/backend.py sim/probe.py sim/eventprop_stepper.py utils/closed_loop_eval.py
+git diff --stat origin/Simulator -- sim/state.py sim/stepper.py sim/backend.py sim/probe.py sim/eventprop_stepper.py sim/events.py utils/closed_loop_eval.py
 ```
 
 Expected: **empty**.
@@ -684,14 +1062,17 @@ env python. This is the claim that protects everything already built.
 
 - [ ] **Step 4: Render-verify — actually look at it**
 
-`QT_QPA_PLATFORM=windows`, build `SimApp`, `set_mode(3)`, `compose_new("ramp", 300, {"to_v": 2.0})`,
-move the pad off the neutral, grab and **Read the PNG**. Check: two dots on the pad (bright = block,
-dim = neutral), the composer curve starting from the right speed, the scenario curve below.
+`QT_QPA_PLATFORM=windows` (offscreen renders text as tofu), build `SimApp`, `set_mode(3)`,
+`compose_new("ramp", 300, {"to_v": 2.0})`, move the pad off the neutral, grab and **Read the PNG**.
+Check: two dots on the pad (bright = block, dim = neutral), the composer curve starting from the right
+speed, the scenario curve below, and — with kind=`preset` — the preset combo visible and the value box
+gone.
 
 - [ ] **Step 5: Update the resume and commit**
 
-Mark cycle 4a done with the **real** test count; note that `ScenarioSpec.style` now means the neutral;
-leave cycle 4b (drag + `custom` + advisory) as the next open item.
+Mark cycle 4a done with the **real** test count; note that `ScenarioSpec.style` now means the neutral,
+and that the builder now reaches all 9 presets (it reached 1). Leave cycle 4b (drag + `custom` +
+advisory) as the next open item.
 
 ```bash
 git add document/SIMULATOR_SESSION_RESUME.md
@@ -707,6 +1088,9 @@ git push origin Simulator
   block, you have removed the driver: that is the one thing this cycle exists to preserve.
 - **`bias=None` must stay byte-identical to cycle 3.** It is not a nicety — scenarios and JSON already
   exist. Task 1's first test and Task 2's are the gate.
+- **One owner for the params: the widgets.** A dict beside them was tried in the first draft of this
+  plan and MEASURED to crash (`KeyError: 'to_v'`) and to silently rewrite reopened blocks. If a param
+  cannot be expressed by a widget, add the widget — do not add a dict.
 - **Do not add the advisory here.** It looks trivial (`diff(v)/DT > style`) and it is measured to be
   false red on presets: `cut_in` demands −75 m/s² because it is a *different vehicle*, and `following`
   "violates" in 503 of 599 steps because of its noise. It belongs with the drag, in 4b.
