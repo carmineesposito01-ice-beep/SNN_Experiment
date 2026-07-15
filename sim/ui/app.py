@@ -19,6 +19,7 @@ from sim.events import EventInjector
 from sim.replay import ReplayLog
 from sim.probe import AttributeProbe
 from sim.scenario import manual_scenario, scenario_library
+from sim.scenario_spec import Block, LeaderStyle, ScenarioSpec
 from sim.stepper import SimStepper
 from sim.ui.layout import (DOCK_ORDER, LAYOUT_PATH, PRESETS, apply_overview, load_layout,
                            save_layout, visible_docks)
@@ -28,6 +29,7 @@ from sim.ui.panels import (PARAM_COLORS, PARAM_NAMES, PARAM_UNITS, EventTimeline
                            SpikeRatePanel, SynOpsPanel, TrajectoryPanel)
 from sim.ui.meso_page import MesoMacroPage
 from sim.ui.postrun_page import PostRunPage
+from sim.ui.scenario_page import ScenarioPage
 from sim.ui.platoon import platoon_metrics, run_fundamental_diagram, run_platoon
 from sim.ui.episode import EpisodeSummary, write_episode_csv
 from sim.ui.reconstruct import reconstruct_spliced
@@ -165,11 +167,18 @@ class SimApp(QMainWindow):
         self._sweep_ring_len = 1000.0                          # m
         self._sweep_steps = 600
         self._postrun_page = PostRunPage()
+        self._scenario_page = ScenarioPage(params_gt=_PARAMS_GT, N=600)
+        self._scenario_page.set_spec(ScenarioSpec(
+            name="nuovo", blocks=(Block("const", 600, {"v": 21.0}),),
+            style=LeaderStyle(2.0, 4.0), s_init=33.5, v_init=21.0))
+        self._scenario_page.sigScenarioBuilt.connect(self._on_scenario_built)
         self._mode_stack = QStackedWidget()
         self._mode_stack.addWidget(container)          # page 0: Live cockpit
         self._mode_stack.addWidget(self._meso_page)    # page 1: Meso/Macro analysis
         self._mode_stack.addWidget(self._postrun_page) # page 2: Post-run report card
-        self._mode_sel = QComboBox(); self._mode_sel.addItems(["Live", "Meso/Macro", "Post-run"])
+        self._mode_stack.addWidget(self._scenario_page)  # page 3: scenario builder
+        self._mode_sel = QComboBox()
+        self._mode_sel.addItems(["Live", "Meso/Macro", "Post-run", "Scenari"])
         self._mode_sel.currentIndexChanged.connect(self.set_mode)
         outer = QVBoxLayout(); outer.setContentsMargins(0, 0, 0, 0)
         outer.addWidget(self._mode_sel)
@@ -592,6 +601,18 @@ class SimApp(QMainWindow):
 
     def _on_speed(self, v: int):
         self._speed = int(v)
+
+    def _on_scenario_built(self, scenario):
+        """A built scenario joins the library and is selected. materialise already produced a real
+        Scenario via manual_scenario, so the cockpit, the Meso page and the post-run never learn it
+        was built rather than picked."""
+        self._scenarios.append(scenario)
+        self._selector.blockSignals(True)
+        self._selector.addItem(scenario.name)
+        self._selector.setCurrentIndex(len(self._scenarios) - 1)
+        self._selector.blockSignals(False)
+        self.select_scenario(len(self._scenarios) - 1)
+        self.set_mode(0)                                  # back to the cockpit to watch it run
 
     def _on_ghost_toggled(self, on: bool):
         self._topdown.set_ghost_visible(on)

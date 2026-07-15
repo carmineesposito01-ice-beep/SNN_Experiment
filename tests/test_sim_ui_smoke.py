@@ -313,7 +313,7 @@ def test_simapp_champion_selector_lists_and_swaps(qapp):
 
 def test_simapp_mode_toggle(qapp):
     win = SimApp(CHAMP)
-    assert win._mode_stack.count() == 3                  # Live + Meso/Macro + Post-run
+    assert win._mode_stack.count() == 4                  # Live + Meso/Macro + Post-run + Scenari
     assert win._mode_stack.currentIndex() == 0           # starts Live
     win._run_btn.setChecked(True)
     win.set_mode(1)                                       # switch to analysis
@@ -429,7 +429,7 @@ def test_simapp_feeds_episode_summary(qapp):
 
 def test_simapp_postrun_mode(qapp):
     win = SimApp(CHAMP)
-    assert win._mode_stack.count() == 3                  # Live + Meso/Macro + Post-run
+    assert win._mode_stack.count() == 4                  # Live + Meso/Macro + Post-run + Scenari
     win.select_scenario(0)
     win._advance(0.5)
     win.set_mode(2)                                       # Post-run
@@ -612,3 +612,61 @@ def test_app_unsupported_variant_is_refused_by_name(qapp, tmp_path):
     win = SimApp(CHAMP)
     ok, msg = win.open_champion_path(str(p))
     assert ok is False and "attn" in msg          # named, not "unknown", not "Raffaello"
+
+
+# --- scenario builder: the fourth mode ---
+def test_app_has_a_fourth_mode(qapp):
+    win = SimApp(CHAMP)
+    assert win._mode_sel.count() == 4
+    assert win._mode_sel.itemText(3) == "Scenari"
+    win.set_mode(3)                                   # must not raise
+    assert win._mode_stack.currentIndex() == 3
+
+
+def test_scenario_page_preview_is_the_real_materialised_profile(qapp):
+    """The preview must come from the same function the sim will run -- not a sketch."""
+    from sim.scenario_spec import Block, LeaderStyle, ScenarioSpec, materialise
+    from sim.ui.scenario_page import ScenarioPage
+    page = ScenarioPage(params_gt=np.array([30.0, 1.5, 2.0, 1.5, 1.5]), N=600)
+    spec = ScenarioSpec(name="x", blocks=(Block("ramp", 600, {"to_v": 2.0}),),
+                        style=LeaderStyle(2.0, 4.0), s_init=33.5, v_init=21.0)
+    page.set_spec(spec)
+    shown = page._curve.getOriginalDataset()[1]
+    expected = materialise(spec, page._params_gt, page._N).v_leader
+    np.testing.assert_array_equal(shown, expected)
+
+
+def test_scenario_page_style_pad_redraws_the_preview(qapp):
+    from sim.scenario_spec import Block, LeaderStyle, ScenarioSpec
+    from sim.ui.scenario_page import ScenarioPage
+    page = ScenarioPage(params_gt=np.array([30.0, 1.5, 2.0, 1.5, 1.5]), N=600)
+    page.set_spec(ScenarioSpec(name="x", blocks=(Block("ramp", 600, {"to_v": 2.0}),),
+                               style=LeaderStyle(2.0, 4.0), s_init=33.5, v_init=21.0))
+    before = page._curve.getOriginalDataset()[1].copy()
+    page.set_style(4.0, 9.0)                          # what dragging the pad calls
+    after = page._curve.getOriginalDataset()[1]
+    assert not np.array_equal(before, after)          # live: the curve really moved
+
+
+def test_scenario_page_emits_the_built_scenario(qapp):
+    from sim.scenario_spec import Block, LeaderStyle, ScenarioSpec
+    from sim.ui.scenario_page import ScenarioPage
+    page = ScenarioPage(params_gt=np.array([30.0, 1.5, 2.0, 1.5, 1.5]), N=600)
+    got = []
+    page.sigScenarioBuilt.connect(got.append)
+    page.set_spec(ScenarioSpec(name="mio", blocks=(Block("const", 600, {"v": 15.0}),),
+                               style=LeaderStyle(2.0, 4.0), s_init=33.5, v_init=21.0))
+    page._on_use()
+    assert len(got) == 1 and got[0].name == "mio"
+    assert got[0].v_leader.shape == (600,)
+
+
+def test_app_use_scenario_appends_it_to_the_live_selector(qapp):
+    win = SimApp(CHAMP)
+    before = win._selector.count()
+    win.set_mode(3)
+    win._scenario_page.set_style(4.0, 9.0)
+    win._scenario_page._on_use()
+    assert win._selector.count() == before + 1
+    assert win.scenario_count() == before + 1
+    win._advance(0.2)                                 # and the built scenario actually runs
