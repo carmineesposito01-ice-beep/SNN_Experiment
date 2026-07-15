@@ -15,8 +15,10 @@ Two families appear in the versioned champions (design scope — YAGNI, seam to 
   * ``baseline``            — .cell-nested ALIF, readout ``layer_out.fc_weight``
   * ``eventprop_alif_full`` — flat ALIF,        readout ``layer_out.weight``
 """
+import json
+import os
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Optional
 
 import torch
 
@@ -153,6 +155,50 @@ def _infer_topology(state_dict, variant) -> dict:
     }
 
 
+@dataclass(frozen=True)
+class Identity:
+    """What a checkpoint IS, and how sure we are of each part."""
+    family: str                  # build_model variant, the name of an unsupported one, or "unknown"
+    supported: bool
+    reason: Optional[str]        # why it cannot be served (None when supported)
+    topology: Optional[dict]     # {hidden, input, rank, output}; None when unreadable
+    max_delay: Optional[int]
+    sources: dict                # {"topology": "weights", "max_delay": "arch"|"delay_masks"|...}
+    max_delay_p_underestimate: Optional[float]   # only when max_delay was inferred
+
+
+def resolve_identity(state_dict, arch=None, sidecar=None) -> Identity:
+    """What is this checkpoint?
+
+    Pure: no torch.load, no filesystem, no GUI — so it is testable on synthetic state-dicts,
+    including the ones that lie today. Never raises for an unsupported but nameable variant: it
+    returns ``supported=False`` and a reason, and the caller decides.
+    """
+    family, supported, reason = _name_signature(state_dict)
+    if not supported:
+        return Identity(family=family, supported=False, reason=reason, topology=None,
+                        max_delay=None, sources={}, max_delay_p_underestimate=None)
+    topo = _infer_topology(state_dict, family)
+    md, md_src, p = _resolve_max_delay(state_dict, family, arch=arch, sidecar=sidecar)
+    return Identity(family=family, supported=True, reason=None, topology=topo, max_delay=md,
+                    sources={"topology": "weights", "max_delay": md_src},
+                    max_delay_p_underestimate=p)
+
+
+def _read_sidecar(path):
+    """``config_snapshot.json`` next to the checkpoint, if any.
+
+    Coverage in the corpus: cf_hidden_size/cf_rank 506/512, cf_max_delay 258/512 — and absent next
+    to the 4 bundled champions. An unreadable sidecar must never block a loadable checkpoint.
+    """
+    p = os.path.join(os.path.dirname(os.path.abspath(path)), "config_snapshot.json")
+    try:
+        with open(p, encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return None
+
+
 @dataclass
 class ChampionHandle:
     """A strict-verified, ready-to-run champion."""
@@ -161,26 +207,31 @@ class ChampionHandle:
     topology: dict
     epoch: int
     val_loss: float
+    identity: Identity
 
 
 def load_champion(path, device="cpu") -> ChampionHandle:
     """Load a champion ``.pt`` into a strict-verified, eval-mode model.
 
-    Raises ``ValueError`` on an unrecognised family and ``RuntimeError`` (from
-    ``load_state_dict(strict=True)``) on any key/shape mismatch — never a silent
-    partial load.
+    Raises ``ValueError`` on an unrecognised or unsupported family (naming it) and ``RuntimeError``
+    (from ``load_state_dict(strict=True)``) on any key/shape mismatch — never a silent partial load.
     """
     ckpt = torch.load(path, map_location=device, weights_only=False)
     state = ckpt["model_state"]
-    variant = detect_family(state)
-    topo = _infer_topology(state, variant)
-    model = build_model(variant, hidden_size=topo["hidden"], rank=topo["rank"])
+    identity = resolve_identity(state, arch=ckpt.get("arch"), sidecar=_read_sidecar(path))
+    if not identity.supported:
+        raise ValueError(f"Cannot load this checkpoint: {identity.family} — {identity.reason}")
+    # max_delay is the line that closes the silent-drop bug: it used to fall back to the config
+    # default, which made every delay >= 6 unreachable on a max_delay_12 checkpoint.
+    model = build_model(identity.family, hidden_size=identity.topology["hidden"],
+                        rank=identity.topology["rank"], max_delay=identity.max_delay)
     model.load_state_dict(state, strict=True)   # §9.4 guard: raises on any mismatch
     model.to(device).eval()
     return ChampionHandle(
         model=model,
-        variant=variant,
-        topology=topo,
+        variant=identity.family,
+        topology=identity.topology,
         epoch=int(ckpt.get("epoch", -1)),
         val_loss=float(ckpt.get("val_loss", float("nan"))),
+        identity=identity,
     )

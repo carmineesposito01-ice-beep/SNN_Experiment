@@ -157,3 +157,60 @@ def test_cross_check_raises_only_when_the_weights_REFUTE_the_declared_value():
     # declared ABOVE the inference -> the expected under-shoot -> must NOT raise
     md, src, p = _resolve_max_delay(sd, "baseline", arch=None, sidecar={"cf_max_delay": 18})
     assert md == 18 and src == "sidecar"
+
+
+# ---- identity: the verdict, and the bug this cycle closes ----------------------------------------
+
+def test_resolve_identity_verdict_for_a_real_champion():
+    from utils.champion_io import resolve_identity
+    ckpt = torch.load(os.path.join(REPO, "champions", "R33_C2_A1_T12_fix", "best_model.pt"),
+                      map_location="cpu", weights_only=False)
+    idy = resolve_identity(ckpt["model_state"], arch=ckpt.get("arch"))
+    assert idy.family == "baseline" and idy.supported is True
+    assert idy.topology == {"hidden": 32, "input": 4, "rank": 8, "output": 5}
+    assert idy.max_delay == 6 and idy.sources["max_delay"] == "inferred"
+
+
+def test_resolve_identity_refuses_by_name_without_raising():
+    from utils.champion_io import resolve_identity
+    from core.network import build_model
+    idy = resolve_identity(build_model("attn").state_dict())
+    assert idy.family == "attn" and idy.supported is False and idy.reason
+
+
+def test_load_champion_no_longer_drops_synapses_on_a_max_delay_12_checkpoint(tmp_path):
+    """THE BUG THIS CYCLE CLOSES, asserted on the synapse count -- not on a label.
+
+    Before: detect_family said 'baseline', strict=True PASSED, build_model rebuilt with the config
+    default 6, and every delay >= 6 never matched `for d in range(max_delay)` -> 68/128 input
+    synapses silently dropped, max |diff| on the decoded params = 5.98.
+    """
+    from core.network import build_model
+    torch.manual_seed(0)
+    original = build_model("baseline", hidden_size=32, rank=8, max_delay=12)
+    path = tmp_path / "best_model.pt"
+    torch.save({"epoch": 1, "val_loss": 0.1, "model_state": original.state_dict(),
+                "optim_state": {}}, path)
+
+    handle = load_champion(str(path))
+    assert handle.model.max_delay == 12                    # rebuilt with the RIGHT max_delay
+    assert handle.identity.max_delay == 12
+
+    delays = handle.model.layer_hidden.delays
+    dropped = int((delays >= handle.model.max_delay).sum())
+    assert dropped == 0, f"{dropped} of {delays.numel()} input synapses are unreachable"
+
+    obs = torch.zeros(1, 4)
+    original.reset_state(1, "cpu")
+    handle.model.reset_state(1, "cpu")
+    torch.testing.assert_close(original.forward_step(obs), handle.model.forward_step(obs))
+
+
+def test_load_champion_still_loads_the_four_champions_identically():
+    """Regression: the four bundled champions must resolve exactly as before."""
+    expected = {"R33_C2_A1_T12_fix": ("baseline", 8), "LS3_PEAK_R0_launch_d03": ("baseline", 8),
+                "PE_t05_gp0002": ("eventprop_alif_full", 16), "A_lr1e2_t06_r16": ("eventprop_alif_full", 16)}
+    for tag, (fam, rank) in expected.items():
+        h = load_champion(os.path.join(REPO, "champions", tag, "best_model.pt"))
+        assert h.variant == fam and h.topology["rank"] == rank
+        assert h.identity.max_delay == 6
