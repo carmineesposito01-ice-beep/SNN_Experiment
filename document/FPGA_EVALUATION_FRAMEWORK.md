@@ -1,5 +1,16 @@
 # FPGA_EVALUATION_FRAMEWORK — Catalogo dati & piano valutazione FPGA (CF_FSNN)
 
+> ### ⚠️ 2026-07-14 — questo framework aveva PREVISTO il bug che poi e' successo
+> La voce **«Bit-exactness comparatore spike sotto fixed-point»** (*«Un LSB puo' flippare uno spike e
+> propagarsi -> tasso di flip»*) **non e' mai stata eseguita**. Esattamente quel meccanismo ha poi prodotto un
+> bug reale nel forward deployato: `snn_b2_fsm` castava la corrente sinaptica da `accw` Q8.17 a `T.V` Q5.13
+> **prima del confronto di soglia** -> spike decisi diversamente da `snn_core` sull'**82,4%** dei control-step
+> del dataset, invisibile perche' i cancelli erano profondi 16 campioni. **Trovato e corretto il 2026-07-14**
+> (0/240.000, +5 LUT). Storia: `HDL_PHASE.md` §2.1.
+> **Lezione**: un rischio identificato e non testato non e' un rischio gestito. Le voci rimaste in questo
+> framework vanno considerate **debito di verifica**, non ipotesi teoriche.
+
+
 > **Data:** 2026-06-30 · **Branch:** `EventProp_Study` · **Repo:** `D:\Project_MBSE\1.Reti Neurali\Rete_SNN_Test\CF_FSNN`
 >
 > **Documento-master della prossima fase.** Definisce (A) l'analisi critica del framework a 6 punti dell'utente e (B) il catalogo esaustivo di tutti i dati estraibili dalla rete per una evaluation specifica-FPGA sul target **Xilinx Zynq-7020 / PYNQ-Z1** (≈53.200 LUT, 106.400 FF, 220 DSP48E1, 140 BRAM da 36Kb ≈ 4,9 Mb on-chip, no UltraRAM, clock tipico 100–200 MHz, dual-core ARM Cortex-A9 PS).
@@ -185,7 +196,7 @@
 | Simulazione bit-true del datapath (troncamento/rounding/ordine accumulo) | quant | Errore residuo dovuto SOLO all'aritmetica finita degli stati (non catturato da QuantParamModel) | forward NumPy con `fake_quant` dopo ogni op; confronto spike/param/collisioni | SW | M |
 | Errore sigmoid + scaling `_decode_params` in fixed-point | quant | Errore di sigmoid tabellata (N=16/32/64) + offset/tau quantizzati sui 5 param | sostituire `torch.sigmoid` con LUT quantizzata, Δ param + closed-loop | SW | M |
 | Errore delay-mask × pre-scaling sqrt(max_delay) sui pesi fc | quali/quant | Il peso effettivo per delay d è `w_po2·mask_d` (mask binaria → moltiplicazione esatta), MA lo scaling `fc_weight.mul_(sqrt(max_delay))` precede la po2 → verifica che sqrt(6)=2.449 non spinga pesi oltre 2^1 (saturazione clamp) | ricostruire `w_scaled=fc_float·2.449`, po2, contare frazione a clamp +1; incrocio con distribuzione esponenti fc | SW | M |
-| Bit-exactness comparatore spike sotto fixed-point | quali | Un LSB può flippare uno spike e propagarsi → tasso di flip | comparatore fixed vs float su potential/eff_thresh catturati | SW | M |
+| Bit-exactness comparatore spike sotto fixed-point ⚠️**PREVISTO E MAI ESEGUITO → il bug è successo davvero (2026-07-14)** | quali | Un LSB può flippare uno spike e propagarsi → tasso di flip | comparatore fixed vs float su potential/eff_thresh catturati | SW | M |
 | Sensibilità raster/param a quant fixed-point DEGLI STATI | quant | Estende Tier 5 (solo output) ai registri interni → bit minimi sufficienti | `fake_quant` su potential/fatigue/LI/rec_int dietro flag, sweep bit, Δ 5 param + closed-loop | SW | H |
 | Verifica bit-esatta software-vs-HDL (co-simulazione) | quant | Spike e param identici a livello di bit tra golden fixed-point e RTL | esportare vettori test, confronto con sim Vivado/Vitis | HDL | L |
 | Overflow/saturazione REALE accumulatori sul device | quali | Che gli accumulatori non saturino sul silicio nei casi limite | flag sticky overflow in PL, monitor via PS ARM in HIL | BOARD | L |
