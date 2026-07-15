@@ -34,6 +34,17 @@ function ok = run_block_hdl_gate(blockName)
 
   ok = false;
   load_system(fullfile(work, [lib '.slx']));
+
+  % Questo gate cabla 5 uscite (v0,T,s0,a,b): vale SOLO per i blocchi HDL-ready. Lanciato su
+  % `Donatello_ACC_IIDM` (1 sola uscita, sola simulazione) fallirebbe cablando le porte -> un errore
+  % d'HARNESS che si scambierebbe per un verdetto di HDL Coder: una conferma FALSA del "non
+  % sintetizzabile". Meglio fermarsi e dirlo. (Che quel blocco non sia sintetizzabile e' verificato
+  % a parte: 14 errori, document/SP2_ACC_IIDM.md §Sintetizzabilita'.)
+  nOut = numel(find_system([lib '/' blockName], 'SearchDepth', 1, 'BlockType', 'Outport'));
+  assert(nOut == 5, ['run_block_hdl_gate vale solo per i blocchi HDL-ready (5 uscite v0,T,s0,a,b): ' ...
+         '"%s" ne ha %d. Se e'' Donatello_ACC_IIDM, e'' di SOLA SIMULAZIONE per progetto ' ...
+         '(document/SP2_ACC_IIDM.md): non ha senso passarlo da questo cancello.'], blockName, nOut);
+
   mdl = 'gate_mdl'; new_system(mdl); load_system(mdl);
   sub = [mdl '/DUT'];
   add_block([lib '/' blockName], sub);

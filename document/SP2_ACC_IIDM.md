@@ -8,8 +8,8 @@ Blocco unico `s,v,dv,v_l → accel`: campione Donatello **LUT-64** (fixed, cycle
 del bitstream) + **ACC-IIDM open-loop** (double). Porta la catena completa **stato → azione di controllo**,
 per testare la rete *dentro* un modello di car-following.
 
-**Sola simulazione: NON sintetizzabile** — per costruzione mescola la SNN in fixed con l'IIDM in double.
-È una conseguenza accettata del blocco unico (spec §3): l'artefatto HDL-ready resta `Donatello_Champion`.
+**Sola simulazione: NON sintetizzabile** — conseguenza accettata del blocco unico (spec §3): l'artefatto
+HDL-ready resta `Donatello_Champion`. Non è un'assunzione di design: è **misurato** (vedi §Sintetizzabilità).
 
 ## Interfaccia e uso
 | | |
@@ -39,6 +39,28 @@ spostata fuori da `if valid`) e misurata:
 Cioè: l'errore è fisicamente rilevante *e* il test lo becca. Un cancello che non può fallire non è un
 cancello — è la lezione di `HDL_PHASE.md` §2.1, dove un bug nel forward è vissuto mesi perché i test
 stampavano e basta.
+
+## Sintetizzabilità — misurata, non assunta
+Il «non sintetizzabile» era inizialmente una **claim di design mai verificata** (scritta in Description, doc e
+commit). Messa alla prova il 2026-07-15 dando il blocco a HDL Coder nello stesso isolamento del cancello «altro
+PC»: **rifiutato, 14 errori**. La claim regge, ma la spiegazione «mescola fixed e double» era incompleta. La
+catena vera:
+
+1. l'IIDM gira in **double** → HDL Coder attiva `UseFloatingPoint` e passa all'architettura **`MATLAB Datapath`**
+   invece di `MATLAB Function` (quella usata dai blocchi HDL-ready);
+2. su quell'architettura: `Call to operation 'tanh' is not supported for Double types` e idem per
+   `min(v/v0, 10)^4`;
+3. **di rimbalzo**, viene rifiutato anche lo struct dei tipi: `Struct in expression 'Tt' has an empty-typed
+   field. This is not supported for MATLAB-to-dataflow conversion` — lo stesso `snn_types('fixed',13)` che nei
+   blocchi HDL-ready passa senza problemi.
+
+Cioè: **la causa radice è il double**; gli errori sullo struct sono un *effetto* del cambio d'architettura, non un
+difetto di `snn_types`. Chi un domani volesse un ACC-IIDM su FPGA non deve inseguire lo struct: deve portare
+l'IIDM in fixed (è l'SP a sé, vedi §Fuori scope).
+
+> ⚠️ **`run_block_hdl_gate` non si lancia su questo blocco.** Cabla 5 uscite (`v0,T,s0,a,b`); questo ne ha 1
+> (`accel`), quindi fallirebbe **sull'harness** e l'errore si scambierebbe per un verdetto di HDL Coder — una
+> conferma *falsa*. Dal 2026-07-15 il cancello se ne accorge e si ferma con un messaggio esplicito.
 
 ## Single source
 La matematica ACC-IIDM sta **solo** in `matlab/acc_iidm_open.m`. La usano:

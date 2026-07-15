@@ -289,8 +289,12 @@ function d = acciidm_description(N)
   L = {
     sprintf('Donatello_ACC_IIDM - campione Donatello (LUT-%d) + modello ACC-IIDM open-loop.', N)
     ''
-    '⚠️ BLOCCO DI SOLA SIMULAZIONE: NON e'' sintetizzabile (mescola la SNN in fixed con l''IIDM in'
-    '   double). L''artefatto HDL-ready e'' Donatello_Champion.'
+    '⚠️ BLOCCO DI SOLA SIMULAZIONE: NON e'' sintetizzabile. VERIFICATO, non assunto: dato in pasto a'
+    '   HDL Coder produce 14 errori. Causa radice = l''IIDM in double, che forza HDL Coder'
+    '   all''architettura "MATLAB Datapath" invece di "MATLAB Function"; li'' `tanh` e `min(v/v0,10)^4`'
+    '   non sono supportati in double e, di rimbalzo, viene rifiutato anche lo struct dei tipi'
+    '   (snn_types), che nei blocchi HDL-ready passa senza problemi.'
+    '   L''artefatto HDL-ready e'' Donatello_Champion. Dettagli: document/SP2_ACC_IIDM.md.'
     ''
     'FUNZIONE'
     '  Catena completa stato -> azione: la SNN stima i 5 parametri IDM, il modello ACC-IIDM li usa'
