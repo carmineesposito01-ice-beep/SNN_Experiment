@@ -174,9 +174,11 @@ l'elenco per non farlo divergere.
   backend stepper scenario events probe replay loop eventprop input_capture trajectory layout panels
   ui_smoke reconstruct platoon meso_panels meso_road episode postrun`. **148 verdi (2026-07-15, ri-eseguiti).**
   ⚠️ **Numeri "diversi" che troverai in giro = istantanee datate, NON regressioni** (erano veri al loro
-  commit): test **135** (roadmap) · **136** (2026-07-10) · **142** (fine QC) → **il numero buono è 148**.
-  Dock **14** (roadmap §Fase 3, `phase3-qa-perf-report.md`) = pre-revert dei dock input → **il numero buono
-  è 13**. Non trattarli come discrepanze da investigare.
+  commit): test **135** e **142** (roadmap ~righe 201/205, era Fase 3–4; NB il roadmap più avanti, riga ~212,
+  dice già 148) → **il numero buono è 148**. Dock **14** (roadmap §Fase 3, `phase3-qa-perf-report.md`) = era
+  quando il 14° dock era **`v_mem`** (poi rimosso **senza sostituto**; il dock Input nacque dopo, come rename
+  di v_mem, e fu a sua volta revertito) → **il numero buono è 13**. I plan datati citano anche **9** e **11**
+  dock: idem, storici. **Non trattarli come discrepanze da investigare.**
 - **Test runner gotcha**: `conda run -n cf_sim python -m pytest …` **intermittently crashes conda's
   plugin system**. Reliable bypass — call the env python directly with `Library/bin` on PATH:
   `ENV=C:/Miniconda/envs/cf_sim; PATH="$ENV:$ENV/Library/bin:$ENV/Scripts:$PATH" "$ENV/python.exe" -m
