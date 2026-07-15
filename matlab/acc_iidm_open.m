@@ -3,6 +3,10 @@ function accel = acc_iidm_open(s, v, dv, v_l, p, rst, T) %#codegen
 %  s, v, dv, v_l : stato fornito DA FUORI (il loop lo chiude il sistema che testa)
 %  p             : [v0; T; s0; a; b]
 %  rst           : true -> azzera lo stato del filtro OU (inizio di una nuova traiettoria)
+%  T (opz.)      : prototipi di tipo (acc_types). Assente/vuoto -> DOUBLE (riferimento + plant
+%                  cf_plant_lib/ACC_IIDM); popolato -> FIXED (blocco HDL-ready Donatello_ACC_IIDM).
+%                  Type-parametrico come snn_core: UNICA fonte, perche' due implementazioni della
+%                  stessa matematica divergerebbero in silenzio (lezione di HDL_PHASE §2.1).
 %
 %  E' l'UNICA fonte della matematica ACC-IIDM del progetto: la usa sia il blocco SP2
 %  `Donatello_ACC_IIDM` sia il plant closed-loop `cf_plant_lib/ACC_IIDM` (che aggiunge solo
@@ -11,43 +15,71 @@ function accel = acc_iidm_open(s, v, dv, v_l, p, rst, T) %#codegen
 %  ⚠️ DA CHIAMARE **UNA VOLTA PER CONTROL-STEP** (DT = 0.1 s): il filtro OU stima a_l da Δv_l/DT.
 %     Chiamarla a ogni clock farebbe vedere Δv_l = 0 per 340 campioni su 341 -> a_l ~ 0, in silenzio.
 %     Vedi docs/superpowers/specs/2026-07-14-sp2-donatello-acc-iidm-design.md §5.
-%  T (opz.) : prototipi di tipo (acc_types). Assente/vuoto -> DOUBLE (riferimento + plant
-%             cf_plant_lib/ACC_IIDM); popolato -> FIXED (blocco HDL-ready Donatello_ACC_IIDM).
-%             Type-parametrico come snn_core: UNICA fonte, perche' due implementazioni della stessa
-%             matematica divergerebbero in silenzio (e' la lezione di HDL_PHASE §2.1).
+%
+%  NOTA sul path FIXED (SP3): niente LUT e niente Newton-Raphson. HDL Coder genera `sqrt`, `tanh` e
+%  `x^4` NATIVAMENTE; la divisione la accetta **solo** con RoundingMethod 'Zero' (con 'Nearest' la
+%  rifiuta). `exp` e' l'unica non generabile -- ed e' il motivo per cui la sigmoide richiese una LUT
+%  mentre `tanh` no: qui compare solo in ALPHA, che ha argomento COSTANTE e viene ripiegata a
+%  build-time. Tutto misurato il 2026-07-15, spec SP3 §2.
   if nargin < 7 || isempty(T), T = acc_types('double'); end
-  isFx = ~isa(T.out, 'double'); %#ok<NASGU>   % usato dal path fixed (SP3 Task 3)
+  isFx = ~isa(T.out, 'double');
   DT = 0.1; ALPHA = exp(-DT/1.0); COOL = 0.99;
-  v0 = max(p(1), 1e-3); T = max(p(2), 1e-3); s0 = p(3); a = max(p(4), 1e-3); b = max(p(5), 1e-3);
+  % `T_` (time headway IDM) e NON `T`: `T` e' il parametro dei tipi. Ombreggiarlo romperebbe il path
+  % fixed, che usa T.st/T.par/T.acc/T.out DOPO questa riga.
+  v0 = max(p(1), 1e-3); T_ = max(p(2), 1e-3); s0 = p(3); a = max(p(4), 1e-3); b = max(p(5), 1e-3);
 
   % Init con guardia `isempty` PER VARIABILE (idioma codegen-safe del progetto, come snn_core.m:15-19):
   % il codegen riconosce letteralmente isempty(<persistent>) come prova di definizione, e senza fallisce
   % con "Persistent variable 'alf' is undefined on some execution paths". `rst` azzera il filtro OU
   % a inizio traiettoria; al primo giro ci pensa gia' isempty, quindi non serve un flag `started`.
   persistent alf vlp
-  if isempty(alf) || rst, alf = 0;   end
-  if isempty(vlp) || rst, vlp = v_l; end
+  if isempty(alf) || rst, alf = cast(0, 'like', T.acc);   end
+  if isempty(vlp) || rst, vlp = cast(v_l, 'like', T.st); end
+
+  if isFx
+    % fimath con RoundingMethod 'Zero': l'UNICA forma di divisione che HDL Coder genera per tipi
+    % SIGNED ('Floor' vale solo per unsigned). Prodotti e somme a precisione FISSA (T.acc), se no i
+    % word-length crescerebbero a ogni operazione.
+    FM = fimath('RoundingMethod', 'Zero', 'OverflowAction', 'Saturate', ...
+                'ProductMode', 'SpecifyPrecision', ...
+                'ProductWordLength', T.acc.WordLength, 'ProductFractionLength', T.acc.FractionLength, ...
+                'SumMode', 'SpecifyPrecision', ...
+                'SumWordLength', T.acc.WordLength, 'SumFractionLength', T.acc.FractionLength);
+    sq = setfimath(cast(s,  'like', T.st),  FM);
+    vq = setfimath(cast(v,  'like', T.st),  FM);
+    dq = setfimath(cast(dv, 'like', T.st),  FM);
+    lq = setfimath(cast(v_l,'like', T.st),  FM);
+    v0 = setfimath(cast(v0, 'like', T.par), FM);
+    T_ = setfimath(cast(T_, 'like', T.par), FM);
+    s0 = setfimath(cast(s0, 'like', T.par), FM);
+    a  = setfimath(cast(a,  'like', T.par), FM);
+    b  = setfimath(cast(b,  'like', T.par), FM);
+    alf = setfimath(alf, FM); vlp = setfimath(vlp, FM);
+  else
+    sq = s; vq = v; dq = dv; lq = v_l;
+  end
+
   % stima a_l (filtro OU su differenze finite del leader)
-  alf = ALPHA*alf + (1-ALPHA)*((v_l - vlp)/DT); vlp = v_l;
+  alf = cast(ALPHA*alf + (1-ALPHA)*((lq - vlp)/DT), 'like', T.acc); vlp = cast(lq, 'like', T.st);
 
   % --- acc_iidm_accel: IIDM base + CAH + blend ACC (verbatim da build_plant_lib:plant_code) ---
-  sab = max(sqrt(a*b), 1e-6);
-  s_star = s0 + max(v*T + v*dv/(2*sab), 0);
-  s_safe = max(s, 2.0);
-  v_free = a*(1 - min(v/v0, 10)^4);
-  z = min(s_star/s_safe, 20);
-  below = (v <= v0);
-  a_z = a*(1 - z^2);
+  sab = cast(max(sqrt(a*b), 1e-6), 'like', T.par);
+  s_star = cast(s0 + max(vq*T_ + vq*dq/(2*sab), 0), 'like', T.st);
+  s_safe = cast(max(sq, 2.0), 'like', T.st);
+  v_free = cast(a*(1 - min(vq/v0, 10)^4), 'like', T.acc);
+  z = cast(min(s_star/s_safe, 20), 'like', T.acc);
+  below = (vq <= v0);
+  a_z = cast(a*(1 - z^2), 'like', T.acc);
   if z < 1
-    if below, a_iidm = v_free*(1 - z^2); else, a_iidm = v_free; end
+    if below, a_iidm = cast(v_free*(1 - z^2), 'like', T.acc); else, a_iidm = cast(v_free, 'like', T.acc); end
   else
-    if below, a_iidm = a_z; else, a_iidm = v_free + a_z; end
+    if below, a_iidm = cast(a_z, 'like', T.acc); else, a_iidm = cast(v_free + a_z, 'like', T.acc); end
   end
-  a_l_bar = min(alf, a);
-  a_cah = a_l_bar - max(dv,0)^2/(2*s_safe + 1e-6);
-  a_cah = min(max(a_cah, -9), a);
-  dd = (a_iidm - a_cah)/(b + 1e-6);
-  a_blend = (1-COOL)*a_iidm + COOL*(a_cah + b*tanh(dd));
-  if a_iidm >= a_cah, accel = a_iidm; else, accel = a_blend; end
-  accel = min(max(accel, -9), a);
+  a_l_bar = cast(min(alf, a), 'like', T.acc);
+  a_cah = cast(a_l_bar - max(dq,0)^2/(2*s_safe + 1e-6), 'like', T.acc);
+  a_cah = cast(min(max(a_cah, -9), a), 'like', T.acc);
+  dd = cast((a_iidm - a_cah)/(b + 1e-6), 'like', T.acc);
+  a_blend = cast((1-COOL)*a_iidm + COOL*(a_cah + b*tanh(dd)), 'like', T.acc);
+  if a_iidm >= a_cah, ac = a_iidm; else, ac = a_blend; end
+  accel = cast(min(max(ac, -9), a), 'like', T.out);
 end
