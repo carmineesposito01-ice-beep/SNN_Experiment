@@ -14,11 +14,13 @@ function accel = acc_iidm_open(s, v, dv, v_l, p, rst) %#codegen
   DT = 0.1; ALPHA = exp(-DT/1.0); COOL = 0.99;
   v0 = max(p(1), 1e-3); T = max(p(2), 1e-3); s0 = p(3); a = max(p(4), 1e-3); b = max(p(5), 1e-3);
 
-  persistent alf vlp started
-  if isempty(started), started = false; end
-  if ~started || rst
-    alf = 0; vlp = v_l; started = true;
-  end
+  % Init con guardia `isempty` PER VARIABILE (idioma codegen-safe del progetto, come snn_core.m:15-19):
+  % il codegen riconosce letteralmente isempty(<persistent>) come prova di definizione, e senza fallisce
+  % con "Persistent variable 'alf' is undefined on some execution paths". `rst` azzera il filtro OU
+  % a inizio traiettoria; al primo giro ci pensa gia' isempty, quindi non serve un flag `started`.
+  persistent alf vlp
+  if isempty(alf) || rst, alf = 0;   end
+  if isempty(vlp) || rst, vlp = v_l; end
   % stima a_l (filtro OU su differenze finite del leader)
   alf = ALPHA*alf + (1-ALPHA)*((v_l - vlp)/DT); vlp = v_l;
 
