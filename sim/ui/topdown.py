@@ -21,6 +21,9 @@ DASH_EVERY_M = 12.0
 TTC_CAUTION = 4.0
 _COL = {"safe": "#2e8b57", "caution": "#e8871e", "danger": "#d1495b"}
 
+GHOST_COLOR = "#9a9a9a"      # oracle ("Master Splinter"), same reference grey as the panels
+GHOST_OPACITY = 0.45
+
 
 def ttc_color(s, dv):
     """'safe'|'caution'|'danger' from gap s [m] and closing speed dv [m/s] (>0 = closing)."""
@@ -52,6 +55,12 @@ class TopDownView(QGraphicsView):
         self._leader = self._vehicle("#d1495b")
         self._ego_label = self._label("ego")
         self._leader_label = self._label("leader")
+        self._ghost_x = 0.0
+        self._ghost = self._vehicle(GHOST_COLOR)
+        self._ghost.setOpacity(GHOST_OPACITY)
+        self._ghost_label = self._label("oracolo")
+        self._ghost_label.setDefaultTextColor(QColor(GHOST_COLOR))
+        self._set_ghost_visible_items(False)          # off until the toggle asks for it
         self._gap_line = QGraphicsLineItem()
         self._scene.addItem(self._gap_line)
         self._gap_text = self._label("")
@@ -100,12 +109,49 @@ class TopDownView(QGraphicsView):
     def reset(self):
         """Reset the integrated ego position (called per episode). Without this the car drives off
         the finite road across successive runs, and live vs scrub (which recomputes x = Σv·DT from 0)
-        would disagree from the 2nd episode on."""
+        would disagree from the 2nd episode on. Same reasoning for the ghost."""
         self._ego_x = 0.0
         self._last_s = 0.0
+        self._ghost_x = 0.0
+        self._place_ghost(0.0)
 
     def ego_x_m(self):
         return self._ego_x
+
+    # ---- oracle ghost: integrated exactly like the ego, drawn only when the toggle is on ----
+    def _set_ghost_visible_items(self, on):
+        self._ghost.setVisible(bool(on))
+        self._ghost_label.setVisible(bool(on))
+
+    def set_ghost_visible(self, on):
+        self._set_ghost_visible_items(on)
+
+    def ghost_x_m(self):
+        return self._ghost_x
+
+    def _place_ghost(self, ghost_x):
+        self._ghost_x = ghost_x
+        px = self._ghost_x * PX_PER_M
+        self._ghost.setPos(px, 0)
+        self._ghost_label.setPos(px - 20, VEH_W_M * PX_PER_M + 18)
+
+    def update_ghost(self, r):
+        """Integrate the oracle's position exactly like the ego's (see update_frame)."""
+        self._place_ghost(self._ghost_x + r.v * DT)
+
+    def advance_ghost(self, r):
+        """Integrate without rendering -- mirrors advance() for coalesced ticks at speed>1."""
+        self._ghost_x += r.v * DT
+
+    def render_ghost_at(self, traj, index):
+        """Reconstruct the oracle's position at buffer position `index`: x = Σ v·DT up to index."""
+        a = traj.arrays()
+        if a["t"].size == 0:
+            return
+        n = a["t"].size
+        i = index if index >= 0 else n + index
+        i = max(0, min(i, n - 1))
+        self._place_ghost(float(a["v"][:i + 1].sum() * DT))
 
     def leader_x_m(self):
         return self._ego_x + VEH_LEN_M + self._last_s

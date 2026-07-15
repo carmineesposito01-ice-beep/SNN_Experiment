@@ -162,6 +162,47 @@ def test_topdown_render_at_reconstructs(qapp):
     assert abs(view.ego_x_m() - float(np.sum(vs) * DT)) < 1e-6
 
 
+# --- oracle ghost on the road ---
+def test_topdown_ghost_x_integrates_and_resets(qapp):
+    from config import DT
+    view = TopDownView()
+    for _ in range(10):
+        view.update_ghost(_stepv(s=24.0, v=19.0))
+    assert abs(view.ghost_x_m() - 10 * 19.0 * DT) < 1e-6
+    view.reset()
+    assert view.ghost_x_m() == 0.0               # else the ghost drives off across episodes
+
+
+def test_topdown_ghost_hidden_by_default_and_toggleable(qapp):
+    view = TopDownView()
+    assert view._ghost.isVisible() is False
+    view.set_ghost_visible(True)
+    assert view._ghost.isVisible() is True
+    view.set_ghost_visible(False)
+    assert view._ghost.isVisible() is False
+
+
+def test_topdown_render_ghost_at_reconstructs(qapp):
+    from config import DT
+    view = TopDownView()
+    vs = [10.0, 12.0, 8.0, 15.0]
+    tb = _traj_seq(vs, [30.0, 28.0, 26.0, 24.0])
+    view.render_ghost_at(tb, 2)                  # x = sum of v*DT up to index 2 inclusive
+    assert abs(view.ghost_x_m() - float(np.cumsum(vs)[2] * DT)) < 1e-6
+    view.render_ghost_at(tb, -1)                 # head
+    assert abs(view.ghost_x_m() - float(np.sum(vs) * DT)) < 1e-6
+
+
+def test_topdown_ghost_is_independent_of_the_ego(qapp):
+    """The two integrate separately: advancing one must not move the other."""
+    view = TopDownView()
+    view.update_frame(_stepv(s=30.0, v=20.0))
+    ego_before = view.ego_x_m()
+    view.update_ghost(_stepv(s=24.0, v=19.0))
+    assert view.ego_x_m() == ego_before
+    assert view.ghost_x_m() != ego_before
+
+
 def test_simapp_scrub_cursor(qapp):
     win = SimApp(CHAMP)
     win.select_scenario(0)
