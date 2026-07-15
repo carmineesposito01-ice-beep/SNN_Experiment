@@ -24,6 +24,7 @@ function build_hdl_variants()
   srcFsm   = fileread(fullfile(here, 'snn_b2_fsm.m'));
   srcLut   = fileread(fullfile(here, 'snn_decode_lut.m'));
   srcHdl   = fileread(fullfile(here, 'snn_decode_hdl.m'));
+  srcIidm  = fileread(fullfile(here, 'acc_iidm_open.m'));   % SP2: matematica IIDM (single source)
 
   d = load(fullfile(here, 'champions_export.mat')); champs = d.champions;
   if iscell(champs), champs = [champs{:}]; end
@@ -77,10 +78,30 @@ function build_hdl_variants()
     end
     fprintf('  costruito %s\n', names{i});
   end
+
+  % ---- SP2: blocco unico campione + plant ACC-IIDM open-loop (SOLA SIMULAZIONE) ----
+  % NON sintetizzabile per costruzione (mescola la SNN in fixed con l'IIDM in double): serve a testare
+  % la rete DENTRO un modello di car-following. L'artefatto HDL-ready resta Donatello_Champion.
+  sub = [lib '/Donatello_ACC_IIDM'];
+  if getSimulinkBlockHandle(sub) > 0, delete_block(sub); end
+  add_block('built-in/Subsystem', sub, 'Position', [300, 30, 500, 70], ...
+            'Description', acciidm_description(NCHAMP));
+  add_block('simulink/User-Defined Functions/MATLAB Function', [sub '/SNN_ACC']);
+  chart = sfroot().find('-isa', 'Stateflow.EMChart', 'Path', [sub '/SNN_ACC']);
+  chart.Script = acciidm_chart_code(NCHAMP, srcRom, srcTypes, srcFsm, srcLut, srcIidm, nrm);
+  for j = 1:4
+    add_block('built-in/Inport', [sub '/' in_names{j}], 'Port', num2str(j));
+    add_line(sub, [in_names{j} '/1'], ['SNN_ACC/' num2str(j)]);
+  end
+  add_block('built-in/Outport', [sub '/accel'], 'Port', '1');
+  add_line(sub, 'SNN_ACC/1', 'accel/1');
+  fprintf('  costruito Donatello_ACC_IIDM (SP2, sola simulazione)\n');
+
   set_param(lib, 'EnableLBRepository', 'on');
   save_system(lib, libfile);
   close_system(lib, 0);
-  fprintf('OK: %d blocchi SELF-CONTAINED (time-mux, I/O fisico, no start/done) in %s.slx\n', numel(names), lib);
+  fprintf(['OK: %d blocchi SELF-CONTAINED HDL-ready (time-mux, I/O fisico, no start/done)' ...
+           ' + Donatello_ACC_IIDM (sola simulazione) in %s.slx\n'], numel(names), lib);
 end
 
 
@@ -149,8 +170,7 @@ end
 
 function code = chart_code(decodeCall, srcDecode, srcRom, srcTypes, srcFsm, nrm)
 %CHART_CODE  Testo della chart: main + normalize locale + i sorgenti VERI come funzioni locali.
-  M = @(x) sprintf('%.17g', x);
-  L = {
+  Lmain = {
     'function [v0, T, s0, a, b] = SNN(s, v, dv, v_l)'
     '%#codegen'
     '% Donatello TIME-MUX (l''architettura del bitstream) - SELF-CONTAINED: zero dipendenze .m.'
@@ -176,7 +196,19 @@ function code = chart_code(decodeCall, srcDecode, srcRom, srcTypes, srcFsm, nrm)
     '  end'
     '  v0 = pv(1); T = pv(2); s0 = pv(3); a = pv(4); b = pv(5);'
     'end'
-    ''
+  };
+  L = [Lmain(:); {''}; normalize_code(nrm); {''}; inlined_header()];
+  code = strjoin(L, newline);
+  code = [code newline newline srcRom newline newline srcTypes newline newline srcFsm newline newline srcDecode];
+end
+
+
+function L = normalize_code(nrm)
+%NORMALIZE_CODE  Righe della funzione locale `local_normalize` (fisico -> xn fixed).
+%  UNICA fonte, condivisa da chart_code (blocchi HDL-ready) e da acciidm_chart_code (SP2):
+%  duplicarla farebbe divergere i blocchi in silenzio alla prima modifica dei reciproci.
+  M = @(x) sprintf('%.17g', x);
+  L = {
     'function xn = local_normalize(s, v, dv, v_l, T)'
     '%LOCAL_NORMALIZE  fisico -> xn (fixed). Nel deployato la normalize gira in SW float e all''HDL'
     '%  arriva gia'' xn (HDL_PHASE §3.1); qui sta nel blocco per avere I/O fisico.'
@@ -198,13 +230,89 @@ function code = chart_code(decodeCall, srcDecode, srcRom, srcTypes, srcFsm, nrm)
     '  xn(3) = cast((d + DVc) * inv2DV, ''like'', T.V);'
     '  xn(4) = cast(v_l * invVL, ''like'', T.V);'
     'end'
-    ''
+  };
+  L = L(:);
+end
+
+
+function L = inlined_header()
+%INLINED_HEADER  Intestazione della sezione dei sorgenti inlinati (condivisa dai due generatori).
+  L = {
     '% ===================================================================================='
     '% Funzioni locali INLINATE dai sorgenti veri (build_hdl_variants le legge a build-time).'
     '% Le funzioni locali hanno precedenza sul path => il blocco e'' SELF-CONTAINED.'
     '% NON modificarle qui: si rigenerano con build_hdl_variants.'
     '% ===================================================================================='
   };
+  L = L(:);
+end
+
+
+function code = acciidm_chart_code(N, srcRom, srcTypes, srcFsm, srcLut, srcIidm, nrm)
+%ACCIIDM_CHART_CODE  SP2: SNN LUT-N (fixed) + ACC-IIDM open-loop (double), gated sul refresh param.
+  Lmain = {
+    'function accel = SNN_ACC(s, v, dv, v_l)'
+    '%#codegen'
+    '% SP2 - campione Donatello + ACC-IIDM open-loop. SOLA SIMULAZIONE (mescola fixed e double).'
+    '%  Ingressi FIXED (>=20 bit frazionari); uscita accel (double). 1 cambio d''ingresso = 1'
+    '%  control-step = DT 0.1 s; ogni ingresso va tenuto >=341 campioni (time-mux).'
+    '  Tt = snn_types(''fixed'', 13);'
+    '  xn = local_normalize(s, v, dv, v_l, Tt);'
+    '  persistent pv xprev started acc'
+    '  if isempty(started)                % isempty(<persistent>) e'' l''unica forma che il codegen'
+    '    pv = fi(zeros(5,1), 1, 21, 13);  % riconosce come prova di definizione: un test sul VALORE'
+    '    xprev = xn; started = true;      % fallirebbe con "undefined on some execution paths".'
+    '    acc = 0; go = true;'
+    '  else'
+    '    go = any(xn ~= xprev);           % edge-triggered: 1 campione = 1 inferenza'
+    '  end'
+    '  xprev = xn;'
+    '  [raw, valid] = snn_b2_fsm(xn, go);'
+    '  if valid'
+    ['    pv = snn_decode_lut(raw, ' num2str(N) ');']
+    '    % ⚠️ L''IIDM gira SOLO qui: una volta per control-step. A ogni clock vedrebbe Δv_l = 0 per'
+    '    %    340 campioni su 341 -> il filtro OU stimerebbe a_l ~ 0, in silenzio (spec §5).'
+    '    acc = acc_iidm_open(double(s), double(v), double(dv), double(v_l), double(pv(:)), false);'
+    '  end'
+    '  accel = acc;                       % tenuto fino al control-step successivo'
+    'end'
+  };
+  L = [Lmain(:); {''}; normalize_code(nrm); {''}; inlined_header()];
   code = strjoin(L, newline);
-  code = [code newline newline srcRom newline newline srcTypes newline newline srcFsm newline newline srcDecode];
+  code = [code newline newline srcRom newline newline srcTypes newline newline srcFsm ...
+          newline newline srcLut newline newline srcIidm];
+end
+
+
+function d = acciidm_description(N)
+%ACCIIDM_DESCRIPTION  Description del blocco SP2 (visibile in Block Properties in Simulink).
+  L = {
+    sprintf('Donatello_ACC_IIDM - campione Donatello (LUT-%d) + modello ACC-IIDM open-loop.', N)
+    ''
+    '⚠️ BLOCCO DI SOLA SIMULAZIONE: NON e'' sintetizzabile (mescola la SNN in fixed con l''IIDM in'
+    '   double). L''artefatto HDL-ready e'' Donatello_Champion.'
+    ''
+    'FUNZIONE'
+    '  Catena completa stato -> azione: la SNN stima i 5 parametri IDM, il modello ACC-IIDM li usa'
+    '  per calcolare l''accelerazione. Serve a testare la rete dentro un modello di car-following.'
+    ''
+    'INGRESSI (fisici, fixed con >=20 bit frazionari - interporre un Data Type Conversion)'
+    '  s [m] · v [m/s] · dv [m/s] (= v - v_l) · v_l [m/s]'
+    'USCITA'
+    '  accel [m/s^2]'
+    ''
+    'LOOP APERTO'
+    '  Il blocco NON integra v ne'' s: li riceve. Il loop lo chiude il sistema che testa (la velocita'''
+    '  effettiva puo'' essere alterata a valle). L''unico stato interno e'' il filtro OU che stima a_l.'
+    ''
+    'SEMANTICA E RATE'
+    '  1 cambio d''ingresso = 1 control-step = DT 0.1 s. Ogni ingresso va tenuto per almeno ~341'
+    '  campioni (la SNN e'' time-multiplexata: 1 neurone/clock). L''IIDM gira una volta per'
+    '  control-step, quando i parametri si rinfrescano.'
+    ''
+    'RIFERIMENTI'
+    '  docs/superpowers/specs/2026-07-14-sp2-donatello-acc-iidm-design.md · document/SP2_ACC_IIDM.md'
+    '  Rigenerazione: build_hdl_variants.m (NON modificare la chart a mano)'
+  };
+  d = strjoin(L, newline);
 end
