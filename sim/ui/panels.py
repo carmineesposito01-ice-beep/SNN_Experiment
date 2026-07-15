@@ -245,10 +245,18 @@ class NeuronGraphPanel(QWidget):
         OUT = w_out.shape[0]
         self._n_in, self._n_hid, self._n_out = IN, H, OUT
 
-        def yspread(n, span=32.0):
+        # The span is GLOBAL, driven by the busiest column (a hidden half): a constant per-node
+        # spacing makes the layout GROW with the network instead of squeezing N nodes into a fixed
+        # height (at H=64 the 13 px markers collided). It must NOT be per-column, or the 4 inputs
+        # would spread over 6.4 while the hidden go to 66 and the columns would stop lining up.
+        # 2.13 = the old 32.0 over the 15 gaps of a 16-node column -> at H=32 the span comes back to
+        # 32.0 and the familiar view is unchanged by construction.
+        half = (H + 1) // 2
+        span = 2.13 * max(1, half - 1)
+
+        def yspread(n, span=span):
             return np.linspace(0.0, span, n) if n > 1 else np.array([span / 2])
 
-        half = (H + 1) // 2
         pin = [(0.0, y) for y in yspread(IN)]
         phid = ([(1.0, y) for y in yspread(half)] + [(1.4, y) for y in yspread(H - half)])
         pout = [(2.6, y) for y in yspread(OUT)]
@@ -305,7 +313,7 @@ class NeuronGraphPanel(QWidget):
                        self._pos[j, 0], self._pos[j, 1], (-0.2, 0.5), "#88d6a0")
         top = float(self._pos[:, 1].max()) + 2.5
         self._text("input · osservazione", 0.0, top, (0.5, 1.0), "#8fb7e0")
-        self._text("hidden · 32 ALIF", 1.2, top, (0.5, 1.0), "#c9a0e8")
+        self._text(f"hidden · {self._n_hid} ALIF", 1.2, top, (0.5, 1.0), "#c9a0e8")
         self._text("output · parametri", 2.6, top, (0.5, 1.0), "#88d6a0")
 
     def clear(self):

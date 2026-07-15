@@ -364,3 +364,50 @@ def test_panels_clear_blanks_ghost_curves(qapp):
         for name in ghosts:
             d = _ydata(getattr(p, name))
             assert d is None or len(d) == 0
+
+
+# ---- network graph adapts to the real hidden size ------------------------------------------------
+
+def _col_ys(panel, x):
+    return sorted(y for px, y in panel._pos if abs(px - x) < 1e-9)
+
+
+def test_neuron_graph_label_states_the_real_hidden_count(qapp):
+    """panels.py hardcodes 'hidden · 32 ALIF' -- the only literal 32 in sim/. It lies for any H != 32,
+    and the whole point of this cycle is that the cockpit stops lying about what it loaded."""
+    H, IN, OUT = 48, 4, 5
+    rng = np.random.default_rng(0)
+    panel = NeuronGraphPanel()
+    panel.set_topology(rng.standard_normal((H, IN)), rng.standard_normal((H, H)),
+                       rng.standard_normal((OUT, H)))
+    # getPlotItem().items is pyqtgraph's list of added items; _plot.items is QGraphicsView's method.
+    labels = [t.toPlainText() for t in panel._plot.getPlotItem().items if hasattr(t, "toPlainText")]
+    assert any("48" in t for t in labels), labels
+    assert not any("32" in t for t in labels), labels
+
+
+def test_neuron_graph_nodes_do_not_overlap_at_larger_H(qapp):
+    """yspread's span=32.0 is tuned for 16 nodes/column; at H=64 the spacing halves and the 13 px
+    markers collide."""
+    rng = np.random.default_rng(0)
+    spacing = {}
+    for H in (32, 64):
+        panel = NeuronGraphPanel()
+        panel.set_topology(rng.standard_normal((H, 4)), rng.standard_normal((H, H)),
+                           rng.standard_normal((5, H)))
+        ys = _col_ys(panel, 1.0)
+        spacing[H] = min(b - a for a, b in zip(ys, ys[1:]))
+    assert spacing[64] >= spacing[32] * 0.9      # spacing must not collapse with H
+
+
+def test_neuron_graph_columns_stay_aligned_and_H32_is_unchanged(qapp):
+    """TEETH: the span must stay GLOBAL. Giving each column a span from its own node count would
+    spread 4 inputs over 6.4 while the hidden go to 66 -- the columns would stop lining up. And at
+    H=32 the layout must be pixel-identical to what it has always been (span 32.0)."""
+    rng = np.random.default_rng(0)
+    panel = NeuronGraphPanel()
+    panel.set_topology(rng.standard_normal((32, 4)), rng.standard_normal((32, 32)),
+                       rng.standard_normal((5, 32)))
+    for x in (0.0, 1.0, 1.4, 2.6):
+        ys = _col_ys(panel, x)
+        assert abs(ys[0] - 0.0) < 1e-6 and abs(ys[-1] - 32.0) < 0.1, f"column x={x}: {ys[0]}..{ys[-1]}"
