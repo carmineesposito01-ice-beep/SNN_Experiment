@@ -9,7 +9,11 @@
 ## 📍 DOVE SIAMO (verificato 2026-07-15)
 
 - **Repo**: `D:\Project_MBSE\1.Reti Neurali\Rete_SNN_Test\CF_FSNN` · **worktree**: `.worktrees/Simulator` ·
-  **branch**: `Simulator` · **HEAD** `4001f72` · **0 commit non pushati**, working tree pulito.
+  **branch**: `Simulator`.
+  ⚠️ **Non fidarti di uno SHA scritto qui**: un HEAD fissato in questo file si auto-stalizza (il commit che
+  lo scrive lo cambia). **Verificalo tu**: `git log --oneline -1` + `git status` + `git rev-list --count
+  origin/Simulator..HEAD`. **Atteso: working tree pulito, 0 commit non pushati.** Se non è così, capisci
+  perché prima di lavorare.
 - **Env/test**: conda `cf_sim`. **148 test sim verdi.** Core SNN **bit-identico** (congelato).
 - **Altri track (NON confonderli con questo)**:
   - `main` → studio EventProp; ha il **suo** `document/SESSION_RESUME.md` (file diverso, altro track).
