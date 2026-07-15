@@ -26,8 +26,10 @@
 ## 🎯 STATO ATTUALE — 🏁 MILESTONE: cockpit feature-complete (dichiarata 2026-07-13)
 
 Lo strumento è ora a **4 modi** — **Live cockpit (13 dock, + oracolo ghost)** + **Meso/Macro** +
-**Post-run dashboard** + **Scenari (costruttore)**. I 3 cicli aperti il 2026-07-15 sono **tutti chiusi**
-(oracolo · identità checkpoint · costruttore di scenari): vedi §AZIONI PENDENTI. Tutto committato e
+**Post-run dashboard** + **Scenari (costruttore)**. I **3 cicli** aperti il 2026-07-15 sono **tutti chiusi**
+(oracolo · identità checkpoint · costruttore di scenari). Ne sono nati **altri 2 dalla proposta
+dell'utente a valle**: **4a** (costruttore iterativo — spec approvata, tocca al plan) e **4b** (drag +
+advisory — da brainstormare). Vedi §AZIONI PENDENTI. Tutto committato e
 pushato. Il dettaglio di com'è fatto sta nelle sezioni sotto (§Architecture, §Phase history).
 
 ## ▶️ AZIONI PENDENTI (puntatori, non dump — le azioni 1-3 SUPERANO il "next = merge" della milestone)
@@ -126,13 +128,38 @@ pushato. Il dettaglio di com'è fatto sta nelle sezioni sotto (§Architecture, �
    ignora, `app.py:383`, quindi mentirebbe in silenzio); **leader con dinamica propria → PARCHEGGIATO
    per una discussione a fine blocco** (decisione utente); verbi/trigger nuovi (YAGNI).
    **Debito residuo, NON qui**: `ReplayLog.seed` alimentato con l'indice di scenario (`app.py:591`).
-4. **RINVIATA — merge `Simulator`→`main`** (coordinare col track `Simulink_Importer`: entrambi rinviano il
+4. **IN CORSO — ciclo 4a: costruttore ITERATIVO (bias per-blocco + composer)** *(proposta utente
+   2026-07-15, a valle del ciclo 3)*. ✅ brainstorming · ✅ **spec APPROVATA**:
+   `docs/superpowers/specs/2026-07-15-iterative-builder-design.md` (`c14e793`).
+   → **prossimo: `superpowers:writing-plans`** → plan → TDD.
+   **Cosa**: ogni `Block` guadagna un **`bias` ADDITIVO** `(Δa, Δb)` sul **neutro**; il pannello di destra
+   diventa un **composer**: costruisci il blocco *vedendolo* (anteprima isolata, che parte dalla velocità
+   lasciata dai blocchi precedenti) prima di aggiungerlo.
+   **Perché additivo (ragionamento dell'utente, corretto)**: uno stile per-blocco *assoluto* lascerebbe N
+   stili scollegati e nessun guidatore; col neutro+bias **il guidatore è UNO** — il neutro è il carattere,
+   il bias è la circostanza. Retrocompatibile per costruzione: `bias=None` = il neutro → gli scenari del
+   ciclo 3 restano byte-identici e il loro JSON si legge senza campo versione.
+5. **CICLO 4b — drag + blocco `custom` + advisory fisica** *(da brainstormare dopo aver usato 4a)*.
+   ⚠️ **Il taglio 4a/4b è stato spostato DA UNA MISURA, non da un'opinione**: l'advisory ("accendi i tratti
+   che il leader non può fare") sembrava stare in 4a perché i preset sono verbatim e possono eccedere un
+   neutro placido. **Misurato sulla libreria vera: è quasi tutto rosso FALSO.** `cut_in` chiede **−75 m/s²**,
+   `aggressive_cut_in` −120, `cut_out` −210 → **non sono violazioni, è un ALTRO VEICOLO** (`build_scenarios`
+   fa `vl[t_cut:] = 0.45*v0`); e **`following` "viola" in 503 tick su 599** perché somma
+   `rng.normal(0,0.3)` tick per tick e diviso `DT=0.1` diventa ±13 m/s². Quindi **l'advisory dice il vero
+   solo su un profilo DISEGNATO** → va col drag. `custom` idem: senza drag nessuno lo creerebbe.
+   Decisione utente sul 4b: **il drag NON è vincolato**, la UI *avvisa* e basta — perché uno scenario
+   fisicamente inevitabile **è un test** (`brake_margin`, `closed_loop_eval.py:238-241`: `min<0` =
+   «collisione fisicamente inevitabile»), e vincolare cancellerebbe quella classe di prove. Forma scelta:
+   **tratti accesi** (la curva si colora dove viola + di quanto), verificata renderizzando: una seconda
+   curva con `np.nan` sui campioni fisici e `connect="finite"` disegna **solo** gli strappi. ⚠️ Il drag è
+   **l'unico pezzo della sessione senza un numero misurato a supporto** (interazione mouse su pyqtgraph).
+6. **RINVIATA — merge `Simulator`→`main`** (coordinare col track `Simulink_Importer`: entrambi rinviano il
    merge, vanno sequenziati per far atterrare in `main` uno stato coerente).
-5. **STUDIO POST-MILESTONE — A/B float-vs-fixed** (unica idea di Fase 4 mai fatta). ⚠️ richiede un **forward
+7. **STUDIO POST-MILESTONE — A/B float-vs-fixed** (unica idea di Fase 4 mai fatta). ⚠️ richiede un **forward
    fixed-point Qm.n SW** che nel simulatore **non esiste** — va scopato prima (candidato: portare la logica
    fixed-point dal track `Simulink_Importer`/HDL, che l'ha già fatta per l'FPGA). Design-before-code.
    Non blocca nulla.
-6. 📋 **Backlog residuo** (non pre-deciso, l'utente sceglie): roadmap §6 "Phase 5"
+8. 📋 **Backlog residuo** (non pre-deciso, l'utente sceglie): roadmap §6 "Phase 5"
    (`docs/superpowers/2026-07-07-simulator-extension-study.md`) — slider GT / UKF live (si sposa col ciclo 1),
    video/GIF, ellisse a–b, worker QThread. Più: **riconciliare/etichettare il dock energia** (caveat
    ASIC-vs-FPGA in §Architecture→Energy) e la lettura **"shadow"** dell'oracolo (errore di comando istantaneo
