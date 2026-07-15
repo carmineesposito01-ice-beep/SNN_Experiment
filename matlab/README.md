@@ -63,7 +63,19 @@ blocco con le traiettorie di `test_dataset.mat` → `dmax = 0`). Dettagli e prov
 `../document/HDL_PHASE.md` §3.1.3-§3.1.4.
 
 ### Test / verifica (i cancelli)
-`run_parity_tests.m` (**cancello 1:1**: double vs golden PyTorch ~2e-6) · `run_b2_parity.m` (FSM B2 vs core, 0 mismatch) ·
+
+> ⚠️ **Due trappole scoperte il 2026-07-14 — leggere prima di fidarsi di un "verde"** (`../document/HDL_PHASE.md` §2.1):
+> 1. **Nessuno dei cancelli storici asserta**: stampano `>> BIT-EXACT MATCH` o `>> MISMATCH (da debuggare)` e
+>    **ritornano comunque**. In un run automatico passano **sempre**: bisogna *leggere* l'output.
+> 2. **Sono poco profondi**: `run_b2_parity` gira su **16 campioni**, `test_b2_fsm` su **12 control-step**, l'uso reale
+>    è **1000**. Con questo velo un bug reale dell'FSM è sopravvissuto mesi a cancello verde.
+>
+> I cancelli **nuovi** (`run_b2_parity_dataset`, `run_block_*`) **assertano** e girano sul **dataset intero**.
+
+**`run_b2_parity_dataset.m`** ⭐ (FSM B2 vs core su **60 traiettorie × 1000 step × 4 champion** → atteso **0/240.000**;
+richiede i MEX) · **`run_block_sync_check.m`** ⭐ (i blocchi self-contained **inlinano** i sorgenti: verifica che non
+siano rimasti indietro; se fallisce → `build_hdl_variants`) ·
+`run_parity_tests.m` (**cancello 1:1**: double vs golden PyTorch ~2e-6) · `run_b2_parity.m` (FSM B2 vs core su 16 campioni golden — **non è una prova di equivalenza**) ·
 `run_fixed_parity.m` · `run_fixed_sweep.m` (errore vs bit di frazione) · `run_hdl_verify.m` · `run_block_parity.m` ·
 `run_plant_parity.m` · `run_b15a_validate.m` (validazione funzionale via MEX) · `run_lut_sweep.m` (accuratezza vs N) ·
 **`run_block_hdl_gate.m`** (cancello "altro PC": copia il solo `.slx`, toglie `matlab/` dal path, `makehdl` deve

@@ -5,6 +5,23 @@
 
 ---
 
+## 🔴 BUG DEL FORWARD DEPLOYATO — TROVATO E CORRETTO (2026-07-14) — LEGGERE PER PRIMO
+
+> **`snn_b2_fsm` (il forward del bitstream) NON era bit-exact a `snn_core`**: divergeva sull'**82,4 %** dei
+> control-step del dataset (60/60 traiettorie). Era invisibile perché i cancelli sono **profondi 16 campioni**
+> (`run_b2_parity`) / **12 control-step** (`test_b2_fsm`) su un uso reale di **1000**, **non assertano** (stampano e
+> basta) ed erano **dipendenti dall'ordine** (ROM globale non rigenerata).
+> **Causa**: `snn_b2_fsm.m:77` castava `(Ii+reci)` da `accw` Q8.17 a `T.V` Q5.13 **prima del confronto di soglia**.
+> **Corretto**: ora **0 / 240.000** control-step (4 champion × 60 traj × 1000). **Costo: +5 LUT (+0,1 %)**.
+> **Impatto funzionale del bug: −0,007 punti** di accuratezza → Fase B e le sue conclusioni **reggono**.
+> **⚠️ Il bitstream attuale è STALE** (costruito con l'FSM difettosa) → da rigenerare quando serve.
+> **Storia, prove e numeri → `document/HDL_PHASE.md` §2 (anello ②bis) e §2.1.** Commit `1e779e1`.
+>
+> **Cancelli nuovi (assertano, girano sul dataset):** `run_b2_parity_dataset` (60×1000×4) ·
+> `run_block_sync_check` (i blocchi inlinano i sorgenti: becca quelli rimasti indietro) ·
+> `run_block_traj_test` · `run_block_hdl_gate`.
+> **Aperto**: i cancelli storici **non assertano** — tutti verdi oggi, ma l'assert va aggiunto (decisione utente).
+
 ## ✅ Blocchi libreria HDL-ready — FATTI (2026-07-14)
 
 > `snn_champions_lib.slx` ha ora **7 blocchi Donatello SELF-CONTAINED e HDL-ready** (`Donatello_Champion` +

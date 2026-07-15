@@ -121,9 +121,15 @@ accanto ai 4 champion base comportamentali (**invariati**).
 > di **1 LSB da quella float ~1 volta su 25 step** → uno spike flippa → i params driftano (0.01→0.23 entro 20 step).
 > Dettaglio e tabella: `HDL_PHASE.md` **§3.1.3**.
 
-> **Uso**: il time-mux impiega **~341 clock/inferenza** ⇒ il modello ospite gira al **rate di clock** e i params si
-> aggiornano ogni ~341 passi. È l'architettura (il 5,5× di area risparmiata), non un difetto (§3.1.1).
-> Builder: `matlab/build_hdl_variants.m` · gate: `matlab/run_block_hdl_gate.m`.
+> **Uso**: il time-mux impiega **~341 clock/inferenza**; il blocco è **edge-triggered** sul cambio d'ingresso
+> (1 campione = 1 inferenza) → funziona con **qualunque** hold ≥ ~341 passi, nessun rapporto col `FixedStep` da
+> conoscere (`HDL_PHASE.md` §3.1.4). Builder: `matlab/build_hdl_variants.m` · gate: `run_block_hdl_gate.m`,
+> `run_block_traj_test.m`, `run_block_sync_check.m`.
+>
+> **⚠️ Nota storica (2026-07-14)**: la prima verifica di questi blocchi girava su **1 traiettoria** e dava `dmax=0`.
+> Allargandola a 8 ne è emersa **una** divergente → l'indagine ha scoperto che **`snn_b2_fsm` stesso** non era
+> bit-exact a `snn_core` (`HDL_PHASE.md` §2.1). **Corretto l'FSM**, i blocchi sono stati **rigenerati** (inlinano i
+> sorgenti) e ora passano su tutte le traiettorie provate. I blocchi non erano la causa: **propagavano** il difetto.
 
 I `params` al variare di N (stesso `raw`, single control-step) mostrano la convergenza — l'effetto della dimensione LUT
 visibile a livello di blocco:

@@ -13,9 +13,17 @@
 
 **Sì, ed è dimostrato a livello bit.** (Stabilito nella fase HDL; qui reso esplicito per tracciabilità.)
 
+> ### ⚠️ CORREZIONE 2026-07-14 — la riga «RTL vs core fixed-point: err = 0» era basata su 12 control-step
+> `test_b2_fsm` copre **12 control-step**; `run_b2_parity` **16 campioni**. Sull'uso reale (60 traiettorie × 1000 step)
+> `snn_b2_fsm` **divergeva da `snn_core` sull'82,4 % dei control-step** (causa: un cast che buttava 4 bit frazionari
+> prima del confronto di soglia → `HDL_PHASE.md` §2.1). **Corretto il 2026-07-14**: ora **0 / 240.000** su 4 champion.
+> **Impatto su questo documento: NESSUNO.** L'impatto funzionale del bug era **−0,007 punti** di accuratezza e il costo
+> del fix **+5 LUT (+0,1 %)**: tutte le conclusioni di potenza/area/energia qui dentro **restano valide**.
+> ⚠️ Da sapere: i numeri qui sono **pre-fix**, e il **bitstream** esistente è **stale** (costruito con l'FSM difettosa).
+
 | Livello | Evidenza | Errore |
 |---|---|---|
-| RTL vs core fixed-point | `test_b2_fsm` (parità cyclo-accurata) | **err = 0 (bit-exact)** |
+| RTL vs core fixed-point | `test_b2_fsm` (12 step) → **usare `run_b2_parity_dataset`** (60×1000×4) | **err = 0** *(dal fix 2026-07-14; prima: 82,4 % dei step divergenti)* |
 | IP (AXI) vs `snn_top_b2` | cosim `axi_tb.v` → `AXI TEST PASSED` | bit-exact (v0=26.49, T=1.63, s0=2.45, a=1.01, b=1.71) |
 | core fixed vs core double | `run_fixed_sweep` | ≤ 0.028 su v0 |
 | core double vs **PyTorch originale** | `run_parity_tests` vs `forward_sequence` | **~2e-6** |

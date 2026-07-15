@@ -1,8 +1,18 @@
 # HDL_ARCHITECTURE_STUDY.md — Studio d'architettura FPGA e realizzazione B2
 
+> ### ⚠️ CORREZIONE 2026-07-14 — la claim «bit-exact» qui sotto era FALSA (ora è vera, dopo un fix)
+> Il «bit-exact a `snn_core` (err=0)» era misurato da `test_b2_fsm` su **12 control-step** e da `run_b2_parity` su
+> **16 campioni golden**. Sull'uso reale (60 traiettorie × 1000 step) l'FSM **divergeva sull'82,4 % dei control-step**
+> (max raw 2,54). **Causa**: `snn_b2_fsm.m:77` castava `(Ii+reci)` da `accw` Q8.17 a `T.V` Q5.13 **prima del confronto
+> di soglia**, buttando i 4 bit frazionari che `snn_core` conserva → spike decisi diversamente.
+> **Corretto il 2026-07-14** (+5 LUT, +0,1 %): ora **0 / 240.000** control-step su 4 champion × 60 traiettorie.
+> Cancello nuovo: **`run_b2_parity_dataset`** (`run_b2_parity` è profondo 16 campioni → **non è una prova**).
+> Storia completa e prove: **`HDL_PHASE.md` §2.1**. ⚠️ **Numeri di sintesi qui sotto: pre-fix** (delta +5 LUT).
+
 > **✅ B2 REALIZZATO E VERIFICATO (2026-07-10, commit `f20e812`).** Dopo lo studio sotto, la **variante B2**
 > (pesi in ROM + MAC serializzato, time-multiplexing) è stata realizzata: `matlab/snn_b2_fsm.m` = SNN Donatello
-> **1 neurone/clock** con V/fatigue in **`hdl.RAM`**, **bit-exact** a `snn_core` (err=0), **synth 3.652 LUT = 6.9%**
+> **1 neurone/clock** con V/fatigue in **`hdl.RAM`**, ~~**bit-exact** a `snn_core` (err=0)~~ **[vedi correzione sopra:
+> bit-exact solo DOPO il fix del 2026-07-14]**, **synth 3.652 LUT = 6.9%**
 > (**~6.3× meno** del 44%), **22 DSP**, **2 BRAM**, ~14 MHz, **cosim xsim PASSED**. Verifica: `test_b2_fsm` (parità)
 > + `tb_b2_fsm` (cosim). **Causa-radice sbloccante:** `MapPersistentVarsToRAM` NON funziona in loop → serve
 > **`hdl.RAM` esplicito** cycle-based (lo studio sotto riguarda l'**auto-flow**, che resta non-percorribile).
