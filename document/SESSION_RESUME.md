@@ -35,10 +35,18 @@
 > d'interfaccia, §3.1.1 *l'architettura segue il sorgente*, §3.1.2 `start` scollegato = fallimento silenzioso, §9) ·
 > **mappa cartella → `matlab/README.md`**.
 
-**Prossimi:** **SP2** (Donatello + ACC-IIDM open-loop) · **riordino fisico di `matlab/`** (refactor a sé: 21 file
-caricano i `.mat` via `fullfile(here,…)` → vanno riscritti i path e ri-verificato con `run_parity_tests` +
-`run_b2_parity`; target `core/ b2/ hdl/ lib/ test/ ann/ micro/ diag/ data/`) · **report** della digressione LUT
-(sorgente pronto: `DECODE_LUT_SWEEP.md`).
+**SP2 — FATTO** (2026-07-15, `a9fb61b`…`be19044`): blocco **`Donatello_ACC_IIDM`** in `snn_champions_lib`
+(campione LUT-64 + ACC-IIDM open-loop, `s,v,dv,v_l → accel`, **sola simulazione**). Matematica IIDM a **fonte
+unica** (`acc_iidm_open.m`, usata anche dal plant closed-loop). Cancelli: `run_block_acciidm_test` **dmax = 0 su
+5/5 traiettorie**, e **verificato sensibile** (variante mis-gated → 0.1836 → fallisce). Dettagli →
+**`document/SP2_ACC_IIDM.md`**.
+
+**Prossimi:** **bitstream + `report/FPGA_PHASE_B_REPORT`** da rigenerare (disallineati: costruiti col forward
+buggato §2.1 **e** col decode-256, mentre il campione ora è LUT-64) · **riordino fisico di `matlab/`** (refactor a
+sé: 21 file caricano i `.mat` via `fullfile(here,…)` → vanno riscritti i path e ri-verificato con
+`run_parity_tests` + `run_b2_parity`; target `core/ b2/ hdl/ lib/ test/ ann/ micro/ diag/ data/`) · **report**
+della digressione LUT (sorgente pronto: `DECODE_LUT_SWEEP.md`) · **asserzioni nei cancelli storici** (oggi
+stampano e basta; sono tutti verdi, quindi aggiungerle è sicuro — decisione dell'utente in sospeso).
 
 ---
 
@@ -91,9 +99,19 @@ conformance OK), sigmoide = **tabella costante (niente `exp`)**; tool `make_hdl_
 NON in C:\Xilinx/AMD.)* Doc sorgente report = `document/DECODE_LUT_SWEEP.md`. Commit
 `454327b`/`8f7f248`/`a4e8d15`/`c888e86`(+doc/figura). *(Skill `fpga-expert` disponibile. Prossimo: SP2 Donatello+ACC-IIDM open-loop.)*
 
-**SP2 — Donatello + ACC-IIDM open-loop.** IN CODA (outline nel design SP1 §5): Donatello **LUT-256** + ACC-IIDM
-open-loop, plug&play HDL-ready, **NON chiudere il loop velocità interno** (la velocità arriva da fuori; il loop si chiude
-nel test). Avrà spec proprio; oggi `build_plant_lib.m`/`cf_plant_lib.slx` hanno l'ACC-IIDM **closed-loop** (da aprire).
+**SP2 — Donatello + ACC-IIDM open-loop. ⇒ COMPLETO** (2026-07-15). Spec
+`docs/superpowers/specs/2026-07-14-sp2-donatello-acc-iidm-design.md`, piano `docs/superpowers/plans/2026-07-14-sp2-*`,
+**doc di processo `document/SP2_ACC_IIDM.md`** (leggere quello: qui solo il puntatore).
+
+Blocco **`Donatello_ACC_IIDM`** in `snn_champions_lib`: `s,v,dv,v_l → accel`, campione **LUT-64** (non 256:
+l'outline SP1 §5 precede la scelta del campione) + ACC-IIDM open-loop in **double**, loop velocità **aperto** come
+richiesto. **Sola simulazione, NON sintetizzabile** (fixed+double): conseguenza accettata del blocco unico —
+l'artefatto HDL-ready resta `Donatello_Champion`. Il `cf_plant_lib/ACC_IIDM` closed-loop **non è stato aperto**:
+ora è `acc_iidm_open` + integrazione, cioè la stessa matematica a **fonte unica** (`run_plant_parity` invariato).
+
+Cancelli: `run_block_acciidm_test` **dmax(accel) = 0 su 5/5 traiettorie**; latenza 340 ed edge-trigger **misurati**;
+il test è **verificato sensibile** al mis-gating dell'IIDM (variante con l'IIDM a ogni clock → **0.1836 m/s²** →
+fallisce). `run_block_sync_check` esteso: **8 blocchi, 0 stale**. Commit `a9fb61b`…`be19044`.
 
 ---
 
