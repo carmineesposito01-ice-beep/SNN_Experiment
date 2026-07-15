@@ -110,10 +110,27 @@ Criterio: l'IIDM in fixed **non deve diventare la fonte d'errore dominante**. I 
 - **Bitstream / deploy** su PYNQ-Z1 (decisione dell'utente).
 - Rigenerare il bitstream della SNN (resta il debito noto: forward §2.1 + decode-256).
 - L'MPC stesso e l'esecuzione del confronto: sono la loro spec/branch.
-- Ottimizzare area o Fmax: qui si misura, non si ottimizza. L'area è al 7,94% e un control-step dura ~800.000
-  clock contro i 341 usati ⇒ **né area né latenza sono vincoli**; l'unico numero da sorvegliare è l'**Fmax**
-  (8,5 MHz), che le divisioni potrebbero peggiorare. Se succede, è un **risultato da riportare**, non un
-  problema da inseguire (pipelining: eventuale SP a sé).
+- **Ottimizzare** area o Fmax. L'area è al 7,94% e un control-step dura ~800.000 clock contro i 341 usati ⇒ **né
+  area né latenza sono vincoli**. L'unico numero da sorvegliare è l'**Fmax (8,5 MHz)**.
+
+  **Regola per questo SP (decisa dall'utente): un calo di Fmax non è un problema, ma non è licenza di andarci
+  leggeri.** Cioè: non si ottimizza, non si peggiora **gratuitamente**, e **si registra il numero** (Fmax +
+  slack + path critico) perché lo sweep futuro abbia una baseline. Lo sweep del punto a slack minima (Timing
+  Analysis) è previsto ma **non è questo il momento**.
+
+  **Rischio noto, da misurare non da assumere.** `fpga-expert` ch02: *«Division is the slowest arithmetic —
+  always multi-cycle on FPGA»*; le digit-recurrence (restoring/non-restoring/SRT) producono **1 bit di
+  quoziente per ciclo**. Da un `/` dentro una chart — che non ha stato né handshake — HDL Coder plausibilmente
+  **srotola l'array in combinatorio** (~32 livelli per divisione): con 4 divisioni in cascata l'Fmax può
+  scendere parecchio. **È un'ipotesi, non un fatto**: la sintesi OOC (§6) la conferma o la smentisce, e il path
+  critico va guardato, non dedotto.
+
+  **Se l'Fmax collassa → è un risultato da riportare, non un problema da inseguire in questo SP.** La via
+  d'uscita è già identificata e fondata: *tutti* i divisori (`v0`, `b`, `sqrt(a·b)`, `s_safe`) sono **costanti
+  entro il control-step**, quindi si possono calcolare i 4 **reciproci una volta** e ridurre l'IIDM a sole
+  moltiplicazioni — è la tecnica di folding di `fpga-expert` ch09 (*«replace divisions with reciprocal
+  multiplications»*) con Newton-Raphson (ch02: *«compute 1/y then multiply»*). **SP a sé**, insieme al
+  pipelining.
 
 ## 8. File
 - `matlab/acc_iidm_open.m` → **type-parametrico** (double + fixed), unica fonte
