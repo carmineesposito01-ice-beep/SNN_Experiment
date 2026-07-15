@@ -62,5 +62,8 @@ Arch_Tested/**/__pycache__/
 # Parallel-track worktrees (Simulator / Simulink_Importer)
 .worktrees/
 
+# Visual brainstorming companion (mockup di design serviti in locale, non artefatti di progetto)
+.superpowers/
+
 sim_frame.png
 verify_*.png
