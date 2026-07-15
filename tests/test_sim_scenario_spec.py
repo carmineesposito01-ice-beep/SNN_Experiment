@@ -199,3 +199,21 @@ def test_json_rejects_an_unknown_block_kind_by_name():
           '"blocks":[{"kind":"teleport","ticks":10,"params":{}}]}'
     with pytest.raises(ValueError, match="teleport"):
         from_json(bad)
+
+
+def test_materialise_holds_the_60fps_budget():
+    """The live preview redraws on every drag step. Assert the PEAK, not the mean: it is the peak
+    the eye sees. A per-tick Python loop (the first prototype) costs ~3.7 ms and fails this on a
+    busy timeline -- which is why the materialiser is vectorised."""
+    import time
+    s = _spec([Block("preset", 150, {"name": "stop_and_go"}), Block("ramp", 150, {"to_v": 2.0}),
+               Block("const", 150, {"v": 2.0}), Block("sine", 150, {"amp": 5.0, "period": 60})])
+    for _ in range(3):
+        materialise(s, _PG, N=600)                       # warm up
+    ts = []
+    for _ in range(60):
+        t0 = time.perf_counter()
+        materialise(s, _PG, N=600)
+        ts.append((time.perf_counter() - t0) * 1000)
+    peak = max(ts)
+    assert peak < 16.7, f"materialise peaks at {peak:.2f} ms, over the 60 fps budget"

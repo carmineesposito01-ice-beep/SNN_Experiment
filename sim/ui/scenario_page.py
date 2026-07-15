@@ -14,8 +14,10 @@ from sim.scenario_spec import (A_MAX_RANGE, B_MAX_RANGE, Block, LeaderStyle, Sce
                                materialise)
 
 # Labels for READING the plane, not modes: the point is continuous and may sit anywhere.
-_QUADRANTS = [("placido", 1.4, 1.6), ("guardingo", 1.4, 8.4),
-              ("spavaldo", 3.6, 1.6), ("aggressivo", 3.6, 8.4)]
+# Parked in the CORNERS with an outward anchor, not at the quadrant centres: the centre is exactly
+# where you drop the point, and a 13 px dot sitting on the text hides it (seen in a render).
+_QUADRANTS = [("placido", 1.05, 1.15, (0.0, 1.0)), ("guardingo", 1.05, 8.85, (0.0, 0.0)),
+              ("spavaldo", 3.95, 1.15, (1.0, 1.0)), ("aggressivo", 3.95, 8.85, (1.0, 0.0))]
 
 
 class StylePad(pg.PlotWidget):
@@ -31,8 +33,8 @@ class StylePad(pg.PlotWidget):
         self.setYRange(*B_MAX_RANGE)
         self.setMouseEnabled(x=False, y=False)
         self.showGrid(x=True, y=True, alpha=0.2)
-        for name, a, b in _QUADRANTS:
-            t = pg.TextItem(name, color="#8a8a8a", anchor=(0.5, 0.5))
+        for name, a, b, anchor in _QUADRANTS:
+            t = pg.TextItem(name, color="#8a8a8a", anchor=anchor)
             t.setPos(a, b)
             self.addItem(t)
         self._dot = pg.ScatterPlotItem(size=13, brush=pg.mkBrush("#2a7fb8"),
@@ -46,10 +48,13 @@ class StylePad(pg.PlotWidget):
         p = self.getPlotItem().vb.mapSceneToView(ev.scenePos())
         self.set_point(float(np.clip(p.x(), *A_MAX_RANGE)), float(np.clip(p.y(), *B_MAX_RANGE)))
 
-    def set_point(self, a, b):
+    def set_point(self, a, b, emit=True):
+        """emit=False syncs the dot WITHOUT re-announcing: the page calls it when the style changed
+        from elsewhere, so the dot never disagrees with the curve. Announcing there would loop."""
         self._a, self._b = float(a), float(b)
         self._dot.setData([self._a], [self._b])
-        self.sigStyleChanged.emit(self._a, self._b)
+        if emit:
+            self.sigStyleChanged.emit(self._a, self._b)
 
 
 class ScenarioPage(QWidget):
@@ -106,6 +111,7 @@ class ScenarioPage(QWidget):
         self._spec = ScenarioSpec(name=self._spec.name, blocks=self._spec.blocks,
                                   style=LeaderStyle(float(a_max), float(b_max)),
                                   s_init=self._spec.s_init, v_init=self._spec.v_init)
+        self._pad.set_point(a_max, b_max, emit=False)   # the dot must never disagree with the curve
         self._refresh()
 
     def _refresh(self):

@@ -670,3 +670,17 @@ def test_app_use_scenario_appends_it_to_the_live_selector(qapp):
     assert win._selector.count() == before + 1
     assert win.scenario_count() == before + 1
     win._advance(0.2)                                 # and the built scenario actually runs
+
+
+def test_scenario_page_pad_never_disagrees_with_the_curve(qapp):
+    """TEETH: the dot and the spec are two views of one state. set_style used to redraw the curve
+    WITHOUT moving the dot, so a programmatic style change left the pad pointing at the old
+    quadrant -- caught by looking at a render, not by a test: the old test only checked the curve."""
+    from sim.scenario_spec import Block, LeaderStyle, ScenarioSpec
+    from sim.ui.scenario_page import ScenarioPage
+    page = ScenarioPage(params_gt=np.array([30.0, 1.5, 2.0, 1.5, 1.5]), N=600)
+    page.set_spec(ScenarioSpec(name="x", blocks=(Block("ramp", 600, {"to_v": 2.0}),),
+                               style=LeaderStyle(1.4, 8.4), s_init=33.5, v_init=21.0))
+    page.set_style(3.6, 1.6)
+    assert (page._pad._a, page._pad._b) == (3.6, 1.6)          # the dot followed
+    assert (page._spec.style.a_max, page._spec.style.b_max) == (3.6, 1.6)
