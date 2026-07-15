@@ -36,33 +36,16 @@ function accel = acc_iidm_open(s, v, dv, v_l, p, rst, T) %#codegen
   if isempty(alf) || rst, alf = cast(0, 'like', T.acc);   end
   if isempty(vlp) || rst, vlp = cast(v_l, 'like', T.st); end
 
-  if isFx
-    % fimath con RoundingMethod 'Zero': l'UNICA forma di divisione che HDL Coder genera per tipi
-    % SIGNED ('Floor' vale solo per unsigned). Prodotti e somme a precisione FISSA (T.acc), se no i
-    % word-length crescerebbero a ogni operazione.
-    FM = fimath('RoundingMethod', 'Zero', 'OverflowAction', 'Saturate', ...
-                'ProductMode', 'SpecifyPrecision', ...
-                'ProductWordLength', T.acc.WordLength, 'ProductFractionLength', T.acc.FractionLength, ...
-                'SumMode', 'SpecifyPrecision', ...
-                'SumWordLength', T.acc.WordLength, 'SumFractionLength', T.acc.FractionLength);
-    % NOMI NUOVI, non riassegnazione: `v0 = cast(v0, 'like', T.par)` cambierebbe il tipo di v0 (da
-    % sfix21_En13, che e' il tipo del decode, a sfix15_En8) e il codegen lo rifiuta -- "Variable types
-    % are incompatible". Una variabile NON puo' cambiare tipo (HDL_PHASE §9). Ne' serve `x(:)=`: qui
-    % il tipo di destinazione e' diverso per progetto, quindi la variabile giusta e' un'altra.
-    sq = setfimath(cast(s,  'like', T.st),  FM);
-    vq = setfimath(cast(v,  'like', T.st),  FM);
-    dq = setfimath(cast(dv, 'like', T.st),  FM);
-    lq = setfimath(cast(v_l,'like', T.st),  FM);
-    v0f = setfimath(cast(v0, 'like', T.par), FM);
-    Tf_ = setfimath(cast(T_, 'like', T.par), FM);
-    s0f = setfimath(cast(s0, 'like', T.par), FM);
-    af  = setfimath(cast(a,  'like', T.par), FM);
-    bf  = setfimath(cast(b,  'like', T.par), FM);
-    alf = setfimath(alf, FM); vlp = setfimath(vlp, FM);
-  else
-    sq = s; vq = v; dq = dv; lq = v_l;
-    v0f = v0; Tf_ = T_; s0f = s0; af = a; bf = b;
-  end
+  % Niente `setfimath` e niente ramo isFx qui: la fimath ('Zero' per le divisioni) e' gia' nei
+  % prototipi di acc_types, quindi ogni cast se la porta dietro e tutto combacia. In DOUBLE questi
+  % cast sono no-op -> il riferimento resta bit-identico (lo prova run_plant_parity).
+  % NOMI NUOVI (v0f/Tf_/...) e non riassegnazione: `v0 = cast(v0,'like',T.par)` cambierebbe il tipo
+  % di v0 (da sfix21_En13, il tipo del decode, a sfix15_En8) e il codegen lo rifiuta -- "Variable
+  % types are incompatible". Una variabile non puo' cambiare ne' TIPO ne' FIMATH (HDL_PHASE §9).
+  sq = cast(s,  'like', T.st);   vq = cast(v,   'like', T.st);
+  dq = cast(dv, 'like', T.st);   lq = cast(v_l, 'like', T.st);
+  v0f = cast(v0, 'like', T.par); Tf_ = cast(T_, 'like', T.par); s0f = cast(s0, 'like', T.par);
+  af  = cast(a,  'like', T.par); bf  = cast(b,  'like', T.par);
 
   % stima a_l (filtro OU su differenze finite del leader)
   alf = cast(ALPHA*alf + (1-ALPHA)*acc_div(T, isFx, lq - vlp, DT), 'like', T.acc);

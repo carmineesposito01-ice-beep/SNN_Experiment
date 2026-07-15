@@ -35,11 +35,24 @@ function T = acc_types(dt, nfrac)
       T = struct('st', z, 'par', z, 'acc', z, 'out', z);
     case 'fixed'
       f = nfrac;
+      % La fimath fa parte del TIPO, non e' una decorazione locale. Due ragioni, entrambe misurate:
+      %  1) RoundingMethod 'Zero' e' l'UNICA forma di divisione che HDL Coder genera per tipi signed
+      %     ('Floor' vale solo per unsigned, 'Nearest' viene rifiutata) -- spec SP3 §2;
+      %  2) attaccarla qui evita che una `setfimath` locale la cambi su una variabile gia' assegnata:
+      %     il codegen rifiuta anche il cambio di FIMATH, non solo di tipo -- "Properties of fimath
+      %     object must match. Property 'RoundMode' is 'nearest' ... but 'fix'". Mettendola nel
+      %     prototipo, ogni cast(x,'like',T.*) la porta con se' e tutto combacia per costruzione.
+      % Prodotti e somme a precisione FISSA: senza, i word-length crescerebbero a ogni operazione.
+      FM = fimath('RoundingMethod', 'Zero', 'OverflowAction', 'Saturate', ...
+                  'ProductMode', 'SpecifyPrecision', ...
+                  'ProductWordLength', 11 + f, 'ProductFractionLength', f, ...
+                  'SumMode', 'SpecifyPrecision', ...
+                  'SumWordLength', 11 + f, 'SumFractionLength', f);
       T = struct( ...
-        'st',  fi([], true, 11 + f, f), ...   % Q10.f
-        'par', fi([], true,  7 + f, f), ...   % Q6.f
-        'acc', fi([], true, 11 + f, f), ...   % Q10.f
-        'out', fi([], true,  5 + f, f));      % Q4.f
+        'st',  fi([], true, 11 + f, f, FM), ...   % Q10.f
+        'par', fi([], true,  7 + f, f, FM), ...   % Q6.f
+        'acc', fi([], true, 11 + f, f, FM), ...   % Q10.f
+        'out', fi([], true,  5 + f, f, FM));      % Q4.f
     otherwise
       error('acc_types:dt', 'dt deve essere ''double'' o ''fixed''');
   end

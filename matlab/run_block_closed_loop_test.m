@@ -199,7 +199,11 @@ function code = ego_code(C, hold, dvMode)
     '    cnt = cnt + 1;'
     ['    if mod(cnt, ' num2str(hold) ') == 0     % UN control-step ogni `hold` clock']
     ['      xe_new  = xe + ve*' M(C.DT) ';        % balistico: usa la v VECCHIA']
-    ['      ve_new  = min(max(ve + accel*' M(C.DT) ', 0), ' M(C.v_cap) ');']
+    ['      ve_new  = min(max(ve + double(accel)*' M(C.DT) ', 0), ' M(C.v_cap) ');   % double(): dal']
+    '                                     % 2026-07-16 (SP3) il blocco emette accel in FIXED (Q4.8);'
+    '                                     % senza, `ve` (double persistente) cambierebbe tipo e il'
+    '                                     % codegen lo rifiuta. Il plant e'' e resta in double: qui si'
+    '                                     % simula la fisica, non la si sintetizza.'
     '      ve_prev = ve; xe = xe_new; ve = ve_new;'
     '    end'
     '  end'

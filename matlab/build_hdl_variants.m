@@ -25,6 +25,7 @@ function build_hdl_variants()
   srcLut   = fileread(fullfile(here, 'snn_decode_lut.m'));
   srcHdl   = fileread(fullfile(here, 'snn_decode_hdl.m'));
   srcIidm  = fileread(fullfile(here, 'acc_iidm_open.m'));   % SP2: matematica IIDM (single source)
+  srcAccT  = fileread(fullfile(here, 'acc_types.m'));       % SP3: tipi dell'IIDM (single source)
 
   d = load(fullfile(here, 'champions_export.mat')); champs = d.champions;
   if iscell(champs), champs = [champs{:}]; end
@@ -79,29 +80,31 @@ function build_hdl_variants()
     fprintf('  costruito %s\n', names{i});
   end
 
-  % ---- SP2: blocco unico campione + plant ACC-IIDM open-loop (SOLA SIMULAZIONE) ----
-  % NON sintetizzabile per costruzione (mescola la SNN in fixed con l'IIDM in double): serve a testare
-  % la rete DENTRO un modello di car-following. L'artefatto HDL-ready resta Donatello_Champion.
+  % ---- SP2/SP3: blocco unico campione + plant ACC-IIDM open-loop, HDL-READY ----
+  % Dal 2026-07-16 (SP3) l'IIDM e' fixed-point (acc_types) e il blocco genera VHDL come gli altri:
+  % prima era in double e HDL Coder lo rifiutava (14 errori). Serve a dare il costo in silicio del
+  % controllore COMPLETO (rete + legge di controllo), cioe' cio' che si confronta con un MPC.
+  % ⚠️ HDL-ready NON vuol dire deployato: il bitstream PYNQ-Z1 resta la sola SNN.
   sub = [lib '/Donatello_ACC_IIDM'];
   if getSimulinkBlockHandle(sub) > 0, delete_block(sub); end
   add_block('built-in/Subsystem', sub, 'Position', [300, 30, 500, 70], ...
             'Description', acciidm_description(NCHAMP));
   add_block('simulink/User-Defined Functions/MATLAB Function', [sub '/SNN_ACC']);
   chart = sfroot().find('-isa', 'Stateflow.EMChart', 'Path', [sub '/SNN_ACC']);
-  chart.Script = acciidm_chart_code(NCHAMP, srcRom, srcTypes, srcFsm, srcLut, srcIidm, nrm);
+  chart.Script = acciidm_chart_code(NCHAMP, srcRom, srcTypes, srcFsm, srcLut, srcIidm, srcAccT, nrm);
   for j = 1:4
     add_block('built-in/Inport', [sub '/' in_names{j}], 'Port', num2str(j));
     add_line(sub, [in_names{j} '/1'], ['SNN_ACC/' num2str(j)]);
   end
   add_block('built-in/Outport', [sub '/accel'], 'Port', '1');
   add_line(sub, 'SNN_ACC/1', 'accel/1');
-  fprintf('  costruito Donatello_ACC_IIDM (SP2, sola simulazione)\n');
+  fprintf('  costruito Donatello_ACC_IIDM (SP2/SP3, HDL-ready)\n');
 
   set_param(lib, 'EnableLBRepository', 'on');
   save_system(lib, libfile);
   close_system(lib, 0);
   fprintf(['OK: %d blocchi SELF-CONTAINED HDL-ready (time-mux, I/O fisico, no start/done)' ...
-           ' + Donatello_ACC_IIDM (sola simulazione) in %s.slx\n'], numel(names), lib);
+           ' + Donatello_ACC_IIDM (HDL-ready, catena completa) in %s.slx\n'], numel(names), lib);
 end
 
 
@@ -248,12 +251,12 @@ function L = inlined_header()
 end
 
 
-function code = acciidm_chart_code(N, srcRom, srcTypes, srcFsm, srcLut, srcIidm, nrm)
+function code = acciidm_chart_code(N, srcRom, srcTypes, srcFsm, srcLut, srcIidm, srcAccT, nrm)
 %ACCIIDM_CHART_CODE  SP2: SNN LUT-N (fixed) + ACC-IIDM open-loop (double), gated sul refresh param.
   Lmain = {
     'function accel = SNN_ACC(s, v, dv, v_l)'
     '%#codegen'
-    '% SP2 - campione Donatello + ACC-IIDM open-loop. SOLA SIMULAZIONE (mescola fixed e double).'
+    '% SP2 - campione Donatello + ACC-IIDM open-loop. ENTRAMBI in fixed -> HDL-ready.'
     '%  Ingressi FIXED (>=20 bit frazionari); uscita accel (double). 1 cambio d''ingresso = 1'
     '%  control-step = DT 0.1 s; ogni ingresso va tenuto >=341 campioni (time-mux).'
     '  Tt = snn_types(''fixed'', 13);'
@@ -262,7 +265,7 @@ function code = acciidm_chart_code(N, srcRom, srcTypes, srcFsm, srcLut, srcIidm,
     '  if isempty(started)                % isempty(<persistent>) e'' l''unica forma che il codegen'
     '    pv = fi(zeros(5,1), 1, 21, 13);  % riconosce come prova di definizione: un test sul VALORE'
     '    xprev = xn; started = true;      % fallirebbe con "undefined on some execution paths".'
-    '    acc = 0; go = true;'
+    '    Ta = acc_types(''fixed''); acc = cast(0, ''like'', Ta.out); go = true;'
     '  else'
     '    go = any(xn ~= xprev);           % edge-triggered: 1 campione = 1 inferenza'
     '  end'
@@ -272,7 +275,7 @@ function code = acciidm_chart_code(N, srcRom, srcTypes, srcFsm, srcLut, srcIidm,
     ['    pv = snn_decode_lut(raw, ' num2str(N) ');']
     '    % ⚠️ L''IIDM gira SOLO qui: una volta per control-step. A ogni clock vedrebbe Δv_l = 0 per'
     '    %    340 campioni su 341 -> il filtro OU stimerebbe a_l ~ 0, in silenzio (spec §5).'
-    '    acc = acc_iidm_open(double(s), double(v), double(dv), double(v_l), double(pv(:)), false);'
+    '    acc = acc_iidm_open(s, v, dv, v_l, pv(:), false, acc_types(''fixed''));'
     '  end'
     '  accel = acc;                       % tenuto fino al control-step successivo'
     'end'
@@ -280,7 +283,7 @@ function code = acciidm_chart_code(N, srcRom, srcTypes, srcFsm, srcLut, srcIidm,
   L = [Lmain(:); {''}; normalize_code(nrm); {''}; inlined_header()];
   code = strjoin(L, newline);
   code = [code newline newline srcRom newline newline srcTypes newline newline srcFsm ...
-          newline newline srcLut newline newline srcIidm];
+          newline newline srcLut newline newline srcIidm newline newline srcAccT];
 end
 
 
@@ -289,12 +292,15 @@ function d = acciidm_description(N)
   L = {
     sprintf('Donatello_ACC_IIDM - campione Donatello (LUT-%d) + modello ACC-IIDM open-loop.', N)
     ''
-    '⚠️ BLOCCO DI SOLA SIMULAZIONE: NON e'' sintetizzabile. VERIFICATO, non assunto: dato in pasto a'
-    '   HDL Coder produce 14 errori. Causa radice = l''IIDM in double, che forza HDL Coder'
-    '   all''architettura "MATLAB Datapath" invece di "MATLAB Function"; li'' `tanh` e `min(v/v0,10)^4`'
-    '   non sono supportati in double e, di rimbalzo, viene rifiutato anche lo struct dei tipi'
-    '   (snn_types), che nei blocchi HDL-ready passa senza problemi.'
-    '   L''artefatto HDL-ready e'' Donatello_Champion. Dettagli: document/SP2_ACC_IIDM.md.'
+    'HDL-READY dal 2026-07-16 (SP3): HDL Coder genera il VHDL dal solo .slx, con DualPortRAM (cioe'''
+    '   l''architettura time-mux del deployato). Fino a quella data l''IIDM girava in double e HDL'
+    '   Coder rifiutava il blocco con 14 errori; ora l''IIDM e'' fixed-point (acc_types, Q10.8).'
+    '   Non servirono LUT: sqrt/tanh/x^4 sono NATIVI in HDL Coder e la divisione passa con'
+    '   RoundingMethod ''Zero''. Cancello: run_block_hdl_gate.'
+    ''
+    '⚠️ HDL-READY NON VUOL DIRE DEPLOYATO: il bitstream PYNQ-Z1 resta la sola SNN. Questo blocco da'''
+    '   il costo in silicio del controllore COMPLETO (rete + legge di controllo), che e'' cio'' che si'
+    '   confronta con un MPC. Dettagli: document/SP3_ACC_IIDM_HDL.md.'
     ''
     'FUNZIONE'
     '  Catena completa stato -> azione: la SNN stima i 5 parametri IDM, il modello ACC-IIDM li usa'

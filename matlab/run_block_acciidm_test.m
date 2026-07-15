@@ -43,7 +43,9 @@ function dmax = run_block_acciidm_test(K, trajIdx, hold)
   a_ref = zeros(K,1);
   for k = 1:K
     p = double(snn_decode_lut(fi(Rmex(k,:).', Tp), 64));      % 64 = decode del campione
-    a_ref(k) = acc_iidm_open(val(1,k), val(2,k), val(3,k), val(4,k), p, k == 1);
+    % IIDM in FIXED: il blocco dal 2026-07-16 (SP3) e' fixed, quindi confrontarlo col double
+    % renderebbe dmax=0 irraggiungibile. La distanza fixed-vs-double e' `run_acc_fixed_sweep`.
+    a_ref(k) = double(acc_iidm_open(val(1,k), val(2,k), val(3,k), val(4,k), p, k == 1, acc_types('fixed')));
   end
 
   % 3) blocco in streaming; campionamento DETERMINISTICO (non sui cambiamenti: due control-step

@@ -20,5 +20,7 @@ function [p, accel] = snn_cl_step(x_phys, W, rst) %#codegen
   raw = snn_core(xn, W, T, false);
   pf  = snn_decode_lut(raw, 64);                            % 64 = decode del campione
   p   = double(pf(:));
-  accel = acc_iidm_open(x_phys(1), x_phys(2), x_phys(3), x_phys(4), p, rst, acc_types('double'));
+  % IIDM in FIXED: e' il riferimento del BLOCCO, che dal 2026-07-16 (SP3) e' fixed e HDL-ready.
+  % La distanza fixed-vs-double NON si misura qui: e' un cancello a se', `run_acc_fixed_sweep`.
+  accel = double(acc_iidm_open(x_phys(1), x_phys(2), x_phys(3), x_phys(4), p, rst, acc_types('fixed')));
 end
