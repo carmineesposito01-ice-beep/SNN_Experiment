@@ -636,16 +636,19 @@ def test_scenario_page_preview_is_the_real_materialised_profile(qapp):
     np.testing.assert_array_equal(shown, expected)
 
 
-def test_scenario_page_style_pad_redraws_the_preview(qapp):
-    from sim.scenario_spec import Block, LeaderStyle, ScenarioSpec
-    from sim.ui.scenario_page import ScenarioPage
-    page = ScenarioPage(params_gt=np.array([30.0, 1.5, 2.0, 1.5, 1.5]), N=600)
-    page.set_spec(ScenarioSpec(name="x", blocks=(Block("ramp", 600, {"to_v": 2.0}),),
-                               style=LeaderStyle(2.0, 4.0), s_init=33.5, v_init=21.0))
-    before = page._curve.getOriginalDataset()[1].copy()
+def test_scenario_page_style_pad_redraws_the_composer_not_the_scenario(qapp):
+    """Cycle 3: the pad WAS the scenario's style. Cycle 4a: it is the composed block's bias, so the
+    scenario must NOT move until Add -- and the composer must. Same lesson (the pad is live), moved
+    onto the state the pad now owns."""
+    from sim.scenario_spec import Block
+    page = _page()
+    page.set_spec(_spec3([Block("ramp", 600, {"to_v": 2.0})]))
+    page.compose_new("ramp", ticks=300, params={"to_v": 18.0})
+    scen_before = page._curve.getOriginalDataset()[1].copy()
+    comp_before = page._composer_curve.getOriginalDataset()[1].copy()
     page.set_style(4.0, 9.0)                          # what dragging the pad calls
-    after = page._curve.getOriginalDataset()[1]
-    assert not np.array_equal(before, after)          # live: the curve really moved
+    np.testing.assert_array_equal(page._curve.getOriginalDataset()[1], scen_before)
+    assert not np.array_equal(page._composer_curve.getOriginalDataset()[1], comp_before)
 
 
 def test_scenario_page_emits_the_built_scenario(qapp):
@@ -672,15 +675,168 @@ def test_app_use_scenario_appends_it_to_the_live_selector(qapp):
     win._advance(0.2)                                 # and the built scenario actually runs
 
 
-def test_scenario_page_pad_never_disagrees_with_the_curve(qapp):
-    """TEETH: the dot and the spec are two views of one state. set_style used to redraw the curve
-    WITHOUT moving the dot, so a programmatic style change left the pad pointing at the old
-    quadrant -- caught by looking at a render, not by a test: the old test only checked the curve."""
-    from sim.scenario_spec import Block, LeaderStyle, ScenarioSpec
-    from sim.ui.scenario_page import ScenarioPage
-    page = ScenarioPage(params_gt=np.array([30.0, 1.5, 2.0, 1.5, 1.5]), N=600)
-    page.set_spec(ScenarioSpec(name="x", blocks=(Block("ramp", 600, {"to_v": 2.0}),),
-                               style=LeaderStyle(1.4, 8.4), s_init=33.5, v_init=21.0))
+def test_scenario_page_pad_never_disagrees_with_the_state(qapp):
+    """TEETH: the dot and the state are two views of one thing. set_style used to redraw the curve
+    WITHOUT moving the dot, so a programmatic change left the pad pointing at the old quadrant --
+    caught by looking at a render, not by a test: the old test only checked the curve.
+
+    The state the dot mirrors is now the BIAS, so that is where the teeth move."""
+    from sim.scenario_spec import Block
+    page = _page()
+    page.set_spec(_spec3([Block("ramp", 600, {"to_v": 2.0})], a=1.4, b=8.4))
+    page.compose_new("ramp", ticks=300, params={"to_v": 2.0})
     page.set_style(3.6, 1.6)
     assert (page._pad._a, page._pad._b) == (3.6, 1.6)          # the dot followed
-    assert (page._spec.style.a_max, page._spec.style.b_max) == (3.6, 1.6)
+    assert page._composer_bias() == (2.2, -6.8)                # 3.6-1.4, 1.6-8.4
+
+
+# --- cycle 4a: the iterative builder ---
+def _page():
+    from sim.ui.scenario_page import ScenarioPage
+    return ScenarioPage(params_gt=np.array([30.0, 1.5, 2.0, 1.5, 1.5]), N=600)
+
+
+def _spec3(blocks, a=2.0, b=4.0):
+    from sim.scenario_spec import LeaderStyle, ScenarioSpec
+    return ScenarioSpec(name="x", blocks=tuple(blocks), style=LeaderStyle(a, b),
+                        s_init=33.5, v_init=21.0)
+
+
+def test_every_library_preset_is_reachable_from_the_builder(qapp):
+    """MEASURED before this task: _params_for hardcoded "stop_and_go", so 1 preset of 9 was
+    reachable and 'combine the existing scenarios' meant combining one with itself."""
+    from sim.scenario import scenario_library
+    page = _page()
+    names = sorted(s.name for s in scenario_library(page._params_gt, N=600,
+                                                    rng=np.random.default_rng(0), include_tail=True))
+    have = sorted(page._preset.itemText(i) for i in range(page._preset.count()))
+    assert have == names, f"{len(have)} presets offered of {len(names)} in the library"
+    page._kind.setCurrentText("preset")
+    page._preset.setCurrentText("hard_brake")
+    assert page._params_for("preset") == {"name": "hard_brake"}     # not the hardcoded default
+
+
+def test_widgets_can_represent_every_kind_s_params(qapp):
+    """TEETH: this is what lets the params have ONE owner. A kind whose params the widgets cannot
+    express would force a shadow dict back into existence -- and silently rewrite blocks on Apply."""
+    page = _page()
+    for kind, params in [("preset", {"name": "cut_in"}), ("const", {"v": 12.0}),
+                         ("ramp", {"to_v": 3.5}), ("sine", {"amp": 5.0, "period": 60})]:
+        page._load_into_widgets(kind, 200, params, None)
+        assert page._params_for(kind) == params, f"{kind}: {page._params_for(kind)} != {params}"
+
+
+def test_changing_any_input_redraws_the_composer(qapp):
+    """'Build the piece while you see it' means every input is live -- not just the pad.
+
+    The kind change here is ramp -> sine, NOT ramp -> const: MEASURED, those two are the same
+    computation (_block_samples sends both to _rate_limited_toward with the same arguments; only the
+    param key differs), so a ramp->const change cannot move the curve and asserting it would fail
+    for a reason that has nothing to do with the inputs being live.
+    """
+    from sim.scenario_spec import Block
+    page = _page()
+    page.set_spec(_spec3([Block("ramp", 300, {"to_v": 2.0})]))
+    page.compose_new("ramp", ticks=300, params={"to_v": 18.0})
+    for name, widget_change in (("value", lambda: page._value.setValue(4.0)),
+                                ("ticks", lambda: page._ticks.setValue(200)),
+                                ("kind", lambda: page._kind.setCurrentText("sine")),
+                                ("period", lambda: page._period.setValue(30))):
+        before = page._composer_curve.getOriginalDataset()[1].copy()
+        widget_change()
+        after = page._composer_curve.getOriginalDataset()[1]
+        assert not np.array_equal(before, after), f"{name} changed and the preview did not"
+
+
+def test_composer_preview_starts_where_the_previous_blocks_left_off(qapp):
+    """TEETH: this is the claim the whole composer rests on. A preview that always started from
+    v_init would look plausible and be a lie for every block after the first."""
+    from sim.scenario_spec import Block
+    page = _page()
+    page.set_spec(_spec3([Block("ramp", 300, {"to_v": 2.0})]))
+    page.compose_new("ramp", ticks=300, params={"to_v": 18.0})
+    small = page._composer_curve.getOriginalDataset()[1]
+    assert abs(small[0] - 2.0) < 0.5           # starts from ~2 m/s (where block 1 ends), not 21
+    assert small[-1] > 15.0                    # and climbs toward 18
+
+
+def test_composer_preview_equals_the_scenario_slice_after_add(qapp):
+    """TEETH: what you judged is what you get."""
+    from sim.scenario_spec import Block
+    page = _page()
+    page.set_spec(_spec3([Block("ramp", 300, {"to_v": 2.0})]))
+    page.compose_new("ramp", ticks=300, params={"to_v": 18.0})
+    small = page._composer_curve.getOriginalDataset()[1].copy()
+    page._on_add()
+    full = page._curve.getOriginalDataset()[1]
+    np.testing.assert_array_equal(full[300:600], small)
+
+
+def test_composer_pad_edits_the_bias_and_shows_the_neutral(qapp):
+    from sim.scenario_spec import Block, LeaderStyle
+    page = _page()
+    page.set_spec(_spec3([Block("ramp", 600, {"to_v": 2.0})], a=2.0, b=4.0))
+    page.compose_new("ramp", ticks=300, params={"to_v": 2.0})
+    page._pad.set_point(3.0, 7.0)               # the ABSOLUTE point the user drops
+    assert page._composer_bias() == (1.0, 3.0)  # stored as a bias off the neutral (2,4)
+    assert page._pad._neutral == (2.0, 4.0)     # and the neutral is on screen as a second marker
+    assert page._spec.style == LeaderStyle(2.0, 4.0)   # the pad did NOT move the driver
+
+
+def test_reopening_a_row_round_trips_the_block_exactly(qapp):
+    """TEETH: MEASURED to corrupt before Task 3 -- a reopened preset came back as stop_and_go and a
+    sine came back with period 80. Reopen-then-Apply with no edit must be the identity."""
+    from sim.scenario_spec import Block
+    page = _page()
+    blocks = [Block("ramp", 150, {"to_v": 2.0}),
+              Block("preset", 150, {"name": "hard_brake"}),
+              Block("sine", 150, {"amp": 5.0, "period": 60}, bias=(1.0, 2.0)),
+              Block("const", 150, {"v": 8.0})]
+    page.set_spec(_spec3(blocks))
+    for i, original in enumerate(blocks):
+        page._on_row_selected(i)
+        assert page._composer_kind() == original.kind
+        assert page._composer_bias() == original.bias
+        page._on_add()                                    # Add acts as Apply on an open row
+        assert len(page._spec.blocks) == 4                # replaced, not appended
+        assert page._spec.blocks[i] == original, f"row {i}: {page._spec.blocks[i]} != {original}"
+
+
+def test_composer_does_not_break_the_existing_flow(qapp):
+    win = SimApp(CHAMP)
+    before = win._selector.count()
+    win.set_mode(3)
+    win._scenario_page._on_use()
+    assert win._selector.count() == before + 1
+    win._advance(0.2)
+
+
+def test_the_neutral_has_its_own_control(qapp):
+    """The pad edits the block's bias; without this the driver's character is unreachable.
+
+    Moves b_max, not a_max: this block ramps 21 -> 2, i.e. it BRAKES, so _rate_limited_toward reads
+    b_max and a_max cannot move the curve at all. The two axes are independent by design -- asserting
+    on the one the block does not use would fail for a reason that has nothing to do with the control.
+    """
+    from sim.scenario_spec import Block, LeaderStyle
+    page = _page()
+    page.set_spec(_spec3([Block("ramp", 600, {"to_v": 2.0})], a=2.0, b=4.0))
+    before = page._curve.getOriginalDataset()[1].copy()
+    page._neu_b.setValue(9.0)
+    assert page._spec.style == LeaderStyle(2.0, 9.0)      # the driver really changed
+    assert page._pad._neutral == (2.0, 9.0)               # and the dim marker followed
+    assert not np.array_equal(page._curve.getOriginalDataset()[1], before)   # so did the scenario
+
+
+def test_moving_the_neutral_keeps_the_bias_and_carries_the_block(qapp):
+    """TEETH: the bias is stored as a DIFFERENCE, so moving the neutral must move every block with
+    it -- that is what "one driver" means. An implementation that kept the absolute would silently
+    turn the bias into a different number."""
+    from sim.scenario_spec import Block
+    page = _page()
+    page.set_spec(_spec3([Block("ramp", 600, {"to_v": 2.0})], a=2.0, b=4.0))
+    page.compose_new("ramp", ticks=300, params={"to_v": 18.0}, bias=(1.0, 2.0))
+    assert (page._pad._a, page._pad._b) == (3.0, 6.0)     # neutral + bias
+    page._neu_a.setValue(1.0)                             # the driver gets calmer
+    assert page._composer_bias() == (1.0, 2.0)            # the CIRCUMSTANCE is unchanged...
+    assert page._pad._a == 2.0                            # ...so the block's absolute followed: 1+1
