@@ -22,9 +22,12 @@ chart che inlinea `snn_core` (1 chiamata = 1 inferenza) ⇒ parallela **superata
 
 ### Core single-source (il cuore — non toccare senza rilanciare la parità)
 `snn_core.m` (core type-parametrizzato: double **e** fixed) · `snn_types.m` (tipi `fi`) · `snn_normalize.m`
-(fisico→`xn`; **gira in SW/PS, non in HDL** — §3.1) · `snn_decode.m` (double) · `snn_decode_hdl.m` (fixed, σ-LUT 256 =
-**quella deployata**) · `snn_decode_lut.m` (fixed, σ-LUT **parametrica in N**) · `snn_entry.m` (normalize→core→decode) ·
-`champ_weights.m` (helper pesi).
+(fisico→`xn`; **gira in SW/PS, non in HDL** — §3.1) · `snn_decode.m` (double) · `snn_decode_lut.m` (fixed,
+σ-LUT **parametrica in N**; **N=64 è il decode del campione** dal 2026-07-14 — `../document/DECODE_LUT_SWEEP.md`) ·
+`snn_decode_hdl.m` (fixed, σ-LUT 256 — **LEGACY**: era il decode deployato *fino al* 2026-07-14; tenuto come
+golden di regressione, `snn_decode_lut(.,256)` gli è bit-identico) · `snn_entry.m` (normalize→core→decode) ·
+`acc_iidm_open.m` (**unica fonte** della matematica ACC-IIDM: `accel = f(stato, params)`, non integra; la usano
+il blocco SP2 e il plant `cf_plant_lib/ACC_IIDM`) · `champ_weights.m` (helper pesi).
 
 ### B2 — architettura deployata
 `snn_b2_fsm.m` (FSM time-mux, `hdl.RAM`, serializzazione **bit-exact** di `snn_core`) · `snn_top_b2.m` (top del
@@ -45,6 +48,15 @@ deployato) · `make_hdl_decode_lut.m` (decode LUT-N, sweep) · `make_hdl_ann.m` 
 `build_hdl_variants.m` → aggiunge alla stessa libreria i 7 blocchi **HDL-ready SELF-CONTAINED**
 (`Donatello_Champion` + `Donatello_LUT{16..512}`) ·
 `build_plant_lib.m` → `cf_plant_lib.slx` (ACC-IIDM) · `build_closed_loop_demo.m`.
+
+Lo stesso builder aggiunge anche **`Donatello_ACC_IIDM`** (SP2): campione LUT-64 + ACC-IIDM **open-loop**,
+`s,v,dv,v_l → accel`, per testare la rete dentro un modello di car-following. ⚠️ **Sola simulazione: NON
+sintetizzabile** (mescola fixed e double) — l'artefatto HDL-ready resta `Donatello_Champion`.
+Doc: `../document/SP2_ACC_IIDM.md`. Cancello: `run_block_acciidm_test.m`.
+
+La matematica ACC-IIDM ha **una sola fonte**, `acc_iidm_open.m`: la usano sia il blocco SP2 sia il plant
+closed-loop `cf_plant_lib/ACC_IIDM` (che aggiunge solo l'integrazione). Idem `local_normalize`
+(`build_hdl_variants:normalize_code`), condivisa fra i blocchi HDL-ready e quello SP2.
 
 #### Come si usano i blocchi HDL-ready (`Donatello_Champion`, `Donatello_LUT{N}`)
 *(ogni blocco porta la stessa spiegazione nella propria **Description**, visibile in Block Properties)*
@@ -81,6 +93,9 @@ siano rimasti indietro; se fallisce → `build_hdl_variants`) ·
 **`run_block_hdl_gate.m`** (cancello "altro PC": copia il solo `.slx`, toglie `matlab/` dal path, `makehdl` deve
 generare VHDL time-mux) · **`run_block_traj_test.m`** (blocchi pilotati con le traiettorie di `test_dataset.mat`:
 `dmax` vs riferimento **deve essere 0**; verifica anche che su ingresso costante l'inferenza sia UNA) ·
+**`run_block_acciidm_test.m`** ⭐ (SP2: la catena `s,v,dv,v_l → accel` del blocco `Donatello_ACC_IIDM` vs
+riferimento MEX + decode-64 + `acc_iidm_open`, **`dmax = 0`** sul dataset. Verificato **sensibile**: la variante
+con l'IIDM mis-gated lo fa fallire — `../document/SP2_ACC_IIDM.md`) ·
 `test_b2_fsm.m` · `test_top_b2.m` · `test_decode.m` · `test_ann_mlp.m` · `tb_b2_fsm.m` · `tb_hdl_Donatello.m`.
 
 ### Confronto ANN (Fase B)
