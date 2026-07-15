@@ -89,10 +89,38 @@ Il dettaglio di com'è fatto e di cosa è stato costruito sta nelle sezioni sott
    il test scritto su quella premessa **passava col `getattr` rimosso** (vedi memoria
    `right-conclusion-wrong-premise`). (d) Il **cross-check è asimmetrico**: `declared > inferred` = normale
    (l'inferenza è un lower bound), solo `declared < inferred` è impossibile e alza.
-3. **CICLO 3/3 — costruttore di scenari personalizzati** *(= punto 2 dell'utente)*. Da brainstormare.
-   Possiede **due debiti misurati**: (a) `sim/events.py:37-38` fa ripartire la rampa dal `v_leader[t]`
-   **grezzo** → due `brake_leader` in fila fanno **saltare il leader da 5.00 a 21.00 m/s in un tick**
-   (misurato); (b) `ReplayLog.seed` è alimentato con l'**indice di scenario** (`sim/ui/app.py:591`).
+3. **IN CORSO — ciclo 3/3: costruttore di scenari** *(= punto 2 dell'utente)*. ✅ brainstorming ·
+   ✅ **spec APPROVATA**: `docs/superpowers/specs/2026-07-15-scenario-builder-design.md` (`1ae63a8`,
+   stile 2D `8e4dfbf`). → **prossimo: `superpowers:writing-plans`** → plan → TDD.
+   **Cosa**: 4° modo. Uno scenario si **descrive** (timeline di blocchi + stile del leader) e si
+   **materializza** nei 600 float che `SimStepper` già mangia — `manual_scenario()` è già la porta,
+   quindi a valle non cambia nulla. Blocchi: `preset` (fetta di `scenario_library()`, **as-is**),
+   `const`, `ramp(→v)`, `sine`. Formato **JSON dichiarativo**, non 600 float.
+   **⚠️ IL VINCOLO CHE PLASMA IL DESIGN**: `build_scenarios` (`utils/closed_loop_eval.py:332`) è
+   **INVARIANTE per contratto scritto nel suo docstring** ("i 5 scenari storici INVARIATO, così
+   eval_safety legacy non cambia") — i report ci girano sopra. Quindi lo stile **non parametrizza i
+   preset**; funziona al contrario: **il blocco dice COSA, lo stile dice COME**. `ticks` è lo *slot*
+   del blocco, lo stile possiede il *rate*, **mai** lo slot.
+   **Stile = PUNTO CONTINUO nel piano (a_max 1-4, b_max 1-9)**, non un cursore: accelerazione e
+   decelerazione sono **indipendenti**, un cursore solo percorre la sola diagonale Placido↔Aggressivo e
+   rende **irraggiungibili** i due quadranti misti — *Guardingo* (a↓ b↑: il gap si chiude di colpo → TTC
+   minimo) e *Spavaldo* (a↑ b↓: gap che si riaprono lenti → prova la ripresa). `b_max=9` = **`B_MAX`
+   verificato** (`closed_loop_eval.py:22`), quello che `panic_stop` usa già.
+   **Anteprima LIVE mentre trascini, senza throttle — misurato**: 0 frame su 120 fuori dal budget 60 fps,
+   picco 14.18 ms su 16.7. ⚠️ Ma il collo di bottiglia è **il nostro codice**: `materialise` 3.68 ms vs
+   `setData` 1.91 → **`materialise` VA VETTORIZZATO** (vincolo di design, non ottimizzazione: c'è un test
+   che asserisce sul picco).
+   **`events.py` SCONGELATO** per il fix della rampa (decisione utente, su evidenza: `closed_loop_eval`
+   non ha eventi live → nessun golden esterno; il test di bit-identità copre solo `injector=None`;
+   l'injector è **iniettato** in `SimStepper`). Fix di una riga, **l'ordine è portante**: catturare
+   `_effective_leader(t, base_vl)` **prima** di sovrascrivere `_brake`.
+   ⚠️ **Il costruttore NON attiva quel bug** (genera il profilo; il bug è negli eventi live, cioè il
+   bottone premuto due volte): il fix è qui **per proprietà, non per causa**. Una versione precedente di
+   questa riga diceva il contrario.
+   **FUORI**: `params_gt` non editabile (è l'oracolo, non una proprietà dello scenario — e la Meso lo
+   ignora, `app.py:383`, quindi mentirebbe in silenzio); **leader con dinamica propria → PARCHEGGIATO
+   per una discussione a fine blocco** (decisione utente); verbi/trigger nuovi (YAGNI).
+   **Debito residuo, NON qui**: `ReplayLog.seed` alimentato con l'indice di scenario (`app.py:591`).
 4. **RINVIATA — merge `Simulator`→`main`** (coordinare col track `Simulink_Importer`: entrambi rinviano il
    merge, vanno sequenziati per far atterrare in `main` uno stato coerente).
 5. **STUDIO POST-MILESTONE — A/B float-vs-fixed** (unica idea di Fase 4 mai fatta). ⚠️ richiede un **forward
