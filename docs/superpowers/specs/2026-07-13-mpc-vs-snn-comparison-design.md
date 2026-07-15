@@ -1,10 +1,27 @@
 # MPC vs SNN Car-Following — Comparison Study (design spec)
 
-> **Date:** 2026-07-13 · **Track:** `Simulink_Importer` · **Status:** DESIGN APPROVED via brainstorming —
-> ready for `writing-plans` on **Phase A**. Produced by a one-question-at-a-time brainstorming session.
+> **Date:** 2026-07-13 · **Written on:** `Simulink_Importer` (design only — see below) · **Status:**
+> **DESIGN PHASE ONLY — PARKED. Execution NOT started.** Produced by a one-question-at-a-time
+> brainstorming session; the design is approved but **may still change** before execution.
+> **Purpose = a thesis/report-grade comparison** (maximum rigour on fairness, metrics, reproducibility).
+>
+> **📍 Where this lives / how to resume.** This spec + its Phase-A plan
+> (`docs/superpowers/plans/2026-07-13-mpc-vs-snn-phase-a.md`) were authored on the `Simulink_Importer`
+> branch **for storage only** — they are **a distinct thread** from that branch's active B1.5/HDL-library
+> work (whose `SESSION_RESUME.md` correctly labels these commits "di un altro filone"). **When the study is
+> actually executed it gets its own worktree/branch.** These documents are the durable record of the
+> decisions and the reasoning; they travel to `main` at the next reconvergence. **The rationale behind every
+> choice — including the alternatives considered and rejected — is in Appendix A: read it first on resume,
+> so the settled questions are not re-litigated.**
+>
+> **⚠️ Staleness caveat.** Written **2026-07-13**, *before* the B1.5 session (2026-07-14/15) that reworked
+> the champion library: HDL-ready self-contained blocks, edge-triggered FSM, `normalize` reciprocals at
+> Q.30, decode-LUT sweep. The Phase-A plan's API references (`snn_normalize`, `snn_entry`, `snn_b2_fsm`,
+> `champions_export.mat`, and the "the `.slx` block is the HDL-ready B2" premise) **must be re-verified
+> against the live code before execution** — the *design* stands, the *wiring details* may have moved.
+>
 > This spec defines the **whole study** and the **contracts between its phases**; each phase then gets its
-> own spec+plan cycle. **Purpose = a thesis/report-grade comparison** (maximum rigour on fairness,
-> metrics, and reproducibility).
+> own spec+plan cycle.
 
 ---
 
@@ -225,3 +242,37 @@ A can start immediately (SNN + plant + parity infra exist); B is the largest/ris
   bit-close, document the (small) definitional difference.
 - **MPC availability** — the study assumes the user's existing online MPC (Simulink) is the artefact under
   test; its formulation (horizon, cost, constraints, solver) is recorded at Phase A start.
+
+---
+
+## Appendix A — Decisions & rationale (the brainstorming record)
+
+*Read this first on resume.* Every settled question, **with the alternatives that were considered and why
+they were rejected**, so they are not re-litigated. Decisions 1–8 came from a one-question-at-a-time
+brainstorming; 9–11 are the user's own reframings, which materially improved the design.
+
+| # | Decision | Alternatives rejected | Why |
+|---|---|---|---|
+| 1 | **Purpose = thesis/report-grade** | *design decision* (practical pass/fail verdict, less formalism); *demonstrator* (headline numbers, less exhaustive) | It feeds the MBSE documentation → maximum rigour on fairness, metrics, reproducibility. |
+| 2 | **Axes = Pareto cost–performance** | *behaviour only* (simpler, but discards the SNN's whole value proposition); *behaviour + qualitative cost* (cost as an order-of-magnitude argument, unmeasured) | The project's thesis **is** "MPC-comparable behaviour at a fraction of the cost" — that claim requires measuring **both** axes. |
+| 3 | **MPC = online (QP/NLP per step)** | *(a fact about the user's MPC, not a choice)* — had it been **explicit MPC** (precomputed PWA lookup) | Online ⇒ per-step cost high **and variable** (solver-dependent WCET) ⇒ the strongest case for the SNN efficiency thesis, **and** what makes MPC-on-FPGA hard. With explicit MPC the efficiency argument would have shifted from solve-time to footprint/memory. |
+| 4 | **SNN = both float + fixed** | *float only* (clean baseline, cost taken from Phase B separately); *fixed only* (as-deployed fidelity) | Maximum fidelity: float = algorithmic baseline, fixed = what actually runs on FPGA. Proves quantisation doesn't break behaviour — and **settles the long-deferred float-vs-fixed A/B as a by-product**. |
+| 5 | **Info set = both regimes (MPC ±V2X preview)** | *no-preview only* (clean information parity); *preview only* (matches the project's V2X theme but hands MPC an undeclared edge) | **Isolates *information* advantage from *control* advantage.** Without both, any MPC win is confounded — you couldn't tell whether it drives better or just knows more. |
+| 6 | **Champion = Donatello only** | *one per family* (Raffaello BPTT + Donatello EventProp — shows the training dichotomy); *all 4* (full coverage, big matrix); *Raffaello only* (the default BPTT) | Donatello = the EventProp champion: **ρ≈0.057 (contractive), 0 dead neurons**, most neuromorphic-native, and **already realized as B2 on FPGA**. Best foot forward, smallest matrix. |
+| 7 | **Harness = one all-MATLAB pipeline** | *Simulink drives → **Python** computes metrics* (my original recommendation: reuse the validated suite); *hybrid: SNN in the Python simulator + MPC in Simulink* — **rejected outright** | User's call, and correct: **one script runs sims + metrics + comparisons + figures together**, so multi-run sessions can never mix fresh sims with **stale metrics/figures**. The metric-**drift** risk that motivated the Python option is neutralised by a **one-time parity check** of the MATLAB metrics vs the validated Python suite (the track already has the idiom: `run_parity_tests`, `plant_golden.mat`). The hybrid was rejected because **two different plants ⇒ non-identical dynamics ⇒ an unfair comparison**. |
+| 8 | **MPC on FPGA = full realization** | *staged* (estimate/feasibility → build only if promising — the de-risking recommendation); *estimate only* (HLS report + literature ballpark) | Gold standard: **real synthesized numbers**, symmetric with the SNN's Phase-B realized numbers. Accepted cost: a large sub-project (the **online QP is the hard part**). |
+| 9 | **Two planes (Simulink + FPGA)** — *user's addition* | the original single-plane design (behaviour in Simulink; cost = MPC-on-host-CPU vs SNN-on-FPGA) | The MPC **can also go on FPGA**. This **dissolved the platform-asymmetry threat** of the original design (host-CPU vs FPGA was an unfair cost axis) and promoted **FPGA-implementability itself to a first-class result**: fixed-latency feed-forward (SNN) vs iterative, variable-latency QP (MPC). |
+| 10 | **Own internal models, shared plant** — *user's framing* | forcing algorithmic equivalence between the two controllers | *"L'MPC lavorerà con il suo modello e così la nostra SNN. Ci interessano i risultati, in quanto i due lavorano per principi molto diversi."* → It is a **paradigm comparison judged on outcomes**. Equalize **only** the plant, scenarios, metrics, and the declared info regimes — never the control law. |
+| 11 | **The `.slx` block is the HDL-ready B2** — *user's precisation* | assuming the library block was still the earlier float MATLAB-Function version | The behavioural plane therefore tests **exactly the artefact the hardware plane synthesizes** — *"what you simulate is what you synthesize"*. It also fixes the meaning of the two SNN configs: **as-deployed** = the B2 block; **float** = `snn_core` in `double`. |
+
+### Framing insight worth preserving
+
+The comparison is **not** "does the SNN drive better than MPC". A fairly-tuned online MPC will tend to match
+or beat a learned-IIDM on *constrained optimality* — almost by construction, since MPC is optimal w.r.t. its
+own cost. The defensible, interesting claim is the **Pareto** one: *MPC-class car-following behaviour
+(string-stable, safe, comfortable) out of a spiking net on a sub-mW FPGA, at a fraction of the silicon cost*.
+**The novelty is the neuromorphic/FPGA realization, not the control law.** Frame the report that way.
+
+Corollary on honesty: MPC **guarantees** its constraints by construction; SNN+IIDM satisfies safety only
+**structurally + empirically** (IIDM is collision-free under its assumptions, plus the crash provision).
+That difference must be *stated*, not competed away.

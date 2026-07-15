@@ -3,8 +3,19 @@
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended)
 > or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax.
 >
-> **Spec:** `docs/superpowers/specs/2026-07-13-mpc-vs-snn-comparison-design.md`. This plan covers **Phase A
-> only** (the behavioural plane). Phases B (MPC-on-FPGA) and C (Pareto + report) get their own plans.
+> **Spec:** `docs/superpowers/specs/2026-07-13-mpc-vs-snn-comparison-design.md` — **read its Appendix A
+> (decisions & rationale) first.** This plan covers **Phase A only** (the behavioural plane). Phases B
+> (MPC-on-FPGA) and C (Pareto + report) get their own plans.
+>
+> **Status: PARKED — execution NOT started.** Authored 2026-07-13 on `Simulink_Importer` **for storage only**;
+> it is a **distinct thread** from that branch's active B1.5/HDL-library work. **The study executes on its own
+> worktree/branch** when it starts.
+>
+> **⚠️ Re-verify before executing.** Written *before* the B1.5 session (2026-07-14/15) that reworked the
+> champion library (HDL-ready self-contained blocks, edge-triggered FSM, `normalize` reciprocals at Q.30,
+> decode-LUT sweep). **Task 2's API references — `snn_normalize`, `snn_entry`, `snn_b2_fsm`,
+> `champions_export.mat`, and the "the `.slx` block is the HDL-ready B2" premise — must be checked against
+> the live code first.** The task *structure* stands; the *wiring details* may have moved.
 
 **Goal:** A single MATLAB pipeline that runs the closed-loop car-following comparison over a shared plant
 and the scenario bank, computes metrics (parity-checked against the validated Python suite), and produces

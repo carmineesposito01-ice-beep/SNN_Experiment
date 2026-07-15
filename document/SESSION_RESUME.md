@@ -37,7 +37,10 @@ caricano i `.mat` via `fullfile(here,…)` → vanno riscritti i path e ri-verif
 
 > **Stato più recente (in cima; il blocco Fase B/C sotto è il precedente).** ⚠️ Working tree: ci sono modifiche NON
 > mie non committate (`matlab/closed_loop_demo.slx`, `matlab/slblocks.m`) + commit `mpc-vs-snn` di un altro filone —
-> **non toccarli**. Artefatti generati sono gitignored (`snn_traj_fixed_r*_mex.*`, `b2_rom_active.m`, `codegen/`, `slprj/`).
+> **non toccarli**. *(Cos'è quel filone: studio confronto **MPC↔SNN**, **solo fase di design, parcheggiato** —
+> doc depositati qui ma non attivi: `docs/superpowers/specs/2026-07-13-mpc-vs-snn-comparison-design.md`
+> (**Appendice A = record decisionale, leggere prima**) + `docs/superpowers/plans/2026-07-13-mpc-vs-snn-phase-a.md`.
+> Eseguirà su un **suo worktree/branch**; le API del piano sono da ri-verificare dopo B1.5.)* Artefatti generati sono gitignored (`snn_traj_fixed_r*_mex.*`, `b2_rom_active.m`, `codegen/`, `slprj/`).
 
 **B1.5 — validazione HW approfondita (Vivado/sim, pre-silicio).** Spec master (7 filoni → 4 sotto-studi a/b/c/d) =
 `docs/superpowers/specs/2026-07-13-fase-b1.5-design.md`.
