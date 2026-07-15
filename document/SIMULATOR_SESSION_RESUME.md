@@ -7,7 +7,7 @@
 > iniettata prima che tu legga qualsiasi doc**: se memoria e questo file divergono su stato o azioni,
 > **vince questo file**. La memoria è un supplemento, non una dipendenza — **questo file deve bastare da solo**.
 
-## 📍 DOVE SIAMO (verificato 2026-07-15)
+## 📍 DOVE SIAMO (verificato 2026-07-16)
 
 - **Repo**: `D:\Project_MBSE\1.Reti Neurali\Rete_SNN_Test\CF_FSNN` · **worktree**: `.worktrees/Simulator` ·
   **branch**: `Simulator`.
@@ -15,21 +15,24 @@
   lo scrive lo cambia). **Verificalo tu**: `git log --oneline -1` + `git status` + `git rev-list --count
   origin/Simulator..HEAD`. **Atteso: working tree pulito, 0 commit non pushati.** Se non è così, capisci
   perché prima di lavorare.
-- **Env/test**: conda `cf_sim`. **224 test verdi** (**21** file sim + `test_champion_io.py`). Core SNN
+- **Env/test**: conda `cf_sim`. **244 test verdi** (**21** file sim + `test_champion_io.py`). Core SNN
   bit-identico **tranne `sim/events.py`**, scongelato di proposito nel ciclo 3 (vedi azione 3).
+  ⚠️ La suite intera gira in **~3-4 minuti** (`test_sim_ui_smoke.py` da solo ~2: 72 test, molti
+  costruiscono `SimApp` col champion). **Non è un blocco**: se lanci col timeout di default a 2 minuti
+  sembra appesa. Dalle almeno 420 s, o mandala in background.
 - **Altri track (NON confonderli con questo)**:
   - `main` → studio EventProp; ha il **suo** `document/SESSION_RESUME.md` (file diverso, altro track).
   - `Simulink_Importer` (`.worktrees/Simulink_Importer`) → FPGA/HDL, Fase B/C, B1.5 libreria champion +
     lo **studio MPC↔SNN parcheggiato (solo design)**. Ha il suo `document/SESSION_RESUME.md`.
   - `Presentation_NN` → già fuso in `main`.
 
-## 🎯 STATO ATTUALE — 🏁 MILESTONE: cockpit feature-complete (dichiarata 2026-07-13)
+## 🎯 STATO ATTUALE — 🏁 MILESTONE: cockpit feature-complete (2026-07-13) · builder iterativo (2026-07-16)
 
 Lo strumento è ora a **4 modi** — **Live cockpit (13 dock, + oracolo ghost)** + **Meso/Macro** +
-**Post-run dashboard** + **Scenari (costruttore)**. I **3 cicli** aperti il 2026-07-15 sono **tutti chiusi**
-(oracolo · identità checkpoint · costruttore di scenari). Ne sono nati **altri 2 dalla proposta
-dell'utente a valle**: **4a** (costruttore iterativo — spec approvata, tocca al plan) e **4b** (drag +
-advisory — da brainstormare). Vedi §AZIONI PENDENTI. Tutto committato e
+**Post-run dashboard** + **Scenari (costruttore ITERATIVO)**. I **3 cicli** aperti il 2026-07-15 sono
+**tutti chiusi** (oracolo · identità checkpoint · costruttore di scenari), e **anche il 4a** (costruttore
+iterativo) *(2026-07-16)*. Resta aperto solo il **4b** (drag + `custom` + advisory — da brainstormare
+**dopo** aver usato il 4a). Vedi §AZIONI PENDENTI. Tutto committato e
 pushato. Il dettaglio di com'è fatto sta nelle sezioni sotto (§Architecture, §Phase history).
 
 ## ▶️ AZIONI PENDENTI (puntatori, non dump — le azioni 1-3 SUPERANO il "next = merge" della milestone)
@@ -128,18 +131,69 @@ pushato. Il dettaglio di com'è fatto sta nelle sezioni sotto (§Architecture, �
    ignora, `app.py:383`, quindi mentirebbe in silenzio); **leader con dinamica propria → PARCHEGGIATO
    per una discussione a fine blocco** (decisione utente); verbi/trigger nuovi (YAGNI).
    **Debito residuo, NON qui**: `ReplayLog.seed` alimentato con l'indice di scenario (`app.py:591`).
-4. **IN CORSO — ciclo 4a: costruttore ITERATIVO (bias per-blocco + composer)** *(proposta utente
-   2026-07-15, a valle del ciclo 3)*. ✅ brainstorming · ✅ **spec APPROVATA**:
-   `docs/superpowers/specs/2026-07-15-iterative-builder-design.md` (`c14e793`).
-   → **prossimo: `superpowers:writing-plans`** → plan → TDD.
-   **Cosa**: ogni `Block` guadagna un **`bias` ADDITIVO** `(Δa, Δb)` sul **neutro**; il pannello di destra
-   diventa un **composer**: costruisci il blocco *vedendolo* (anteprima isolata, che parte dalla velocità
-   lasciata dai blocchi precedenti) prima di aggiungerlo.
+4. **✅ FATTO — ciclo 4a: costruttore ITERATIVO (bias per-blocco + composer)** *(proposta utente
+   2026-07-15, chiuso 2026-07-16)*. spec `…/specs/2026-07-15-iterative-builder-design.md` (`c14e793`) →
+   plan `…/plans/2026-07-15-iterative-builder.md` (`ba16319`, **corretto `b98aced`** — vedi sotto) →
+   **TDD completo** (`1169560`→`a2a3923`). **244 test verdi · core congelato intatto (diff vuoto) ·
+   retrocompatibilità provata su un file ciclo-3 vero (`max|diff| = 0` su 600 campioni) ·
+   render-verificato.**
+   **Cosa c'è ora**: ogni `Block` ha un **`bias` ADDITIVO** `(Δa, Δb)` sul **neutro**, e
+   `effective_style(block, neutral)` = `clamp(neutro + bias)`; il pannello di destra è un **composer**
+   (kind · params · pad che edita il bias · **anteprima isolata del blocco**) e il click su una riga la
+   riapre lì (Add diventa Apply). Il **neutro ha due spinbox sue**: muoverlo trascina ogni blocco con sé,
+   perché il bias è una *differenza*.
    **Perché additivo (ragionamento dell'utente, corretto)**: uno stile per-blocco *assoluto* lascerebbe N
    stili scollegati e nessun guidatore; col neutro+bias **il guidatore è UNO** — il neutro è il carattere,
-   il bias è la circostanza. Retrocompatibile per costruzione: `bias=None` = il neutro → gli scenari del
-   ciclo 3 restano byte-identici e il loro JSON si legge senza campo versione.
-5. **CICLO 4b — drag + blocco `custom` + advisory fisica** *(da brainstormare dopo aver usato 4a)*.
+   il bias è la circostanza. Retrocompatibile **per costruzione**: `bias=None` = il neutro → gli scenari
+   del ciclo 3 restano byte-identici e il loro JSON si legge **senza campo versione** (quella metà non ha
+   richiesto codice: il default `None` la rende vera da sola, e il suo test è passato al primo colpo).
+   ⚠️ **`ScenarioSpec.style` ora significa IL NEUTRO** — il nome del campo resta (rinominarlo romperebbe il
+   JSON del ciclo 3 per niente); il docstring porta il cambio.
+   🔴 **QUATTRO DIFETTI DEL PIANO, TROVATI RILEGGENDOLO CONTRO IL CODICE VERO PRIMA DI ESEGUIRLO**
+   (`b98aced`; tutti e quattro **misurati**, nessuno dedotto — 5 task → 7):
+   (a) **il neutro restava irraggiungibile**: il pad veniva riusato per il bias e nulla lo sostituiva. La
+   spec lo aveva **in scope** (§Scope IN punto 4) e la self-review del piano **aveva controllato gli 8 test
+   della spec senza mai leggerne lo Scope**;
+   (b) `compose_new` **crashava** (`KeyError: 'to_v'`): `set_point` emette → refresh col kind nuovo e i
+   params ancora vecchi;
+   (c) **due proprietari per i params** (un dict `_composer_params` accanto ai widget) = *lo stesso difetto
+   che il ciclo 3 aveva pagato* col pad che non seguiva la curva;
+   (d) **riaprire una riga e premere Apply la corrompeva in silenzio**: un `preset` tornava `stop_and_go`,
+   una `sine` tornava `period=80`.
+   **La correzione di (b)(c)(d) è UNA sola idea: un solo proprietario dei params, i widget** (derivati, mai
+   specchiati) — il che **obbliga** i widget a rappresentare tutto, e per questo il builder ha guadagnato la
+   **combo dei preset** e lo **spinbox del period**.
+   🎁 **EFFETTO COLLATERALE, ed è grosso**: `_params_for` cablava il nome del preset → **dei 9 preset in
+   libreria dal builder ne raggiungevi 1** (`stop_and_go`). Cioè la metà «*o come combinazione di quelli
+   esistenti*» della richiesta originale dell'utente era consegnata **a un nono**: potevi combinare
+   `stop_and_go` solo con sé stesso. **Ora ci sono tutti e 9.** (Idem `sine`: `period` cablato a 80 e
+   `amp = valore/2` → `amp=5.0` era irrappresentabile; ora un numero, un significato.)
+   ⚠️ **`const` e `ramp` SONO LA STESSA COMPUTAZIONE** (misurato): `_block_samples` manda entrambi a
+   `_rate_limited_toward(v0, target, n, style)` con gli stessi argomenti — **cambia solo il nome del
+   param**. Il menu offre 4 kind di cui 2 sono uno. **Non è un bug del 4a** (è del ciclo 3) e non è stato
+   toccato: rimuovere un kind romperebbe il JSON esistente ed è una decisione dell'utente. Ma **qualunque
+   test che assuma "cambio kind ramp↔const ⇒ la curva si muove" fallirà**, e non per il motivo che pensi.
+   👁️ **IL RENDER HA TROVATO IL TERZO BUG DELLA SESSIONE CHE I TEST DICHIARAVANO ASSENTE** (`a2a3923`,
+   con 242 verdi): il **pad restava vivo su un `preset`** — punto azzurro acceso in "aggressivo" su un
+   blocco che il bias non tocca. La spec lo vietava (*«ignored, and the composer says so»*) e il docstring
+   di `_on_kind_changed`, scritto due ore prima, dice *«an input that does nothing is a lie»*: avevo
+   nascosto `valore` e `periodo` e lasciato acceso il controllo più grande. Ora il pad **muore e dice
+   perché** (nota sotto il pad; e il **punto** va in grafite — `setEnabled` ingrigisce la cornice del
+   widget ma **non** un item della scena, e il punto *è* l'affermazione). Inoltre **un blocco `preset` non
+   registra più un bias**: raggiungibile in tre click (componi una rampa, muovi il pad, cambia kind), il
+   pad tiene il punto → il blocco veniva *salvato* con un bias che `materialise` ignora, e **la timeline
+   stampava `bias +1.6/+4.2` su un blocco che non ne ha**. Essere ignorato a valle non basta.
+   📏 **Budget di frame — la paura era giusta a metà** (misurato): la struttura c'è (un trascinamento del
+   pad fa **2** `materialise`, muovere il neutro ne fa **3**), il costo no — picco **2.09 ms** col pad e
+   **6.13 ms** col neutro, **0/60 fuori** dal budget 16.7. Il piano stimava ~11 ms moltiplicando 3.68×3:
+   **sbagliato**, perché 3.68 ms è una `materialise` da **600 tick** mentre quelle del composer sono da 150
+   e il prefisso è tagliato ai tick usati. *Il caso peggiore moltiplicato per tre non è una misura.*
+   ⚠️ **Nota di processo**: il codice del neutro è stato scritto **prima** dei suoi test (una riscrittura
+   dell'intero file se l'è portato dietro). La garanzia è stata recuperata **per sabotaggio**: scollegare il
+   controllo — *cioè esattamente ciò che il piano originale avrebbe consegnato* — fa cadere 2 test.
+5. **▶️ PROSSIMA — ciclo 4b: drag + blocco `custom` + advisory fisica** *(da brainstormare **dopo** aver
+   usato il 4a: il punto era proprio sapere se il drag ti serve davvero una volta provato il flusso
+   iterativo)*.
    ⚠️ **Il taglio 4a/4b è stato spostato DA UNA MISURA, non da un'opinione**: l'advisory ("accendi i tratti
    che il leader non può fare") sembrava stare in 4a perché i preset sono verbatim e possono eccedere un
    neutro placido. **Misurato sulla libreria vera: è quasi tutto rosso FALSO.** `cut_in` chiede **−75 m/s²**,
