@@ -89,6 +89,51 @@ PyTorch(fp32) ─①─ MATLAB double ─②─ MATLAB fixed(fi Q?.13) ─③─
 - **③** ✅ **verificato in cosim** (xsim, 2026-07-10): TB `raw_expected.dat` → `TEST COMPLETED (PASSED)`, RTL bit-esatto vs il fixed MATLAB. Non più solo garantito.
 - **④** ✅ **synth + P&R REALI** (Vivado 2026.1, 2026-07-10, §0): LUT 44%/slice 53%, DSP 32, 0 BRAM, ~5 MHz. Resta solo la sintesi degli altri 3 champion.
 
+## ⚠️ §2.1 La parità B2 NON è verificata come si credeva (MISURATO 2026-07-14)
+
+> **La claim «`snn_b2_fsm` è una serializzazione bit-exact di `snn_core`» vale solo per ~16 passi.**
+
+**Il buco di copertura.** Il cancello `run_b2_parity` — quello che dichiara *«0 mismatch su tutti e 4 i champion»* —
+gira sulla sequenza golden `c.x_phys`, che è lunga **16 campioni**. Anche la **cosim** di Fase B era su **16 campioni**.
+Le traiettorie d'uso reale sono lunghe **1000**. L'intera verifica della catena B2 è quindi **profonda 16 passi**.
+
+**Estensione misurata** (forward B2 vs core, **stesso `xn`**, intero `test_dataset.mat`, harness `snn_traj_b2` + MEX):
+
+| metrica | valore |
+|---|---|
+| traiettorie con almeno una divergenza | **60 / 60 (100 %)** |
+| control-step divergenti | **49.436 / 60.000 (82,4 %)** |
+| divergenza massima (raw) | **2,543** |
+| primo step divergente | da **1** a **362** (mediana ~100) → **oltre** i 16 del cancello |
+
+`run_b2_parity('Donatello')` resta **verde (0 mismatch su 16 step)**: non è in contraddizione: semplicemente **non
+arriva dove il problema vive**.
+
+**Impatto funzionale: BENIGNO** (misurato sulle stesse 60 traiettorie, decode deployato, aggregazione del riferimento):
+
+| forward | accuratezza params |
+|---|---|
+| `snn_core` (riferimento) | **83,971 %** |
+| `snn_b2_fsm` (deployato) | **83,965 %** |
+| differenza | **−0,007 punti** (rumore) |
+
+`|params FSM − params core|` aggregati: **max 0,163 · mediana 0,042**. Cioè: l'82 % di divergenza sul `raw` **non**
+si trasferisce all'uscita — il transitorio decade prima di contaminare la media della 2ª metà. **Il bitstream funziona;
+ciò che è errata è la CLAIM di bit-exactness, non la rete.** *(Il che non chiude il caso: senza conoscere la causa non
+si può escludere che in altri regimi/champion l'effetto sia peggiore.)*
+
+**Conseguenze.**
+1. La parità ③ della catena §2 è dimostrata **solo sui primi ~16 passi**, non in generale.
+2. Il cancello va **esteso al dataset** (non a una sequenza corta): `scratchpad/parity_all_traj.m` è la misura;
+   `matlab/snn_traj_b2.m` è il kernel MEX-abile del forward serializzato (senza MEX sarebbe ~20 M chiamate).
+3. I blocchi di libreria `Donatello_*` **non c'entrano**: usano `snn_b2_fsm` fedelmente e stavano solo **propagando**
+   una discrepanza già presente nella catena deployata.
+4. **Causa: da determinare** (debug sistematico). Ipotesi **già escluse**: quantizzazione della ROM (tutti i pesi
+   ≥ 0,0625, errore di bake **0**) e normalizzazione (il test alimenta l'FSM con lo stesso `xn` float del riferimento).
+
+> **Lezione di metodo**: un cancello verde va letto insieme a **su cosa gira**. 16 campioni di una sequenza non sono
+> una prova di equivalenza per un sistema con stato che evolve su 1000 passi.
+
 ## §3 I tre livelli (dove si agisce — regola)
 1. **VHDL a mano → MAI.** Rompe la garanzia 1:1, non riproducibile, e ora **non verificabile** (niente simulatore).
 2. **Config HDL Coder → SÌ (leva primaria).** Bit-preserving.
