@@ -35,15 +35,12 @@ function ok = run_block_hdl_gate(blockName)
   ok = false;
   load_system(fullfile(work, [lib '.slx']));
 
-  % Questo gate cabla 5 uscite (v0,T,s0,a,b): vale SOLO per i blocchi HDL-ready. Lanciato su
-  % `Donatello_ACC_IIDM` (1 sola uscita, sola simulazione) fallirebbe cablando le porte -> un errore
-  % d'HARNESS che si scambierebbe per un verdetto di HDL Coder: una conferma FALSA del "non
-  % sintetizzabile". Meglio fermarsi e dirlo. (Che quel blocco non sia sintetizzabile e' verificato
-  % a parte: 14 errori, document/SP2_ACC_IIDM.md §Sintetizzabilita'.)
+  % Il gate cabla tante uscite quante ne ha il blocco: i Donatello_* ne hanno 5 (v0,T,s0,a,b),
+  % Donatello_ACC_IIDM una sola (accel). Fino al 2026-07-15 erano fisse a 5: sul blocco SP2 il gate
+  % falliva cablando le porte, cioe' sull'HARNESS -> e quell'errore si sarebbe scambiato per un
+  % verdetto di HDL Coder (una conferma FALSA del "non sintetizzabile").
   nOut = numel(find_system([lib '/' blockName], 'SearchDepth', 1, 'BlockType', 'Outport'));
-  assert(nOut == 5, ['run_block_hdl_gate vale solo per i blocchi HDL-ready (5 uscite v0,T,s0,a,b): ' ...
-         '"%s" ne ha %d. Se e'' Donatello_ACC_IIDM, e'' di SOLA SIMULAZIONE per progetto ' ...
-         '(document/SP2_ACC_IIDM.md): non ha senso passarlo da questo cancello.'], blockName, nOut);
+  assert(nOut >= 1, 'il blocco "%s" non ha uscite: non c''e'' nulla da generare', blockName);
 
   mdl = 'gate_mdl'; new_system(mdl); load_system(mdl);
   sub = [mdl '/DUT'];
@@ -54,7 +51,7 @@ function ok = run_block_hdl_gate(blockName)
               'OutDataTypeStr', 'fixdt(1,32,20)', 'SampleTime', '1');   % >=20 bit frazionari (vedi §3.1.3)
     add_line(mdl, ['i' num2str(j) '/1'], ['DUT/' num2str(j)]);
   end
-  for j = 1:5
+  for j = 1:nOut
     add_block('built-in/Outport', [mdl '/o' num2str(j)], 'Port', num2str(j));
     add_line(mdl, ['DUT/' num2str(j)], ['o' num2str(j) '/1']);
   end
@@ -70,7 +67,13 @@ function ok = run_block_hdl_gate(blockName)
   for i = 1:numel(v), fprintf('   %-30s %8d byte\n', v(i).name, v(i).bytes); end
   hasRAM = any(strcmp({v.name}, 'DualPortRAM_generic.vhd'));
   fprintf('   time-mux (DualPortRAM presente): %s\n', string(hasRAM));
-  assert(ok && hasRAM, 'gate fallito: VHDL assente o architettura non time-mux');
+  % Due fallimenti DIVERSI, due messaggi diversi: "non genera" e "genera l'architettura sbagliata"
+  % si diagnosticano in modi opposti.
+  assert(ok, ['gate fallito su %s: makehdl NON ha generato VHDL. Il messaggio vero (con riga e ' ...
+         'colonna) si ottiene dando lo script della chart a `codegen`: Simulink stampa solo ' ...
+         '"Errors occurred during parsing of ..." (SP2_ACC_IIDM.md §Gotcha).'], blockName);
+  assert(hasRAM, ['gate fallito su %s: VHDL generato ma SENZA DualPortRAM -> non e'' l''architettura ' ...
+         'time-mux del deployato (HDL_PHASE §3.1.1), e' ' quindi non e'' cio'' che va sull''FPGA.'], blockName);
   fprintf('\n=== GATE PASSATO: %s e'' self-contained e HDL-ready ===\n', blockName);
 end
 
