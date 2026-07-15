@@ -15,8 +15,8 @@
   lo scrive lo cambia). **Verificalo tu**: `git log --oneline -1` + `git status` + `git rev-list --count
   origin/Simulator..HEAD`. **Atteso: working tree pulito, 0 commit non pushati.** Se non è così, capisci
   perché prima di lavorare.
-- **Env/test**: conda `cf_sim`. **199 test verdi** (20 file sim + `test_champion_io.py`). Core SNN
-  **bit-identico** (congelato).
+- **Env/test**: conda `cf_sim`. **224 test verdi** (**21** file sim + `test_champion_io.py`). Core SNN
+  bit-identico **tranne `sim/events.py`**, scongelato di proposito nel ciclo 3 (vedi azione 3).
 - **Altri track (NON confonderli con questo)**:
   - `main` → studio EventProp; ha il **suo** `document/SESSION_RESUME.md` (file diverso, altro track).
   - `Simulink_Importer` (`.worktrees/Simulink_Importer`) → FPGA/HDL, Fase B/C, B1.5 libreria champion +
@@ -25,9 +25,10 @@
 
 ## 🎯 STATO ATTUALE — 🏁 MILESTONE: cockpit feature-complete (dichiarata 2026-07-13)
 
-Lo strumento a **3 modi** — **Live cockpit (13 dock)** + **Meso/Macro** + **Post-run dashboard** — è
-feature-complete per il ciclo, temprato da un QC ciclico e documentato. Tutto committato e pushato.
-Il dettaglio di com'è fatto e di cosa è stato costruito sta nelle sezioni sotto (§Architecture, §Phase history).
+Lo strumento è ora a **4 modi** — **Live cockpit (13 dock, + oracolo ghost)** + **Meso/Macro** +
+**Post-run dashboard** + **Scenari (costruttore)**. I 3 cicli aperti il 2026-07-15 sono **tutti chiusi**
+(oracolo · identità checkpoint · costruttore di scenari): vedi §AZIONI PENDENTI. Tutto committato e
+pushato. Il dettaglio di com'è fatto sta nelle sezioni sotto (§Architecture, §Phase history).
 
 ## ▶️ AZIONI PENDENTI (puntatori, non dump — le azioni 1-3 SUPERANO il "next = merge" della milestone)
 
@@ -89,9 +90,13 @@ Il dettaglio di com'è fatto e di cosa è stato costruito sta nelle sezioni sott
    il test scritto su quella premessa **passava col `getattr` rimosso** (vedi memoria
    `right-conclusion-wrong-premise`). (d) Il **cross-check è asimmetrico**: `declared > inferred` = normale
    (l'inferenza è un lower bound), solo `declared < inferred` è impossibile e alza.
-3. **IN CORSO — ciclo 3/3: costruttore di scenari** *(= punto 2 dell'utente)*. ✅ brainstorming ·
-   ✅ **spec APPROVATA**: `docs/superpowers/specs/2026-07-15-scenario-builder-design.md` (`1ae63a8`,
-   stile 2D `8e4dfbf`). → **prossimo: `superpowers:writing-plans`** → plan → TDD.
+3. **✅ FATTO — ciclo 3/3: costruttore di scenari** *(= punto 2 dell'utente)* *(2026-07-15)*.
+   spec `…/specs/2026-07-15-scenario-builder-design.md` (`1ae63a8`, stile 2D `8e4dfbf`) → plan
+   `…/plans/2026-07-15-scenario-builder.md` (`302ee0d`) → **TDD completo** (`239a0a4`→`41e9ca4`).
+   **224 test verdi · render-verificato.**
+   ⚠️ **`sim/events.py` NON è più bit-identico**: scongelato di proposito per il fix della rampa
+   (decisione utente, su evidenza). Gli altri 5 file del core restano intatti (diff vuoto), e
+   `utils/closed_loop_eval.py` è invariante (diff vuoto).
    **Cosa**: 4° modo. Uno scenario si **descrive** (timeline di blocchi + stile del leader) e si
    **materializza** nei 600 float che `SimStepper` già mangia — `manual_scenario()` è già la porta,
    quindi a valle non cambia nulla. Blocchi: `preset` (fetta di `scenario_library()`, **as-is**),
@@ -256,14 +261,14 @@ Questa sezione non duplica più l'elenco per non farlo divergere.
 - **Env**: `cf_sim` (conda). Tests/GUI: `conda run -n cf_sim python ...`.
 - **Tests**: run the 20 `test_sim_*.py` files **explicitly** (non-sim tests fail in cf_sim): `state
   backend stepper scenario events probe replay loop eventprop input_capture trajectory layout panels
-  ui_smoke reconstruct platoon meso_panels meso_road episode postrun`. ⚠️ **dal ciclo 2 aggiungere anche
-  `tests/test_champion_io.py`**: `champion_io` è `utils/`, non `sim/`, e **gira verde in `cf_sim`** (l'avvertenza
-  generica "i test non-sim falliscono" NON vale per lui). **199 verdi (2026-07-15: 148 pre-ghost + 19 ghost +
-  32 identità).**
+  ui_smoke reconstruct platoon meso_panels meso_road episode postrun` **+ `scenario_spec` (21°, dal ciclo 3)**.
+  ⚠️ **dal ciclo 2 aggiungere anche `tests/test_champion_io.py`**: `champion_io` è `utils/`, non `sim/`, e **gira
+  verde in `cf_sim`** (l'avvertenza generica "i test non-sim falliscono" NON vale per lui).
+  **224 verdi (2026-07-15: 148 pre-ghost + 19 ghost + 32 identità + 25 costruttore).**
   ⚠️ **Numeri "diversi" che troverai in giro = istantanee datate, NON regressioni** (erano veri al loro
   commit): test **135**, **142** (roadmap ~righe 201/205, era Fase 3–4), **148** (roadmap riga ~212 + spec/plan
-  dell'oracolo = baseline pre-ghost) e **167/176** (spec/plan del ciclo 2 = baseline pre-identità) →
-  **il numero buono è 199**. Dock **14** (roadmap §Fase 3, `phase3-qa-perf-report.md`) = era
+  dell'oracolo = baseline pre-ghost), **167/176** (spec/plan del ciclo 2 = baseline pre-identità) e **199**
+  (spec/plan del ciclo 3 = baseline pre-costruttore) → **il numero buono è 224**. Dock **14** (roadmap §Fase 3, `phase3-qa-perf-report.md`) = era
   quando il 14° dock era **`v_mem`** (poi rimosso **senza sostituto**; il dock Input nacque dopo, come rename
   di v_mem, e fu a sua volta revertito) → **il numero buono è 13**. I plan datati citano anche **9** e **11**
   dock: idem, storici. **Non trattarli come discrepanze da investigare.**
