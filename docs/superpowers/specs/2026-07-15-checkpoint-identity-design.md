@@ -163,9 +163,20 @@ no GUI, no filesystem — so it is testable on synthetic state-dicts, including 
 > well (6.65e-4 predicted vs 7.5e-4 observed at k=18, H=32). Report it as an order of magnitude, and
 > never round it to "certain".
 
-**Cross-check, not just fallback.** When both a declared source (1–3) and the inference are available and
-**disagree**, that is not a tie to break — one of them is wrong about the model in front of you. Raise,
-loudly, naming both values. Silently preferring either is how the current bug behaves.
+**Cross-check — but the test is asymmetric, not equality.** ⚠️ An earlier draft of this spec said "if the
+declared source and the inference disagree, raise". **That is wrong and would have failed a normal case.**
+The inference is a **lower bound**: `delays.max()+1 ≤ max_delay`, with equality only if some synapse drew
+the top value. So:
+
+| relation | meaning | action |
+|---|---|---|
+| `declared == inferred` | agreement | use declared |
+| `declared > inferred` | **normal** — the inference underestimated (measured: happens ~1 in 1333 at 18/H=32) | use declared, no complaint |
+| `declared < inferred` | **impossible** — a synapse holds a delay ≥ declared, which that model could never have produced | **raise**, naming both values and both sources |
+
+The third row is the real cross-check: it is not "the two differ", it is "the declared value is refuted by
+the weights themselves". That is what catches a sidecar belonging to a different run, or an `arch` field
+copied from elsewhere. Silently preferring either source is how the current bug behaves.
 
 Family/variant detection is extended to **name** what it sees: `Wq/Wk/Wv` → `attn`, `inh_w_in` → `wta`,
 `layers_hidden.N.*` → `stacked_N`, `layer_hidden_0.*` + `skip_weight` → `stacked_2_skip`. Naming them is
@@ -202,7 +213,8 @@ per-column count so H=64 does not overlap. Everything else in the panels is alre
 |---|---|
 | `.pt` of a nameable but unsupported variant (`stacked_*`, `attn`, `wta`) | refused by name, with the reason; cockpit untouched |
 | `.pt` with an unrecognisable signature | refused as "unknown signature"; cockpit untouched |
-| sidecar and inference disagree on `max_delay` | raise, naming both values and both sources |
+| declared `max_delay` **below** the inference | raise: the weights refute it (a synapse holds a delay that model could not produce) |
+| declared `max_delay` **above** the inference | normal — the inference underestimated; use declared, silently |
 | no sidecar, baseline family | inferred; UI labels it inferred and reports the confidence |
 | `.pt` outside `champions/` | loads; selector keeps the 4 bundled + the opened one |
 | corrupt / non-torch file | refused with the torch error surfaced, cockpit untouched |
@@ -215,8 +227,11 @@ The resolver is pure → tested without Qt on synthetic state-dicts:
    reconstructed model must use `max_delay=12` and **drop zero synapses**. Today this silently drops
    68/128 with max |Δ| = 5.98 on the decoded params. Assert on the synapse count, not on a label.
 2. **EventProp is exact** — `delay_masks.shape[0]` wins; the inference is never consulted.
-3. **Cross-check has teeth** — sidecar says 18, inference says 6 → raises, naming both. Fails if either
-   is silently preferred.
+3. **Cross-check has teeth, in the right direction** — two cases, and getting them backwards is the
+   trap: sidecar says **6** while `delays` holds a 17 (inference 18) → **raises**, naming both, because
+   the weights refute the sidecar. Sidecar says **18** while the inference says 17 → **passes silently**
+   and uses 18, because a lower bound under-shooting is the expected behaviour, not a conflict. A test
+   that only checks "differ → raise" would pass a wrong implementation and fail a right one.
 4. **Naming, not mislabelling** — `attn`/`wta`/`stacked_2_skip` state-dicts resolve to their own names
    with `supported=False`; none of them comes back as `"baseline"`.
 5. **`multi_rate` is accepted as baseline** and the resolver says the family was matched by signature,
@@ -231,7 +246,12 @@ The resolver is pure → tested without Qt on synthetic state-dicts:
    simulator entirely, which no sim test would ever catch.
 10. **Core bit-identity** — the frozen six untouched; full sim suite green.
 
-Baseline: **167 sim tests green** (2026-07-15, after cycle 1). Env `cf_sim`, 20 test files explicitly.
+**Where the tests live**: `tests/test_champion_io.py` — `champion_io` is `utils/`, not `sim/`, and that
+file already exists and **runs green in `cf_sim`** (verified: 9 passed). The resume's blanket warning
+that "non-sim tests fail in that env" does **not** hold for it. So the cycle's verification command is
+the 20 sim files **plus** `tests/test_champion_io.py`; the list of 20 stays 20.
+
+Baseline: **167 sim tests green** + **9 champion_io tests green** (2026-07-15, after cycle 1).
 No LAPACK (OMP #15).
 
 ## Known debt (out of scope, do NOT fix here)
