@@ -524,13 +524,18 @@ class TrajectoryPanel(QWidget):
         self._c_vl = self._pv.plot(pen=pg.mkPen("#d1495b", width=2))
         self._c_dv = self._pv.plot(pen=pg.mkPen("#e8871e", width=1, style=Qt.DashLine))
         self._c_a = self._pa.plot(pen=pg.mkPen("#7b3fa0", width=2))
+        self._g_s = self._pg.plot(pen=pg.mkPen(**_GHOST_PEN))     # oracle gap
+        self._g_v = self._pv.plot(pen=pg.mkPen(**_GHOST_PEN))     # oracle ego speed
+        self._g_a = self._pa.plot(pen=pg.mkPen(**_GHOST_PEN))     # oracle accel
+        # NO ghost leader curve: the leader is the same vehicle in both worlds.
         self._cursors = [_add_cursor(p) for p in (self._pg, self._pv, self._pa)]
 
     def set_cursor(self, x):
         _set_cursor(self._cursors, x)
 
     def clear(self):
-        for c in (self._c_s, self._c_v, self._c_vl, self._c_dv, self._c_a):
+        for c in (self._c_s, self._c_v, self._c_vl, self._c_dv, self._c_a,
+                  self._g_s, self._g_v, self._g_a):
             c.setData([])
 
     def update_frame(self, traj):
@@ -543,8 +548,25 @@ class TrajectoryPanel(QWidget):
         self._c_dv.setData(a["dv"])
         self._c_a.setData(a["a_ego"])
 
+    def set_ghost(self, traj):
+        """Draw the oracle's gap/speed/accel, or blank them when traj is None."""
+        if traj is None:
+            for c in (self._g_s, self._g_v, self._g_a):
+                c.setData([])
+            return
+        a = traj.arrays()
+        if a["t"].size == 0:
+            return
+        self._g_s.setData(a["s"])
+        self._g_v.setData(a["v"])
+        self._g_a.setData(a["a_ego"])
+
 
 _SAFETY_CAP = 30.0     # _TTC_REF_S / _DRAC_REF are imported from the frozen source (top of file)
+
+# Oracle ghost: grey dotted, the same reference grey SynOpsPanel._ref_c uses. Legible on the dark
+# theme (render-verified). The oracle is "Master Splinter" in this project's figures.
+_GHOST_PEN = dict(color="#9a9a9a", width=1.6, style=Qt.DotLine)
 
 
 class SafetyPanel(QWidget):
@@ -570,6 +592,9 @@ class SafetyPanel(QWidget):
         self._c_ttc = self._pt.plot(pen=pg.mkPen("#d1495b", width=2))
         self._c_th = self._pt.plot(pen=pg.mkPen("#2a7fb8", width=1, style=Qt.DashLine))
         self._c_drac = self._pd.plot(pen=pg.mkPen("#e8871e", width=2))
+        self._g_ttc = self._pt.plot(pen=pg.mkPen(**_GHOST_PEN))    # oracle TTC
+        self._g_th = self._pt.plot(pen=pg.mkPen(**_GHOST_PEN))     # oracle time-headway
+        self._g_drac = self._pd.plot(pen=pg.mkPen(**_GHOST_PEN))   # oracle DRAC
         self._ttc_ref = pg.InfiniteLine(pos=_TTC_REF_S, angle=0, pen=pg.mkPen("#9a9a9a", style=Qt.DashLine))
         self._drac_ref = pg.InfiniteLine(pos=_DRAC_REF, angle=0, pen=pg.mkPen("#9a9a9a", style=Qt.DashLine))
         self._pt.addItem(self._ttc_ref)
@@ -580,7 +605,8 @@ class SafetyPanel(QWidget):
         _set_cursor(self._cursors, x)
 
     def clear(self):
-        for c in (self._c_ttc, self._c_th, self._c_drac):
+        for c in (self._c_ttc, self._c_th, self._c_drac,
+                  self._g_ttc, self._g_th, self._g_drac):
             c.setData([])
 
     def update_frame(self, traj):
@@ -590,3 +616,17 @@ class SafetyPanel(QWidget):
         self._c_ttc.setData(np.clip(metrics.ttc(a["s"], a["dv"]), 0, _SAFETY_CAP))
         self._c_th.setData(np.clip(metrics.time_headway(a["s"], a["v"]), 0, _SAFETY_CAP))
         self._c_drac.setData(metrics.drac(a["s"], a["dv"]))
+
+    def set_ghost(self, traj):
+        """Draw the oracle's TTC/headway/DRAC with the SAME formulas and the SAME clip as the net's
+        curves, or blank them when traj is None."""
+        if traj is None:
+            for c in (self._g_ttc, self._g_th, self._g_drac):
+                c.setData([])
+            return
+        a = traj.arrays()
+        if a["t"].size == 0:
+            return
+        self._g_ttc.setData(np.clip(metrics.ttc(a["s"], a["dv"]), 0, _SAFETY_CAP))
+        self._g_th.setData(np.clip(metrics.time_headway(a["s"], a["v"]), 0, _SAFETY_CAP))
+        self._g_drac.setData(metrics.drac(a["s"], a["dv"]))

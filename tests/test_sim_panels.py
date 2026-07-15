@@ -302,3 +302,65 @@ def test_synops_panel_cursor(qapp):
     panel = SynOpsPanel()
     panel.set_cursor(6)
     assert panel._cursors[0].isVisible() and abs(panel._cursors[0].value() - 6.0) < 1e-6
+
+
+# ---- oracle ghost curves -------------------------------------------------------------------------
+
+def _traj_buf(n=20, v=20.0, s=25.0):
+    """Every series must VARY: the panels downsample with mode='peak' + clipToView, which collapses
+    a flat series to its two extremes -- a constant-velocity fixture would test the downsampler,
+    not set_ghost."""
+    tb = TrajectoryBuffer(capacity=n + 1)
+    for t in range(n):
+        vt = v + t * 0.05
+        tb.record(StepResult(t=t, s=s + t * 0.1, v=vt, vl=20.0, dv=vt - 20.0,
+                             a_ego=0.1 + t * 0.01, params=np.zeros(5), collided=False))
+    return tb
+
+
+def _ydata(curve):
+    """The data AS SET. getData() returns the downsampled/clipped view, which depends on an
+    autorange that never happens without an event loop -- asserting on it tests pyqtgraph's
+    downsampler (mode='peak' collapses a flat series to 2 points), not our set_ghost."""
+    return curve.getOriginalDataset()[1]
+
+
+def test_trajectory_panel_ghost_adds_three_curves_and_keeps_one_leader(qapp):
+    p = TrajectoryPanel()
+    p.update_frame(_traj_buf())
+    p.set_ghost(_traj_buf(v=19.0, s=24.0))
+    for c in (p._g_s, p._g_v, p._g_a):
+        assert _ydata(c) is not None and len(_ydata(c)) == 20
+    assert float(_ydata(p._g_s)[0]) == 24.0        # the ghost's gap, not the net's (25.0)
+    # the leader is the SAME vehicle in both worlds -> exactly one leader curve on _pv
+    assert not hasattr(p, "_g_vl")
+
+
+def test_trajectory_panel_set_ghost_none_blanks_the_ghost_only(qapp):
+    p = TrajectoryPanel()
+    p.update_frame(_traj_buf())
+    p.set_ghost(_traj_buf(v=19.0))
+    p.set_ghost(None)
+    d = _ydata(p._g_s)
+    assert d is None or len(d) == 0
+    assert len(_ydata(p._c_s)) == 20               # the net's curve survives
+
+
+def test_safety_panel_ghost_adds_ttc_headway_drac(qapp):
+    p = SafetyPanel()
+    p.update_frame(_traj_buf())
+    p.set_ghost(_traj_buf(v=19.0, s=24.0))
+    for c in (p._g_ttc, p._g_th, p._g_drac):
+        assert _ydata(c) is not None and len(_ydata(c)) == 20
+
+
+def test_panels_clear_blanks_ghost_curves(qapp):
+    """Reset/champion-swap trap: the QC already had to fix panels that did not blank."""
+    for p, ghosts in ((TrajectoryPanel(), ("_g_s", "_g_v", "_g_a")),
+                      (SafetyPanel(), ("_g_ttc", "_g_th", "_g_drac"))):
+        p.update_frame(_traj_buf())
+        p.set_ghost(_traj_buf(v=19.0))
+        p.clear()
+        for name in ghosts:
+            d = _ydata(getattr(p, name))
+            assert d is None or len(d) == 0
