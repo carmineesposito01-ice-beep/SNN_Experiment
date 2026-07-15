@@ -51,8 +51,14 @@ def dense_mac(n_in, n_hid, n_out, rank):
     return int(n_in * n_hid + 2 * rank * n_hid + n_hid * n_out)
 
 
-# Per-synaptic-op energy (Horowitz 45nm; from snn_showcase / scripts/fpga_figures.py: E_MAC, E_AC)
-E_AC_PJ = 0.9      # accumulate — SNN spike-driven op (po2 shift-add on FPGA, 0 DSP)
+# Per-synaptic-op energy (Horowitz 45nm; from snn_showcase / scripts/fpga_figures.py: E_MAC, E_AC).
+# ⚠️ These are ASIC (45nm) figures — NOT FPGA. The Simulink_Importer track's Fase B MEASURED (synth OOC +
+# SAIF) that on FPGA e_MAC ≈ e_AC (a DSP48 ≈ shift-add), so the per-op AC-vs-MAC advantage largely vanishes
+# on the PYNQ-Z1 target (~1.3x, not ~5x); the real SNN advantage (~5-65x) comes from MODEL COMPACTNESS
+# (~800 weights vs ~7k-100k MAC for literature car-following NNs), not from "AC << MAC".
+# The SynOps dock's ratio is therefore an ASIC-like framing: do NOT quote it as an on-FPGA advantage.
+# Authoritative: `git show Simulink_Importer:document/FPGA_PHASE_B_POWER.md` (not on this branch).
+E_AC_PJ = 0.9      # accumulate — SNN spike-driven op (po2 shift-add; 0 DSP on FPGA)
 E_MAC_PJ = 4.6     # multiply-accumulate — dense ANN op
 
 

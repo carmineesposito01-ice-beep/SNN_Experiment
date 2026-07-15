@@ -3,8 +3,9 @@
 > **RUOLO DI QUESTO FILE.** Questo è il **punto d'ingresso di ripresa + lo STATO** del track *Simulator*
 > (volatile: si aggiorna a ogni milestone / cambio di azione pendente). **NON è la procedura generale di
 > ripresa** — quella vive nella skill `session-reprise`, non qui. Il `.claude` memory
-> `cf-fsnn-parallel-tracks.md` racconta la stessa storia in più dettaglio, ma **questo file deve bastare da
-> solo**: la memoria è un supplemento, non una dipendenza.
+> `cf-fsnn-parallel-tracks.md` copre le stesse tracce in più dettaglio, **ma può essere STALE e viene
+> iniettata prima che tu legga qualsiasi doc**: se memoria e questo file divergono su stato o azioni,
+> **vince questo file**. La memoria è un supplemento, non una dipendenza — **questo file deve bastare da solo**.
 
 ## 📍 DOVE SIAMO (verificato 2026-07-15)
 
@@ -172,8 +173,10 @@ l'elenco per non farlo divergere.
 - **Tests**: run the 20 `test_sim_*.py` files **explicitly** (non-sim tests fail in cf_sim): `state
   backend stepper scenario events probe replay loop eventprop input_capture trajectory layout panels
   ui_smoke reconstruct platoon meso_panels meso_road episode postrun`. **148 verdi (2026-07-15, ri-eseguiti).**
-  ⚠️ Altri conteggi che trovi in giro sono **istantanee datate**, non regressioni: 136 (2026-07-10) e 142
-  (fine QC) sono storici. **Il numero buono è 148.**
+  ⚠️ **Numeri "diversi" che troverai in giro = istantanee datate, NON regressioni** (erano veri al loro
+  commit): test **135** (roadmap) · **136** (2026-07-10) · **142** (fine QC) → **il numero buono è 148**.
+  Dock **14** (roadmap §Fase 3, `phase3-qa-perf-report.md`) = pre-revert dei dock input → **il numero buono
+  è 13**. Non trattarli come discrepanze da investigare.
 - **Test runner gotcha**: `conda run -n cf_sim python -m pytest …` **intermittently crashes conda's
   plugin system**. Reliable bypass — call the env python directly with `Library/bin` on PATH:
   `ENV=C:/Miniconda/envs/cf_sim; PATH="$ENV:$ENV/Library/bin:$ENV/Scripts:$PATH" "$ENV/python.exe" -m
@@ -212,7 +215,8 @@ l'elenco per non farlo divergere.
   ParamPanel, Trajectory/Safety, EventTimeline, NeuronInspector, SpikeRate). **No standalone v_mem dock**
   — the selected-neuron v_mem scope lives inside `NeuronInspectorPanel` (which is why a v_mem dock was
   redundant). Post-run = `episode.py` (incremental `EpisodeSummary`) + `postrun_page.py` (dark card dashboard).
-- **Meso/Macro**: `sim/ui/{meso_page,meso_panels,platoon}.py`. **Reuses `utils/platoon_eval.py`**
+- **Meso/Macro**: `sim/ui/{meso_page,meso_panels,meso_road,platoon}.py` (`meso_road` = `PlatoonRoadView`).
+  **Reuses `utils/platoon_eval.py`**
   (validated, report-grade): `simulate_platoon`/`platoon_metrics` (MESO string stability),
   `simulate_ring`/`fundamental_diagram` (MACRO fundamental diagram, Edie). `sim/ui/platoon.py` adds the
   family-aware **batched forward** (BPTT `forward_step` / EventProp `EventPropStepper.reset(N)+step`,
@@ -238,8 +242,9 @@ l'elenco per non farlo divergere.
 - **⚠️ TRAPPOLA DI NOMI**: `document/SIMULATOR_FINDINGS.md` **NON riguarda questo simulatore** — è del
   2026-06-01, branch `Visualizer_Building`, e parla del **vecchio simulatore a notebook** (`utils/simulator/`,
   `Simulator_Visual.ipynb`). Record storico di un altro strumento: **ignoralo** per questo track. Idem
-  `document/SIMULATOR_DESIGN.md` = design **iniziale** della Fase ① (implementato ed esteso ben oltre; ha un
-  banner di aggiornamento a riga ~10, ma l'intestazione sopra dice ancora "non implementato" — è stale).
+  `document/SIMULATOR_DESIGN.md` = design **iniziale** della Fase ① (implementato ed esteso ben oltre): la sua
+  intestazione lo dichiara record storico, ma **le frasi al presente lì dentro** ("non implementato", "prima di
+  scrivere codice…") vanno lette come *"al 2026-07-02"*.
 - **Launch GUI**: `conda run -n cf_sim python scripts/run_simulator.py [champion.pt]`.
 
 ---
