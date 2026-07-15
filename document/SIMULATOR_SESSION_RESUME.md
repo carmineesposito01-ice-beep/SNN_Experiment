@@ -55,15 +55,25 @@ Il dettaglio di com'è fatto e di cosa è stato costruito sta nelle sezioni sott
    ⚠️ **Avvertenza metodologica nella spec, non ri-cadervi**: la prima analisi usò la *mediana* e concluse
    (a torto) che il TTC dell'oracolo fosse invisibile — il TTC è saturo al clip di 30 s quasi sempre, va
    guardato il **picco** (75.87 px mediano, 88 su `hard_brake`).
-2. **CICLO 2/3 — identità del checkpoint + adattività della vista** *(= punti 3+4 dell'utente)*. Da
-   brainstormare. **Deve reggere**: taglia (H/rank), **max_delay**, topologia (stacked/skip/attn).
-   **OUT=5 e IN=4 restano INVARIANTI per decisione dell'utente** (sono il modello fisico ACC-IIDM, non la
-   vista). ⚠️ Il cuore non è il `QFileDialog`: è che il `.pt` **non dice cosa contiene**
-   (`{epoch,val_loss,model_state,optim_state}`, famiglia dedotta dalla firma dello state-dict) e che
-   **`max_delay` non è inferibile** per la famiglia baseline (`delays` ha shape `(32,4)` qualunque esso sia
-   → `strict=True` non può beccarlo) — e un run con `cf_max_delay:18` **esiste davvero** (12 run su 512).
-   Il sidecar `results/<RUN>/config_snapshot.json` ha `cf_hidden_size`/`cf_rank` (506/512) ma `cf_max_delay`
-   solo 258/512, `arch_variant` 8/512, e **accanto ai champion non c'è affatto**.
+2. **IN CORSO — ciclo 2/3: identità del checkpoint** *(= punti 3+4 dell'utente, che sono UNA cosa)*.
+   ✅ brainstorming fatto · ✅ **spec APPROVATA**: `docs/superpowers/specs/2026-07-15-checkpoint-identity-design.md`
+   (`2807fc4`). → **prossimo: `superpowers:writing-plans`** → plan → TDD.
+   **⚠️ SCOPE RISTRETTO dall'utente: SOLO identità onesta, NIENTE topologie nuove.** (Una versione
+   precedente di questa riga diceva "deve reggere stacked/skip/attn": **superata**, l'utente ha poi scelto
+   di rifiutarle *per nome* invece di supportarle.) Entrano gratis `max_delay_12` e `multi_rate`.
+   **CHIUDE UN BUG ATTIVO OGGI (misurato)**: un ckpt `max_delay_12` ha chiavi **e shape** identiche a
+   baseline (`delays` è `(H,IN)` qualunque sia max_delay) → `detect_family` dice "baseline", `strict=True`
+   **passa**, il modello gira **scartando 68 sinapsi su 128** (max|Δ| params = **5.98**). Ci si arriva già
+   ora: `run_simulator.py` accetta qualunque path. Quei ckpt esistono (`cf_max_delay:18` in 12 run su 512).
+   **Come**: gerarchia di fonti con confidenza dichiarata (campo `arch` nel .pt ← **train.py va toccato**,
+   additivo → `delay_masks.shape[0]` per EventProp = esatto → sidecar `config_snapshot.json` → inferenza
+   `delays.max()+1`), con **cross-check**: fonte dichiarata vs inferenza divergenti ⇒ errore rumoroso.
+   L'inferenza è **misurata**: esatta per max_delay 6 e 12, ma fallisce ~1 volta su 1333 a max_delay=18/H=32.
+   ⚠️ Nella spec ci sono **due errori di design già intercettati**, non ri-commetterli: `--arch_variant`
+   **non esiste** (CLI unificata in `--training_method`; sopravvive solo in 8 vecchi config_snapshot), e il
+   campo `arch` va letto **dal modello** non dagli `args` (`save_checkpoint` non ha `args`, i default CLI
+   sono `None`, e serve `getattr` perché `_CF_FSNN_VariantBase` non espone `rank`/`bit_shift` → `model.rank`
+   **romperebbe il training** di stacked/attn/wta).
 3. **CICLO 3/3 — costruttore di scenari personalizzati** *(= punto 2 dell'utente)*. Da brainstormare.
    Possiede **due debiti misurati**: (a) `sim/events.py:37-38` fa ripartire la rampa dal `v_leader[t]`
    **grezzo** → due `brake_leader` in fila fanno **saltare il leader da 5.00 a 21.00 m/s in un tick**
