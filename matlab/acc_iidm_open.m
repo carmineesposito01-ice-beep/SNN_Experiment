@@ -45,18 +45,23 @@ function accel = acc_iidm_open(s, v, dv, v_l, p, rst, T) %#codegen
                 'ProductWordLength', T.acc.WordLength, 'ProductFractionLength', T.acc.FractionLength, ...
                 'SumMode', 'SpecifyPrecision', ...
                 'SumWordLength', T.acc.WordLength, 'SumFractionLength', T.acc.FractionLength);
+    % NOMI NUOVI, non riassegnazione: `v0 = cast(v0, 'like', T.par)` cambierebbe il tipo di v0 (da
+    % sfix21_En13, che e' il tipo del decode, a sfix15_En8) e il codegen lo rifiuta -- "Variable types
+    % are incompatible". Una variabile NON puo' cambiare tipo (HDL_PHASE §9). Ne' serve `x(:)=`: qui
+    % il tipo di destinazione e' diverso per progetto, quindi la variabile giusta e' un'altra.
     sq = setfimath(cast(s,  'like', T.st),  FM);
     vq = setfimath(cast(v,  'like', T.st),  FM);
     dq = setfimath(cast(dv, 'like', T.st),  FM);
     lq = setfimath(cast(v_l,'like', T.st),  FM);
-    v0 = setfimath(cast(v0, 'like', T.par), FM);
-    T_ = setfimath(cast(T_, 'like', T.par), FM);
-    s0 = setfimath(cast(s0, 'like', T.par), FM);
-    a  = setfimath(cast(a,  'like', T.par), FM);
-    b  = setfimath(cast(b,  'like', T.par), FM);
+    v0f = setfimath(cast(v0, 'like', T.par), FM);
+    Tf_ = setfimath(cast(T_, 'like', T.par), FM);
+    s0f = setfimath(cast(s0, 'like', T.par), FM);
+    af  = setfimath(cast(a,  'like', T.par), FM);
+    bf  = setfimath(cast(b,  'like', T.par), FM);
     alf = setfimath(alf, FM); vlp = setfimath(vlp, FM);
   else
     sq = s; vq = v; dq = dv; lq = v_l;
+    v0f = v0; Tf_ = T_; s0f = s0; af = a; bf = b;
   end
 
   % stima a_l (filtro OU su differenze finite del leader)
@@ -64,25 +69,25 @@ function accel = acc_iidm_open(s, v, dv, v_l, p, rst, T) %#codegen
   vlp = cast(lq, 'like', T.st);
 
   % --- acc_iidm_accel: IIDM base + CAH + blend ACC (verbatim da build_plant_lib:plant_code) ---
-  sab = cast(max(sqrt(a*b), 1e-6), 'like', T.par);
-  s_star = cast(s0 + max(vq*T_ + acc_div(T, isFx, vq*dq, 2*sab), 0), 'like', T.st);
+  sab = cast(max(sqrt(af*bf), 1e-6), 'like', T.par);
+  s_star = cast(s0f + max(vq*Tf_ + acc_div(T, isFx, vq*dq, 2*sab), 0), 'like', T.st);
   s_safe = cast(max(sq, 2.0), 'like', T.st);
-  v_free = cast(a*(1 - min(acc_div(T, isFx, vq, v0), 10)^4), 'like', T.acc);
+  v_free = cast(af*(1 - min(acc_div(T, isFx, vq, v0f), 10)^4), 'like', T.acc);
   z = cast(min(acc_div(T, isFx, s_star, s_safe), 20), 'like', T.acc);
-  below = (vq <= v0);
-  a_z = cast(a*(1 - z^2), 'like', T.acc);
+  below = (vq <= v0f);
+  a_z = cast(af*(1 - z^2), 'like', T.acc);
   if z < 1
     if below, a_iidm = cast(v_free*(1 - z^2), 'like', T.acc); else, a_iidm = cast(v_free, 'like', T.acc); end
   else
     if below, a_iidm = cast(a_z, 'like', T.acc); else, a_iidm = cast(v_free + a_z, 'like', T.acc); end
   end
-  a_l_bar = cast(min(alf, a), 'like', T.acc);
+  a_l_bar = cast(min(alf, af), 'like', T.acc);
   a_cah = cast(a_l_bar - acc_div(T, isFx, max(dq,0)^2, 2*s_safe + 1e-6), 'like', T.acc);
-  a_cah = cast(min(max(a_cah, -9), a), 'like', T.acc);
-  dd = cast(acc_div(T, isFx, a_iidm - a_cah, b + 1e-6), 'like', T.acc);
-  a_blend = cast((1-COOL)*a_iidm + COOL*(a_cah + b*tanh(dd)), 'like', T.acc);
+  a_cah = cast(min(max(a_cah, -9), af), 'like', T.acc);
+  dd = cast(acc_div(T, isFx, a_iidm - a_cah, bf + 1e-6), 'like', T.acc);
+  a_blend = cast((1-COOL)*a_iidm + COOL*(a_cah + bf*tanh(dd)), 'like', T.acc);
   if a_iidm >= a_cah, ac = a_iidm; else, ac = a_blend; end
-  accel = cast(min(max(ac, -9), a), 'like', T.out);
+  accel = cast(min(max(ac, -9), af), 'like', T.out);
 end
 
 
