@@ -19,7 +19,16 @@ function T = acc_types(dt, nfrac)
 %    par : v0,T,s0,a,b   il decode li vincola a [param_lo, param_hi] = [8 .5 1 .3 .5]..[45 2.5 5 2.5 3]
 %                        (sigmoide * range + lo: non puo' uscirne)   -> int  6 (|x|<64, 1.4x su 45)
 %    out : accel         il codice la clampa a [-9, a], con a <= 2.5 -> int  4 (|x|<16, 1.8x su 9)
-  if nargin < 2, nfrac = 13; end
+  % nfrac di DEFAULT = 8: il MINIMO che rispetta il budget DERIVATO. Misurato da run_acc_fixed_sweep
+  % sul dataset INTERO (60 traj x 1000 step = 60.000 campioni, 2026-07-16, log sweep_nfrac8_60traj.log):
+  %   budget  E_snn  (footprint in accel della quantizzazione GIA' accettata della rete):
+  %                                   p99 = 0.272054   max = 1.48433  [m/s^2]
+  %   nfrac=6 E_iidm  p99 = 0.324937  max = 1.78485  -> NON passa (l'IIDM diventerebbe la fonte
+  %                                                     d'errore DOMINANTE, scavalcando la rete)
+  %   nfrac=8 E_iidm  p99 = 0.156047  max = 0.83368  -> passa, margine ~1.75x su entrambi
+  % ⚠️ Passa STRETTO: un dry-run su 2 traiettorie dava ~6x di margine, il dataset intero dice 1.75x.
+  %    Le code stanno solo nel campione completo -> non tarare questo numero su pochi casi.
+  if nargin < 2, nfrac = 8; end
   switch dt
     case 'double'
       z = double([]);
