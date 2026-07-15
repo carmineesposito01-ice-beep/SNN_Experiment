@@ -35,7 +35,12 @@ class EventInjector:
         """Drain events for tick t (stable order), then return the effective leader velocity."""
         for e in sorted(e for e in self._events if e.tick == t):     # order=True -> (tick, seq)
             if e.verb == "brake_leader":
-                self._brake = (t, float(base_vl), float(e.params["target_v"]),
+                # Ramp from the leader's CURRENT EFFECTIVE speed, not from the raw v_leader[t]:
+                # with a brake already active those differ, and using the raw value made the leader
+                # teleport (measured: 5.00 -> 21.00 m/s in one tick, ~160 m/s^2). Evaluate BEFORE
+                # overwriting _brake -- afterwards _effective_leader would answer about the NEW ramp.
+                v_start = self._effective_leader(t, base_vl)
+                self._brake = (t, v_start, float(e.params["target_v"]),
                                int(e.params["duration"]))
             else:
                 raise ValueError(f"unknown verb: {e.verb!r}")
