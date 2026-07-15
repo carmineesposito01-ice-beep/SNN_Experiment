@@ -217,3 +217,68 @@ def test_materialise_holds_the_60fps_budget():
         ts.append((time.perf_counter() - t0) * 1000)
     peak = max(ts)
     assert peak < 16.7, f"materialise peaks at {peak:.2f} ms, over the 60 fps budget"
+
+
+# ---- per-block bias on one neutral driver --------------------------------------------------------
+
+def test_unbiased_spec_is_byte_identical_to_cycle_3():
+    """Regression on everything already built: bias=None must mean "the neutral", exactly."""
+    from sim.scenario_spec import effective_style
+    blocks = [Block("ramp", 200, {"to_v": 2.0}), Block("const", 200, {"v": 2.0}),
+              Block("sine", 200, {"amp": 3.0, "period": 60})]
+    s = _spec(blocks, style=NORMALE)
+    for b in blocks:
+        assert b.bias is None                                  # the default
+        assert effective_style(b, NORMALE) is NORMALE          # and it IS the neutral, not a copy
+    # the numbers cycle 3 produced, recomputed here from the same inputs
+    vl = materialise(s, _PG, N=600).v_leader
+    assert abs(vl[-1] - materialise(_spec(blocks, style=NORMALE), _PG, N=600).v_leader[-1]) < 1e-12
+
+
+def test_bias_is_additive_on_the_neutral_not_absolute():
+    """TEETH: the same bias on two different neutrals must give two different styles. An
+    implementation that quietly treats the bias as an absolute passes 'it changed' and fails here."""
+    from sim.scenario_spec import effective_style
+    b = Block("ramp", 100, {"to_v": 2.0}, bias=(+1.0, +3.0))
+    s1 = effective_style(b, LeaderStyle(1.0, 2.0))
+    s2 = effective_style(b, LeaderStyle(2.0, 4.0))
+    assert (s1.a_max, s1.b_max) == (2.0, 5.0)                  # 1+1, 2+3
+    assert (s2.a_max, s2.b_max) == (3.0, 7.0)                  # 2+1, 4+3
+    assert s1 != s2                                            # the neutral still matters
+
+
+def test_bias_is_clamped_to_the_plane_not_rejected():
+    from sim.scenario_spec import effective_style
+    b = Block("ramp", 100, {"to_v": 2.0}, bias=(+99.0, +99.0))
+    st = effective_style(b, NORMALE)                            # must not raise
+    assert (st.a_max, st.b_max) == (4.0, 9.0)                  # pinned at the plane's edge
+    b2 = Block("ramp", 100, {"to_v": 2.0}, bias=(-99.0, -99.0))
+    st2 = effective_style(b2, NORMALE)
+    assert (st2.a_max, st2.b_max) == (1.0, 1.0)
+
+
+def test_a_bias_moves_only_its_own_block():
+    """TEETH: per-block scope IS the feature. A bias that leaked into its neighbours would still
+    'change the curve' and pass a naive test."""
+    plain = [Block("ramp", 200, {"to_v": 2.0}), Block("ramp", 200, {"to_v": 18.0}),
+             Block("ramp", 200, {"to_v": 5.0})]
+    biased = [plain[0], Block("ramp", 200, {"to_v": 18.0}, bias=(+2.0, 0.0)), plain[2]]
+    a = materialise(_spec(plain), _PG, N=600).v_leader
+    b = materialise(_spec(biased), _PG, N=600).v_leader
+    np.testing.assert_array_equal(a[:200], b[:200])            # block 1 untouched
+    assert not np.array_equal(a[200:400], b[200:400])          # block 2 moved
+    # block 3 starts from a different speed, so it cannot be byte-equal -- but its RATE must be the
+    # neutral's, not the biased one: the bias did not leak.
+    d = np.diff(b[400:])
+    assert abs(d[d < -1e-9].min() - (-NORMALE.b_max * DT)) < 1e-9
+
+
+def test_a_bias_on_a_preset_changes_nothing():
+    """The cycle-3 invariant survives the new knob: a preset is verbatim, and _preset_samples does
+    not even receive a style -- so this holds by construction. The test guards the construction."""
+    from sim.scenario import scenario_library
+    lib = {s.name: s for s in scenario_library(_PG, N=600, rng=np.random.default_rng(0),
+                                               include_tail=True)}
+    biased = materialise(_spec([Block("preset", 600, {"name": "stop_and_go"},
+                                      bias=(+3.0, +5.0))]), _PG, N=600).v_leader
+    np.testing.assert_array_equal(biased, lib["stop_and_go"].v_leader)

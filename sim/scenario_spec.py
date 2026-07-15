@@ -30,6 +30,7 @@ class Block:
     kind: str                 # "preset" | "const" | "ramp" | "sine"
     ticks: int                # the block's SLOT on the timeline -- NOT a ramp's duration
     params: dict              # {"name":…} | {"v":…} | {"to_v":…} | {"amp","period"}
+    bias: tuple = None        # (da, db) m/s^2 ON the neutral; None = the neutral itself
 
 
 @dataclass(frozen=True)
@@ -130,8 +131,30 @@ def _check_style(style):
         raise ValueError(f"b_max {style.b_max} outside {B_MAX_RANGE}")
 
 
+def effective_style(block, neutral):
+    """The style this block actually runs with: neutral + bias, clamped to the plane.
+
+    ADDITIVE on purpose. An absolute per-block style would leave N unrelated styles and no driver at
+    all; with a bias there is ONE driver -- the neutral is the character, the bias is the circumstance
+    ("in this stretch he is edgier than usual").
+
+    Clamped, not rejected: the bias is a nudge, the plane is physics. A nudge that would leave the
+    plane is pinned at the edge rather than raising -- the user is dragging a pad, not typing a config.
+    """
+    if block.bias is None:
+        return neutral
+    da, db = block.bias
+    return LeaderStyle(a_max=float(np.clip(neutral.a_max + da, *A_MAX_RANGE)),
+                       b_max=float(np.clip(neutral.b_max + db, *B_MAX_RANGE)))
+
+
 def materialise(spec, params_gt, N):
-    """ScenarioSpec -> Scenario. Pure: same spec, same v_leader, byte for byte."""
+    """ScenarioSpec -> Scenario. Pure: same spec, same v_leader, byte for byte.
+
+    `spec.style` is the NEUTRAL: the driver's character. Each block runs with neutral + its own bias
+    (effective_style). Only the neutral is validated -- every effective style is clamped by
+    construction.
+    """
     _check_style(spec.style)
     out = np.empty(N, dtype=np.float64)
     v = float(spec.v_init)
@@ -139,7 +162,7 @@ def materialise(spec, params_gt, N):
     for block in spec.blocks:
         if i >= N:
             break
-        seg = _block_samples(block, v, spec.style, params_gt, N)[: N - i]
+        seg = _block_samples(block, v, effective_style(block, spec.style), params_gt, N)[: N - i]
         out[i:i + seg.size] = seg
         if seg.size:
             v = float(seg[-1])
