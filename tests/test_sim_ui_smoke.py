@@ -840,3 +840,27 @@ def test_moving_the_neutral_keeps_the_bias_and_carries_the_block(qapp):
     page._neu_a.setValue(1.0)                             # the driver gets calmer
     assert page._composer_bias() == (1.0, 2.0)            # the CIRCUMSTANCE is unchanged...
     assert page._pad._a == 2.0                            # ...so the block's absolute followed: 1+1
+
+
+def test_composer_refresh_fits_in_a_frame(qapp):
+    """The composer adds materialise calls to an already-tight budget: 3.68 ms each, 16.7 ms a frame,
+    and a refresh does up to three (prefix + block + full scenario). Assert the PEAK, not the mean --
+    it is the peak the eye sees as a stutter."""
+    import time
+    from sim.scenario_spec import Block
+    page = _page()
+    page.set_spec(_spec3([Block("preset", 150, {"name": "stop_and_go"}),
+                          Block("ramp", 150, {"to_v": 2.0}),
+                          Block("const", 150, {"v": 2.0}),
+                          Block("sine", 150, {"amp": 5.0, "period": 60})]))
+    page.compose_new("ramp", ticks=150, params={"to_v": 18.0})
+    for _ in range(3):
+        page.set_style(3.0, 7.0)                      # warm up
+    ts = []
+    for k in range(40):
+        a = 1.0 + 3.0 * (k / 39.0)
+        t0 = time.perf_counter()
+        page.set_style(a, 5.0)                        # what dragging the pad calls, live
+        ts.append((time.perf_counter() - t0) * 1000)
+    peak = max(ts)
+    assert peak < 16.7, f"composer refresh peaks at {peak:.2f} ms, over the 60 fps budget"
