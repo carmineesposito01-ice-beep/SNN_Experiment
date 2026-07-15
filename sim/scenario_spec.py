@@ -171,25 +171,37 @@ def materialise(spec, params_gt, N):
     return manual_scenario(params_gt, out, spec.s_init, spec.v_init, name=spec.name)
 
 
+def _block_json(b):
+    """A block as JSON. `bias` is omitted when absent, so files that do not use it stay exactly as
+    cycle 3 wrote them -- backward compatibility without a version field."""
+    d = {"kind": b.kind, "ticks": b.ticks, "params": b.params}
+    if b.bias is not None:
+        d["bias"] = list(b.bias)
+    return d
+
+
 def to_json(spec) -> str:
     """Declarative: a list of blocks, human-readable and diffable -- not 600 floats."""
     return json.dumps({
         "name": spec.name,
         "s_init": spec.s_init,
         "v_init": spec.v_init,
-        "style": {"a_max": spec.style.a_max, "b_max": spec.style.b_max},
-        "blocks": [{"kind": b.kind, "ticks": b.ticks, "params": b.params} for b in spec.blocks],
+        "style": {"a_max": spec.style.a_max, "b_max": spec.style.b_max},   # the NEUTRAL
+        "blocks": [_block_json(b) for b in spec.blocks],
     }, indent=2)
 
 
 def from_json(text) -> ScenarioSpec:
-    """Rejects an unknown block kind BY NAME rather than applying the spec partially."""
+    """Rejects an unknown block kind BY NAME rather than applying the spec partially. A missing
+    `bias` means "the neutral": cycle-3 files load unchanged."""
     d = json.loads(text)
     blocks = []
     for b in d["blocks"]:
         if b["kind"] not in _KINDS:
             raise ValueError(f"unknown block kind: {b['kind']!r} (have: {_KINDS})")
-        blocks.append(Block(kind=b["kind"], ticks=int(b["ticks"]), params=dict(b["params"])))
+        raw = b.get("bias")
+        blocks.append(Block(kind=b["kind"], ticks=int(b["ticks"]), params=dict(b["params"]),
+                            bias=tuple(float(x) for x in raw) if raw is not None else None))
     return ScenarioSpec(name=d["name"], blocks=tuple(blocks),
                         style=LeaderStyle(a_max=float(d["style"]["a_max"]),
                                           b_max=float(d["style"]["b_max"])),

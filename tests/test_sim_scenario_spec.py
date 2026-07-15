@@ -282,3 +282,31 @@ def test_a_bias_on_a_preset_changes_nothing():
     biased = materialise(_spec([Block("preset", 600, {"name": "stop_and_go"},
                                       bias=(+3.0, +5.0))]), _PG, N=600).v_leader
     np.testing.assert_array_equal(biased, lib["stop_and_go"].v_leader)
+
+
+def test_cycle3_json_without_bias_still_loads():
+    """A file written before the bias existed must load and mean "the neutral" -- no version field,
+    no migration."""
+    from sim.scenario_spec import from_json
+    old = ('{"name":"vecchio","s_init":33.5,"v_init":21.0,'
+           '"style":{"a_max":2.0,"b_max":4.0},'
+           '"blocks":[{"kind":"ramp","ticks":600,"params":{"to_v":2.0}}]}')
+    spec = from_json(old)
+    assert spec.blocks[0].bias is None
+    np.testing.assert_array_equal(
+        materialise(spec, _PG, N=600).v_leader,
+        materialise(_spec([Block("ramp", 600, {"to_v": 2.0})], style=LeaderStyle(2.0, 4.0)),
+                    _PG, N=600).v_leader)
+
+
+def test_json_omits_bias_when_absent_and_round_trips_it_when_present():
+    from sim.scenario_spec import from_json, to_json
+    plain = _spec([Block("ramp", 600, {"to_v": 2.0})])
+    assert '"bias"' not in to_json(plain)                       # no noise in files that do not use it
+    biased = _spec([Block("ramp", 300, {"to_v": 2.0}, bias=(+1.5, -2.0)),
+                    Block("const", 300, {"v": 2.0})])
+    back = from_json(to_json(biased))
+    assert back == biased                                       # frozen dataclasses compare by value
+    assert back.blocks[0].bias == (1.5, -2.0)                   # a TUPLE, not the JSON list
+    np.testing.assert_array_equal(materialise(back, _PG, N=600).v_leader,
+                                  materialise(biased, _PG, N=600).v_leader)
