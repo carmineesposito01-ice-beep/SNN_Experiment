@@ -58,6 +58,29 @@ sul dataset intero la `dv` istantanea non degrada la stima (20.64% vs 20.97%, **
 realizzabile su strada è utilizzabile. Nuovo kernel `snn_cl_step` (+MEX): un control-step della catena di
 riferimento — i MEX esistenti macinano una traiettoria *già nota*, in anello chiuso serve passo-passo.
 
+**SP3 — ACC-IIDM HDL-Ready. IN CORSO (2026-07-16): Task 1-3 chiusi, Task 4 aperto.**
+Spec `docs/superpowers/specs/2026-07-15-acc-iidm-hdl-ready-design.md` · piano
+`docs/superpowers/plans/2026-07-15-acc-iidm-hdl-ready.md` (**riprendere dal Task 4 Step 2**).
+*Scopo:* chiude un **buco di equità** del confronto MPC: la spec MPC dice che la legge ACC-IIDM appartiene al
+*nostro* controllore, ma con l'IIDM in double il suo Piano 2 conterebbe solo la rete (~4,2k LUT) e ometterebbe
+in silenzio la legge che produce `a_cmd`, mentre per l'MPC conta tutto il QP.
+
+**Fatto:** `acc_types.m` (tipi sui range misurati) · `acc_iidm_open` **type-parametrico** (`T=[]`→double,
+`T=acc_types('fixed')`→fixed; `run_plant_parity` **invariato bit per bit** = il double non si è mosso) ·
+**`nfrac = 8`** misurato sul dataset intero (budget `E_snn` p99 **0.272** / max **1.484**; IIDM fixed **0.156** /
+**0.834** → margine 1,75×; a `nfrac=6` **non passa** ⇒ il cancello discrimina) · `run_block_hdl_gate`
+generalizzato alle **N uscite** (era fisso a 5 e falliva sull'harness sul blocco SP2).
+
+**Premessa SMENTITA (misurata):** «serve una LUT come per la sigmoide» era **falso**. HDL Coder genera
+`sqrt`/`tanh`/`x^4` **nativamente**; la divisione passa con **`RoundingMethod='Zero'`**. `exp` è l'unica non
+generabile — ed è il motivo per cui la sigmoide (σ=1/(1+exp(−x))) richiese la LUT, ma `tanh` no.
+
+**⚠️ APERTO:** passando la chart a fixed resta **un secondo errore di tipo** (il primo era una riassegnazione
+che cambiava tipo — `v0` da `sfix21_En13` a `sfix15_En8`, gotcha di HDL_PHASE §9, corretto in `246f0191`).
+Blocco e libreria **ripristinati alla versione double**: il repo è **verde**. Ricetta nel commit `246f0191`:
+Simulink mostra solo l'errore di propagazione, il messaggio VERO (riga+colonna) si ottiene estraendo lo script
+della chart e dandolo a `codegen('-config:lib','SNN_ACC','-args',{a,a,a,a})` con `a = fi(0,1,32,20)`.
+
 **Prossimi:** **bitstream + `report/FPGA_PHASE_B_REPORT`** da rigenerare (disallineati: costruiti col forward
 buggato §2.1 **e** col decode-256, mentre il campione ora è LUT-64) · **riordino fisico di `matlab/`** (refactor a
 sé: 21 file caricano i `.mat` via `fullfile(here,…)` → vanno riscritti i path e ri-verificato con
