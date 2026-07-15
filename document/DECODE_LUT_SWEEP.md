@@ -98,7 +98,9 @@ accanto ai 4 champion base comportamentali (**invariati**).
 - **Architettura = quella del bitstream**: forward **B2 time-mux** (`snn_b2_fsm`, `hdl.RAM`, 1 neurone/clock).
   HDL Coder emette `DualPortRAM_generic.vhd` ⇒ è davvero il time-mux, non la parallela superata (`HDL_PHASE.md` §3.1.1).
 - **I/O fisico** (fixed): `s, v, dv, v_l → v0, T, s0, a, b`. **Niente `start`/`done`**: la FSM è pilotata
-  **internamente** (free-running, riparte su done) → plug&play e nessun fallimento silenzioso (§3.1.2).
+  **internamente**, **edge-triggered sul cambio d'ingresso** (1 campione = 1 inferenza) → plug&play, nessun
+  fallimento silenzioso (§3.1.2) e **nessun rapporto col `FixedStep` da conoscere**: funziona con qualunque
+  hold ≥ latenza (verificato 341/400/500/777/1000 → dmax=0). *(Il free-running era sbagliato: §3.1.4.)*
 - **Self-contained**: la chart inlina come **funzioni locali** i sorgenti *veri*, letti a build-time
   (`b2_rom_active` + `snn_types` + `snn_b2_fsm` + il decode). Le locali hanno precedenza sul path ⇒ **niente copie a
   mano** (no deriva) e **zero dipendenze `.m`**.

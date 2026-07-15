@@ -1,4 +1,4 @@
-function dmax = run_block_traj_test(K, blockName)
+function dmax = run_block_traj_test(K, blockName, hold)
 %RUN_BLOCK_TRAJ_TEST  Prova dei blocchi HDL-ready sulla TRAIETTORIA REALE del dataset.
 %  Verifica che il blocco, pilotato in streaming con la traiettoria (un control-step per periodo
 %  d'inferenza), riproduca il riferimento — cioe' che lo **stato si porti correttamente** fra
@@ -13,7 +13,8 @@ function dmax = run_block_traj_test(K, blockName)
 %     Con ingressi a Q?.13 l'arrotondamento di xn devia di 1 LSB ~1 volta su 25 step -> uno spike
 %     flippa -> i params divergono (HDL_PHASE §3.1.3).
   if nargin < 1 || isempty(K), K = 20; end
-  if nargin < 2, blockName = 'Donatello_Champion'; end
+  if nargin < 2 || isempty(blockName), blockName = 'Donatello_Champion'; end
+  if nargin < 3 || isempty(hold), hold = 400; end     % QUALUNQUE valore >= latenza va bene
   here = fileparts(mfilename('fullpath'));
   ds = load(fullfile(here, 'test_dataset.mat')); tr = ds.trajectories;
   d  = load(fullfile(here, 'champions_export.mat')); champs = d.champions;
@@ -22,12 +23,17 @@ function dmax = run_block_traj_test(K, blockName)
   W  = champ_weights(c); Tp = numerictype(1, 21, 13);
   val = double(tr{1}.val);
 
-  % 1) periodo d'inferenza (ingresso costante)
+  % 1) LATENZA (ingresso costante). Il blocco e' edge-triggered sul cambio d'ingresso: con un
+  %    ingresso costante deve fare UNA SOLA inferenza. (Col vecchio free-running ne faceva una ogni
+  %    341 clock -> stato che evolve troppo in fretta: era il difetto.)
   P_log = drive(blockName, val(:,1) * ones(1,3), 700, 700);
   chg = find(any(abs(diff(P_log,1,1)) > 0, 2));
-  assert(numel(chg) >= 2, 'nessun aggiornamento params: il blocco non produce (FSM ferma?)');
-  per = diff(chg); Pper = per(1); lat = chg(1);
-  fprintf('periodo d''inferenza = %d clock (latenza 1o done = %d)\n', Pper, lat);
+  assert(~isempty(chg), 'nessun aggiornamento params: il blocco non produce (FSM ferma?)');
+  lat = chg(1);
+  assert(numel(chg) == 1, ['il blocco ri-esegue su ingresso COSTANTE (%d aggiornamenti): non e'' ' ...
+         'edge-triggered -> lo stato evolve troppo in fretta'], numel(chg));
+  fprintf('latenza inferenza = %d clock ; ingresso costante -> 1 sola inferenza (edge-triggered OK)\n', lat);
+  assert(hold >= lat, 'hold=%d < latenza=%d: il time-mux non fa in tempo', hold, lat);
 
   % 2) riferimento: MEX (normalizza in float, come il PS) + il decode COERENTE col blocco
   %    (Champion -> snn_decode_hdl ; LUT{N} -> snn_decode_lut(.,N). Usare il decode sbagliato
@@ -46,15 +52,15 @@ function dmax = run_block_traj_test(K, blockName)
 
   % 3) blocco in streaming sulla traiettoria; campionamento DETERMINISTICO (non sui cambiamenti:
   %    due inferenze possono dare params identici e l'indicizzazione slitterebbe)
-  P_all = drive(blockName, val(:,1:K), Pper, K*Pper + 20);
-  idx = Pper * (0:K-1).' + lat + 1;
+  P_all = drive(blockName, val(:,1:K), hold, K*hold + 20);
+  idx = hold * (0:K-1).' + lat + 1;
   idx = idx(idx <= size(P_all,1));
   p_blk = P_all(idx, :);
   n = min(size(p_blk,1), K);
   assert(n == K, 'attesi %d aggiornamenti, trovati %d', K, n);
 
   dmax = max(max(abs(p_blk - p_ref(1:n,:))));
-  fprintf('%-22s su %d control-step: dmax vs riferimento = %.4g\n', blockName, n, dmax);
+  fprintf('%-22s hold=%-5d su %d control-step: dmax vs riferimento = %.4g\n', blockName, hold, n, dmax);
   assert(dmax == 0, 'il blocco NON riproduce il riferimento in streaming (dmax=%.4g)', dmax);
   fprintf('=== TRAJ TEST PASSATO: %s bit-exact in streaming ===\n', blockName);
 end

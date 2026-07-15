@@ -147,8 +147,25 @@ annidato, RAM-mapping fallito → per serializzare servono `hdl.RAM`/FSM **espli
 | `=1` | funziona: `done` a ~341 clock, params corretti |
 
 → Un blocco che espone `start` **può essere usato male senza accorgersene** (output zeri, zero diagnostica). Se l'FSM sta
-dentro un blocco di libreria, **pilotare `start` internamente** (free-running: riparte su `done`) — così il blocco è
-plug&play e non ha un modo silenzioso di fallire. Harness: `scratchpad/test_start_floating.m`.
+dentro un blocco di libreria, **pilotare `start` internamente** — ma **non** in free-running: vedi §3.1.4.
+Harness: `scratchpad/test_start_floating.m`.
+
+### §3.1.4 Il blocco non deve FREE-RUNNARE: edge-trigger sul cambio d'ingresso (VERIFICATO 2026-07-14)
+Un blocco di libreria che contiene l'FSM time-mux deve decidere **quando** iniziare un'inferenza:
+
+| schema | comportamento | esito |
+|---|---|---|
+| **free-running** (riparte su `done`) | 1 inferenza ogni 341 clock, **a prescindere dall'ingresso** | ⛔ **SBAGLIATO**: con hold ≠ 341 fa più (o meno) inferenze per campione → **lo stato della rete evolve troppo in fretta**. E obbliga chi usa il blocco a conoscere il numero magico 341. |
+| **edge-triggered sul cambio d'ingresso** | **1 campione = 1 inferenza** | ✅ funziona con **qualunque** hold ≥ latenza — verificato hold = 341/400/500/777/1000 → **dmax = 0** |
+
+**Regola: 1 campione = 1 inferenza.** Il vincolo residuo (hold ≥ ~341 clock) è **fisica del time-mux**, non una
+convenzione: sull'FPGA reale un control-step da 0.1 s dura **800.000 clock** e l'inferenza ne usa **341 (0,04 %)** →
+soddisfatto con enorme margine da qualsiasi modello sensato. **Il rapporto col `FixedStep` non va più conosciuto.**
+> **Limite noto dell'edge-trigger**: se due campioni consecutivi hanno tutti e 4 gli ingressi **bit-identici**, il blocco
+> non vede il campione nuovo e salta un'inferenza (il sistema reale invece pulsa `start` a ogni control-step comunque).
+> Con traiettorie reali a Q?.20 non accade; in uno scenario a ingresso **rigorosamente costante** sì. Se serve
+> bulletproof: aggiungere un ingresso esplicito `new_sample`. `run_block_traj_test` verifica anche che su ingresso
+> costante l'inferenza sia **una sola** (cioè che non sia tornato il free-running).
 
 ### §3.1.3 Normalizzazione dentro il blocco: la precisione è critica (VERIFICATO 2026-07-14)
 I blocchi di libreria hanno I/O **fisico**, quindi normalizzano **in fixed** al proprio interno (il deployato la fa in
