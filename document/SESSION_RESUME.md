@@ -35,11 +35,28 @@
 > d'interfaccia, §3.1.1 *l'architettura segue il sorgente*, §3.1.2 `start` scollegato = fallimento silenzioso, §9) ·
 > **mappa cartella → `matlab/README.md`**.
 
-**SP2 — FATTO** (2026-07-15, `a9fb61b`…`be19044`): blocco **`Donatello_ACC_IIDM`** in `snn_champions_lib`
+**SP2 — FATTO** (2026-07-15, `a9fb61b`…`c66cc5d`): blocco **`Donatello_ACC_IIDM`** in `snn_champions_lib`
 (campione LUT-64 + ACC-IIDM open-loop, `s,v,dv,v_l → accel`, **sola simulazione**). Matematica IIDM a **fonte
-unica** (`acc_iidm_open.m`, usata anche dal plant closed-loop). Cancelli: `run_block_acciidm_test` **dmax = 0 su
-5/5 traiettorie**, e **verificato sensibile** (variante mis-gated → 0.1836 → fallisce). Dettagli →
-**`document/SP2_ACC_IIDM.md`**.
+unica** (`acc_iidm_open.m`, usata anche dal plant closed-loop). Dettagli → **`document/SP2_ACC_IIDM.md`**
+(leggere quello: qui solo stato + puntatori).
+
+Cancelli, tutti verdi al 2026-07-15: `run_block_acciidm_test` **dmax = 0 su 5/5 traiettorie**, **verificato
+sensibile** (variante mis-gated → 0.1836 → fallisce) · `run_block_closed_loop_test` **dmax = 0 su 10/10**
+(anello CHIUSO su Simulink, 5 traj × 2 convenzioni di `dv`) · `run_plant_parity` · `run_block_sync_check` (8
+blocchi, 0 stale) · `run_block_traj_test` · `run_block_hdl_gate` (`Donatello_Champion`, `Donatello_LUT64`).
+
+**«NON sintetizzabile» ora è MISURATO, non assunto** (`415e596`): HDL Coder rifiuta il blocco con **14 errori**.
+Causa radice = l'IIDM in **double** → forza l'architettura *MATLAB Datapath* → `tanh` e `min(v/v0,10)^4` non
+supportati in double e, **di rimbalzo**, viene rifiutato lo struct `snn_types` (che nei blocchi HDL-ready passa).
+Chi vorrà l'ACC-IIDM su FPGA non deve inseguire lo struct: deve portare l'IIDM in fixed.
+
+**Anello CHIUSO** (`c3edeff`, `c66cc5d`): dato il leader (`x_l`, `v_l`) l'anello calcola gap e `dv`, li passa al
+blocco e integra l'ego. Semantica **misurata su 60k campioni**: ⚠️ `dv` del dataset **non** è `v − v_l` della
+stessa riga, è `v[k−1] − v_l[k]`; il generatore **non ha posizioni assolute né lunghezza veicolo**;
+`s ∈ [1.25, 150]` col clip attivo nel **6,06%** dei campioni. **Ma la convenzione non morde**: in anello aperto
+sul dataset intero la `dv` istantanea non degrada la stima (20.64% vs 20.97%, **−0.33 pp**) ⇒ l'anello
+realizzabile su strada è utilizzabile. Nuovo kernel `snn_cl_step` (+MEX): un control-step della catena di
+riferimento — i MEX esistenti macinano una traiettoria *già nota*, in anello chiuso serve passo-passo.
 
 **Prossimi:** **bitstream + `report/FPGA_PHASE_B_REPORT`** da rigenerare (disallineati: costruiti col forward
 buggato §2.1 **e** col decode-256, mentre il campione ora è LUT-64) · **riordino fisico di `matlab/`** (refactor a
