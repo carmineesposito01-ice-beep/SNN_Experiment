@@ -15,7 +15,8 @@
   lo scrive lo cambia). **Verificalo tu**: `git log --oneline -1` + `git status` + `git rev-list --count
   origin/Simulator..HEAD`. **Atteso: working tree pulito, 0 commit non pushati.** Se non è così, capisci
   perché prima di lavorare.
-- **Env/test**: conda `cf_sim`. **167 test sim verdi.** Core SNN **bit-identico** (congelato).
+- **Env/test**: conda `cf_sim`. **199 test verdi** (20 file sim + `test_champion_io.py`). Core SNN
+  **bit-identico** (congelato).
 - **Altri track (NON confonderli con questo)**:
   - `main` → studio EventProp; ha il **suo** `document/SESSION_RESUME.md` (file diverso, altro track).
   - `Simulink_Importer` (`.worktrees/Simulink_Importer`) → FPGA/HDL, Fase B/C, B1.5 libreria champion +
@@ -55,9 +56,19 @@ Il dettaglio di com'è fatto e di cosa è stato costruito sta nelle sezioni sott
    ⚠️ **Avvertenza metodologica nella spec, non ri-cadervi**: la prima analisi usò la *mediana* e concluse
    (a torto) che il TTC dell'oracolo fosse invisibile — il TTC è saturo al clip di 30 s quasi sempre, va
    guardato il **picco** (75.87 px mediano, 88 su `hard_brake`).
-2. **IN CORSO — ciclo 2/3: identità del checkpoint** *(= punti 3+4 dell'utente, che sono UNA cosa)*.
-   ✅ brainstorming fatto · ✅ **spec APPROVATA**: `docs/superpowers/specs/2026-07-15-checkpoint-identity-design.md`
-   (`2807fc4`). → **prossimo: `superpowers:writing-plans`** → plan → TDD.
+2. **✅ FATTO — ciclo 2/3: identità del checkpoint** *(= punti 3+4 dell'utente, che sono UNA cosa)*
+   *(2026-07-15)*. spec `…/specs/2026-07-15-checkpoint-identity-design.md` (`2807fc4`) → plan
+   `…/plans/2026-07-15-checkpoint-identity.md` (`f54e36f`) → **TDD completo** (`45630b5`→`59946d4`).
+   **199 test verdi (20 file sim + `test_champion_io.py`) · core bit-identico · render-verificato.**
+   **Cosa c'è ora**: **File → Apri champion…** carica un `.pt` qualunque; un file cattivo mostra il
+   motivo e **lascia in piedi il champion in esecuzione** (prima uccideva la GUI); l'header dichiara
+   identità **e provenienza** (`Raffaello [baseline · 4→32→5 · rank 8 · max_delay 6 (inferito,
+   P(sottostima)~7e-11)]`); le varianti non gestibili sono **rifiutate per nome** (`attn`, `wta`,
+   `stacked_2_skip`), non più chiamate "baseline"; il grafo si adatta a H (label dinamica, span dalla
+   colonna più affollata — **globale**, o le colonne si disallineano; a H=32 identico a prima).
+   **`train.py` ora scrive il campo `arch`** (letto dal modello con `getattr`) → i ckpt nuovi si
+   autodescrivono e `max_delay` non si infera più.
+   **BUG CHIUSO E MISURATO**: ckpt `max_delay=12` → **0 sinapsi irraggiungibili su 128** (erano 68).
    **⚠️ SCOPE RISTRETTO dall'utente: SOLO identità onesta, NIENTE topologie nuove.** (Una versione
    precedente di questa riga diceva "deve reggere stacked/skip/attn": **superata**, l'utente ha poi scelto
    di rifiutarle *per nome* invece di supportarle.) Entrano gratis `max_delay_12` e `multi_rate`.
@@ -213,11 +224,14 @@ Questa sezione non duplica più l'elenco per non farlo divergere.
 - **Env**: `cf_sim` (conda). Tests/GUI: `conda run -n cf_sim python ...`.
 - **Tests**: run the 20 `test_sim_*.py` files **explicitly** (non-sim tests fail in cf_sim): `state
   backend stepper scenario events probe replay loop eventprop input_capture trajectory layout panels
-  ui_smoke reconstruct platoon meso_panels meso_road episode postrun`. **167 verdi (2026-07-15, dopo il
-  ciclo oracolo: erano 148 + 19 test del ghost).**
+  ui_smoke reconstruct platoon meso_panels meso_road episode postrun`. ⚠️ **dal ciclo 2 aggiungere anche
+  `tests/test_champion_io.py`**: `champion_io` è `utils/`, non `sim/`, e **gira verde in `cf_sim`** (l'avvertenza
+  generica "i test non-sim falliscono" NON vale per lui). **199 verdi (2026-07-15: 148 pre-ghost + 19 ghost +
+  32 identità).**
   ⚠️ **Numeri "diversi" che troverai in giro = istantanee datate, NON regressioni** (erano veri al loro
-  commit): test **135**, **142** (roadmap ~righe 201/205, era Fase 3–4) e **148** (roadmap riga ~212 + spec/plan
-  dell'oracolo, era il baseline pre-ghost) → **il numero buono è 167**. Dock **14** (roadmap §Fase 3, `phase3-qa-perf-report.md`) = era
+  commit): test **135**, **142** (roadmap ~righe 201/205, era Fase 3–4), **148** (roadmap riga ~212 + spec/plan
+  dell'oracolo = baseline pre-ghost) e **167/176** (spec/plan del ciclo 2 = baseline pre-identità) →
+  **il numero buono è 199**. Dock **14** (roadmap §Fase 3, `phase3-qa-perf-report.md`) = era
   quando il 14° dock era **`v_mem`** (poi rimosso **senza sostituto**; il dock Input nacque dopo, come rename
   di v_mem, e fu a sua volta revertito) → **il numero buono è 13**. I plan datati citano anche **9** e **11**
   dock: idem, storici. **Non trattarli come discrepanze da investigare.**
