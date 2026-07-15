@@ -1,25 +1,72 @@
-# SIMULATOR_SESSION_RESUME.md — resume the Simulator track without prior context
+# SIMULATOR_SESSION_RESUME.md — resume entry + STATE of the **Simulator** track
 
-> **Scope**: in 5 minutes, know **where we are**, **what's done**, **what to do next** on the CF_FSNN
-> **Simulator** track. This is the in-repo, version-controlled resume master (the `.claude` memory
-> `cf-fsnn-parallel-tracks.md` has the same story in more detail). Update the "Stato attuale" +
-> "Cosa fare adesso" sections at each milestone; append to the history log at the bottom.
->
-> **NB: this is the `Simulator` branch/worktree.** `document/SESSION_RESUME.md` is a *different*
-> track (EventProp study on `main`) — do not confuse them.
+> **RUOLO DI QUESTO FILE.** Questo è il **punto d'ingresso di ripresa + lo STATO** del track *Simulator*
+> (volatile: si aggiorna a ogni milestone / cambio di azione pendente). **NON è la procedura generale di
+> ripresa** — quella vive nella skill `session-reprise`, non qui. Il `.claude` memory
+> `cf-fsnn-parallel-tracks.md` racconta la stessa storia in più dettaglio, ma **questo file deve bastare da
+> solo**: la memoria è un supplemento, non una dipendenza.
 
----
+## 📍 DOVE SIAMO (verificato 2026-07-15)
 
-## 🎯 Stato attuale (2026-07-13) — 🏁 MILESTONE: cockpit feature-complete
+- **Repo**: `D:\Project_MBSE\1.Reti Neurali\Rete_SNN_Test\CF_FSNN` · **worktree**: `.worktrees/Simulator` ·
+  **branch**: `Simulator` · **HEAD** `4001f72` · **0 commit non pushati**, working tree pulito.
+- **Env/test**: conda `cf_sim`. **148 test sim verdi.** Core SNN **bit-identico** (congelato).
+- **Altri track (NON confonderli con questo)**:
+  - `main` → studio EventProp; ha il **suo** `document/SESSION_RESUME.md` (file diverso, altro track).
+  - `Simulink_Importer` (`.worktrees/Simulink_Importer`) → FPGA/HDL, Fase B/C, B1.5 libreria champion +
+    lo **studio MPC↔SNN parcheggiato (solo design)**. Ha il suo `document/SESSION_RESUME.md`.
+  - `Presentation_NN` → già fuso in `main`.
 
-> **MILESTONE (2026-07-13):** the Simulator track is **declared complete for this cycle** (user call).
-> The three-mode instrument — **Live cockpit + Meso/Macro analysis + Post-run dashboard** — is
-> feature-complete, hardened, and documented. The one remaining Phase-4 idea (float-vs-fixed A/B) is
-> **explicitly out of scope for this milestone** (it needs a fixed-point SW forward that doesn't exist).
-> Next is **merge to `main`** (coordinate with `Simulink_Importer`), not more cockpit features.
+## 🎯 STATO ATTUALE — 🏁 MILESTONE: cockpit feature-complete (dichiarata 2026-07-13)
 
-**Worktree/branch**: `.worktrees/Simulator` on branch **`Simulator`** (it IS a git repo). All work
-committed + pushed to `origin/Simulator` (HEAD `d9ee9c1`). **148 sim tests green.** Core bit-identical.
+Lo strumento a **3 modi** — **Live cockpit (13 dock)** + **Meso/Macro** + **Post-run dashboard** — è
+feature-complete per il ciclo, temprato da un QC ciclico e documentato. Tutto committato e pushato.
+Il dettaglio di com'è fatto e di cosa è stato costruito sta nelle sezioni sotto (§Architecture, §Phase history).
+
+## ▶️ AZIONI PENDENTI (puntatori, non dump — l'azione 1 SUPERA il "next = merge" della milestone)
+
+1. **IMMEDIATA — aggiungere/generalizzare funzionalità del simulatore** *(intento utente 2026-07-15)*.
+   ⚠️ **Scope non ancora specificato**: l'utente parla di "alcune funzionalità, più *generalizzazioni* di
+   funzionalità" ma non ha ancora detto quali. → **Non indovinare**: farsi dire l'idea, poi
+   **skill `superpowers:brainstorming`** (design prima del codice) → spec in `docs/superpowers/specs/` →
+   **skill `superpowers:writing-plans`** → plan in `docs/superpowers/plans/` → esecuzione TDD.
+   **Questa azione sostituisce** il "prossimo = merge" scritto nella milestone: si aggiungono funzionalità
+   *prima* di fondere.
+   📋 **Esiste già un backlog scritto di candidati** — non per pre-decidere, ma per non partire ciechi:
+   **roadmap §6 "Phase 5 (ambitions)"** (`docs/superpowers/2026-07-07-simulator-extension-study.md`): slider
+   GT / ri-identificazione UKF live, video/GIF, editor scenari a form, ellisse a–b (modulo estimator a sé),
+   worker QThread. Più due candidati emersi dopo: **riconciliare/etichettare il dock energia** (vedi il caveat
+   ASIC-vs-FPGA in §Architecture→Energy) e l'**A/B float-vs-fixed** (azione 3). L'utente comunque decide lui.
+2. **RINVIATA — merge `Simulator`→`main`** (coordinare col track `Simulink_Importer`: entrambi rinviano il
+   merge, vanno sequenziati per far atterrare in `main` uno stato coerente).
+3. **STUDIO POST-MILESTONE — A/B float-vs-fixed** (unica idea di Fase 4 mai fatta). ⚠️ richiede un **forward
+   fixed-point Qm.n SW** che nel simulatore **non esiste** — va scopato prima (candidato: portare la logica
+   fixed-point dal track `Simulink_Importer`/HDL, che l'ha già fatta per l'FPGA). Design-before-code.
+   Non blocca nulla.
+
+## 🧭 MODI DI LAVORO (vincoli del progetto — dettaglio in §How to work + §GOTCHAS sotto)
+
+- **Design-before-code**: brainstorming → spec (`docs/superpowers/specs/`) → plan (`docs/superpowers/plans/`)
+  → TDD (RED→GREEN→commit). Niente codice prima del design su richieste non banali.
+- **Niente workaround**: se qualcosa non va, **si trova la causa radice** (systematic-debugging), non si
+  mette una pezza. Un test che non fallisce senza il fix non è un test di regressione.
+- **Core congelato bit-identico**: `sim/{state,stepper,backend,events,probe,eventprop_stepper}.py`. Solo
+  accessor additivi read-only. Dopo qualunque tocco: ri-eseguire tutta la suite.
+- **Test**: i **20 `test_sim_*.py` elencati esplicitamente** in `cf_sim` (i test non-sim falliscono in
+  quell'env). Runner affidabile in §How to work (⚠️ `conda run … pytest` crasha a intermittenza).
+- **Render-verify**: le modifiche visive si verificano rendendo un PNG con `QT_QPA_PLATFORM=windows` e
+  **guardandolo** (`offscreen` rende il testo come tofu — non è un difetto della UI).
+- **Doc di processo sempre aggiornati** (questo file + i doc citati), non solo alla fine.
+- **Commit**: conventional, **senza `Co-Authored-By`**. Push liberamente.
+
+## 🗣️ TONO / STILE (perché la ripresa sia continua)
+
+- **Italiano con l'utente**; inglese tecnico dentro doc/codice/commit. Registro diretto e collega-a-collega.
+- **Onestà prima di tutto**: dire quando una cosa **non** è verificata; non vendere più di quanto misurato;
+  se un test/una prova non conferma, dirlo con l'output alla mano. **Verificare eseguendo**, non asserire a
+  memoria (l'utente lo apprezza e lo chiede: "verifica").
+- **Decisi**: dare una raccomandazione motivata, non un catalogo di opzioni. Guidare, non scaricare scelte.
+- **Guidare con l'esito**: prima cosa è successo, poi il dettaglio. Prosa, non frammenti telegrafici.
 
 **What it is**: a live plug&play GUI "digital twin" of the SNN car-following controller (ALIF,
 **4 inputs → 32 hidden → 5 params**, po2 weights, target FPGA PYNQ-Z1). **~800 weights** = the
@@ -102,18 +149,11 @@ perf via a 5-agent workflow — per-paint −30% (NetState freeze/LUT), redraw t
 
 ---
 
-## ▶️ Cosa fare adesso (RESUME — 🏁 milestone reached: next is MERGE)
+## ▶️ Cosa fare adesso
 
-The cockpit is feature-complete and the track is at a **milestone**. Nothing more to build here for this
-cycle. Forward options, in order:
-
-1. `git -C "<worktree>" status` — must be clean on `Simulator` (HEAD `d9ee9c1`; pull if a remote is ahead).
-2. **MERGE `Simulator`→`main`** (the milestone action) — coordinate with the `Simulink_Importer` track
-   (both have deferred their merge; sequence them so `main` lands a coherent state).
-3. **Post-milestone / optional — float-vs-fixed A/B**: the one deferred Phase-4 idea. ⚠️ needs a
-   **fixed-point Qm.n SW forward** that does NOT exist in the simulator yet — scope it first (candidate:
-   port the fixed-point logic from the `Simulink_Importer`/HDL track, which already did it for the FPGA).
-   Design-before-code. This is a **new study, not a milestone blocker**.
+→ **Vedi §AZIONI PENDENTI in cima a questo file** (unica fonte: azione 1 = aggiungere/generalizzare
+funzionalità via brainstorming; 2 = merge rinviato; 3 = A/B float-vs-fixed). Questa sezione non duplica più
+l'elenco per non farlo divergere.
 
 **Meso page map** (reference): `sim/ui/meso_page.py` (scenario selector + road strip + 2×2 grid) ·
 `sim/ui/meso_panels.py` (`_MultiCurvePanel` base → `SpaceTimePanel`/`SpeedWavePanel`, `StringStabilityPanel`,
@@ -127,7 +167,9 @@ cycle. Forward options, in order:
 - **Env**: `cf_sim` (conda). Tests/GUI: `conda run -n cf_sim python ...`.
 - **Tests**: run the 20 `test_sim_*.py` files **explicitly** (non-sim tests fail in cf_sim): `state
   backend stepper scenario events probe replay loop eventprop input_capture trajectory layout panels
-  ui_smoke reconstruct platoon meso_panels meso_road episode postrun`. **136 green at 2026-07-10.**
+  ui_smoke reconstruct platoon meso_panels meso_road episode postrun`. **148 verdi (2026-07-15, ri-eseguiti).**
+  ⚠️ Altri conteggi che trovi in giro sono **istantanee datate**, non regressioni: 136 (2026-07-10) e 142
+  (fine QC) sono storici. **Il numero buono è 148.**
 - **Test runner gotcha**: `conda run -n cf_sim python -m pytest …` **intermittently crashes conda's
   plugin system**. Reliable bypass — call the env python directly with `Library/bin` on PATH:
   `ENV=C:/Miniconda/envs/cf_sim; PATH="$ENV:$ENV/Library/bin:$ENV/Scripts:$PATH" "$ENV/python.exe" -m
@@ -174,8 +216,26 @@ cycle. Forward options, in order:
 - **Energy** (`metrics.py`): `synops`/`synops_series`/`dense_mac` (op counts) + `ann_mac` (dense-RNN
   equivalent, full H·H) + `E_AC_PJ=0.9`, `E_MAC_PJ=4.6` (Horowitz 45nm). SynOps dock plots pJ:
   SNN (SynOps×E_AC) vs dense-ANN (ann_mac×E_MAC) → ~14.5× (Raffaello), ~7.9× (Donatello).
+  > ⚠️ **CAVEAT DI ONESTÀ (discrepanza cross-track nota, NON ancora riconciliata).** Quei ×
+  > usano le costanti **Horowitz 45nm — che sono ASIC**. La **Fase B del track `Simulink_Importer`
+  > ha MISURATO su FPGA** (synth OOC + SAIF) che **e_MAC ≈ e_AC** (DSP48 ≈ shift-add): sull'FPGA —
+  > cioè sul target dichiarato di questo simulatore — **il vantaggio per-operazione largamente
+  > svanisce** (~1.3×, non ~5×), e il vantaggio SNN reale (~5-65×) viene dalla **compattezza del
+  > modello** (letteratura NN car-following ~7k-100k MAC vs ~800 pesi), NON da "AC≪MAC".
+  > Quindi il numero del dock è **framing di Fase A (ASIC-like)**, non la verità sull'FPGA.
+  > Doc autoritativo: `document/FPGA_PHASE_B_POWER.md` **sul branch `Simulink_Importer`**
+  > (⚠️ NON esiste in questo worktree: `git show Simulink_Importer:document/FPGA_PHASE_B_POWER.md`).
+  > **Non citare il ~14.5× come vantaggio-su-FPGA senza questo caveat.** Riconciliare il dock (o
+  > etichettarlo "ASIC-like") è un candidato naturale per l'azione 1.
 - **Docs**: roadmap `docs/superpowers/2026-07-07-simulator-extension-study.md`; QA/perf report
-  `docs/superpowers/2026-07-09-phase3-qa-perf-report.md`; one spec+plan per phase in `specs/`+`plans/`.
+  `docs/superpowers/2026-07-09-phase3-qa-perf-report.md`; spec+plan per fase in `specs/`+`plans/` (⚠️ **non
+  è 1:1**: 11 spec vs 20 plan — alcune fasi hanno solo il plan, es. `plans/2026-07-10-postrun-dashboard.md`
+  non ha spec).
+- **⚠️ TRAPPOLA DI NOMI**: `document/SIMULATOR_FINDINGS.md` **NON riguarda questo simulatore** — è del
+  2026-06-01, branch `Visualizer_Building`, e parla del **vecchio simulatore a notebook** (`utils/simulator/`,
+  `Simulator_Visual.ipynb`). Record storico di un altro strumento: **ignoralo** per questo track. Idem
+  `document/SIMULATOR_DESIGN.md` = design **iniziale** della Fase ① (implementato ed esteso ben oltre; ha un
+  banner di aggiornamento a riga ~10, ma l'intestazione sopra dice ancora "non implementato" — è stale).
 - **Launch GUI**: `conda run -n cf_sim python scripts/run_simulator.py [champion.pt]`.
 
 ---
@@ -198,4 +258,38 @@ cycle. Forward options, in order:
   34 fixes, 142 tests) + cockpit polish (`c381923`→`d9ee9c1`: maximize-restore root-cause fix,
   macro red-cross legend+hover, clickable meso curves→highlight, and an input-dock experiment added
   then **reverted** as redundant with Trajectory → back to **13 docks**). **148 sim tests green.**
-  → **next: merge `Simulator`→`main`**; float-vs-fixed A/B deferred (post-milestone study).
+  → per il seguito vedi **§AZIONI PENDENTI in cima** (il merge è rinviato: prima si aggiungono funzionalità).
+
+---
+
+## 📋 PROMPT DI RIPRESA (copia-incolla in una chat nuova)
+
+> Verificato con un agente a freddo (senza contesto): ricostruisce stato, azioni, modi e tono da soli i doc.
+> Se cambiano stato o azioni pendenti, **riallinea anche questo blocco**.
+
+```text
+Riprendi il track Simulator del progetto CF_FSNN. Non hai contesto: ricostruiscilo LEGGENDO I DOCUMENTI,
+non chiedendolo a me e non ricostruendolo a memoria.
+
+- Repo: D:\Project_MBSE\1.Reti Neurali\Rete_SNN_Test\CF_FSNN
+- Worktree/branch: .worktrees/Simulator sul branch Simulator (è un repo git a sé).
+- Punto d'ingresso UNICO: document/SIMULATOR_SESSION_RESUME.md in quel worktree. Leggilo per intero, poi
+  apri i documenti che indica (roadmap, spec/plan, gotcha, file map) per il dettaglio che ti serve.
+  ATTENZIONE: non confonderlo con document/SESSION_RESUME.md, che è un ALTRO track (EventProp su main).
+
+Da quel file ricostruisci: stato attuale, AZIONI PENDENTI (la n.1 è quella immediata), modi di lavoro e tono.
+In breve, così sai cosa aspettarti: design-before-code (brainstorming -> spec -> plan -> TDD); core SNN
+congelato bit-identico; test = i 20 test_sim_*.py elencati esplicitamente nell'env conda cf_sim; render-verify
+con QT_QPA_PLATFORM=windows (offscreen rende il testo come tofu); niente workaround, si cerca la causa radice;
+commit conventional SENZA Co-Authored-By; doc di processo sempre aggiornati.
+Tono: italiano con me, diretto e collega-a-collega; onesto (dì quando una cosa NON è verificata, non vendere
+più di quanto misurato); VERIFICA ESEGUENDO invece di asserire a memoria; sii deciso (raccomanda, non
+elencare opzioni); guida con l'esito prima del dettaglio.
+
+Cosa faremo: l'azione immediata è AGGIUNGERE/GENERALIZZARE FUNZIONALITÀ del simulatore. Lo scope NON è
+ancora definito: te lo dirò io. Non indovinare e non iniziare a progettare da solo — quando te lo dico si
+parte dal brainstorming.
+
+Quando hai ricostruito: riportami in breve stato, azioni pendenti, modi di lavoro e tono, e ASPETTA il mio
+via prima di toccare qualsiasi cosa.
+```

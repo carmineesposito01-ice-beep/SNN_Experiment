@@ -213,6 +213,10 @@ The core already computes these but shows none of them:
   core bit-identical.** The three-mode instrument (Live + Meso/Macro + Post-run) is **feature-complete for
   this cycle** → the Simulator track is at a **milestone**; next is **merge to `main`** (coordinate with
   `Simulink_Importer`). Float-vs-fixed A/B stays the one deferred Phase-4 idea (post-milestone study).
+  > ⚠️ **SUPERSEDED (2026-07-15) — do not act on the "next = merge" above.** The user chose to **add/generalize
+  > functionality first**; the merge is deferred behind it. The **single source of truth for the current state
+  > and the pending actions is `document/SIMULATOR_SESSION_RESUME.md` (§AZIONI PENDENTI)** — this roadmap is
+  > the historical design record of the extension study, not the live next-step.
 - **Phase 5 (ambitions).** GT sliders / live UKF re-identification, video/GIF, scenario form editor,
   a–b ellipse (separate estimator module), optional QThread worker.
 

@@ -5,47 +5,11 @@
 
 ---
 
-## 🎯 Stato attuale (2026-07-10 — **SIMULATOR track: meso/macro + page v2 fatti, prossimo Fase 4**)
-
-> **Branch/worktree:** `Simulator` @ `.worktrees\Simulator` (parallelo a `main`). Questa sezione riguarda il
-> **track SIMULATORE** = POST_FPGA_ROADMAP Fase ①. Lo stato del track EventProp/main è più sotto ("Stato precedente").
-
-**Cos'è:** un **simulatore live plug&play** dell'SNN car-following (GUI PySide6 6.11 + pyqtgraph 0.14, env conda
-`cf_sim`), digital-twin del controller ACC-IIDM. Avvio: `conda run -n cf_sim python scripts/run_simulator.py [champion.pt]`.
-
-**Resume trail (documenti che bastano da soli, nel worktree Simulator):**
-- `docs/superpowers/2026-07-07-simulator-extension-study.md` — **roadmap** estensione (Fasi 1-5; §6 = stato per-fase).
-- `docs/superpowers/specs/` + `plans/` — **una spec + un piano per fase** (l'ultimo: `2026-07-09-meso-macro-analysis-mode*`).
-- `docs/superpowers/2026-07-09-phase3-qa-perf-report.md` — QA + sessione ottimizzazione (numeri prima/dopo).
-- Memoria assistente `cf-fsnn-parallel-tracks.md` (riga Simulator) — contesto supplementare.
-
-**Fatto** (tutto committato+pushato su `origin/Simulator`; **135 test verdi**, core congelato bit-identico):
-- **MVP v1** + **Fase 1** (leggibilità param) + **Fase 2** (shell dockable, 4 preset, persistenza) + **NetViz** → **grafo node-link** (tragitti attivi bianchi).
-- **Fase 3a** (Trajectory+Safety) · **3b.1** (time-scrub) · **3b-resto** (deep-scrub oltre-buffer + event-timeline + neuron-inspector, 14 dock).
-- **Dock SynOps → ENERGIA (pJ)**: SNN (`SynOps×E_AC 0.9pJ`) vs ANN densa (`MAC×E_MAC 4.6pJ`, ricorrenza H·H) = ~14.5× (mostra AC<MAC, non il conteggio).
-- **QA Fase 3** (2 bug corretti: top-down speed>1, scrub-source su Step) + **sessione ottimizzazione** (workflow 5-agenti): per-paint −30%, throttle repaint ~15fps (fisica/Road a 30), reconstruct **7.7s→0.74s**, memo getter probe.
-- **Selettore campioni** (swap live tra i 4: Raffaello/Leonardo=BPTT, Donatello/Michelangelo=EventProp).
-- **Meso/Macro ✅ (T1–T5 + page v2)**: toggle Live↔Meso/Macro; forward **BATCHATO** family-aware (tutti-4; golden `batch n=1 == mono-veicolo`) via hook **`forward=` additivo** su `platoon_eval` (report intatti). Pagina = **strada plotone** (N auto colorate per velocità, slider+Play sul run REGISTRATO) in cima + **2×2**: **string-stability · onde di velocità v(t)** (attenuazione stop&go) **· spazio-tempo x(t) · diagramma fondamentale Q/V**; **selettore scenario** pilota la testa col `v_leader` scelto. v2 (`7fc4c2c`..`47193dd`): base DRY `_MultiCurvePanel`, `PlatoonRoadView` (`sim/ui/meso_road.py`), rimosso `PlatoonParamsPanel`+`rec['params']` di T4 (core bit-identico). Render-verify BPTT(head→tail 0.07)+EventProp(0.315) su stop_and_go.
-
-**Fase 4 (post-run seal + export) FATTA** (`aa656ef`→`3569017`, spec+plan `2026-07-10-postrun-mode-export*`): **3° modo**
-Post-run = report card episodio (esito·sicurezza·comfort·efficienza·rete) da accumulatore incrementale `EpisodeSummary`
-(`sim/ui/episode.py`, O(1)/tick, niente reconstruct) + `PostRunPage`; **File → Export…** (CSV episodio + PNG finestra).
-Report card **ESAUSTIVA** (`578d32f`→`f554896`): identificazione vs GT · SSM estese (`safety_metrics`/`comfort_metrics`) ·
-dead% · **ρ(U·V) power-iteration** (LAPACK-free) · energia+breakdown, con **tooltip '?'** definizione+formula su ogni metrica —
-riproduce i verdetti dei report (ρ 2.99/0.05, dead 18.8%/0%), energia consistente col dock (invariante testato).
-Più **fix freeze fine-episodio** (`d0a70ec`) + **dock a tutto schermo** (`d4c24fa`). **PROSSIMA AZIONE: A/B float-vs-fixed**
-(⚠️ serve un forward fixed-point Qm.n che NON esiste ancora — scoparlo prima, magari portando dal track HDL/Simulink_Importer).
-Poi **merge `Simulator`→`main`** (coordinare col track `Simulink_Importer`).
-
-**⚠️ 2 GOTCHA cf_sim (LAPACK/OpenMP):** `np.linalg.matrix_rank` **e** `np.polyfit`/`lstsq` fanno **abort OMP #15**
-(OpenMP bundled di numpy vs Intel di torch; i test che non chiamano LAPACK non lo vedono). **Mai LAPACK nell'app** —
-alternative: rango da `rec_V.shape[0]`, pendenza deg-1 calcolata a mano. C'è anche uno **shim OMP**:
-`libomp.dll.disabled` in `C:\Miniconda\envs\cf_sim\Library\bin` (se una conda-op lo ripristina → crash GUI, ri-rinominarlo).
-
-**Vincoli/modi di procedere:** niente workaround (indaga la CAUSA); **design prima del codice** (brainstorming→writing-plans);
-**core congelato** bit-identico (`sim/{state,stepper,backend infer/step,events,probe.record,eventprop_stepper.step}`) —
-solo accessori/memo additivi read-only, poi ri-lancia la suite golden; **commit senza `Co-Authored-By`**; metrica primaria =
-comportamento fisico; test in **`cf_sim`** elencando i file `test_sim_*.py` (non tutta `tests/`, che ha test non-sim che falliscono).
+> **Track SIMULATOR? → NON è qui.** Lo stato del track **Simulator** vive in
+> **`document/SIMULATOR_SESSION_RESUME.md`** (stesso worktree), che ne è l'**unico** punto d'ingresso.
+> Qui c'era un duplicato dello stato Simulator andato **stale** (diceva "prossimo Fase 4", 135 test, 14 dock,
+> mentre il vero stato è: milestone 2026-07-13, 148 test, 13 dock): **rimosso** perché contraddiceva il doc
+> buono. Questo file è il resume del track **EventProp / `main`**.
 
 ---
 

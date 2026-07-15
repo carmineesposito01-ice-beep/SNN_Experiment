@@ -1,6 +1,9 @@
 # SIMULATOR_DESIGN — Simulatore plug&play (Fase ①): design MVP v1 + piano di adozione
 
-> **Data:** 2026-07-02 · **Branch:** `EventProp_Study` · **Stato:** **DESIGN APPROVATO dall'utente — NON ancora implementato.**
+> **Data:** 2026-07-02 · **Branch:** `EventProp_Study` · **Stato (allora):** design approvato, non ancora
+> implementato. · **Stato OGGI: ✅ IMPLEMENTATO ed ESTESO ben oltre questo MVP** — vedi il banner sotto e
+> `document/SIMULATOR_SESSION_RESUME.md`. **Questo file è un record STORICO**: le frasi al presente qui
+> dentro ("non implementato", "prima di scrivere codice…") vanno lette come *"al 2026-07-02"*.
 >
 > Questo documento chiude la sessione di design della **Fase ①** (la prima delle 3 fasi post-FPGA, vedi
 > `document/POST_FPGA_ROADMAP.md`). Registra: le **decisioni bloccate**, il **design dell'MVP v1**, e il
