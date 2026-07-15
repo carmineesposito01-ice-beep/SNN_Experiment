@@ -110,8 +110,14 @@ accanto ai 4 champion base comportamentali (**invariati**).
 | test | esito |
 |---|---|
 | **Cancello "altro PC"** (`run_block_hdl_gate`): solo il `.slx`, `matlab/` **fuori dal path**, `makehdl` | ✅ **VHDL generato** (`DUT`, `DUT_pkg`, **`DualPortRAM_generic`**, `SNN`) su `Donatello_Champion` **e** `Donatello_LUT64` |
-| **Funzionale**: blocco (I/O fisico, norm fixed) vs riferimento (norm float + `snn_core` + `snn_decode_hdl`) | ✅ **dmax = 0** (bit-exact) |
+| **Funzionale** (1 campione): blocco vs riferimento (norm float + `snn_core` + decode) | ✅ **dmax = 0** |
+| **Traiettoria reale in streaming** (`run_block_traj_test`, 20 control-step di `test_dataset.mat`, periodo misurato 341 clock) | ✅ **dmax = 0** su `Donatello_Champion`, `LUT16`, `LUT64`, `LUT512` → **lo stato si porta correttamente** fra inferenze |
 | Compilazione della chart sotto codegen | ✅ (dopo il fix `d(:)`, §9: una variabile non cambia tipo) |
+
+> ⚠️ **Condizione d'uso (scoperta dalla prova su traiettoria)**: pilotare gli ingressi con **≥20 bit frazionari**
+> (es. `fixdt(1,32,20)`), e i reciproci della normalize sono a **Q?.30**. Con reciproci Q?.20 la normalize fixed devia
+> di **1 LSB da quella float ~1 volta su 25 step** → uno spike flippa → i params driftano (0.01→0.23 entro 20 step).
+> Dettaglio e tabella: `HDL_PHASE.md` **§3.1.3**.
 
 > **Uso**: il time-mux impiega **~341 clock/inferenza** ⇒ il modello ospite gira al **rate di clock** e i params si
 > aggiornano ogni ~341 passi. È l'architettura (il 5,5× di area risparmiata), non un difetto (§3.1.1).

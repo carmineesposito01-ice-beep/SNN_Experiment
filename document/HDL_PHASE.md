@@ -150,6 +150,27 @@ annidato, RAM-mapping fallito → per serializzare servono `hdl.RAM`/FSM **espli
 dentro un blocco di libreria, **pilotare `start` internamente** (free-running: riparte su `done`) — così il blocco è
 plug&play e non ha un modo silenzioso di fallire. Harness: `scratchpad/test_start_floating.m`.
 
+### §3.1.3 Normalizzazione dentro il blocco: la precisione è critica (VERIFICATO 2026-07-14)
+I blocchi di libreria hanno I/O **fisico**, quindi normalizzano **in fixed** al proprio interno (il deployato la fa in
+SW float e riceve `xn`, §3.1). Perché il risultato sia **identico** al path float servono **DUE** condizioni:
+1. **Reciproci a Q?.30** (`fi(1/S, 1, 34, 30)`) — **non** Q?.20;
+2. **ingressi con ≥ 20 bit frazionari** (es. `fixdt(1,32,20)`).
+
+Quante volte `xn_fixed ≠ xn_float` su 25 control-step di traiettoria reale:
+
+| ingresso | reciproci Q?.20 | reciproci Q?.30 |
+|---|---|---|
+| Q?.13 | 1 | 1 |
+| Q?.20 | 1 | **0** |
+| Q?.28 | 1 | **0** |
+
+**Perché conta**: una singola deviazione di **1 LSB** (2⁻¹³) su `xn` **flippa uno spike** → lo stato diverge → i params
+driftano. Misurato con reciproci Q?.20: esatto fino al control-step 14, poi deviazioni **0.01 → 0.23** entro 20 step.
+È esattamente il fenomeno che il deployato evita normalizzando in float sul PS. Con **entrambe** le condizioni:
+`run_block_traj_test` → **dmax = 0** su 20 control-step in streaming (Champion e LUT{16,64,512}).
+> **Regola d'uso**: pilotare i blocchi con segnali a **≥20 bit frazionari**. Con meno, il blocco *funziona* ma non è
+> bit-exact al riferimento SW (≈1 spike flippato ogni ~25 control-step).
+
 ## §4 Architettura del core (`matlab/snn_core.m`)
 - **Type-parametrizzato** via `snn_types('double'|'fixed', nfrac)`: stesso codice per parità (double) e HDL (fi).
 - 1 chiamata = 1 control-step = `nt=10` tick interni; stato `persistent` (V, fatigue, s_prev, V_LI, x_buf);

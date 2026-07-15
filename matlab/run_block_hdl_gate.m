@@ -40,7 +40,7 @@ function ok = run_block_hdl_gate(blockName)
   vals = {'10', '6', '2', '4'};                      % s, v, dv, v_l fisici (fixed: double non e' HDL)
   for j = 1:4
     add_block('simulink/Sources/Constant', [mdl '/i' num2str(j)], 'Value', vals{j}, ...
-              'OutDataTypeStr', 'fixdt(1,24,13)', 'SampleTime', '1');
+              'OutDataTypeStr', 'fixdt(1,32,20)', 'SampleTime', '1');   % >=20 bit frazionari (vedi §3.1.3)
     add_line(mdl, ['i' num2str(j) '/1'], ['DUT/' num2str(j)]);
   end
   for j = 1:5

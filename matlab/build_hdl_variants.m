@@ -92,11 +92,14 @@ function code = chart_code(decodeCall, srcDecode, srcRom, srcTypes, srcFsm, nrm)
     ''
     'function xn = local_normalize(s, v, dv, v_l, T)'
     '%LOCAL_NORMALIZE  fisico -> xn (fixed). Nel deployato la normalize gira in SW float e all''HDL'
-    '%  arriva gia'' xn (HDL_PHASE §3.1); qui sta nel blocco per avere I/O fisico. Reciproci Q4.20.'
-    ['  invS   = fi(' M(1/nrm(1))      ', 1, 24, 20);']
-    ['  invV   = fi(' M(1/nrm(2))      ', 1, 24, 20);']
-    ['  inv2DV = fi(' M(1/(2*nrm(3)))  ', 1, 24, 20);']
-    ['  invVL  = fi(' M(1/nrm(4))      ', 1, 24, 20);']
+    '%  arriva gia'' xn (HDL_PHASE §3.1); qui sta nel blocco per avere I/O fisico.'
+    '%  RECIPROCI a Q?.30 (NON Q?.20): verificato che con Q?.20 l''arrotondamento di xn devia di 1 LSB'
+    '%  dal path float ~1 volta su 25 step -> uno spike flippa -> i params divergono. Con Q?.30 e'
+    '%  ingressi con >=20 bit frazionari, xn e'' IDENTICO al riferimento float (0 diff).'
+    ['  invS   = fi(' M(1/nrm(1))      ', 1, 34, 30);']
+    ['  invV   = fi(' M(1/nrm(2))      ', 1, 34, 30);']
+    ['  inv2DV = fi(' M(1/(2*nrm(3)))  ', 1, 34, 30);']
+    ['  invVL  = fi(' M(1/nrm(4))      ', 1, 34, 30);']
     ['  DVc    = fi(' M(nrm(3)) ', 1, 24, 13);   % 24-13-1 = 10 bit interi: DV=' M(nrm(3)) ' ci sta']
     '                                     % (con Q5.13/18bit saturerebbe a ~16 -> clamp sbagliato)'
     '  d = dv;                            % clamp a +-DV. NB: d(:) = ... per NON cambiare il tipo di d'
