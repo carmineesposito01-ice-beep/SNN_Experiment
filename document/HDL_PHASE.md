@@ -128,8 +128,27 @@ si può escludere che in altri regimi/champion l'effetto sia peggiore.)*
    `matlab/snn_traj_b2.m` è il kernel MEX-abile del forward serializzato (senza MEX sarebbe ~20 M chiamate).
 3. I blocchi di libreria `Donatello_*` **non c'entrano**: usano `snn_b2_fsm` fedelmente e stavano solo **propagando**
    una discrepanza già presente nella catena deployata.
-4. **Causa: da determinare** (debug sistematico). Ipotesi **già escluse**: quantizzazione della ROM (tutti i pesi
-   ≥ 0,0625, errore di bake **0**) e normalizzazione (il test alimenta l'FSM con lo stesso `xn` float del riferimento).
+4. **CAUSA RADICE — TROVATA E CONFERMATA** → `snn_b2_fsm.m:77`:
+   ```matlab
+   % snn_core.m:64    Vi = leaky(V(i), sh) + (Ii + reci);        % (Ii+reci) RESTA in T.accw = Q8.17
+   % snn_b2_fsm.m:77  Vi = cast(...,'like',T.V) + cast(Ii + reci, 'like', T.V);   % <-- Q8.17 → Q5.13
+   ```
+   L'FSM **arrotonda la corrente sinaptica a 13 bit frazionari** prima di sommarla alla membrana, buttando i **4 bit
+   extra di `accw`** che il core conserva **fino al confronto di soglia** `Vi >= eth`. Quando `Vi` cade entro ~2⁻¹⁴
+   dalla soglia, i due **decidono lo spike in modo diverso** → lo stato diverge.
+   *(Ironia: quei 4 bit esistono esattamente per la lezione §9 «bitshift nello stesso tipo TRONCA → serve il tipo
+   LARGO accw». L'FSM li conquista e li scarta un'istruzione prima di usarli.)*
+
+   **Prova** (una sola variabile): variante identica con **una riga** cambiata (`+ (Ii + reci)`, senza cast) →
+   **0 / 60.000 control-step divergenti su 60/60 traiettorie**, contro 49.436/60.000 dell'originale.
+   Ipotesi **escluse** lungo il percorso: quantizzazione ROM (pesi ≥ 0,0625, errore bake 0) · normalizzazione (stesso
+   `xn` float del riferimento) · saturazione di `rec_V` (max |w| = 0,125 → 0 pesi saturati dal cast a `T.w`).
+   Harness: `scratchpad/parity_wide.m`.
+
+5. **Severità: limitata per costruzione.** Il meccanismo è **rumore di decisione ±1 LSB sulla soglia**, non un errore
+   sistematico: uno spike flippa e il **leak lo dimentica** (misurato: 0,5 → 0,019 → 0,005 → … → 0). In regimi con `Vi`
+   più spesso vicino alla soglia cresce la **frequenza** dei flip, non la **severità**. Coerente con l'impatto
+   funzionale misurato (−0,007 punti). **Non può essere catastrofico**: non è divergente.
 
 > **Lezione di metodo**: un cancello verde va letto insieme a **su cosa gira**. 16 campioni di una sequenza non sono
 > una prova di equivalenza per un sistema con stato che evolve su 1000 passi.
