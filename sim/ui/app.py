@@ -8,8 +8,8 @@ import os
 import numpy as np
 from PySide6.QtCore import QElapsedTimer, QEvent, Qt, QTimer
 from PySide6.QtGui import QAction
-from PySide6.QtWidgets import (QApplication, QComboBox, QFileDialog, QHBoxLayout, QLabel, QMainWindow,
-                               QPushButton, QSlider, QStackedWidget, QVBoxLayout, QWidget)
+from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QFileDialog, QHBoxLayout, QLabel,
+                               QMainWindow, QPushButton, QSlider, QStackedWidget, QVBoxLayout, QWidget)
 from pyqtgraph.dockarea import Dock, DockArea
 
 from config import DT
@@ -125,6 +125,12 @@ class SimApp(QMainWindow):
         self._step_btn = QPushButton("Step"); self._step_btn.clicked.connect(self.step_once)
         self._reset_btn = QPushButton("Reset"); self._reset_btn.clicked.connect(self.reset_run)
         self._brake_btn = QPushButton("Brake leader"); self._brake_btn.clicked.connect(self.inject_brake)
+        self._ghost_toggle = QCheckBox("Oracolo")
+        self._ghost_toggle.setToolTip(
+            "Guidatore di riferimento (ACC-IIDM) con i parametri veri — 'Master Splinter'.\n"
+            "Parte dallo stesso stato e DIVERGE per costruzione: è un rollout indipendente,\n"
+            "non l'errore istantaneo della rete. Sovrapposto = la rete guida come il guidatore vero.")
+        self._ghost_toggle.toggled.connect(self._on_ghost_toggled)
         self._speed_slider = QSlider(Qt.Horizontal); self._speed_slider.setRange(1, 8)
         self._speed_slider.setValue(1); self._speed_slider.setFixedWidth(90)
         self._speed_slider.valueChanged.connect(self._on_speed)
@@ -136,7 +142,7 @@ class SimApp(QMainWindow):
         controls = QHBoxLayout()
         for w in (QLabel("champion"), self._champ_selector, self._selector,
                   self._run_btn, self._step_btn, self._reset_btn,
-                  self._brake_btn, QLabel("speed"), self._speed_slider,
+                  self._brake_btn, self._ghost_toggle, QLabel("speed"), self._speed_slider,
                   QLabel("t"), self._cursor_slider, self._cursor_readout):
             controls.addWidget(w)
 
@@ -409,15 +415,19 @@ class SimApp(QMainWindow):
         self._injector = EventInjector()
         self._probe = AttributeProbe(capacity=500, sample_every=1)
         self._traj = TrajectoryBuffer()
+        self._ghost_traj = TrajectoryBuffer()
         self._src_probe = self._probe                     # scrub source: live buffer while running
         self._src_traj = self._traj
+        self._src_ghost_traj = self._ghost_traj
         self._recon_key = None                            # invalidate the reconstruction cache
         self._episode = EpisodeSummary(self._synops._dims,   # fresh per-scenario summary (refreshes dims on swap)
                                        params_gt=self._scenarios[self._current_idx].params_gt,
                                        model=self._champ.model)
         backend = SoftwareBackend(self._champ.model)
         stepper = SimStepper.from_scenario(backend, sc, injector=self._injector)
-        self.loop = SimLoop(stepper, self._probe, dt_fixed=DT)
+        ghost = SimStepper.from_scenario(None, sc, injector=self._injector)   # SAME injector: same leader
+        self.loop = SimLoop(stepper, self._probe, dt_fixed=DT,
+                            ghost=ghost, ghost_traj=self._ghost_traj)
         self._last_result = None
         self._header.setText(f"champion: {self._champ_name}    |    scenario: {sc.name}")
         for i, p in enumerate(self._params):
@@ -433,10 +443,12 @@ class SimApp(QMainWindow):
 
     def _clear_panels(self):
         """Blank every cockpit panel (empty buffers early-return in update_frame, so a redraw would
-        NOT clear the old curves) and reset the road's integrated ego position."""
+        NOT clear the old curves) and reset the road's integrated ego/ghost positions."""
         for p in (*self._params, self._spikerate, self._trajectory,
                   self._safety, self._timeline, self._synops, self._netstate):
             p.clear()
+        self._trajectory.set_ghost(None)
+        self._safety.set_ghost(None)
         self._topdown.reset()
 
     def reset_run(self):
@@ -459,18 +471,25 @@ class SimApp(QMainWindow):
         if results:
             self._last_result = results[-1]
             self._src_probe, self._src_traj = self._probe, self._traj   # live advanced -> scrub source = live
+            self._src_ghost_traj = self._ghost_traj
             last = len(results) - 1
+            g_results = self._ghost_traj.results()[-len(results):]      # ghost stepped in lockstep by SimLoop
             for i, r in enumerate(results):                             # speed>1 -> many results per paint
                 if i == last:
                     self._topdown.update_frame(r)                       # render only the final tick (others coalesce)
                 else:
                     self._topdown.advance(r)                            # integrate ego position only, no QGraphics work
                 self._traj.record(r)
+            for i, rg in enumerate(g_results):                          # same coalescing for the ghost
+                if i == len(g_results) - 1:
+                    self._topdown.update_ghost(rg)
+                else:
+                    self._topdown.advance_ghost(rg)
             for r, f in zip(results, self._probe.frames()[-len(results):]):
                 self._episode.update(r, f.spikes)                       # feed the post-run summary
             running = self._run_btn.isChecked()
             if (not running) or self._redraw_clock.elapsed() >= _REDRAW_MS:   # throttle the heavy repaint while live
-                self._redraw_series(self._probe, self._traj)
+                self._redraw_series(self._probe, self._traj, self._ghost_traj)
                 self._redraw_clock.restart()
                 if running:                               # live: slider tracks the head
                     self._cursor_slider.blockSignals(True)
@@ -486,14 +505,19 @@ class SimApp(QMainWindow):
         a = getattr(self, "_view_actions", {}).get(name)
         return a is None or a.isChecked()
 
-    def _redraw_series(self, probe, traj):
+    def _redraw_series(self, probe, traj, ghost_traj=None):
         for name, p in zip(("v0", "T", "s0", "a", "b"), self._params):
             if self._dock_on(name):
                 p.update_frame(probe)
         if self._dock_on("SpikeRate"): self._spikerate.update_frame(probe)
         if self._dock_on("SynOps"): self._synops.update_frame(probe)
-        if self._dock_on("Trajectory"): self._trajectory.update_frame(traj)
-        if self._dock_on("Safety"): self._safety.update_frame(traj)
+        show_ghost = self._ghost_toggle.isChecked()      # off -> not drawn AND not computed
+        if self._dock_on("Trajectory"):
+            self._trajectory.update_frame(traj)
+            self._trajectory.set_ghost(ghost_traj if show_ghost else None)
+        if self._dock_on("Safety"):
+            self._safety.update_frame(traj)
+            self._safety.set_ghost(ghost_traj if show_ghost else None)
         if self._dock_on("NetState"): self._netstate.update_frame(probe)   # head; scrub overrides via _render_at_cursor
         if self._dock_on("Events"): self._timeline.update_events(self._injector.log(), probe.frames())
         if self._dock_on("Inspector") and self._inspector.neuron is not None:
@@ -517,11 +541,18 @@ class SimApp(QMainWindow):
     def _on_speed(self, v: int):
         self._speed = int(v)
 
+    def _on_ghost_toggled(self, on: bool):
+        self._topdown.set_ghost_visible(on)
+        self._redraw_series(self._src_probe, self._src_traj, self._src_ghost_traj)
+        if on and self._cursor is not None:            # toggled while paused on a scrub cursor
+            self._topdown.render_ghost_at(self._src_ghost_traj, self._cursor)
+
     def _on_run_toggled(self, running: bool):
         if running:                                       # live: hide cursors, disable slider
             self._auto_stopping = False
             self._cursor = None
             self._src_probe, self._src_traj = self._probe, self._traj
+            self._src_ghost_traj = self._ghost_traj
             self._cursor_slider.setEnabled(False)
             for p in self._ts_panels:
                 p.set_cursor(None)
@@ -534,10 +565,11 @@ class SimApp(QMainWindow):
             auto = self._auto_stopping                    # episode ended on its own -> don't freeze on an eager reconstruct
             self._auto_stopping = False
             if (not auto) and frames and frames[-1].t + 1 > self._probe.capacity:   # manual pause + buffer wrapped -> reconstruct
-                self._src_probe, self._src_traj = self._reconstruct(frames[-1].t)
+                self._src_probe, self._src_traj, self._src_ghost_traj = self._reconstruct(frames[-1].t)
             else:
                 self._src_probe, self._src_traj = self._probe, self._traj
-            self._redraw_series(self._src_probe, self._src_traj)
+                self._src_ghost_traj = self._ghost_traj
+            self._redraw_series(self._src_probe, self._src_traj, self._src_ghost_traj)
             n = len(self._src_probe.frames())
             self._cursor_slider.setEnabled(n > 0)
             self._cursor_slider.blockSignals(True)
@@ -558,6 +590,8 @@ class SimApp(QMainWindow):
             p.set_cursor(idx)
         self._netstate.update_frame(self._src_probe, idx)
         self._topdown.render_at(self._src_traj, idx)
+        if self._ghost_toggle.isChecked():
+            self._topdown.render_ghost_at(self._src_ghost_traj, idx)
         self._cursor_readout.setText(f"t={frames[idx].t} ({frames[idx].t * DT:.1f}s)")
 
     def _seek_to(self, tick):
@@ -585,14 +619,15 @@ class SimApp(QMainWindow):
         repeated pause/resume is instant, and flag the one-off compute in the status bar."""
         key = (self._current_idx, int(upto), len(self._injector.log()))
         if self._recon_key == key:
-            return self._recon_probe, self._recon_traj
+            return self._recon_probe, self._recon_traj, self._recon_ghost
         self._status.showMessage("ricostruzione episodio…")
         self._status.repaint()
         rlog = ReplayLog.from_injector(self._current_idx, self._injector)
-        probe, traj, _ = reconstruct_spliced(self._champ, self._scenarios[self._current_idx], rlog, upto,
-                                             self._probe, self._traj)
+        probe, traj, ghost = reconstruct_spliced(self._champ, self._scenarios[self._current_idx], rlog, upto,
+                                                 self._probe, self._traj)
         self._recon_key, self._recon_probe, self._recon_traj = key, probe, traj
-        return probe, traj
+        self._recon_ghost = ghost
+        return probe, traj, ghost
 
     def _on_cursor(self, v):
         if not self._run_btn.isChecked():

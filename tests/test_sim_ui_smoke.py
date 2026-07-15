@@ -514,3 +514,55 @@ def test_simapp_hidden_dock_skips_redraw(qapp):
     win._set_dock_visible("SpikeRate", True)              # re-show it
     win._advance(1.0)
     assert not _empty(win._spikerate._curve)              # visible again -> updates
+
+
+# --- oracle ghost: app wiring + toggle ---
+def test_app_builds_a_ghost_and_toggle_is_off_by_default(qapp):
+    win = SimApp(CHAMP)
+    assert win.loop.ghost is not None
+    assert win.loop.ghost.backend is None            # it IS the oracle, not a second net
+    assert win._ghost_toggle.isChecked() is False
+    assert win._topdown._ghost.isVisible() is False
+
+
+def test_app_toggle_shows_ghost_on_road_and_panels(qapp):
+    win = SimApp(CHAMP)
+    win._advance(1.0)
+    win._ghost_toggle.setChecked(True)
+    assert win._topdown._ghost.isVisible() is True
+    assert len(win._trajectory._g_s.getOriginalDataset()[1]) > 0
+    assert len(win._safety._g_ttc.getOriginalDataset()[1]) > 0
+    win._ghost_toggle.setChecked(False)
+    assert win._topdown._ghost.isVisible() is False
+    d = win._trajectory._g_s.getOriginalDataset()[1]
+    assert d is None or len(d) == 0
+
+
+def test_app_ghost_and_net_stay_in_lockstep_while_running(qapp):
+    win = SimApp(CHAMP)
+    win._advance(2.0)
+    assert win.loop.ghost.st.t == win.loop.stepper.st.t
+    assert len(win._ghost_traj) == len(win._traj)
+
+
+def test_app_ghost_scrub_source_swaps_with_the_others(qapp):
+    """TEETH: if _src_ghost_traj is not swapped together with _src_probe/_src_traj, a deep scrub
+    renders the oracle from the live tail against a past net state -- a plausible-looking lie."""
+    win = SimApp(CHAMP)
+    win._ghost_toggle.setChecked(True)
+    win._advance(70.0)                               # > 500 ticks -> the ring buffer wraps
+    win._run_btn.setChecked(True)
+    win._run_btn.setChecked(False)                   # manual pause -> deep reconstruct
+    assert win._src_traj is not win._traj            # reconstruction really happened
+    assert win._src_ghost_traj is not win._ghost_traj
+    assert len(win._src_ghost_traj.arrays()["t"]) == len(win._src_traj.arrays()["t"])
+
+
+def test_app_reset_blanks_the_ghost(qapp):
+    win = SimApp(CHAMP)
+    win._ghost_toggle.setChecked(True)
+    win._advance(1.0)
+    win.reset_run()
+    d = win._trajectory._g_s.getOriginalDataset()[1]
+    assert d is None or len(d) == 0
+    assert win._topdown.ghost_x_m() == 0.0
