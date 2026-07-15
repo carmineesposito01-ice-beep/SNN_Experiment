@@ -89,7 +89,18 @@ Zynq-7020 (53 200 LUT, 220 DSP): anche N=512 = **3.3 % delle LUT**, N=16 = **1.0
   Scelta pratica: **32-64 punti** (errore d'interpolazione ≤ 0.03). La **256 attuale è sovradimensionata**: ridurla a 64
   libera ~430 LUT senza toccare l'accuratezza.
 
-## 6. Blocchi di libreria `Donatello_LUT{N}` (HDL-ready, Task 4)
+## 6. Blocchi di libreria `Donatello_LUT{N}` (Task 4) — ⚠️ DESIGN SUPERATO, DA RIFARE
+
+> **STATO 2026-07-14**: questi blocchi sono **sbagliati come artefatto di libreria** e vanno rifatti. Difetti:
+> (1) **non self-contained** (la chart chiama `snn_b2_fsm`/`snn_decode_lut`/`snn_types` → col solo `.slx` non girano);
+> (2) espongono `xn` + `start`/`done`, cioè l'interfaccia **cycle-accurate RTL**, dentro una libreria che è il livello
+> **MODELLO** → inusabili lì (341 passi di simulazione per 1 inferenza); (3) nomi `xn` invece dei fisici `s,v,dv,v_l`.
+> Causa radice e regola: **`HDL_PHASE.md` §3.1** (i due livelli, modello vs RTL) — la libreria è livello modello.
+> **Da rifare**: self-contained, I/O fisico `s,v,dv,v_l → v0,T,s0,a,b`, 1 chiamata = 1 inferenza (niente handshake),
+> fixed-point (bit-exact a `snn_core` = stessi numeri del deployato) + decode LUT-N. In più: nuovo `Donatello_Champion`
+> (cycle-accurate, riproduce il VHDL del bitstream → tiene `xn`+`start`/`done`, §3.1).
+> **I dati di questo studio (§3 accuratezza, §4 risorse, §5 finding) NON dipendono da questi blocchi e restano validi.**
+
 Aggiunti a `snn_champions_lib.slx` 6 sottosistemi streaming **`Donatello_LUT{N}`** (N∈{16,32,64,128,256,512}),
 accanto ai 4 blocchi champion base (Donatello/Leonardo/Michelangelo/Raffaello, **invariati**). Ogni blocco:
 - **Interfaccia**: `xn`(4, normalizzato) + `start` → `params`(5: v0,T,s0,a,b) + `done`. Streaming: `start=1` avvia una

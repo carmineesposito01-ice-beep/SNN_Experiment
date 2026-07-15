@@ -7,33 +7,25 @@
 
 ## ⏸️ IN PAUSA — REWORK blocchi libreria champion (2026-07-14) — LEGGERE PER PRIMO
 
-> SP1 era "completo" (Task 1-6) ma l'utente ha **bocciato i 6 blocchi `Donatello_LUT{N}`** in
-> `snn_champions_lib.slx`: **vanno RIFATTI**. Il resto di SP1 (`snn_decode_lut`, sweep accuratezza 60-traj,
-> sintesi Vivado risorse §4c, figura, doc `DECODE_LUT_SWEEP.md`) **resta valido**.
+> **Stato**: i 6 `Donatello_LUT{N}` in `snn_champions_lib.slx` sono **da RIFARE** (design sbagliato: artefatto RTL
+> cycle-accurate infilato nella libreria, che è livello MODELLO). Il resto di SP1 (decode `snn_decode_lut`, sweep
+> 60-traj, risorse Vivado, figura) **resta valido**.
+> **Regola + fatti verificati → `document/HDL_PHASE.md` §3.1** (i due livelli modello-vs-RTL, dov'è la normalizzazione,
+> a cosa servono `start`/`done`) e **§9** (lezioni). **Stato dei blocchi → `document/DECODE_LUT_SWEEP.md` §6**.
 
-**Difetti dei miei `Donatello_LUT{N}` (da correggere):** (1) **NON self-contained** — la chart chiama
-`snn_b2_fsm`/`snn_decode_lut`/`snn_types` (16 righe) → chi ha solo il `.slx` non li esegue; i base sono inline/self-contained
-(48 righe). (2) espongono **`start`/`done`** (handshake dell'FSM time-mux `snn_b2_fsm`, ~340 clock/inferenza). (3) ingresso
-**`xn`** generico invece dei nomi fisici **`s,v,dv,v_l → v0,T,s0,a,b`** dei base.
+**Da fare al ritorno:**
+1. Rifare `Donatello_LUT{N}` a **livello modello**: self-contained, I/O fisico `s,v,dv,v_l → v0,T,s0,a,b`,
+   **1 chiamata = 1 inferenza** (niente `start`/`done`), fixed-point inline (`snn_core` = bit-exact al deployato) +
+   decode LUT-N. ⚠️ verificare in build che la normalize in fixed dentro il blocco dia lo **stesso `xn`** del path float (§3.1).
+2. Aggiungere **`Donatello_Champion`** = **cycle-accurate**, riproduce il VHDL del bitstream → **tiene** `xn`+`start`/`done`
+   (è ciò che rende il VHDL identico). **Unico punto da decidere con l'utente**: se accetta questa asimmetria
+   (Champion cycle-accurate vs LUT a livello modello), o vuole Champion anch'esso a livello modello (⇒ VHDL ≠ bitstream).
 
-**Cosa vuole l'utente:** `Donatello_LUT{N}` rifatti **self-contained + HDL-ready + nomi fisici + SENZA start/done**, stesso
-forward del deployato; **+ nuovo blocco `Donatello_Champion`** = il campione del bitstream in libreria, self-contained +
-HDL-ready, che **riproduce lo STESSO VHDL** generato per il bitstream.
-
-**QUESTIONI APERTE — risolvere AI FATTI, non a intuito (⚠️ ho affermato cose sul bitstream senza averne memoria → NON rifarlo):**
-- **(A) Normalizzazione**: il `Donatello` comportamentale self-contained **normalizza DENTRO** (`NRM=[150;40;20;40]`,
-  `xn=[xin(1)/NRM(1); xin(2)/NRM(2); (clamp(xin(3))+NRM(3))/(2NRM(3)); xin(4)/NRM(4)]`). Il **bitstream PROBABILMENTE pure**;
-  io avevo detto "normalizza in SW/PS" solo leggendo il commento di `snn_top_b2.m` — **NON confermato**. → CONFERMARE dal
-  flusso/VHDL reale come è stato costruito il bitstream, PRIMA di decidere l'interfaccia dei blocchi.
-- **(B) start/done vs "stesso forward del deployato"**: il time-mux richiede l'handshake; toglierlo ⇒ o controller
-  free-running interno (VHDL diverso dal deployato) o forward parallelo. Da riconciliare con (A).
-- **(C) `Donatello_Champion` faithful vs usable**: "riprodurre lo stesso VHDL" ⇒ tiene l'interfaccia del deployato; se gli
-  si mettono nomi fisici + niente start/done il VHDL cambia. Scelta aperta.
-
-**INTEGRITÀ (verificato, CHIUSO — nessun dato falsato):** la normalizzazione **c'è in OGNI verifica** — `snn_normalize` in
-`snn_traj_fixed.m:13` (kernel MEX dello sweep, normalizza dentro), `run_b2_parity.m:17`, `run_fixed_sweep.m:23`;
-`run_parity_tests.m:23` la **confronta** col riferimento `x_norm`. Prova: accuratezza CON norm (MEX) = **85.17%** (= il
-valore riportato); `snn_normalize(x_phys)` == `x_norm`. Il dubbio dell'utente era su DOVE avviene nel deployato (aperto=A), non SE (avviene). Harness verifica: `scratchpad/verify_norm.m`.
+**Risolte 2026-07-14 con prove (dettaglio in §3.1):** **(A)** il bitstream **NON** normalizza dentro — normalize in SW
+float → `xn` Q5.13 → PL (entity VHDL prende `xn`, 0 costanti di norm; le `invS/invV/...` in ROM sono morte;
+`gen_stimulus.m:32` normalizza in float). **(B)** `start`/`done` = essenziali in HW (transazione su ~341 clock),
+privi di senso a livello modello. **Integrità**: normalizzazione presente e corretta ovunque
+(`snn_normalize`==`x_norm`, diff **0**; acc CON norm = 85.17%) → nessun dato falsato. Harness: `scratchpad/verify_norm.m`.
 
 ---
 

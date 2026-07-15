@@ -82,6 +82,35 @@ PyTorch(fp32) ─①─ MATLAB double ─②─ MATLAB fixed(fi Q?.13) ─③─
 > Il blocco plug&play `snn_champions_lib.slx` è l'artefatto **COMPORTAMENTALE** (double, decode inline):
 > resta com'è, **NON** è il sorgente HDL. Il sorgente HDL è `snn_core` (type-parametrizzato).
 
+### §3.1 Contratto d'interfaccia: dov'è la normalizzazione, a cosa servono `start`/`done` (VERIFICATO 2026-07-14)
+
+**La normalizzazione NON è in HDL** — il deployato riceve `xn` GIÀ normalizzato. Verificato su 3 fonti indipendenti:
+1. `snn_b2_fsm` **non usa** `invS/invV/invVL/inv2DV`: quelle costanti esistono solo in `b2_rom_active.m` (scritte da
+   `gen_b2_rom`) e sono **morte** — nessun consumatore.
+2. Entity del VHDL sintetizzato (`codegen/snn_top_b2/hdlsrc/snn_top_b2.vhd`): `xn : IN sfix19_En13 [4]`,
+   `start : IN`, `params : OUT sfix21_En13 [5]`, `done : OUT` — e **0 occorrenze** di costanti di normalizzazione.
+3. `axi/phase_b/gen_stimulus.m:32` normalizza **in double/float**, poi quantizza a Q5.13 19-bit per l'HDL.
+
+→ Catena reale: **PS (float): `s,v,dv,v_l` → `snn_normalize` → `xn` Q5.13 → PL (fixed): SNN → `params`.**
+Motivo (commento in `snn_top_b2.m`): 1 LSB di `xn` può flippare uno spike → la normalizzazione si fa in float a
+monte, non in fixed nel fabric.
+
+**`start`/`done` = confine di transazione, non decorazione.** Il B2 è time-multiplexato (1 neurone/clock,
+~341 clock/inferenza): dopo `start` i `params` **non esistono** per ~341 cicli. Il PS scrive `xn`, alza `start`,
+attende `done`, legge `params`; senza `done` leggerebbe uno stato intermedio.
+
+**I due livelli — NON mescolarli:**
+
+| | livello **MODELLO** (`snn_champions_lib.slx`) | livello **RTL** (top deployato `snn_top_b2`) |
+|---|---|---|
+| 1 chiamata = | **1 inferenza** | **1 colpo di clock** |
+| I/O | fisico `s,v,dv,v_l → v0,T,s0,a,b` (normalize **dentro**) | `xn` Q5.13 + `start` → `params` + `done` |
+| `start`/`done` | **privi di senso** (servirebbero 341 passi/inferenza) | **essenziali** |
+
+`snn_b2_fsm` è una **serializzazione bit-exact di `snn_core`** → un blocco a livello modello che inlinea `snn_core`
+(fixed) in **una chiamata** produce **gli stessi numeri** del deployato senza handshake: si rinuncia solo allo
+*scheduling* cycle-accurate (dettaglio implementativo hardware), non all'algoritmo.
+
 ## §4 Architettura del core (`matlab/snn_core.m`)
 - **Type-parametrizzato** via `snn_types('double'|'fixed', nfrac)`: stesso codice per parità (double) e HDL (fi).
 - 1 chiamata = 1 control-step = `nt=10` tick interni; stato `persistent` (V, fatigue, s_prev, V_LI, x_buf);
@@ -176,3 +205,14 @@ Config in `make_hdl.m`: `LoopOptimization='StreamLoops'`, `ConstantMultiplierOpt
   usare `x(:) = ...` per forzare il tipo dichiarato (I_input, wacc, t_lr).
 - **loopspec factor**: `coder.hdl.loopspec('stream', N)` con N = trip-count NON serializza (interpretato come
   parallelismo). Semantica non chiarita in R2026a → per lo streaming affidarsi prima al RAM-mapping (§8 punto 2).
+- **Costanti normalize nella ROM = MORTE (2026-07-14)**: `gen_b2_rom` bake `invS/invV/invVL/inv2DV` in
+  `b2_rom_active.m`, ma **nessuno le consuma** (`snn_b2_fsm` prende `xn` già normalizzato). Non dedurre dalla loro
+  presenza che l'HDL normalizzi: **non lo fa** (§3.1). Sono un residuo — o si usano davvero, o vanno rimosse.
+- **Non mettere artefatti RTL nella libreria comportamentale (2026-07-14)**: i primi `Donatello_LUT{N}` esponevano
+  `xn` + `start`/`done` dell'FSM cycle-accurate dentro `snn_champions_lib.slx` → a livello modello sono inusabili
+  (341 passi di simulazione per 1 inferenza) e per giunta **non self-contained** (la chart chiamava `snn_b2_fsm`/
+  `snn_decode_lut`/`snn_types`: col solo `.slx` non girano). La libreria è il livello MODELLO (§3, §3.1):
+  1 chiamata = 1 inferenza, I/O fisico, tutto inline.
+- **Verificare PRIMA di affermare com'è fatto il deployato (2026-07-14)**: un commento in un `.m` non è una prova.
+  Le fonti che valgono: l'**entity del VHDL generato**, chi **consuma** le costanti, e il **generatore di stimoli**
+  che alimenta l'HDL (§3.1). Affermare a memoria su questo ha già prodotto un errore.
