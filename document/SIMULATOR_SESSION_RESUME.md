@@ -15,7 +15,7 @@
   lo scrive lo cambia). **Verificalo tu**: `git log --oneline -1` + `git status` + `git rev-list --count
   origin/Simulator..HEAD`. **Atteso: working tree pulito, 0 commit non pushati.** Se non è così, capisci
   perché prima di lavorare.
-- **Env/test**: conda `cf_sim`. **148 test sim verdi.** Core SNN **bit-identico** (congelato).
+- **Env/test**: conda `cf_sim`. **167 test sim verdi.** Core SNN **bit-identico** (congelato).
 - **Altri track (NON confonderli con questo)**:
   - `main` → studio EventProp; ha il **suo** `document/SESSION_RESUME.md` (file diverso, altro track).
   - `Simulink_Importer` (`.worktrees/Simulink_Importer`) → FPGA/HDL, Fase B/C, B1.5 libreria champion +
@@ -34,16 +34,21 @@ Il dettaglio di com'è fatto e di cosa è stato costruito sta nelle sezioni sott
 > ognuno con la sua spec+plan. I punti 3+4 dell'utente sono **una cosa sola** (ciclo 2): senza file
 > browser l'adattività della vista è YAGNI, col file browser è obbligatoria.
 
-1. **IN CORSO — ciclo 1/3: oracolo (ghost) nel Live.** ✅ brainstorming fatto · ✅ **spec APPROVATA**:
-   `docs/superpowers/specs/2026-07-15-oracle-ghost-live-design.md` (commit `ea77edc`).
-   → **prossimo: `superpowers:writing-plans`** → plan in `docs/superpowers/plans/` → TDD.
-   **Portata**: ghost semi-trasparente su road + curve nei dock **Trajectory e Safety**, **un** toggle.
-   L'oracolo **esiste già ed è golden-testato**: `SimStepper(backend=None)` (`sim/stepper.py:71-74`,
-   `tests/test_sim_stepper.py:36-41` bit-identico) → il ciclo è **wiring, non fisica**.
-   **Post-run e Meso ESCLUSI con motivi misurati** (nella spec, non ripetuti qui). ⚠️ La spec contiene un
-   **riquadro di avvertenza metodologica**: la prima analisi usò la *mediana* e concluse (a torto) che il
-   TTC dell'oracolo fosse invisibile — il TTC è saturo al clip di 30 s quasi sempre, va guardato il **picco**
-   (75.87 px mediano). Non ri-cadervi.
+1. **✅ FATTO — ciclo 1/3: oracolo (ghost) nel Live** *(2026-07-15)*. brainstorming → spec
+   (`docs/superpowers/specs/2026-07-15-oracle-ghost-live-design.md`, `ea77edc`) → plan
+   (`docs/superpowers/plans/2026-07-15-oracle-ghost-live.md`, `fb2d1bf`) → **TDD completo**
+   (`5733b53`→`4584ee7`). **167 test verdi · core bit-identico (diff vuoto) · render-verificato.**
+   **Cosa c'è ora**: toggle **"Oracolo"** in toolbar → ghost semi-trasparente sulla road + curve grigie
+   punteggiate in **Trajectory** (gap/v/accel) e **Safety** (TTC/headway/DRAC). Secondo
+   `SimStepper(backend=None)` in lockstep dentro `SimLoop`, **injector condiviso** (la sua `tick()` è
+   idempotente — misurato) così rete e ghost vedono lo **stesso leader**; `_src_ghost_traj` commuta
+   insieme a `_src_probe`/`_src_traj` nel deep-scrub. Il ghost non ha probe (niente rete → niente spike).
+   ⚠️ **Aperto, da decidere con l'utente**: sulla road ego e ghost si **compenetrano** quando divergono
+   poco (divergenza tipica ~5 m, auto lunghe 5 m). Fisicamente corretto, la trasparenza li distingue, ma
+   un offset verticale del ghost sarebbe più leggibile.
+   ⚠️ **Avvertenza metodologica nella spec, non ri-cadervi**: la prima analisi usò la *mediana* e concluse
+   (a torto) che il TTC dell'oracolo fosse invisibile — il TTC è saturo al clip di 30 s quasi sempre, va
+   guardato il **picco** (75.87 px mediano, 88 su `hard_brake`).
 2. **CICLO 2/3 — identità del checkpoint + adattività della vista** *(= punti 3+4 dell'utente)*. Da
    brainstormare. **Deve reggere**: taglia (H/rank), **max_delay**, topologia (stacked/skip/attn).
    **OUT=5 e IN=4 restano INVARIANTI per decisione dell'utente** (sono il modello fisico ACC-IIDM, non la
@@ -192,10 +197,11 @@ Questa sezione non duplica più l'elenco per non farlo divergere.
 - **Env**: `cf_sim` (conda). Tests/GUI: `conda run -n cf_sim python ...`.
 - **Tests**: run the 20 `test_sim_*.py` files **explicitly** (non-sim tests fail in cf_sim): `state
   backend stepper scenario events probe replay loop eventprop input_capture trajectory layout panels
-  ui_smoke reconstruct platoon meso_panels meso_road episode postrun`. **148 verdi (2026-07-15, ri-eseguiti).**
+  ui_smoke reconstruct platoon meso_panels meso_road episode postrun`. **167 verdi (2026-07-15, dopo il
+  ciclo oracolo: erano 148 + 19 test del ghost).**
   ⚠️ **Numeri "diversi" che troverai in giro = istantanee datate, NON regressioni** (erano veri al loro
-  commit): test **135** e **142** (roadmap ~righe 201/205, era Fase 3–4; NB il roadmap più avanti, riga ~212,
-  dice già 148) → **il numero buono è 148**. Dock **14** (roadmap §Fase 3, `phase3-qa-perf-report.md`) = era
+  commit): test **135**, **142** (roadmap ~righe 201/205, era Fase 3–4) e **148** (roadmap riga ~212 + spec/plan
+  dell'oracolo, era il baseline pre-ghost) → **il numero buono è 167**. Dock **14** (roadmap §Fase 3, `phase3-qa-perf-report.md`) = era
   quando il 14° dock era **`v_mem`** (poi rimosso **senza sostituto**; il dock Input nacque dopo, come rename
   di v_mem, e fu a sua volta revertito) → **il numero buono è 13**. I plan datati citano anche **9** e **11**
   dock: idem, storici. **Non trattarli come discrepanze da investigare.**
@@ -234,7 +240,12 @@ Questa sezione non duplica più l'elenco per non farlo divergere.
 - **Live UI**: `sim/ui/{app,panels,layout,topdown,trajectory,metrics,reconstruct,loop,theme}.py`.
   `app.py::SimApp` = **13-dock** DockArea + champion/scenario selectors + **3-mode toggle**
   (Live / Meso-Macro / Post-run); `panels.py` = all live panels (NeuronGraphPanel, SynOpsPanel=energy,
-  ParamPanel, Trajectory/Safety, EventTimeline, NeuronInspector, SpikeRate). **No standalone v_mem dock**
+  ParamPanel, Trajectory/Safety, EventTimeline, NeuronInspector, SpikeRate).
+  **ORACOLO (ghost)** = un secondo `SimStepper(backend=None)` avanzato **in lockstep da `SimLoop`**
+  (`loop.py::_step_ghost`) con l'**injector condiviso** → rete e ghost vedono lo stesso leader;
+  `_ghost_traj` (secondo `TrajectoryBuffer`) → `TrajectoryPanel/SafetyPanel.set_ghost()` +
+  `topdown.update_ghost/render_ghost_at`; toggle `_ghost_toggle` in toolbar (off = non disegnato né
+  calcolato). Niente probe per il ghost: non ha rete. **No standalone v_mem dock**
   — the selected-neuron v_mem scope lives inside `NeuronInspectorPanel` (which is why a v_mem dock was
   redundant). Post-run = `episode.py` (incremental `EpisodeSummary`) + `postrun_page.py` (dark card dashboard).
 - **Meso/Macro**: `sim/ui/{meso_page,meso_panels,meso_road,platoon}.py` (`meso_road` = `PlatoonRoadView`).
