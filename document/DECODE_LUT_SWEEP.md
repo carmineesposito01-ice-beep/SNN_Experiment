@@ -89,30 +89,36 @@ Zynq-7020 (53 200 LUT, 220 DSP): anche N=512 = **3.3 % delle LUT**, N=16 = **1.0
   Scelta pratica: **32-64 punti** (errore d'interpolazione ≤ 0.03). La **256 attuale è sovradimensionata**: ridurla a 64
   libera ~430 LUT senza toccare l'accuratezza.
 
-## 6. Blocchi di libreria `Donatello_LUT{N}` (Task 4) — ⚠️ DESIGN SUPERATO, DA RIFARE
+## 6. Blocchi di libreria — SELF-CONTAINED e HDL-ready (rifatti 2026-07-14)
 
-> **STATO 2026-07-14**: questi blocchi sono **sbagliati come artefatto di libreria** e vanno rifatti. Difetti:
-> (1) **non self-contained** (la chart chiama `snn_b2_fsm`/`snn_decode_lut`/`snn_types` → col solo `.slx` non girano);
-> (2) espongono `xn` + `start`/`done`, cioè l'interfaccia **cycle-accurate RTL**, dentro una libreria che è il livello
-> **MODELLO** → inusabili lì (341 passi di simulazione per 1 inferenza); (3) nomi `xn` invece dei fisici `s,v,dv,v_l`.
-> Causa radice e regola: **`HDL_PHASE.md` §3.1** (i due livelli, modello vs RTL) — la libreria è livello modello.
-> **Da rifare**: self-contained, I/O fisico `s,v,dv,v_l → v0,T,s0,a,b`, 1 chiamata = 1 inferenza (niente handshake),
-> fixed-point (bit-exact a `snn_core` = stessi numeri del deployato) + decode LUT-N. In più: nuovo `Donatello_Champion`
-> (cycle-accurate, riproduce il VHDL del bitstream → tiene `xn`+`start`/`done`, §3.1).
-> **I dati di questo studio (§3 accuratezza, §4 risorse, §5 finding) NON dipendono da questi blocchi e restano validi.**
+`snn_champions_lib.slx` contiene **7 blocchi Donatello** generati da `build_hdl_variants.m`: **`Donatello_Champion`**
+(decode deployato `snn_decode_hdl`, σ-LUT 256) + **`Donatello_LUT{16,32,64,128,256,512}`** (decode `snn_decode_lut(raw,N)`),
+accanto ai 4 champion base comportamentali (**invariati**).
 
-Aggiunti a `snn_champions_lib.slx` 6 sottosistemi streaming **`Donatello_LUT{N}`** (N∈{16,32,64,128,256,512}),
-accanto ai 4 blocchi champion base (Donatello/Leonardo/Michelangelo/Raffaello, **invariati**). Ogni blocco:
-- **Interfaccia**: `xn`(4, normalizzato) + `start` → `params`(5: v0,T,s0,a,b) + `done`. Streaming: `start=1` avvia una
-  control-step; `done=1` quando i `params` sono pronti (**≈341 clock/inferenza**, forward B2 time-multiplexato).
-- **Interni**: `snn_b2_fsm` (ROM Donatello, `hdl.RAM`) + `snn_decode_lut(raw, N)`. I 6 differiscono **solo per N**.
-- **Stile referenziato** (come il B2 deployato): la MATLAB Function chiama `snn_b2_fsm`/`snn_decode_lut` → questi
-  (+`snn_types`, `b2_rom_active`) devono stare sul path all'uso/sim/HDL. La ROM Donatello si (ri)genera con
-  `gen_b2_rom('Donatello')` (lo fa `build_hdl_variants.m`). *(I 4 blocchi base restano self-contained; i 6 LUT no — tradeoff scelto.)*
+- **Architettura = quella del bitstream**: forward **B2 time-mux** (`snn_b2_fsm`, `hdl.RAM`, 1 neurone/clock).
+  HDL Coder emette `DualPortRAM_generic.vhd` ⇒ è davvero il time-mux, non la parallela superata (`HDL_PHASE.md` §3.1.1).
+- **I/O fisico** (fixed): `s, v, dv, v_l → v0, T, s0, a, b`. **Niente `start`/`done`**: la FSM è pilotata
+  **internamente** (free-running, riparte su done) → plug&play e nessun fallimento silenzioso (§3.1.2).
+- **Self-contained**: la chart inlina come **funzioni locali** i sorgenti *veri*, letti a build-time
+  (`b2_rom_active` + `snn_types` + `snn_b2_fsm` + il decode). Le locali hanno precedenza sul path ⇒ **niente copie a
+  mano** (no deriva) e **zero dipendenze `.m`**.
+- **Normalizzazione dentro il blocco** (reciproci Q4.20): necessaria per avere I/O fisico. Nel deployato gira in SW
+  float (§3.1); qui è in fixed e **si è verificato che produce lo stesso `xn`** (dmax=0, sotto).
 
-**Validazione (Simulink)**: tutti e 6 i blocchi **simulano** (l'`hdl.RAM` gira dentro la MATLAB Function) e al primo
-`done` riproducono **bit-exact** (`dmax=0`) il riferimento `snn_core`+`snn_decode_lut(raw,N)`. I `params` al blocco
-(single control-step da reset, stesso `raw`) mostrano la convergenza con N:
+**Verifiche — tutte passate:**
+
+| test | esito |
+|---|---|
+| **Cancello "altro PC"** (`run_block_hdl_gate`): solo il `.slx`, `matlab/` **fuori dal path**, `makehdl` | ✅ **VHDL generato** (`DUT`, `DUT_pkg`, **`DualPortRAM_generic`**, `SNN`) su `Donatello_Champion` **e** `Donatello_LUT64` |
+| **Funzionale**: blocco (I/O fisico, norm fixed) vs riferimento (norm float + `snn_core` + `snn_decode_hdl`) | ✅ **dmax = 0** (bit-exact) |
+| Compilazione della chart sotto codegen | ✅ (dopo il fix `d(:)`, §9: una variabile non cambia tipo) |
+
+> **Uso**: il time-mux impiega **~341 clock/inferenza** ⇒ il modello ospite gira al **rate di clock** e i params si
+> aggiornano ogni ~341 passi. È l'architettura (il 5,5× di area risparmiata), non un difetto (§3.1.1).
+> Builder: `matlab/build_hdl_variants.m` · gate: `matlab/run_block_hdl_gate.m`.
+
+I `params` al variare di N (stesso `raw`, single control-step) mostrano la convergenza — l'effetto della dimensione LUT
+visibile a livello di blocco:
 
 | N | params @ done (dal blocco Simulink) |
 |---|---|

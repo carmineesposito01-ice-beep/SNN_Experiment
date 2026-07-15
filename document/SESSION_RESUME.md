@@ -5,27 +5,23 @@
 
 ---
 
-## ⏸️ IN PAUSA — REWORK blocchi libreria champion (2026-07-14) — LEGGERE PER PRIMO
+## ✅ Blocchi libreria HDL-ready — FATTI (2026-07-14)
 
-> **Stato**: i 6 `Donatello_LUT{N}` in `snn_champions_lib.slx` sono **da RIFARE** (design sbagliato: artefatto RTL
-> cycle-accurate infilato nella libreria, che è livello MODELLO). Il resto di SP1 (decode `snn_decode_lut`, sweep
-> 60-traj, risorse Vivado, figura) **resta valido**.
-> **Regola + fatti verificati → `document/HDL_PHASE.md` §3.1** (i due livelli modello-vs-RTL, dov'è la normalizzazione,
-> a cosa servono `start`/`done`) e **§9** (lezioni). **Stato dei blocchi → `document/DECODE_LUT_SWEEP.md` §6**.
+> `snn_champions_lib.slx` ha ora **7 blocchi Donatello SELF-CONTAINED e HDL-ready** (`Donatello_Champion` +
+> `Donatello_LUT{16..512}`), accanto ai 4 comportamentali: forward **B2 time-mux** (come il bitstream), **I/O fisico**
+> `s,v,dv,v_l → v0,T,s0,a,b`, **niente start/done** (FSM free-running interna), ~341 clock/inferenza.
+> **Dimostrato**, non promesso: cancello **`run_block_hdl_gate`** → copia solo il `.slx`, toglie `matlab/` dal path,
+> `makehdl` **genera VHDL** (con `DualPortRAM_generic` ⇒ time-mux) su `Donatello_Champion` e `Donatello_LUT64`.
+> Funzionale: **dmax = 0** (bit-exact vs norm-float + `snn_core` + `snn_decode_hdl`). Commit `e399572`.
+>
+> **Dettagli → `document/DECODE_LUT_SWEEP.md` §6** · **regole/lezioni → `document/HDL_PHASE.md`** (§3.1 contratto
+> d'interfaccia, §3.1.1 *l'architettura segue il sorgente*, §3.1.2 `start` scollegato = fallimento silenzioso, §9) ·
+> **mappa cartella → `matlab/README.md`**.
 
-**Da fare al ritorno:**
-1. Rifare `Donatello_LUT{N}` a **livello modello**: self-contained, I/O fisico `s,v,dv,v_l → v0,T,s0,a,b`,
-   **1 chiamata = 1 inferenza** (niente `start`/`done`), fixed-point inline (`snn_core` = bit-exact al deployato) +
-   decode LUT-N. ⚠️ verificare in build che la normalize in fixed dentro il blocco dia lo **stesso `xn`** del path float (§3.1).
-2. Aggiungere **`Donatello_Champion`** = **cycle-accurate**, riproduce il VHDL del bitstream → **tiene** `xn`+`start`/`done`
-   (è ciò che rende il VHDL identico). **Unico punto da decidere con l'utente**: se accetta questa asimmetria
-   (Champion cycle-accurate vs LUT a livello modello), o vuole Champion anch'esso a livello modello (⇒ VHDL ≠ bitstream).
-
-**Risolte 2026-07-14 con prove (dettaglio in §3.1):** **(A)** il bitstream **NON** normalizza dentro — normalize in SW
-float → `xn` Q5.13 → PL (entity VHDL prende `xn`, 0 costanti di norm; le `invS/invV/...` in ROM sono morte;
-`gen_stimulus.m:32` normalizza in float). **(B)** `start`/`done` = essenziali in HW (transazione su ~341 clock),
-privi di senso a livello modello. **Integrità**: normalizzazione presente e corretta ovunque
-(`snn_normalize`==`x_norm`, diff **0**; acc CON norm = 85.17%) → nessun dato falsato. Harness: `scratchpad/verify_norm.m`.
+**Prossimi:** **SP2** (Donatello + ACC-IIDM open-loop) · **riordino fisico di `matlab/`** (refactor a sé: 21 file
+caricano i `.mat` via `fullfile(here,…)` → vanno riscritti i path e ri-verificato con `run_parity_tests` +
+`run_b2_parity`; target `core/ b2/ hdl/ lib/ test/ ann/ micro/ diag/ data/`) · **report** della digressione LUT
+(sorgente pronto: `DECODE_LUT_SWEEP.md`).
 
 ---
 

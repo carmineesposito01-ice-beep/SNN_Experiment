@@ -40,8 +40,13 @@ deployato) · `make_hdl_decode_lut.m` (decode LUT-N, sweep) · `make_hdl_ann.m` 
 `make_hdl_probe|probe2|ram_probe.m` (esperimenti) · `check_hdl.m`.
 
 ### Librerie Simulink (builder + `.slx`)
-`build_library.m` → **`snn_champions_lib.slx`** (4 blocchi champion **comportamentali** double, self-contained) ·
-`build_hdl_variants.m` → blocchi `Donatello_LUT{N}` *(⚠️ **design superato, in rework**: vedi `DECODE_LUT_SWEEP.md` §6)* ·
+`build_library.m` → **`snn_champions_lib.slx`**: 4 blocchi champion **comportamentali** (double, self-contained,
+1 chiamata = 1 inferenza — **non** sintetizzabili: double+`exp`) ·
+`build_hdl_variants.m` → aggiunge alla stessa libreria i 7 blocchi **HDL-ready SELF-CONTAINED**
+(`Donatello_Champion` + `Donatello_LUT{16..512}`): forward **B2 time-mux**, I/O **fisico** `s,v,dv,v_l → v0,T,s0,a,b`,
+**niente start/done** (FSM free-running interna), ~341 clock/inferenza. Dimostrati col cancello
+**`run_block_hdl_gate.m`** (solo il `.slx`, `matlab/` fuori dal path → `makehdl` genera VHDL). Dettagli:
+`../document/DECODE_LUT_SWEEP.md` §6 ·
 `build_plant_lib.m` → `cf_plant_lib.slx` (ACC-IIDM) · `build_closed_loop_demo.m`.
 
 ### Test / verifica (i cancelli)

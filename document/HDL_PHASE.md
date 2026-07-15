@@ -238,6 +238,18 @@ Config in `make_hdl.m`: `LoopOptimization='StreamLoops'`, `ConstantMultiplierOpt
   **non perseguito** (guadagno solo estetico, vedi studio).
 - **Simulink-HDL flow NON aiuta con MATLAB Function block**: dentro il block gira lo stesso motore
   MATLAB-to-HDL. Beneficio solo ricostruendo a blocchi (perde single-source) → **scartato**.
+  > **Precisazione VERIFICATA 2026-07-14 — "non aiuta" ≠ "non funziona".** `makehdl` su un Subsystem con dentro un
+  > MATLAB Function block che usa `hdl.RAM` + `persistent` + la FSM B2 **genera VHDL** (0 errori/warning), inclusa
+  > `DualPortRAM_generic.vhd` ⇒ **time-mux**. È esattamente ciò che abilita i **blocchi di libreria HDL-ready**
+  > (`Donatello_Champion`/`Donatello_LUT{N}`): il `.slx` da solo, su un altro PC, produce il VHDL. Per il **deployment**
+  > resta valida la scelta `codegen -config hdl` da MATLAB (single-source); il flusso Simulink serve alla **libreria**.
+- **Chart SELF-CONTAINED = funzioni locali (2026-07-14)**: un MATLAB Function block può contenere **funzioni locali**, e
+  le locali **hanno precedenza sul path**. Quindi per rendere un blocco autosufficiente NON si copia codice a mano (deriva):
+  il generatore **legge i sorgenti veri** (`b2_rom_active`+`snn_types`+`snn_b2_fsm`+decode) e li appende come locali.
+  Cancello che lo dimostra: `run_block_hdl_gate` (copia solo il `.slx`, toglie `matlab/` dal path, lancia `makehdl`).
+- **Larghezza dei `fi` costanti — controllare il range (2026-07-14)**: `fi(20, 1, 18, 13)` ha 18-1-13 = **4 bit interi**
+  ⇒ range ±16 ⇒ **20 satura a ~15.999** (clamp sbagliato, silenzioso a parte un warning "overflow during constant
+  folding"). I warning di quantizzazione di HDL Coder **vanno letti**: qui hanno scoperto un bug reale.
 - **Resource report = STIMA, non sintesi**: ignora DSP-inference (mult piccoli → LUT), LUT-packing, retiming.
   **Verdetto vero solo da Vivado.**
 - **Accumulatore a larghezza fissa (codegen)**: una variabile non può cambiare tipo tra iterazioni del loop →
