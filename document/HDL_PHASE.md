@@ -3,14 +3,29 @@
 > **Worktree separato:** `D:\Project_MBSE\1.Reti Neurali\Rete_SNN_Test\CF_FSNN\.worktrees\Simulink_Importer`
 > **Branch:** `Simulink_Importer` · **Base:** HEAD `9010d3d` (closed_loop_demo)
 > `core/` PyTorch **congelato read-only** (letti solo i pesi). MATLAB **R2026a** gira headless
-> (`C:\Program Files\MATLAB\R2026a\bin`). **Vivado / simulatore HDL: NON installati in locale**
-> (Vivado in installazione ~3h → sintesi vera e cosim rinviate).
+> (`C:\Program Files\MATLAB\R2026a\bin`). **Vivado 2026.1 È INSTALLATO** (aggiornato 2026-07-14):
+> `C:\AMDDesignTools\2026.1\Vivado\bin\vivado.bat` — **NON** in `C:\Xilinx`. Include xsim (cosim).
 
 ---
 
 ## §0 RIPRESA RAPIDA (leggi prima questo)
 
-> **✅ AGGIORNAMENTO 2026-07-10 — ④ SINTESI + P&R REALI (Vivado 2026.1, OOC su `xc7z020clg400-1`).**
+> ## ⚠️ ARCHITETTURA DEPLOYATA = **B2 (time-mux)**. Tutto ciò che segue con "44% LUT" è **SUPERATO** (2026-07-14)
+>
+> | architettura | sorgente | LUT | stato |
+> |---|---|---|---|
+> | **B2 time-mux** (1 neurone/clock, `hdl.RAM`, FSM) | `snn_b2_fsm` → `snn_top_b2` | **4.223** (~7,9% dello Zynq-7020) · FF 1.584 · BRAM 1 · DSP 38 | ✅ **DEPLOYATA → bitstream PYNQ-Z1** |
+> | parallela (tutti i neuroni srotolati) | `snn_hdl_<name>` (`make_hdl`) | **23.186 = 44%** · DSP 32 · Fmax ~5 MHz | ⛔ **SUPERATA** (~5,5× più grande) |
+>
+> Numeri B2 = grounded su `matlab/axi/build/phase_b/results.csv` (`synth-OOC`, `util_b2_flat`). La catena reale del
+> bitstream è `snn_b2_fsm` → `snn_top_b2` → `snn_top_b2_flat` + `snn_b2_axi_lite` (vedi `axi/build/axi_synth.tcl`).
+> **Regola:** l'architettura generata **segue il sorgente** — sorgente FSM ⇒ time-mux (4.2k LUT); sorgente parallelo
+> ⇒ 23k LUT. L'auto-flow **non** serializza da solo (§9 "Streaming ÷32"). Interfaccia del deployato: §3.1.
+>
+> **Il blocco §0 qui sotto è del 2026-07-10 e descrive la fase PRE-B2** (numeri 44%, "Vivado non pronto",
+> "non ancora cosim'd"): **conservato per storia, NON è lo stato attuale.** Cosim ③: **CHIUSA** (xsim, PASSED).
+
+> **[STORICO PRE-B2] ✅ AGGIORNAMENTO 2026-07-10 — ④ SINTESI + P&R REALI (Vivado 2026.1, OOC su `xc7z020clg400-1`).**
 > Donatello **entra e ROUTA** sullo Zynq-7020 (`Design State: Routed`, 0 ERROR). Numeri **VERI post-route**:
 > **LUT 23.186 = 44%** · **slice occupati 53%** · **FF 3.386 = 3%** · **DSP 32 = 15%** · **BRAM 0** ·
 > **Fmax ~5 MHz** (percorso critico 200 ns, **NON-vincolante**: control-step 0.1 s ⇒ margine ~50.000×). I 32 DSP
@@ -24,14 +39,14 @@
 > Artefatti: `scratchpad/impl_out/{util_impl,timing_impl}.rpt` + `donatello_routed.dcp`; script
 > `scratchpad/{synth,impl}_donatello.tcl` (promuovibili in `matlab/synth/`).
 
-**Stato in una riga:** RTL VHDL **bit-accurato** (garanzia HDL Coder vs il fixed MATLAB — **NON ancora
+**[STORICO PRE-B2 — superato: vedi banner sopra] Stato in una riga:** RTL VHDL **bit-accurato** (garanzia HDL Coder vs il fixed MATLAB — **NON ancora
 cosim'd**) generato per Donatello, single-source da `snn_core`. **po2→shift FATTO** → moltiplicatori
 **27.840 → 32 in STIMA** (premessa 0-DSP; **NON ancora sintetizzato**), comportamento preservato (parità
 double 2e-6, errore fixed **≤0.028 = max sui 5 parametri**, v0 il peggiore). Resta il **lato LUT**
 (adder/mux, alti in STIMA) e il **verdetto di sintesi VERO** (serve Vivado — che include il simulatore,
 quindi UNA installazione sblocca sia la sintesi ④ sia la cosim ③).
 
-**Prossima azione (quando Vivado è pronto):** sintetizzare l'RTL Donatello
+**[STORICO — Vivado è installato e la sintesi è FATTA; il deployato è il B2, non questo] Prossima azione (quando Vivado è pronto):** sintetizzare l'RTL Donatello
 (`matlab/codegen/snn_hdl_Donatello/hdlsrc/snn_hdl_Donatello.vhd` — rigenerabile) su **Zynq-7020
 `xc7z020clg400-1`** per numeri DSP/LUT/FF/timing REALI. La resource-report di HDL Coder è solo una
 STIMA (pessimista sui DSP). Se sta / è vicino → area OK. Se LUT troppo alti → streaming ÷32 (§8 punto 2).
@@ -109,7 +124,31 @@ attende `done`, legge `params`; senza `done` leggerebbe uno stato intermedio.
 
 `snn_b2_fsm` è una **serializzazione bit-exact di `snn_core`** → un blocco a livello modello che inlinea `snn_core`
 (fixed) in **una chiamata** produce **gli stessi numeri** del deployato senza handshake: si rinuncia solo allo
-*scheduling* cycle-accurate (dettaglio implementativo hardware), non all'algoritmo.
+*scheduling* cycle-accurate. ⚠️ **Ma attenzione**: "stessi numeri" ≠ "stessa architettura HDL" — vedi sotto.
+
+### §3.1.1 Cosa genera HDL Coder da un blocco — **l'architettura segue il SORGENTE** (verificato sugli artefatti)
+| sorgente nella chart | HDL generato | LUT | note |
+|---|---|---|---|
+| chiama/inlinea **`snn_b2_fsm`** (FSM + `hdl.RAM`) | **time-mux** | **~4.2k** | classe **deployato** ✅ |
+| inlinea **`snn_core`** ("1 chiamata = 1 inferenza", neuroni paralleli) | **parallelo srotolato** | **~23k** | l'architettura **SUPERATA** ⛔ |
+| comportamentale **double + `exp`** (i 4 blocchi base) | **nessuno** | — | double/`exp` non sintetizzabili |
+
+L'auto-flow **NON** converte il parallelo in time-mux (§9 "Streaming ÷32": `loopspec('stream')` ignorato sul loop
+annidato, RAM-mapping fallito → per serializzare servono `hdl.RAM`/FSM **espliciti**).
+> **Corollario (decide il design della libreria):** «blocco 1-chiamata-1-inferenza» e «logica time-mux del deployato»
+> sono **mutuamente esclusivi**. Volere HDL comparabile al deployato ⇒ **l'FSM deve stare dentro il blocco** ⇒ il blocco
+> lavora a **rate di clock** (~341 passi/inferenza). Il prezzo del 5,5× di area è la latenza multi-ciclo: è l'architettura, non un difetto.
+
+### §3.1.2 `start` scollegato in Simulink = **fallimento SILENZIOSO** (verificato 2026-07-14)
+| `start` | esito simulazione |
+|---|---|
+| **scollegato** | **nessun errore**: Simulink lo mette a 0 → FSM mai avviata → `done` mai, **`params=[0 0 0 0 0]` per sempre** |
+| `=0` | idem: blocco morto, params all'init |
+| `=1` | funziona: `done` a ~341 clock, params corretti |
+
+→ Un blocco che espone `start` **può essere usato male senza accorgersene** (output zeri, zero diagnostica). Se l'FSM sta
+dentro un blocco di libreria, **pilotare `start` internamente** (free-running: riparte su `done`) — così il blocco è
+plug&play e non ha un modo silenzioso di fallire. Harness: `scratchpad/test_start_floating.m`.
 
 ## §4 Architettura del core (`matlab/snn_core.m`)
 - **Type-parametrizzato** via `snn_types('double'|'fixed', nfrac)`: stesso codice per parità (double) e HDL (fi).
