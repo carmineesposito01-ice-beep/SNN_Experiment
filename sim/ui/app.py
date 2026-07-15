@@ -589,8 +589,8 @@ class SimApp(QMainWindow):
         self._status.showMessage("ricostruzione episodio…")
         self._status.repaint()
         rlog = ReplayLog.from_injector(self._current_idx, self._injector)
-        probe, traj = reconstruct_spliced(self._champ, self._scenarios[self._current_idx], rlog, upto,
-                                          self._probe, self._traj)
+        probe, traj, _ = reconstruct_spliced(self._champ, self._scenarios[self._current_idx], rlog, upto,
+                                             self._probe, self._traj)
         self._recon_key, self._recon_probe, self._recon_traj = key, probe, traj
         return probe, traj
 
