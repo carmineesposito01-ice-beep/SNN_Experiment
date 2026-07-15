@@ -100,3 +100,60 @@ def test_multi_rate_is_accepted_as_baseline():
     from core.network import build_model
     name, supported, _ = _name_signature(build_model("multi_rate").state_dict())
     assert name == "baseline" and supported is True
+
+
+# ---- identity: max_delay from a hierarchy of sources ---------------------------------------------
+
+def _sd_with_delays(max_delay, H=32, IN=4, seed=0):
+    """A baseline state-dict whose `delays` really come from randint(0, max_delay)."""
+    from core.network import build_model
+    torch.manual_seed(seed)
+    return build_model("baseline", hidden_size=H, rank=8, max_delay=max_delay).state_dict()
+
+
+def test_max_delay_from_arch_field_is_exact_and_skips_inference():
+    from utils.champion_io import _resolve_max_delay
+    sd = _sd_with_delays(6)
+    md, src, p = _resolve_max_delay(sd, "baseline", arch={"max_delay": 6}, sidecar=None)
+    assert md == 6 and src == "arch" and p is None
+
+
+def test_max_delay_from_delay_masks_is_exact_for_eventprop():
+    from utils.champion_io import _resolve_max_delay
+    from core.network import build_model
+    sd = build_model("eventprop_alif_full").state_dict()
+    md, src, p = _resolve_max_delay(sd, "eventprop_alif_full", arch=None, sidecar=None)
+    assert md == int(sd["layer_hidden.delay_masks"].shape[0])
+    assert src == "delay_masks" and p is None
+
+
+def test_max_delay_from_sidecar():
+    from utils.champion_io import _resolve_max_delay
+    sd = _sd_with_delays(12)
+    md, src, p = _resolve_max_delay(sd, "baseline", arch=None, sidecar={"cf_max_delay": 12})
+    assert md == 12 and src == "sidecar" and p is None
+
+
+def test_max_delay_inferred_reports_its_confidence():
+    from utils.champion_io import _resolve_max_delay
+    sd = _sd_with_delays(12)
+    md, src, p = _resolve_max_delay(sd, "baseline", arch=None, sidecar=None)
+    assert md == 12 and src == "inferred"
+    assert 0.0 < p < 1e-3                       # 128 samples at k=12 -> ~1.5e-5
+
+
+def test_cross_check_raises_only_when_the_weights_REFUTE_the_declared_value():
+    """TEETH, and the direction is the trap. The inference is a LOWER BOUND:
+      declared > inferred  -> normal under-shoot, accept silently
+      declared < inferred  -> impossible: a synapse holds a delay that model could not produce
+    A test asserting 'differ -> raise' would pass a wrong implementation and fail a right one."""
+    from utils.champion_io import _resolve_max_delay
+    sd = _sd_with_delays(12)                    # delays.max() == 11 -> inference says 12
+
+    # declared BELOW the inference -> refuted by the weights -> must raise
+    with pytest.raises(ValueError, match="12"):
+        _resolve_max_delay(sd, "baseline", arch=None, sidecar={"cf_max_delay": 6})
+
+    # declared ABOVE the inference -> the expected under-shoot -> must NOT raise
+    md, src, p = _resolve_max_delay(sd, "baseline", arch=None, sidecar={"cf_max_delay": 18})
+    assert md == 18 and src == "sidecar"

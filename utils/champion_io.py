@@ -82,11 +82,64 @@ def detect_family(state_dict) -> str:
     return name
 
 
+def _infer_max_delay(state_dict):
+    """(inferred, p_underestimate) from the ``delays`` buffer, or (None, None) if absent.
+
+    ``delays`` is ``randint(0, max_delay, (H, IN))`` (core/network.py:26), so its max is a LOWER
+    BOUND of ``max_delay-1``: the inference is exact only if some synapse drew the top value.
+    Measured over 20k draws: exact for max_delay 6 and 12, fails ~1 in 1333 at max_delay=18 with
+    H=32 (128 samples), under-shooting by 1.
+    """
+    d = state_dict.get("layer_hidden.delays")
+    if d is None:
+        return None, None
+    k = int(d.max()) + 1
+    n = int(d.numel())
+    p = ((k - 1) / k) ** n if k > 1 else 0.0     # uses the inferred k: the true one is unknowable
+    return k, p
+
+
+def _resolve_max_delay(state_dict, family, arch=None, sidecar=None):
+    """(max_delay, source, p_underestimate). source in {arch, delay_masks, sidecar, inferred}.
+
+    The .pt carries no metadata, so max_delay is unknowable from the baseline signature alone
+    (``delays`` is (H,IN) whatever max_delay is) — which is why it used to be silently defaulted
+    to 6, dropping 68/128 input synapses on a max_delay_12 checkpoint. Hierarchy, most
+    authoritative first.
+    """
+    declared, source = None, None
+    if arch and arch.get("max_delay") is not None:
+        declared, source = int(arch["max_delay"]), "arch"
+    elif family == "eventprop_alif_full" and "layer_hidden.delay_masks" in state_dict:
+        declared, source = int(state_dict["layer_hidden.delay_masks"].shape[0]), "delay_masks"
+    elif sidecar and sidecar.get("cf_max_delay") is not None:
+        declared, source = int(sidecar["cf_max_delay"]), "sidecar"
+
+    inferred, p = _infer_max_delay(state_dict)
+
+    if declared is not None:
+        # Asymmetric cross-check. The inference is a LOWER BOUND, so declared > inferred is the
+        # expected under-shoot, NOT a conflict. Only declared < inferred is impossible: a synapse
+        # holds a delay that model could never have produced, so the declared source is refuted by
+        # the weights themselves (a sidecar from another run, an arch field copied from elsewhere).
+        if inferred is not None and declared < inferred:
+            raise ValueError(
+                f"max_delay declared as {declared} (source: {source}) is refuted by the weights: "
+                f"the delays buffer holds {inferred - 1}, which requires max_delay >= {inferred}. "
+                f"The checkpoint and that source do not describe the same model.")
+        return declared, source, None
+
+    if inferred is None:
+        return None, None, None
+    return inferred, "inferred", p
+
+
 def _infer_topology(state_dict, variant) -> dict:
     """Infer (hidden, input, rank, output) from tensor shapes.
 
-    ``max_delay`` is intentionally not inferred: it does not change baseline tensor
-    shapes and all champions use the config default (6), so it is left to build_model.
+    ``max_delay`` is NOT inferable here: it does not change baseline tensor shapes (``delays`` is
+    (H,IN) whatever it is). It is resolved by ``_resolve_max_delay`` — see there for why defaulting
+    it silently was a real bug and not a harmless assumption.
     """
     fc = state_dict["layer_hidden.fc_weight"]        # (hidden, input)
     rec_u = state_dict["layer_hidden.rec_U"]         # (hidden, rank)
