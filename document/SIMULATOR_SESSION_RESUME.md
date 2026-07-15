@@ -80,11 +80,15 @@ Il dettaglio di com'è fatto e di cosa è stato costruito sta nelle sezioni sott
    additivo → `delay_masks.shape[0]` per EventProp = esatto → sidecar `config_snapshot.json` → inferenza
    `delays.max()+1`), con **cross-check**: fonte dichiarata vs inferenza divergenti ⇒ errore rumoroso.
    L'inferenza è **misurata**: esatta per max_delay 6 e 12, ma fallisce ~1 volta su 1333 a max_delay=18/H=32.
-   ⚠️ Nella spec ci sono **due errori di design già intercettati**, non ri-commetterli: `--arch_variant`
-   **non esiste** (CLI unificata in `--training_method`; sopravvive solo in 8 vecchi config_snapshot), e il
-   campo `arch` va letto **dal modello** non dagli `args` (`save_checkpoint` non ha `args`, i default CLI
-   sono `None`, e serve `getattr` perché `_CF_FSNN_VariantBase` non espone `rank`/`bit_shift` → `model.rank`
-   **romperebbe il training** di stacked/attn/wta).
+   ⚠️ **Tre errori già intercettati e corretti — non ri-commetterli** (dettaglio nella spec): (a)
+   `--arch_variant` **non esiste** (CLI unificata in `--training_method`; sopravvive solo in 8 vecchi
+   config_snapshot); (b) il campo `arch` va letto **dal modello** non dagli `args` (`save_checkpoint` non ha
+   `args`, i default CLI sono `None`); (c) **il `getattr` serve per `bit_shift`, NON per `rank`** — misurato:
+   `hidden_size`/`rank`/`max_delay` ci sono su **tutte e 10** le varianti, mentre **`bit_shift` è assente su
+   9 su 10** (EventProp compreso). Una versione precedente di questa riga incolpava `rank`: era **falsa**, e
+   il test scritto su quella premessa **passava col `getattr` rimosso** (vedi memoria
+   `right-conclusion-wrong-premise`). (d) Il **cross-check è asimmetrico**: `declared > inferred` = normale
+   (l'inferenza è un lower bound), solo `declared < inferred` è impossibile e alza.
 3. **CICLO 3/3 — costruttore di scenari personalizzati** *(= punto 2 dell'utente)*. Da brainstormare.
    Possiede **due debiti misurati**: (a) `sim/events.py:37-38` fa ripartire la rampa dal `v_leader[t]`
    **grezzo** → due `brake_leader` in fila fanno **saltare il leader da 5.00 a 21.00 m/s in un tick**
