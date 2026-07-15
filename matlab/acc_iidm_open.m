@@ -60,14 +60,15 @@ function accel = acc_iidm_open(s, v, dv, v_l, p, rst, T) %#codegen
   end
 
   % stima a_l (filtro OU su differenze finite del leader)
-  alf = cast(ALPHA*alf + (1-ALPHA)*((lq - vlp)/DT), 'like', T.acc); vlp = cast(lq, 'like', T.st);
+  alf = cast(ALPHA*alf + (1-ALPHA)*acc_div(T, isFx, lq - vlp, DT), 'like', T.acc);
+  vlp = cast(lq, 'like', T.st);
 
   % --- acc_iidm_accel: IIDM base + CAH + blend ACC (verbatim da build_plant_lib:plant_code) ---
   sab = cast(max(sqrt(a*b), 1e-6), 'like', T.par);
-  s_star = cast(s0 + max(vq*T_ + vq*dq/(2*sab), 0), 'like', T.st);
+  s_star = cast(s0 + max(vq*T_ + acc_div(T, isFx, vq*dq, 2*sab), 0), 'like', T.st);
   s_safe = cast(max(sq, 2.0), 'like', T.st);
-  v_free = cast(a*(1 - min(vq/v0, 10)^4), 'like', T.acc);
-  z = cast(min(s_star/s_safe, 20), 'like', T.acc);
+  v_free = cast(a*(1 - min(acc_div(T, isFx, vq, v0), 10)^4), 'like', T.acc);
+  z = cast(min(acc_div(T, isFx, s_star, s_safe), 20), 'like', T.acc);
   below = (vq <= v0);
   a_z = cast(a*(1 - z^2), 'like', T.acc);
   if z < 1
@@ -76,10 +77,28 @@ function accel = acc_iidm_open(s, v, dv, v_l, p, rst, T) %#codegen
     if below, a_iidm = cast(a_z, 'like', T.acc); else, a_iidm = cast(v_free + a_z, 'like', T.acc); end
   end
   a_l_bar = cast(min(alf, a), 'like', T.acc);
-  a_cah = cast(a_l_bar - max(dq,0)^2/(2*s_safe + 1e-6), 'like', T.acc);
+  a_cah = cast(a_l_bar - acc_div(T, isFx, max(dq,0)^2, 2*s_safe + 1e-6), 'like', T.acc);
   a_cah = cast(min(max(a_cah, -9), a), 'like', T.acc);
-  dd = cast((a_iidm - a_cah)/(b + 1e-6), 'like', T.acc);
+  dd = cast(acc_div(T, isFx, a_iidm - a_cah, b + 1e-6), 'like', T.acc);
   a_blend = cast((1-COOL)*a_iidm + COOL*(a_cah + b*tanh(dd)), 'like', T.acc);
   if a_iidm >= a_cah, ac = a_iidm; else, ac = a_blend; end
   accel = cast(min(max(ac, -9), a), 'like', T.out);
+end
+
+
+function q = acc_div(T, isFx, num, den)
+%ACC_DIV  Divisione type-parametrica: in double e' `num/den`, in fixed e' `divide(numerictype,...)`.
+%  ⚠️ In fixed l'operatore `/` NON va usato: non produce il tipo di quoziente che ci si aspetta.
+%     Misurato il 2026-07-15 con fimath('RoundingMethod','Zero', Product/SumMode 'SpecifyPrecision'):
+%        13.743 / 2.5625  -> 0        (atteso 5.36)
+%         6.216 / 17.95   -> 0        (atteso 0.346)
+%        11.552 / 10.2396 -> 1        (atteso 1.128)  <- troncato a INTERO
+%     cioe' l'ACC-IIDM in fixed restituiva accel = 0 SEMPRE. `divide` impone il tipo del risultato
+%     (qui T.acc) e toglie l'ambiguita'. HDL Coder genera VHDL da entrambe le forme (verificato),
+%     quindi non costa l'HDL-readiness.
+  if isFx
+    q = divide(numerictype(T.acc), num, den);
+  else
+    q = num / den;
+  end
 end
