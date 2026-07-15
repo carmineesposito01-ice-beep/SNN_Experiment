@@ -63,3 +63,59 @@ def test_materialise_returns_a_scenario_the_stepper_can_run():
             break
         st.step()
     assert st.st.t == 60                                        # it really is a runnable Scenario
+
+
+# ---- the style is a PLANE, and the axes are independent -------------------------------------------
+
+AGGRESSIVO = LeaderStyle(a_max=4.0, b_max=9.0)
+PLACIDO = LeaderStyle(a_max=1.0, b_max=1.0)
+GUARDINGO = LeaderStyle(a_max=1.0, b_max=9.0)      # crawls off, slams the brakes
+SPAVALDO = LeaderStyle(a_max=4.0, b_max=1.0)       # darts away, coasts down
+
+
+def test_style_changes_the_trajectory_not_the_label():
+    """TEETH: the deceleration must MATCH b_max, not merely differ between styles. A style that
+    only renames things gives the same rate for both and fails here.
+
+    NB the LAST step of a ramp is partial by design -- the clip lands exactly on to_v instead of
+    overshooting -- so the assertion is on the steepest step, not on every step.
+    """
+    for style in (PLACIDO, AGGRESSIVO):
+        vl = materialise(_spec([Block("ramp", 300, {"to_v": 2.0})], style=style), _PG, N=300).v_leader
+        d = np.diff(vl)
+        moving = d[d < -1e-9]                                  # the braking samples
+        assert abs(moving.min() - (-style.b_max * DT)) < 1e-9  # the steepest step IS b_max
+        assert np.all(moving >= -style.b_max * DT - 1e-9)      # and nothing is steeper
+        assert abs(vl[-1] - 2.0) < 1e-9                        # and it lands exactly on the target
+
+
+def test_the_two_axes_are_independent():
+    """TEETH, and this is WHY the style is a plane and not a slider: moving a_max must leave every
+    braking segment byte-identical, and moving b_max must leave every accelerating segment
+    byte-identical. A style that secretly couples them passes the test above and fails here."""
+    blocks = [Block("ramp", 150, {"to_v": 2.0}),               # braking
+              Block("ramp", 150, {"to_v": 21.0})]              # accelerating
+    base = materialise(_spec(blocks, style=LeaderStyle(2.0, 4.0)), _PG, N=300).v_leader
+    only_a = materialise(_spec(blocks, style=LeaderStyle(4.0, 4.0)), _PG, N=300).v_leader
+    only_b = materialise(_spec(blocks, style=LeaderStyle(2.0, 9.0)), _PG, N=300).v_leader
+    np.testing.assert_array_equal(base[:150], only_a[:150])    # a_max moved -> braking untouched
+    assert not np.array_equal(base[150:], only_a[150:])        # ...and acceleration DID change
+    assert not np.array_equal(base[:150], only_b[:150])        # b_max moved -> braking changed
+
+
+def test_the_four_quadrants_are_reachable_and_distinct():
+    blocks = [Block("ramp", 150, {"to_v": 2.0}), Block("ramp", 150, {"to_v": 21.0})]
+    out = {name: materialise(_spec(blocks, style=s), _PG, N=300).v_leader
+           for name, s in (("aggressivo", AGGRESSIVO), ("placido", PLACIDO),
+                           ("guardingo", GUARDINGO), ("spavaldo", SPAVALDO))}
+    # guardingo brakes like aggressivo but accelerates like placido: the mixed quadrant exists
+    np.testing.assert_array_equal(out["guardingo"][:150], out["aggressivo"][:150])
+    np.testing.assert_array_equal(out["spavaldo"][:150], out["placido"][:150])
+    assert not np.array_equal(out["guardingo"][150:], out["aggressivo"][150:])
+
+
+def test_style_outside_the_plane_is_rejected():
+    with pytest.raises(ValueError, match="a_max"):
+        materialise(_spec([Block("const", 10, {"v": 5.0})], style=LeaderStyle(9.0, 4.0)), _PG, N=10)
+    with pytest.raises(ValueError, match="b_max"):
+        materialise(_spec([Block("const", 10, {"v": 5.0})], style=LeaderStyle(2.0, 20.0)), _PG, N=10)

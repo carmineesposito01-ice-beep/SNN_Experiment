@@ -77,8 +77,18 @@ def _block_samples(block, v0, style, params_gt, N):
     raise ValueError(f"unknown block kind: {block.kind!r}")
 
 
+def _check_style(style):
+    """The plane's bounds. b_max above B_MAX would let the leader out-brake physics, and every
+    safety metric downstream (brake_margin, DRAC) is written against that limit."""
+    if not A_MAX_RANGE[0] <= style.a_max <= A_MAX_RANGE[1]:
+        raise ValueError(f"a_max {style.a_max} outside {A_MAX_RANGE}")
+    if not B_MAX_RANGE[0] <= style.b_max <= B_MAX_RANGE[1]:
+        raise ValueError(f"b_max {style.b_max} outside {B_MAX_RANGE}")
+
+
 def materialise(spec, params_gt, N):
     """ScenarioSpec -> Scenario. Pure: same spec, same v_leader, byte for byte."""
+    _check_style(spec.style)
     out = np.empty(N, dtype=np.float64)
     v = float(spec.v_init)
     i = 0
