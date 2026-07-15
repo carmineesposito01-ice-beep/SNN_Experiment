@@ -43,16 +43,32 @@ deployato) · `make_hdl_decode_lut.m` (decode LUT-N, sweep) · `make_hdl_ann.m` 
 `build_library.m` → **`snn_champions_lib.slx`**: 4 blocchi champion **comportamentali** (double, self-contained,
 1 chiamata = 1 inferenza — **non** sintetizzabili: double+`exp`) ·
 `build_hdl_variants.m` → aggiunge alla stessa libreria i 7 blocchi **HDL-ready SELF-CONTAINED**
-(`Donatello_Champion` + `Donatello_LUT{16..512}`): forward **B2 time-mux**, I/O **fisico** `s,v,dv,v_l → v0,T,s0,a,b`,
-**niente start/done** (FSM free-running interna), ~341 clock/inferenza. Dimostrati col cancello
-**`run_block_hdl_gate.m`** (solo il `.slx`, `matlab/` fuori dal path → `makehdl` genera VHDL). Dettagli:
-`../document/DECODE_LUT_SWEEP.md` §6 ·
+(`Donatello_Champion` + `Donatello_LUT{16..512}`) ·
 `build_plant_lib.m` → `cf_plant_lib.slx` (ACC-IIDM) · `build_closed_loop_demo.m`.
+
+#### Come si usano i blocchi HDL-ready (`Donatello_Champion`, `Donatello_LUT{N}`)
+*(ogni blocco porta la stessa spiegazione nella propria **Description**, visibile in Block Properties)*
+
+| | |
+|---|---|
+| **I/O** | fisico: `s, v, dv, v_l` → `v0, T, s0, a, b` — niente `start`/`done` |
+| **Tipi** | ingressi **fixed con ≥20 bit frazionari** (es. `fixdt(1,32,20)`). **Il `double` non compila**: per sorgenti double (es. `test_dataset.mat`) interporre un **Data Type Conversion** |
+| **Semantica** | **1 campione = 1 inferenza** (edge-triggered sul cambio d'ingresso); le uscite tengono l'ultimo valore |
+| **Rate** | ogni ingresso va tenuto **≥ ~341 passi** (il time-mux elabora 1 neurone/clock). Il valore esatto **non conta**: qualunque hold ≥341 è corretto |
+| **Architettura** | forward **B2 time-mux** = quella del bitstream → `makehdl` genera time-mux (con `DualPortRAM`) |
+| **Self-contained** | zero dipendenze `.m`: il `.slx` genera VHDL anche su un altro PC |
+
+Verifiche: **`run_block_hdl_gate.m`** (isola il `.slx` e lancia `makehdl`) · **`run_block_traj_test.m`** (pilota il
+blocco con le traiettorie di `test_dataset.mat` → `dmax = 0`). Dettagli e prove: `../document/DECODE_LUT_SWEEP.md` §6,
+`../document/HDL_PHASE.md` §3.1.3-§3.1.4.
 
 ### Test / verifica (i cancelli)
 `run_parity_tests.m` (**cancello 1:1**: double vs golden PyTorch ~2e-6) · `run_b2_parity.m` (FSM B2 vs core, 0 mismatch) ·
 `run_fixed_parity.m` · `run_fixed_sweep.m` (errore vs bit di frazione) · `run_hdl_verify.m` · `run_block_parity.m` ·
 `run_plant_parity.m` · `run_b15a_validate.m` (validazione funzionale via MEX) · `run_lut_sweep.m` (accuratezza vs N) ·
+**`run_block_hdl_gate.m`** (cancello "altro PC": copia il solo `.slx`, toglie `matlab/` dal path, `makehdl` deve
+generare VHDL time-mux) · **`run_block_traj_test.m`** (blocchi pilotati con le traiettorie di `test_dataset.mat`:
+`dmax` vs riferimento **deve essere 0**; verifica anche che su ingresso costante l'inferenza sia UNA) ·
 `test_b2_fsm.m` · `test_top_b2.m` · `test_decode.m` · `test_ann_mlp.m` · `tb_b2_fsm.m` · `tb_hdl_Donatello.m`.
 
 ### Confronto ANN (Fase B)

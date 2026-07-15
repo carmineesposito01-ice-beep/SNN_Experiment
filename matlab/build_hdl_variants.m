@@ -34,6 +34,13 @@ function build_hdl_variants()
   names = [{'Donatello_Champion'}, arrayfun(@(N) sprintf('Donatello_LUT%d', N), Ns, 'UniformOutput', false)];
   calls = [{'snn_decode_hdl(raw)'}, arrayfun(@(N) sprintf('snn_decode_lut(raw, %d)', N), Ns, 'UniformOutput', false)];
   decs  = [{srcHdl}, repmat({srcLut}, 1, numel(Ns))];
+  desc  = [{['Decode della sigmoide via LUT a 256 punti: e'' esattamente lo stadio decode ' ...
+             'del bitstream PYNQ-Z1 (snn_decode_hdl). Blocco di riferimento della libreria.']}, ...
+           arrayfun(@(N) sprintf(['Decode della sigmoide via LUT a %d punti (snn_decode_lut). Variante ' ...
+             'per lo studio del compromesso dimensione-LUT / accuratezza / risorse: l''accuratezza e'' ' ...
+             'piatta (~84%%) su N=16..512 mentre le LUT di sintesi crescono da 520 a 1732 (vedi ' ...
+             'document/DECODE_LUT_SWEEP.md). Il forward e'' identico in tutte le varianti.'], N), ...
+             Ns, 'UniformOutput', false)];
 
   lib = 'snn_champions_lib'; libfile = fullfile(here, [lib '.slx']);
   assert(isfile(libfile), '%s inesistente: esegui prima build_library()', libfile);
@@ -45,7 +52,8 @@ function build_hdl_variants()
   for i = 1:numel(names)
     sub = [lib '/' names{i}];
     if getSimulinkBlockHandle(sub) > 0, delete_block(sub); end
-    add_block('built-in/Subsystem', sub, 'Position', [40, 30 + (i-1)*80, 230, 70 + (i-1)*80]);
+    add_block('built-in/Subsystem', sub, 'Position', [40, 30 + (i-1)*80, 230, 70 + (i-1)*80], ...
+              'Description', block_description(names{i}, desc{i}));
     add_block('simulink/User-Defined Functions/MATLAB Function', [sub '/SNN']);
     chart = sfroot().find('-isa', 'Stateflow.EMChart', 'Path', [sub '/SNN']);
     chart.Script = chart_code(calls{i}, decs{i}, srcRom, srcTypes, srcFsm, nrm);
@@ -63,6 +71,69 @@ function build_hdl_variants()
   save_system(lib, libfile);
   close_system(lib, 0);
   fprintf('OK: %d blocchi SELF-CONTAINED (time-mux, I/O fisico, no start/done) in %s.slx\n', numel(names), lib);
+end
+
+
+function d = block_description(name, decodeNote)
+%BLOCK_DESCRIPTION  Testo della Description del blocco (visibile in Block Properties in Simulink).
+%  Registro impersonale: descrive funzione, interfaccia, vincoli d'uso e limiti noti.
+  L = {
+    sprintf('%s - SNN car-following (champion Donatello), architettura B2 time-multiplexata.', name)
+    ''
+    'FUNZIONE'
+    '  Stima i 5 parametri IDM del veicolo osservato a partire dallo stato di car-following.'
+    ''
+    'INGRESSI (grandezze fisiche)'
+    '  s    [m]    spaziatura dal veicolo che precede'
+    '  v    [m/s]  velocita'' del veicolo'
+    '  dv   [m/s]  velocita'' relativa (v - v_l); saturata internamente a +-20'
+    '  v_l  [m/s]  velocita'' del veicolo che precede'
+    ''
+    'USCITE (parametri IDM stimati)'
+    '  v0 [m/s]  ·  T [s]  ·  s0 [m]  ·  a [m/s^2]  ·  b [m/s^2]'
+    ''
+    'TIPI DI DATO (vincolo)'
+    '  Gli ingressi devono essere fixed-point con ALMENO 20 bit frazionari, ad esempio'
+    '  fixdt(1,32,20). Il tipo double NON e'' ammesso: non e'' sintetizzabile e il blocco non'
+    '  compila. Per sorgenti in double (es. le traiettorie di test_dataset.mat) interporre un'
+    '  blocco "Data Type Conversion". Con meno di 20 bit frazionari il blocco funziona ma non'
+    '  e'' bit-exact rispetto al riferimento software (la normalizzazione devia di 1 LSB circa'
+    '  1 volta ogni 25 campioni, il che fa cambiare uno spike).'
+    ''
+    'SEMANTICA: 1 campione = 1 inferenza'
+    '  Una inferenza viene avviata a ogni cambio degli ingressi (edge-triggered). Il blocco non'
+    '  espone start/done. Le uscite mantengono l''ultimo valore calcolato fino all''inferenza'
+    '  successiva.'
+    ''
+    'VINCOLO DI RATE'
+    '  L''architettura time-multiplexata elabora un neurone per clock: una inferenza richiede'
+    '  circa 341 campioni. Ogni ingresso va quindi mantenuto per almeno 341 passi di simulazione.'
+    '  Il valore esatto e'' irrilevante: qualunque durata >= 341 e'' corretta. Sull''FPGA il vincolo'
+    '  e'' soddisfatto con ampio margine (un control-step da 0.1 s dura 800.000 clock e l''inferenza'
+    '  ne usa 341, pari allo 0,04%).'
+    ''
+    'LIMITE NOTO'
+    '  Se due campioni consecutivi hanno tutti e quattro gli ingressi bit-identici, il cambio non'
+    '  viene rilevato e una inferenza viene saltata.'
+    ''
+    'IMPLEMENTAZIONE'
+    ['  ' decodeNote]
+    '  Il forward e'' il B2 time-multiplexato, identico all''architettura del bitstream PYNQ-Z1.'
+    '  Il blocco e'' SELF-CONTAINED: non richiede alcun file .m esterno. HDL Coder genera il VHDL'
+    '  direttamente dal blocco (architettura time-mux, con DualPortRAM).'
+    ''
+    'VERIFICHE'
+    '  run_block_hdl_gate   - copia il solo .slx in una cartella isolata, rimuove matlab/ dal path'
+    '                         e lancia makehdl: dimostra che il VHDL si genera su un altro PC.'
+    '  run_block_traj_test  - pilota il blocco con le traiettorie di test_dataset.mat e verifica'
+    '                         che i parametri coincidano con il riferimento (dmax = 0).'
+    ''
+    'RIFERIMENTI'
+    '  document/HDL_PHASE.md         §3.1 contratto d''interfaccia, §3.1.4 edge-trigger e rate'
+    '  document/DECODE_LUT_SWEEP.md  §6 blocchi e verifiche'
+    '  Rigenerazione: build_hdl_variants.m (NON modificare la chart a mano)'
+  };
+  d = strjoin(L, newline);
 end
 
 

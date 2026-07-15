@@ -1,4 +1,4 @@
-function dmax = run_block_traj_test(K, blockName, hold)
+function dmax = run_block_traj_test(K, blockName, hold, trajIdx)
 %RUN_BLOCK_TRAJ_TEST  Prova dei blocchi HDL-ready sulla TRAIETTORIA REALE del dataset.
 %  Verifica che il blocco, pilotato in streaming con la traiettoria (un control-step per periodo
 %  d'inferenza), riproduca il riferimento — cioe' che lo **stato si porti correttamente** fra
@@ -15,8 +15,11 @@ function dmax = run_block_traj_test(K, blockName, hold)
   if nargin < 1 || isempty(K), K = 20; end
   if nargin < 2 || isempty(blockName), blockName = 'Donatello_Champion'; end
   if nargin < 3 || isempty(hold), hold = 400; end     % QUALUNQUE valore >= latenza va bene
+  if nargin < 4 || isempty(trajIdx), trajIdx = 1; end
   here = fileparts(mfilename('fullpath'));
   ds = load(fullfile(here, 'test_dataset.mat')); tr = ds.trajectories;
+  assert(trajIdx <= numel(tr), 'traiettoria %d inesistente (ne esistono %d)', trajIdx, numel(tr));
+  tr = tr(trajIdx);                                   % traiettoria sotto test
   d  = load(fullfile(here, 'champions_export.mat')); champs = d.champions;
   if iscell(champs), champs = [champs{:}]; end
   c  = champs(find(arrayfun(@(x) strcmp(char(string(x.name)), 'Donatello'), champs), 1));
@@ -60,7 +63,8 @@ function dmax = run_block_traj_test(K, blockName, hold)
   assert(n == K, 'attesi %d aggiornamenti, trovati %d', K, n);
 
   dmax = max(max(abs(p_blk - p_ref(1:n,:))));
-  fprintf('%-22s hold=%-5d su %d control-step: dmax vs riferimento = %.4g\n', blockName, hold, n, dmax);
+  fprintf('%-22s traj=%-3d hold=%-5d su %d control-step: dmax vs riferimento = %.4g\n', ...
+          blockName, trajIdx, hold, n, dmax);
   assert(dmax == 0, 'il blocco NON riproduce il riferimento in streaming (dmax=%.4g)', dmax);
   fprintf('=== TRAJ TEST PASSATO: %s bit-exact in streaming ===\n', blockName);
 end
