@@ -96,6 +96,10 @@ generare VHDL time-mux) · **`run_block_traj_test.m`** (blocchi pilotati con le 
 **`run_block_acciidm_test.m`** ⭐ (SP2: la catena `s,v,dv,v_l → accel` del blocco `Donatello_ACC_IIDM` vs
 riferimento MEX + decode-64 + `acc_iidm_open`, **`dmax = 0`** sul dataset. Verificato **sensibile**: la variante
 con l'IIDM mis-gated lo fa fallire — `../document/SP2_ACC_IIDM.md`) ·
+**`run_block_closed_loop_test.m`** ⭐ (SP2 in **anello CHIUSO**: dato il leader (`x_l`, `v_l`) l'anello calcola gap
+e `dv`, li passa al blocco e integra l'ego con l'`accel` che ne esce; vs riferimento `snn_cl_step_mex`,
+**`dmax = 0`**. ⚠️ `dv` del dataset **non** è `v - v_l` della stessa riga: è `v[k-1] - v_l[k]` — vedi
+`../document/SP2_ACC_IIDM.md` §Anello chiuso, che riporta anche perché la convenzione **non** cambia i risultati) ·
 `test_b2_fsm.m` · `test_top_b2.m` · `test_decode.m` · `test_ann_mlp.m` · `tb_b2_fsm.m` · `tb_hdl_Donatello.m`.
 
 ### Confronto ANN (Fase B)

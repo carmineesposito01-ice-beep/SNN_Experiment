@@ -62,6 +62,72 @@ l'IIDM in fixed (è l'SP a sé, vedi §Fuori scope).
 > (`accel`), quindi fallirebbe **sull'harness** e l'errore si scambierebbe per un verdetto di HDL Coder — una
 > conferma *falsa*. Dal 2026-07-15 il cancello se ne accorge e si ferma con un messaggio esplicito.
 
+## Anello CHIUSO (2026-07-15)
+Cancello: **`run_block_closed_loop_test(trajIdx, K, hold, dvMode)`**. Dato il leader (posizione `x_l` e
+velocità `v_l`), l'anello calcola gap e `dv`, li passa al blocco e integra l'ego con l'`accel` che ne esce.
+Esito: **dmax = 0 su 10/10** (5 traiettorie × 2 convenzioni di `dv`). In anello chiuso `dmax = 0` è un criterio
+*forte*: l'errore si retroaziona, quindi 1 LSB al passo k diverge nei passi dopo — o è 0, o si vede.
+
+**Comportamento** (non solo implementazione): l'ego segue il leader in 5/5 scenari, gap sempre limitati
+(2.7–44.5 m), nessuna collisione, nessun NaN. Negli scenari `stop_and_go` l'ego va a 0 perché **il leader stesso
+si ferma** (`v_l` min = 0): è inseguimento corretto, non un difetto.
+
+> ⚠️ **Non è un test di recupero dei parametri.** In anello chiuso l'ego è guidato dai parametri **stimati dalla
+> rete stessa** → il sistema è auto-consistente e i `gt_params` del dataset non sono il bersaglio. Qui si
+> verificano implementazione (`dmax = 0`) e comportamento.
+
+### Semantica degli ingressi — misurata, non letta dai commenti
+Su 60 traiettorie / 60.000 campioni, contro `data/generator.py`:
+
+| fatto | evidenza |
+|---|---|
+| `s` (gap) è l'**ingresso #1**; `ds/dt = v_l − v` | `s[k]−s[k−1] == −dv[k]·DT` esatta a meno di 1 LSB |
+| **non esistono posizioni assolute né lunghezza veicolo**: il generatore integra il gap direttamente | `s = clip(s + (v_l−v)·DT, …)` — nessun `x_l`/`x_ego` nel sorgente |
+| ⇒ `s = x_l − x_ego − L`, con **`L` costante che i dati NON fissano** | scelta di modellazione, non recuperabile dal dataset |
+| range operativo fissato dai dati | `s ∈ [1.25, 150] m` |
+| ⚠️ **`dv` NON è `v − v_l` della stessa riga**: è `dv[k] = v[k−1] − v_l[k]` (v **prima** dell'update balistico) | ipotesi istantanea: \|res\| max **0.919** m/s (mediana 0.020); ipotesi sfasata: \|res\| max **1.9e-6** (= float32 del generatore) |
+| il clip di `s` **non** è un caso limite | **6,06%** del dataset sta esattamente a `s = 150` |
+
+⚠️ Omonimia insidiosa: `s` = gap corrente (**ingresso**) vs `s0` = jam distance (**parametro stimato in uscita**).
+
+### La convenzione del training è riproducibile da un anello su posizioni
+Non è un artefatto inaccessibile: basta questa discretizzazione (è quella di `generator.py`):
+
+```
+x_l(k) = x_l(k-1) + v_l(k)*DT      leader integrato con la v_l NUOVA
+x_e(k) = x_e(k-1) + v(k-1)*DT      ego balistico con la v VECCHIA
+v(k)   = clip(v(k-1) + accel*DT, 0, 1.2*v0)
+dv(k)  = v(k-1) - v_l(k)           s(k) = clip(x_l(k) - x_e(k), 0.5*s0, 150)
+```
+Con `dvMode='train'` l'anello soddisfa entrambe le relazioni del dataset a meno di 1 LSB; `dvMode='inst'` le rompe.
+
+### Quanto costa la `dv` istantanea? **Nulla** — misurato
+In *anello aperto* sul dataset intero (60 traiettorie), dove i `gt_params` **sono** il bersaglio: stessa
+traiettoria, `dv` del dataset vs `dv` ricalcolata istantanea. Errore relativo mediano:
+
+| | v0 | T | s0 | a | b | media |
+|---|---|---|---|---|---|---|
+| `dv` training | 20.91% | 19.88% | 9.60% | 40.68% | 13.80% | **20.97%** |
+| `dv` istantanea | 20.59% | 20.00% | 9.28% | 38.22% | 15.14% | **20.64%** |
+| Δ | −0.33 | +0.13 | −0.33 | −2.46 | +1.34 | **−0.33 pp** |
+
+Peggiora in **35/60** traiettorie e migliora in 25/60: testa o croce. **Lo scarto di convenzione (mediana ~4 LSB)
+è sotto la sensibilità della rete** ⇒ l'anello «onesto» (quello realizzabile su strada, con `dv` istantanea) è
+utilizzabile senza penalità misurabile.
+
+> Sull'errore assoluto (~21%, `a` al 40%): **non è introdotto da qui.** Il readout è stato validato contro il
+> `ref_params` del dataset (|diff| ≤ 1.09 su 6 traiettorie), e **anche il riferimento del dataset stima v0 ≈ 26.8
+> contro un gt di 17.95**. È il tetto di **identificabilità** già diagnosticato dal progetto (Dynamic_Study): in
+> traiettorie di puro inseguimento il veicolo non raggiunge il flusso libero, quindi `v0` è debolmente
+> identificabile. Da non attribuire all'anello né al blocco.
+
+### Il punto delicato: due rate diversi
+Il modello gira al rate di **clock** (il time-mux vuole ~341 clock per inferenza) ma la fisica avanza al rate di
+**control-step**. Senza il contatore nella chart `EGO`, l'ego integrerebbe l'accelerazione a ogni clock, cioè
+**~400 volte troppo in fretta**. Serve inoltre un `Unit Delay` (1 clock) sulla retroazione di `accel`: la chart è
+direct-feedthrough e senza rompere l'anello algebrico Simulink non compila. È innocuo — l'`accel` serve al
+control-step dopo (≥ 400 clock).
+
 ## Single source
 La matematica ACC-IIDM sta **solo** in `matlab/acc_iidm_open.m`. La usano:
 - questo blocco (`build_hdl_variants` la legge a build-time e la inlina come funzione locale);
