@@ -28,26 +28,46 @@ Lo strumento a **3 modi** — **Live cockpit (13 dock)** + **Meso/Macro** + **Po
 feature-complete per il ciclo, temprato da un QC ciclico e documentato. Tutto committato e pushato.
 Il dettaglio di com'è fatto e di cosa è stato costruito sta nelle sezioni sotto (§Architecture, §Phase history).
 
-## ▶️ AZIONI PENDENTI (puntatori, non dump — l'azione 1 SUPERA il "next = merge" della milestone)
+## ▶️ AZIONI PENDENTI (puntatori, non dump — le azioni 1-3 SUPERANO il "next = merge" della milestone)
 
-1. **IMMEDIATA — aggiungere/generalizzare funzionalità del simulatore** *(intento utente 2026-07-15)*.
-   ⚠️ **Scope non ancora specificato**: l'utente parla di "alcune funzionalità, più *generalizzazioni* di
-   funzionalità" ma non ha ancora detto quali. → **Non indovinare**: farsi dire l'idea, poi
-   **skill `superpowers:brainstorming`** (design prima del codice) → spec in `docs/superpowers/specs/` →
-   **skill `superpowers:writing-plans`** → plan in `docs/superpowers/plans/` → esecuzione TDD.
-   **Questa azione sostituisce** il "prossimo = merge" scritto nella milestone: si aggiungono funzionalità
-   *prima* di fondere.
-   📋 **Esiste già un backlog scritto di candidati** — non per pre-decidere, ma per non partire ciechi:
-   **roadmap §6 "Phase 5 (ambitions)"** (`docs/superpowers/2026-07-07-simulator-extension-study.md`): slider
-   GT / ri-identificazione UKF live, video/GIF, editor scenari a form, ellisse a–b (modulo estimator a sé),
-   worker QThread. Più due candidati emersi dopo: **riconciliare/etichettare il dock energia** (vedi il caveat
-   ASIC-vs-FPGA in §Architecture→Energy) e l'**A/B float-vs-fixed** (azione 3). L'utente comunque decide lui.
-2. **RINVIATA — merge `Simulator`→`main`** (coordinare col track `Simulink_Importer`: entrambi rinviano il
+> **Scope definito dall'utente il 2026-07-15** (4 richieste) e **decomposto in 3 cicli indipendenti**,
+> ognuno con la sua spec+plan. I punti 3+4 dell'utente sono **una cosa sola** (ciclo 2): senza file
+> browser l'adattività della vista è YAGNI, col file browser è obbligatoria.
+
+1. **IN CORSO — ciclo 1/3: oracolo (ghost) nel Live.** ✅ brainstorming fatto · ✅ **spec APPROVATA**:
+   `docs/superpowers/specs/2026-07-15-oracle-ghost-live-design.md` (commit `ea77edc`).
+   → **prossimo: `superpowers:writing-plans`** → plan in `docs/superpowers/plans/` → TDD.
+   **Portata**: ghost semi-trasparente su road + curve nei dock **Trajectory e Safety**, **un** toggle.
+   L'oracolo **esiste già ed è golden-testato**: `SimStepper(backend=None)` (`sim/stepper.py:71-74`,
+   `tests/test_sim_stepper.py:36-41` bit-identico) → il ciclo è **wiring, non fisica**.
+   **Post-run e Meso ESCLUSI con motivi misurati** (nella spec, non ripetuti qui). ⚠️ La spec contiene un
+   **riquadro di avvertenza metodologica**: la prima analisi usò la *mediana* e concluse (a torto) che il
+   TTC dell'oracolo fosse invisibile — il TTC è saturo al clip di 30 s quasi sempre, va guardato il **picco**
+   (75.87 px mediano). Non ri-cadervi.
+2. **CICLO 2/3 — identità del checkpoint + adattività della vista** *(= punti 3+4 dell'utente)*. Da
+   brainstormare. **Deve reggere**: taglia (H/rank), **max_delay**, topologia (stacked/skip/attn).
+   **OUT=5 e IN=4 restano INVARIANTI per decisione dell'utente** (sono il modello fisico ACC-IIDM, non la
+   vista). ⚠️ Il cuore non è il `QFileDialog`: è che il `.pt` **non dice cosa contiene**
+   (`{epoch,val_loss,model_state,optim_state}`, famiglia dedotta dalla firma dello state-dict) e che
+   **`max_delay` non è inferibile** per la famiglia baseline (`delays` ha shape `(32,4)` qualunque esso sia
+   → `strict=True` non può beccarlo) — e un run con `cf_max_delay:18` **esiste davvero** (12 run su 512).
+   Il sidecar `results/<RUN>/config_snapshot.json` ha `cf_hidden_size`/`cf_rank` (506/512) ma `cf_max_delay`
+   solo 258/512, `arch_variant` 8/512, e **accanto ai champion non c'è affatto**.
+3. **CICLO 3/3 — costruttore di scenari personalizzati** *(= punto 2 dell'utente)*. Da brainstormare.
+   Possiede **due debiti misurati**: (a) `sim/events.py:37-38` fa ripartire la rampa dal `v_leader[t]`
+   **grezzo** → due `brake_leader` in fila fanno **saltare il leader da 5.00 a 21.00 m/s in un tick**
+   (misurato); (b) `ReplayLog.seed` è alimentato con l'**indice di scenario** (`sim/ui/app.py:591`).
+4. **RINVIATA — merge `Simulator`→`main`** (coordinare col track `Simulink_Importer`: entrambi rinviano il
    merge, vanno sequenziati per far atterrare in `main` uno stato coerente).
-3. **STUDIO POST-MILESTONE — A/B float-vs-fixed** (unica idea di Fase 4 mai fatta). ⚠️ richiede un **forward
+5. **STUDIO POST-MILESTONE — A/B float-vs-fixed** (unica idea di Fase 4 mai fatta). ⚠️ richiede un **forward
    fixed-point Qm.n SW** che nel simulatore **non esiste** — va scopato prima (candidato: portare la logica
    fixed-point dal track `Simulink_Importer`/HDL, che l'ha già fatta per l'FPGA). Design-before-code.
    Non blocca nulla.
+6. 📋 **Backlog residuo** (non pre-deciso, l'utente sceglie): roadmap §6 "Phase 5"
+   (`docs/superpowers/2026-07-07-simulator-extension-study.md`) — slider GT / UKF live (si sposa col ciclo 1),
+   video/GIF, ellisse a–b, worker QThread. Più: **riconciliare/etichettare il dock energia** (caveat
+   ASIC-vs-FPGA in §Architecture→Energy) e la lettura **"shadow"** dell'oracolo (errore di comando istantaneo
+   teacher-forced: scartata da questo ciclo per YAGNI, costa una chiamata pura, zero debito a rimandarla).
 
 ## 🧭 MODI DI LAVORO (vincoli del progetto — dettaglio in §How to work + §GOTCHAS sotto)
 
@@ -156,9 +176,9 @@ perf via a 5-agent workflow — per-paint −30% (NetState freeze/LUT), redraw t
 
 ## ▶️ Cosa fare adesso
 
-→ **Vedi §AZIONI PENDENTI in cima a questo file** (unica fonte: azione 1 = aggiungere/generalizzare
-funzionalità via brainstorming; 2 = merge rinviato; 3 = A/B float-vs-fixed). Questa sezione non duplica più
-l'elenco per non farlo divergere.
+→ **Vedi §AZIONI PENDENTI in cima a questo file** (unica fonte). In una riga: **ciclo 1/3 = oracolo ghost,
+spec approvata, tocca al plan**; i cicli 2 e 3 sono da brainstormare; merge e A/B restano rinviati.
+Questa sezione non duplica più l'elenco per non farlo divergere.
 
 **Meso page map** (reference): `sim/ui/meso_page.py` (scenario selector + road strip + 2×2 grid) ·
 `sim/ui/meso_panels.py` (`_MultiCurvePanel` base → `SpaceTimePanel`/`SpeedWavePanel`, `StringStabilityPanel`,
