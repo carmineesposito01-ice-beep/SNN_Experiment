@@ -43,9 +43,15 @@ Il dettaglio di com'è fatto e di cosa è stato costruito sta nelle sezioni sott
    `SimStepper(backend=None)` in lockstep dentro `SimLoop`, **injector condiviso** (la sua `tick()` è
    idempotente — misurato) così rete e ghost vedono lo **stesso leader**; `_src_ghost_traj` commuta
    insieme a `_src_probe`/`_src_traj` nel deep-scrub. Il ghost non ha probe (niente rete → niente spike).
-   ⚠️ **Aperto, da decidere con l'utente**: sulla road ego e ghost si **compenetrano** quando divergono
-   poco (divergenza tipica ~5 m, auto lunghe 5 m). Fisicamente corretto, la trasparenza li distingue, ma
-   un offset verticale del ghost sarebbe più leggibile.
+   ✅ **DECISO dall'utente (2026-07-15) — la compenetrazione RESTA ed è VOLUTA. NON è un bug.**
+   Sulla road ego e ghost si compenetrano quando divergono meno della lunghezza di un'auto (divergenza
+   tipica ~5 m, veicoli lunghi 5 m). **Motivo, con le parole dell'utente**: il ghost «è un qualcosa che
+   non esiste, una traccia a cui confrontare il proprio funzionamento». Due auto vere non possono
+   compenetrarsi: il fatto che queste lo facciano è precisamente ciò che comunica che una delle due
+   **non è un veicolo**. L'alternativa scartata (offset verticale su una "corsia fantasma") avrebbe
+   aggiunto una finzione — una corsia inesistente — per nascondere un fatto che invece informa.
+   → **Niente offset verticale, niente separazione dei due sulla road.** Se un QC futuro lo segnala come
+   difetto di leggibilità: è by-design, e questa riga è la risposta.
    ⚠️ **Avvertenza metodologica nella spec, non ri-cadervi**: la prima analisi usò la *mediana* e concluse
    (a torto) che il TTC dell'oracolo fosse invisibile — il TTC è saturo al clip di 30 s quasi sempre, va
    guardato il **picco** (75.87 px mediano, 88 su `hard_brake`).
