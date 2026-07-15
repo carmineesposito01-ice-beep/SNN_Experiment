@@ -119,3 +119,83 @@ def test_style_outside_the_plane_is_rejected():
         materialise(_spec([Block("const", 10, {"v": 5.0})], style=LeaderStyle(9.0, 4.0)), _PG, N=10)
     with pytest.raises(ValueError, match="b_max"):
         materialise(_spec([Block("const", 10, {"v": 5.0})], style=LeaderStyle(2.0, 20.0)), _PG, N=10)
+
+
+# ---- preset (as-is), sine (anchored to v0), JSON -------------------------------------------------
+
+def test_preset_block_reproduces_the_library_exactly():
+    """TEETH: build_scenarios is INVARIANT (its docstring pins it: the reports run on it), so a
+    preset block must be byte-identical to the library's. Fails the moment the style touches it."""
+    from sim.scenario import scenario_library
+    lib = {s.name: s for s in scenario_library(_PG, N=600, rng=np.random.default_rng(0),
+                                               include_tail=True)}
+    for style in (PLACIDO, AGGRESSIVO):                        # the style must NOT matter here
+        sc = materialise(_spec([Block("preset", 600, {"name": "stop_and_go"})], style=style),
+                         _PG, N=600)
+        np.testing.assert_array_equal(sc.v_leader, lib["stop_and_go"].v_leader)
+
+
+def test_preset_block_slice_takes_the_first_ticks_samples():
+    from sim.scenario import scenario_library
+    lib = {s.name: s for s in scenario_library(_PG, N=600, rng=np.random.default_rng(0),
+                                               include_tail=True)}
+    sc = materialise(_spec([Block("preset", 200, {"name": "stop_and_go"}),
+                            Block("const", 400, {"v": 5.0})]), _PG, N=600)
+    np.testing.assert_array_equal(sc.v_leader[:200], lib["stop_and_go"].v_leader[:200])
+
+
+def test_unknown_preset_name_is_rejected_by_name():
+    with pytest.raises(ValueError, match="nonesuch"):
+        materialise(_spec([Block("preset", 10, {"name": "nonesuch"})]), _PG, N=10)
+
+
+def test_sine_amplitude_is_clamped_by_the_style():
+    """A sine's steepest slope is amp*2*pi/period. Rather than clipping tick by tick (recursive, and
+    it would break the vectorisation the live preview needs), the style CLAMPS the amplitude -- a
+    placid driver does not make brusque oscillations."""
+    blocks = [Block("sine", 300, {"amp": 10.5, "period": 40})]
+    calm = materialise(_spec(blocks, style=PLACIDO), _PG, N=300).v_leader
+    hard = materialise(_spec(blocks, style=AGGRESSIVO), _PG, N=300).v_leader
+    assert np.ptp(calm) < np.ptp(hard)                          # the calm driver swings less
+    for vl, style in ((calm, PLACIDO), (hard, AGGRESSIVO)):
+        assert np.abs(np.diff(vl)).max() <= max(style.a_max, style.b_max) * DT + 1e-9
+
+
+def test_no_block_boundary_ever_teleports_the_leader():
+    """TEETH, and it is the test that caught a real design bug: an earlier `sine` oscillated around
+    an absolute `mean` and IGNORED v0, so a sine after a ramp ending at 2 m/s jumped straight to
+    10.5 -- reproducing, inside the builder, the very teleport Task 4 removes from the events.
+
+    Every junction between blocks must respect the style's rate, not just the inside of each block.
+    """
+    for style in (PLACIDO, AGGRESSIVO, GUARDINGO, SPAVALDO):
+        vl = materialise(_spec([Block("ramp", 100, {"to_v": 2.0}),
+                                Block("sine", 100, {"amp": 6.0, "period": 60}),
+                                Block("const", 100, {"v": 18.0}),
+                                Block("ramp", 100, {"to_v": 4.0}),
+                                Block("sine", 200, {"amp": 3.0, "period": 40})],
+                               style=style), _PG, N=600).v_leader
+        jump = np.abs(np.diff(vl)).max()
+        limit = max(style.a_max, style.b_max) * DT + 1e-9
+        assert jump <= limit, f"{style}: a {jump:.3f} m/s jump in one tick (limit {limit:.3f})"
+
+
+def test_json_round_trip_is_byte_exact_on_every_kind():
+    from sim.scenario_spec import from_json, to_json
+    s = _spec([Block("preset", 100, {"name": "stop_and_go"}),
+               Block("const", 100, {"v": 8.0}),
+               Block("ramp", 100, {"to_v": 2.0}),
+               Block("sine", 300, {"amp": 4.0, "period": 80})],
+              style=GUARDINGO)
+    back = from_json(to_json(s))
+    assert back == s                                            # frozen dataclasses compare by value
+    np.testing.assert_array_equal(materialise(back, _PG, N=600).v_leader,
+                                  materialise(s, _PG, N=600).v_leader)
+
+
+def test_json_rejects_an_unknown_block_kind_by_name():
+    from sim.scenario_spec import from_json
+    bad = '{"name":"x","s_init":33.5,"v_init":21.0,"style":{"a_max":2.0,"b_max":4.0},' \
+          '"blocks":[{"kind":"teleport","ticks":10,"params":{}}]}'
+    with pytest.raises(ValueError, match="teleport"):
+        from_json(bad)
