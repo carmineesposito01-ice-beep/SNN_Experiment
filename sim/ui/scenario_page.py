@@ -82,6 +82,17 @@ class StylePad(pg.PlotWidget):
         self._neutral = (float(a), float(b))
         self._neutral_dot.setData([self._neutral[0]], [self._neutral[1]])
 
+    def setEnabled(self, on):
+        """Dims the DOT too, not just the widget's chrome.
+
+        Qt greys a disabled widget's own text, but the dot is a scene item and stays vivid -- and the
+        dot IS the claim. A bright point sitting in "aggressivo" on a block that ignores it is
+        exactly the lie being removed, so graphite is not decoration here.
+        """
+        super().setEnabled(on)
+        self._dot.setBrush(pg.mkBrush("#2a7fb8" if on else "#3d3d3d"))
+        self._dot.setPen(pg.mkPen("#ffffff" if on else "#5a5a5a", width=2))
+
 
 class ScenarioPage(QWidget):
     sigScenarioBuilt = Signal(object)          # emits a sim.scenario.Scenario
@@ -125,9 +136,15 @@ class ScenarioPage(QWidget):
         mid = QHBoxLayout()
         self._list = QListWidget()
         mid.addWidget(self._list, stretch=1)
+        pad_col = QVBoxLayout()
         self._pad = StylePad()
         self._pad.sigStyleChanged.connect(self.set_style)
-        mid.addWidget(self._pad, stretch=1)
+        pad_col.addWidget(self._pad, stretch=1)
+        self._pad_note = QLabel("il preset è verbatim: il bias non lo tocca")
+        self._pad_note.setStyleSheet("color: #8a8a8a; font-style: italic;")
+        self._pad_note.hide()
+        pad_col.addWidget(self._pad_note)
+        mid.addLayout(pad_col, stretch=1)
         self._composer_plot = pg.PlotWidget()
         self._composer_plot.setLabel("left", "blocco", units="m/s")
         self._composer_plot.setLabel("bottom", "tick del blocco")
@@ -199,7 +216,12 @@ class ScenarioPage(QWidget):
                 "sine": {"amp": v, "period": int(self._period.value())}}[kind]
 
     def _on_kind_changed(self, kind):
-        """Show only the inputs this kind actually has: an input that does nothing is a lie."""
+        """Show only the inputs this kind actually has: an input that does nothing is a lie.
+
+        The pad is one of them. A preset is reproduced verbatim -- _preset_samples never receives a
+        style -- so on a preset the pad cannot move anything, and leaving it live would be the
+        biggest lie on the page rather than the smallest. It goes dead, and says why.
+        """
         is_preset, is_sine = kind == "preset", kind == "sine"
         self._preset.setVisible(is_preset)
         for w in (self._value_lbl, self._value):
@@ -207,6 +229,8 @@ class ScenarioPage(QWidget):
         for w in (self._period_lbl, self._period):
             w.setVisible(is_sine)
         self._value_lbl.setText("ampiezza" if is_sine else "valore")
+        self._pad.setEnabled(not is_preset)
+        self._pad_note.setVisible(is_preset)
         self._refresh_composer()
 
     def _load_into_widgets(self, kind, ticks, params, bias):
@@ -247,8 +271,11 @@ class ScenarioPage(QWidget):
 
     def _composer_block(self):
         kind = self._composer_kind()
-        return Block(kind, int(self._ticks.value()), self._params_for(kind),
-                     bias=self._composer_bias())
+        # A preset is verbatim, so it cannot obey a bias -- and the pad keeps its point across a kind
+        # change, so composing a ramp, moving the pad and switching to preset would RECORD one.
+        # materialise ignoring it is not enough: the timeline would print a bias the block has not.
+        bias = None if kind == "preset" else self._composer_bias()
+        return Block(kind, int(self._ticks.value()), self._params_for(kind), bias=bias)
 
     def _start_speed(self, upto):
         """The speed the first `upto` blocks leave behind -- the composer's only coupling to the

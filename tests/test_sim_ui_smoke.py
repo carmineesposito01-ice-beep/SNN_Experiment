@@ -864,3 +864,43 @@ def test_composer_refresh_fits_in_a_frame(qapp):
         ts.append((time.perf_counter() - t0) * 1000)
     peak = max(ts)
     assert peak < 16.7, f"composer refresh peaks at {peak:.2f} ms, over the 60 fps budget"
+
+
+def test_the_composer_says_so_when_the_bias_cannot_apply(qapp):
+    """A preset is verbatim -- _preset_samples never receives a style -- so the pad cannot change it.
+    Leaving the pad live there shows a control that does nothing, which the spec explicitly rules out
+    ("ignored, and the composer says so").
+
+    Found by LOOKING at a render: every test passed while the bright dot sat in 'aggressivo' with
+    kind=preset. isHidden() rather than isVisible(): the page is never show()n in tests, so
+    isVisible() is False for every child regardless.
+    """
+    from sim.scenario_spec import Block
+    page = _page()
+    page.set_spec(_spec3([Block("ramp", 300, {"to_v": 2.0})]))
+    page.compose_new("ramp", ticks=150, params={"to_v": 18.0}, bias=(1.6, 4.2))
+    assert page._pad.isEnabled()                  # a ramp DOES obey the bias
+    assert page._pad_note.isHidden()
+    page._kind.setCurrentText("preset")
+    assert not page._pad.isEnabled()              # the pad cannot move a verbatim profile...
+    assert not page._pad_note.isHidden()          # ...and the page says why instead of pretending
+    page._kind.setCurrentText("sine")
+    assert page._pad.isEnabled()                  # and it comes back
+    assert page._pad_note.isHidden()
+
+
+def test_a_preset_block_never_carries_a_bias(qapp):
+    """TEETH: reachable in three clicks -- compose a ramp, move the pad, switch the kind to preset.
+    The pad keeps its point, so the block would be STORED with a bias, and the timeline would print
+    "bias +1.6/+4.2" on a block that has none. materialise ignoring it is not enough: a bias a preset
+    cannot obey must not be recorded in the first place."""
+    from sim.scenario_spec import Block
+    page = _page()
+    page.set_spec(_spec3([Block("ramp", 300, {"to_v": 2.0})]))
+    page.compose_new("ramp", ticks=150, params={"to_v": 18.0}, bias=(1.6, 4.2))
+    assert page._composer_block().bias == (1.6, 4.2)      # a ramp obeys it
+    page._kind.setCurrentText("preset")
+    assert page._composer_block().bias is None            # a preset cannot, so it does not keep it
+    page._on_add()
+    assert page._spec.blocks[-1].bias is None
+    assert "bias" not in page._list.item(page._list.count() - 1).text()
