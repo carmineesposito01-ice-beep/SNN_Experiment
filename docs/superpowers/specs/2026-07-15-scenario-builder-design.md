@@ -79,9 +79,26 @@ class Block:
 
 @dataclass(frozen=True)
 class LeaderStyle:
-    name: str            # "calmo" | "normale" | "aggressivo"
-    a_max: float         # m/s²  — how hard it speeds up
-    b_max: float         # m/s²  — how hard it slows down
+    """A POINT on the (a_max, b_max) plane — continuous, not a menu of presets.
+
+    Acceleration and deceleration are INDEPENDENT: a single "calm → aggressive" slider ties them
+    together and only walks the PLACIDO↔AGGRESSIVO diagonal, making the two mixed quadrants — the
+    ones that probe braking and recovery SEPARATELY — unreachable. The names below are labels for
+    reading the plane, not modes: the point may sit anywhere.
+    """
+    a_max: float         # m/s², 1..4 — how hard it speeds up
+    b_max: float         # m/s², 1..9 — how hard it slows down; 9 = B_MAX, the project's physical
+                         #             limit (closed_loop_eval.py:22), the one panic_stop uses
+```
+
+| quadrant | a_max | b_max | what it does | what it probes |
+|---|---|---|---|---|
+| **Aggressivo** | high | high | everything at the limit | the most stressful overall |
+| **Placido** | low | low | everything soft | the easiest |
+| **Guardingo** | low | high | crawls off, then slams the brakes | **the gap slams shut with little warning** → lowest TTC |
+| **Spavaldo** | high | low | darts away, then coasts down | **gaps that open and close slowly** → recovery, not braking |
+
+```python
 
 @dataclass(frozen=True)
 class ScenarioSpec:
@@ -111,16 +128,29 @@ This is the whole point of the feature — it must change the trajectory, not th
 - `preset` is **untouched** — it is a validated profile, reproduced exactly as `scenario_library()`
   emits it. The UI must say so, or the user will wonder why the knob does nothing there.
 
-Styles are three named presets. `normale` matches today's numbers so an all-`preset` timeline reproduces
-the current behaviour exactly.
+The style is a **continuous point**, and the centre of the plane sits on today's numbers, so nothing
+about the existing behaviour shifts. The four names are read off the quadrants (see the table above);
+the user is never forced into one.
 
 ### ③ The page (`sim/ui/scenario_page.py`, new)
 
 A fourth entry in the mode selector. Timeline of blocks on top (add / remove / reorder / edit), the
 **materialised** `v_leader` preview below — the real one, from the same function the sim will run, not a
-sketch — plus the style selector and `s_init`/`v_init`. "Usa questo scenario" appends it to the Live
+sketch — plus the 2-D style pad and `s_init`/`v_init`. "Usa questo scenario" appends it to the Live
 scenario selector via `manual_scenario`. The preview is the honesty guarantee: what you see is literally
 what will run.
+
+**The preview redraws LIVE while the style point is dragged — no throttle.** Measured on a real
+120-position drag across the plane: **0 frames of 120 over the 60 fps budget**, peak **14.18 ms**
+against 16.7 available (71 fps sustained at the worst frame). So the cockpit's `_REDRAW_MS` throttle is
+**not** needed here — this preview is nothing like the 1440-edge NetState repaint it was invented for.
+
+> ⚠️ **Where the time actually goes, and it is not where you would guess.** In the measured prototype
+> `materialise` cost **3.68 ms** and pyqtgraph's `setData` only **1.91** — the bottleneck is *our* code,
+> not the rendering, and the margin (14.18 of 16.7 ms) is thinner than it looks. That prototype used a
+> per-tick Python loop. **`materialise` must be vectorised** (numpy over each block's slice, not a `for`
+> over 600 ticks) or the drag will stutter on a busier timeline. This is a design constraint, not an
+> optimisation to postpone: discovering it after the page is built means rewriting the materialiser.
 
 ### ④ JSON round-trip
 
@@ -161,19 +191,27 @@ The materialiser is pure → tested without Qt:
 1. **An all-`preset` timeline reproduces the library exactly** — `materialise` of a single
    `preset("stop_and_go")` covering all N is **bit-identical** to `scenario_library()`'s `stop_and_go`
    (`assert_array_equal`). Fails if the style ever touches a preset.
-2. **The style changes the trajectory, not the looks (teeth)** — the same `ramp(to_v=2)` under *calmo*
-   and *aggressivo* produces different `v_leader`, and the measured decelerations match `b_max` within
-   a tick's quantisation. A test asserting only "they differ" would pass a style that just renames things.
-3. **Rate limiting holds** — no block, under any style, produces `|Δv/DT|` above that style's limits.
-4. **JSON round-trip is byte-exact** on every block kind.
-5. **The ramp bug is dead (teeth)** — two `brake_leader` in sequence: the leader's speed is
+2. **The style changes the trajectory, not the looks (teeth)** — the same `ramp(to_v=2)` at two points
+   of the plane produces different `v_leader`, and the measured deceleration matches that point's
+   `b_max` within a tick's quantisation. A test asserting only "they differ" would pass a style that
+   merely renames things.
+3. **The two axes are independent (teeth)** — moving only `a_max` must leave every *braking* segment
+   byte-identical, and moving only `b_max` must leave every *accelerating* segment byte-identical.
+   This is the whole reason the style is a plane and not a slider: a fix that secretly couples them
+   would pass test 2 and fail here.
+4. **`materialise` holds 60 fps** — 120 materialisations of a full timeline stay under 16.7 ms each,
+   asserting on the **peak**, not the mean. Guards the vectorisation constraint above; a per-tick Python
+   loop fails it on a busy timeline.
+5. **Rate limiting holds** — no block, under any style, produces `|Δv/DT|` above that style's limits.
+6. **JSON round-trip is byte-exact** on every block kind.
+7. **The ramp bug is dead (teeth)** — two `brake_leader` in sequence: the leader's speed is
    **monotonically non-increasing** through both, and the largest one-tick jump stays within physical
    limits. Today this test fails with +16.00 m/s. Assert the jump, not a label.
-6. **The single-brake behaviour is unchanged** — `tests/test_sim_events.py:13-22` must stay green
+8. **The single-brake behaviour is unchanged** — `tests/test_sim_events.py:13-22` must stay green
    untouched: the fix only bites when a brake is *already* active.
-7. **`injector=None` stays bit-identical to `simulate`** (`test_sim_events.py:53`) — the one golden that
+9. **`injector=None` stays bit-identical to `simulate`** (`test_sim_events.py:53`) — the one golden that
    events.py really has.
-8. **Reconstruct still matches live** with two brakes: fix and replay must move together.
+10. **Reconstruct still matches live** with two brakes: fix and replay must move together.
 
 Baseline: **199 tests green** (20 sim files + `test_champion_io.py`). Env `cf_sim`, no LAPACK (OMP #15).
 
