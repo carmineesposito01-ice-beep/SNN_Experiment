@@ -9,7 +9,8 @@ import numpy as np
 from PySide6.QtCore import QElapsedTimer, QEvent, Qt, QTimer
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QFileDialog, QHBoxLayout, QLabel,
-                               QMainWindow, QPushButton, QSlider, QStackedWidget, QVBoxLayout, QWidget)
+                               QMainWindow, QMessageBox, QPushButton, QSlider, QStackedWidget,
+                               QVBoxLayout, QWidget)
 from pyqtgraph.dockarea import Dock, DockArea
 
 from config import DT
@@ -54,9 +55,13 @@ class SimApp(QMainWindow):
         self._champions = [(nick, d) for nick, d, _ in _CHAMPIONS
                            if os.path.isfile(os.path.join(self._champ_root, d, "best_model.pt"))]
         _launched = os.path.basename(os.path.dirname(champion_path))
-        self._champ_idx = next((i for i, (_, d) in enumerate(self._champions) if d == _launched), 0)
+        # None, never 0: falling back to the first entry is how an unknown tag under champions/ got
+        # labelled "Raffaello" while a different model was running.
+        self._champ_idx = next((i for i, (_, d) in enumerate(self._champions) if d == _launched), None)
         self._champ = load_champion(champion_path)
-        self._champ_name = self._champions[self._champ_idx][0] if self._champions else _launched
+        self._champ_path = champion_path
+        self._champ_name = (self._champions[self._champ_idx][0] if self._champ_idx is not None
+                            else _launched)
         self._scenarios = scenario_library(_PARAMS_GT, N=600,
                                             rng=np.random.default_rng(0), include_tail=True)
         self._scenarios.append(self._manual(_PARAMS_GT))
@@ -114,7 +119,7 @@ class SimApp(QMainWindow):
 
         self._champ_selector = QComboBox()
         self._champ_selector.addItems([nick for nick, _ in self._champions])
-        if self._champions:
+        if self._champions and self._champ_idx is not None:
             self._champ_selector.setCurrentIndex(self._champ_idx)
         self._champ_selector.currentIndexChanged.connect(self.select_champion)
         self._selector = QComboBox()
@@ -193,6 +198,8 @@ class SimApp(QMainWindow):
         file_menu = self.menuBar().addMenu("File")
         a_csv = QAction("Export CSV…", self); a_csv.triggered.connect(self._export_csv)
         a_png = QAction("Export PNG…", self); a_png.triggered.connect(self._export_png)
+        a_open = QAction("Apri champion…", self); a_open.triggered.connect(self.open_champion_dialog)
+        file_menu.addAction(a_open); file_menu.addSeparator()
         file_menu.addAction(a_csv); file_menu.addAction(a_png)
         view = self.menuBar().addMenu("View")
         self._view_actions = {}
@@ -429,7 +436,7 @@ class SimApp(QMainWindow):
         self.loop = SimLoop(stepper, self._probe, dt_fixed=DT,
                             ghost=ghost, ghost_traj=self._ghost_traj)
         self._last_result = None
-        self._header.setText(f"champion: {self._champ_name}    |    scenario: {sc.name}")
+        self._header.setText(f"{self._identity_line()}    |    scenario: {sc.name}")
         for i, p in enumerate(self._params):
             p.set_ground_truth(float(sc.params_gt[i]))
         self._inspector.set_neuron(None)                  # clear selection + graph highlight on scenario change
@@ -537,6 +544,51 @@ class SimApp(QMainWindow):
 
     def _refresh_status(self):
         self._status.showMessage(self.status_text())
+
+    def _identity_line(self):
+        """Header text: what is loaded, and where each claim comes from. 'max_delay 6 (inferito)' is
+        a different claim from '(da arch)' and must read differently."""
+        idy = self._champ.identity
+        t = idy.topology
+        md = f"max_delay {idy.max_delay}"
+        src = idy.sources.get("max_delay")
+        if src == "inferred":
+            md += f" (inferito, P(sottostima)~{idy.max_delay_p_underestimate:.0e})"
+        elif src:
+            md += f" (da {src})"
+        return (f"champion: {self._champ_name}  [{idy.family} · {t['input']}→{t['hidden']}→"
+                f"{t['output']} · rank {t['rank']} · {md}]")
+
+    def open_champion_path(self, path):
+        """Load a champion from an arbitrary path. Returns (ok, message).
+
+        Nothing is torn down before the new champion is known-good: on failure the running one keeps
+        going. load_champion used to be called bare, so a bad .pt killed the GUI.
+        """
+        try:
+            champ = load_champion(path)
+        except Exception as exc:              # ValueError (named refusal) / RuntimeError / torch
+            return False, str(exc)
+        self._champ = champ
+        self._champ_path = path
+        self._champ_name = os.path.basename(os.path.dirname(os.path.abspath(path)))
+        if self._champ_selector.findText(self._champ_name) < 0:
+            self._champ_selector.blockSignals(True)
+            self._champ_selector.addItem(self._champ_name)
+            self._champ_selector.setCurrentIndex(self._champ_selector.count() - 1)
+            self._champ_selector.blockSignals(False)
+        self._apply_champion_topology()
+        self.select_scenario(self._current_idx)
+        return True, ""
+
+    def open_champion_dialog(self):
+        path, _ = QFileDialog.getOpenFileName(self, "Apri champion", self._champ_root,
+                                              "Checkpoint (*.pt)")
+        if not path:
+            return
+        ok, msg = self.open_champion_path(path)
+        if not ok:
+            QMessageBox.warning(self, "Champion non caricato", msg)
 
     def _on_speed(self, v: int):
         self._speed = int(v)

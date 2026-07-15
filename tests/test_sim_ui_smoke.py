@@ -566,3 +566,49 @@ def test_app_reset_blanks_the_ghost(qapp):
     d = win._trajectory._g_s.getOriginalDataset()[1]
     assert d is None or len(d) == 0
     assert win._topdown.ghost_x_m() == 0.0
+
+
+# --- checkpoint identity: file browser + honest header ---
+def test_app_header_states_the_real_identity_not_a_guess(qapp):
+    win = SimApp(CHAMP)
+    h = win._header.text()
+    assert "Raffaello" in h                       # this one really IS Raffaello
+    assert "baseline" in h and "32" in h          # family + topology stated
+    assert "max_delay" in h and "inferito" in h   # and the PROVENANCE of max_delay
+
+
+def test_app_open_champion_from_an_arbitrary_path(qapp, tmp_path):
+    """A .pt outside champions/ must load AND leave the selector usable -- today
+    _champ_root = dirname(dirname(path)) empties it."""
+    import shutil
+    p = tmp_path / "altrove" / "best_model.pt"
+    p.parent.mkdir(parents=True)
+    shutil.copy(CHAMP, p)
+    win = SimApp(CHAMP)
+    ok, msg = win.open_champion_path(str(p))
+    assert ok is True, msg
+    assert win._champ_selector.count() >= 5       # 4 bundled + the opened one
+    win._advance(0.2)                             # and it runs
+
+
+def test_app_bad_checkpoint_leaves_the_cockpit_standing(qapp, tmp_path):
+    """Today load_champion has no try/except (app.py:58): a bad .pt kills the GUI."""
+    bad = tmp_path / "rubbish.pt"
+    bad.write_bytes(b"not a torch file")
+    win = SimApp(CHAMP)
+    before = win._champ_name
+    ok, msg = win.open_champion_path(str(bad))
+    assert ok is False and msg                    # reason reported, no exception
+    assert win._champ_name == before              # the running champion is untouched
+    win._advance(0.2)                             # and the cockpit still runs
+
+
+def test_app_unsupported_variant_is_refused_by_name(qapp, tmp_path):
+    import torch
+    from core.network import build_model
+    p = tmp_path / "attn.pt"
+    torch.save({"epoch": 0, "val_loss": 0.0, "model_state": build_model("attn").state_dict(),
+                "optim_state": {}}, p)
+    win = SimApp(CHAMP)
+    ok, msg = win.open_champion_path(str(p))
+    assert ok is False and "attn" in msg          # named, not "unknown", not "Raffaello"
