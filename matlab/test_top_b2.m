@@ -46,5 +46,17 @@ function test_top_b2()
   e = abs(ref - top);
   fprintf('TOP B2 (SNN+decode) vs snn_core+decode: max abs err = %.6f\n', max(e(:)));
   fprintf('  per-parametro: %s   (rel range max = %.4f%%)\n', mat2str(max(e, [], 1), 4), 100 * max(max(e ./ rng)));
-  if max(e(:)) < 0.01, disp('>> TOP OK (= errore solo LUT decode)'); else, disp('>> rivedere'); end
+  % Soglia agganciata al BUDGET gia' accettato dal progetto (quantizzazione fixed <= 0.028 su v0,
+  % HDL_PHASE §2), non a un numero magico: l'errore qui e' l'approssimazione del decode, e il criterio
+  % di scelta della LUT e' che resti SOTTO la quantizzazione (DECODE_LUT_SWEEP.md §5bis).
+  % Col decode LUT-64 del campione (dal 2026-07-14) l'atteso e' ~0.013; col vecchio 256 era ~0.002
+  % (per quello la soglia era 0.01, che col campione attuale darebbe un falso allarme).
+  tol = 0.028;
+  if max(e(:)) < tol
+    disp('>> TOP OK (errore = approssimazione del decode, sotto il budget di quantizzazione)');
+  else
+    disp('>> rivedere');
+  end
+  assert(max(e(:)) < tol, ['top: errore %.4g >= budget %.3g -> il decode e'' diventato la fonte ' ...
+         'd''errore dominante (rivedere la dimensione della LUT, DECODE_LUT_SWEEP.md §5bis)'], max(e(:)), tol);
 end

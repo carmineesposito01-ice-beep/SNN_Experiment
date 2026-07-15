@@ -42,15 +42,12 @@ function dmax = run_block_traj_test(K, blockName, hold, trajIdx)
   %    (Champion -> snn_decode_hdl ; LUT{N} -> snn_decode_lut(.,N). Usare il decode sbagliato
   %     produce un falso mismatch pari all'errore d'approssimazione della LUT.)
   tokN = regexp(blockName, 'LUT(\d+)$', 'tokens', 'once');
+  if isempty(tokN), Ndec = 64;                      % Donatello_Champion = decode LUT-64 (dal 2026-07-14)
+  else,             Ndec = str2double(tokN{1}); end
   Rmex = double(snn_traj_fixed_r16_mex(tr{1}.val, W));
   p_ref = zeros(K,5);
   for k = 1:K
-    rw = fi(Rmex(k,:).', Tp);
-    if isempty(tokN)
-      p_ref(k,:) = double(snn_decode_hdl(rw)).';
-    else
-      p_ref(k,:) = double(snn_decode_lut(rw, str2double(tokN{1}))).';
-    end
+    p_ref(k,:) = double(snn_decode_lut(fi(Rmex(k,:).', Tp), Ndec)).';
   end
 
   % 3) blocco in streaming sulla traiettoria; campionamento DETERMINISTICO (non sui cambiamenti:

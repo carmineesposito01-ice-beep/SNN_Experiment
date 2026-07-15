@@ -78,6 +78,35 @@ la nascondeva ripiegandola nella costante). DSP (16, le moltiplicazioni) e carry
 Zynq-7020 (53 200 LUT, 220 DSP): anche N=512 = **3.3 % delle LUT**, N=16 = **1.0 %**. Flusso: `scripts/figs_lut_sweep.py`
 + tcl OOC (part come Fase B). **Figura riassuntiva**: `document/decode_lut_sweep.png` (accuratezza / dmax / LUT-vs-N).
 
+## 5bis. ✅ DECISIONE (2026-07-14): il campione passa a **LUT-64**
+
+> Lo studio non resta un esercizio: **`snn_top_b2` (il top deployato) usa ora `snn_decode_lut(raw, 64)`**
+> al posto di `snn_decode_hdl` (256 punti). Occasione: il fix dell'FSM (§`HDL_PHASE.md` §2.1) obbligava
+> comunque a rifare la parte Vivado, quindi cambiare il decode è costato zero.
+
+**Criterio della scelta** (non "l'accuratezza è piatta quindi prendi la più piccola"): il progetto **accetta già**
+un errore di quantizzazione fixed di **≤ 0,028 su v0** (`HDL_PHASE.md` §2). La regola applicata è che **il decode non
+deve diventare la fonte d'errore dominante** → si prende la LUT più piccola il cui errore resta **sotto** quel budget.
+
+Errore del decode **per parametro** (60 traiettorie, vs LUT-512 near-exact) — l'errore è **uniforme in relativo**
+(~0,68 % su tutti i param a N=16), non concentrato su un parametro:
+
+| N | errore su `v0` | vs budget 0,028 | LUT del **top** | accuratezza |
+|---|---|---|---|---|
+| 16 | 0,252 | **9×** ⛔ | ~4180 | 84,06 |
+| 32 | 0,0345 | **1,2×** ⛔ diventa dominante | ~4180 | 84,00 |
+| **64** ✅ | **0,0114** | **0,41×** — sub-dominante | **4342** | **83,98** |
+| 128 | 0,0025 | 0,09× | ~4470 | 83,97 |
+| 256 (vecchio) | 0,0005 | 0,018× | 4630 | 83,97 |
+
+**Guadagno**: top **4630 → 4342 LUT (−288, −6,2 %)**, FF/DSP/BRAM invariati, accuratezza invariata.
+**Onestà**: il B2 occupa ~8,7 % del Zynq-7020 → **non siamo area-bound**, quei 288 LUT non sbloccano nulla oggi.
+Il vero valore è la **difendibilità**: alla domanda «perché 256?» non c'era risposta; a «perché 64?» ora sì.
+
+**Conseguenze**: `snn_decode_hdl` (256 hardcoded) → **legacy** (resta come golden di regressione: `snn_decode_lut(.,256)`
+gli è bit-identico) · in libreria **`Donatello_Champion` = decode-64**, funzionalmente identico a `Donatello_LUT64`
+(il primo è il nome *semantico* = cosa si deploya, il secondo la variante di studio) · **bitstream da rigenerare**.
+
 ## 5. Finding
 - **Accuratezza end-to-end piatta (~84%)** su N∈{16..512}: è dominata dalla rete, non dal decode. La sigmoide è
   **liscia** e quindi facile da approssimare anche con poche coppie.

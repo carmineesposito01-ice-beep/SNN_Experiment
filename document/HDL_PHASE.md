@@ -17,7 +17,16 @@
 > | **B2 time-mux** (1 neurone/clock, `hdl.RAM`, FSM) | `snn_b2_fsm` → `snn_top_b2` | **4.223** (~7,9% dello Zynq-7020) · FF 1.584 · BRAM 1 · DSP 38 | ✅ **DEPLOYATA → bitstream PYNQ-Z1** |
 > | parallela (tutti i neuroni srotolati) | `snn_hdl_<name>` (`make_hdl`) | **23.186 = 44%** · DSP 32 · Fmax ~5 MHz | ⛔ **SUPERATA** (~5,5× più grande) |
 >
-> Numeri B2 = grounded su `matlab/axi/build/phase_b/results.csv` (`synth-OOC`, `util_b2_flat`). La catena reale del
+> **⚠️ AGGIORNAMENTO 2026-07-14 — il B2 è CAMBIATO due volte oggi; il bitstream è STALE:**
+> 1. **Fix di `snn_b2_fsm`** (non era bit-exact a `snn_core`: 82,4 % dei control-step) → **§2.1**. Costo +5 LUT.
+> 2. **Decode: 256 → 64 punti** (`snn_top_b2` usa `snn_decode_lut(raw,64)`; `snn_decode_hdl` è **legacy**) —
+>    scelta dallo studio `DECODE_LUT_SWEEP.md` §5bis: accuratezza identica, **−288 LUT**.
+>
+> **Top attuale (post-fix, decode-64): 4342 LUT · FF 1584 · DSP 38 · BRAM 2** (Vivado OOC, `xc7z020clg400-1`).
+> *(4630 con decode-256; i 4.223 di `results.csv` sono `util_b2_flat`, scopo diverso: non confrontabili.)*
+> **Il bitstream su disco precede entrambi i cambi → va rigenerato.**
+>
+> Numeri B2 originali = grounded su `matlab/axi/build/phase_b/results.csv` (`synth-OOC`, `util_b2_flat`). La catena reale del
 > bitstream è `snn_b2_fsm` → `snn_top_b2` → `snn_top_b2_flat` + `snn_b2_axi_lite` (vedi `axi/build/axi_synth.tcl`).
 > **Regola:** l'architettura generata **segue il sorgente** — sorgente FSM ⇒ time-mux (4.2k LUT); sorgente parallelo
 > ⇒ 23k LUT. L'auto-flow **non** serializza da solo (§9 "Streaming ÷32"). Interfaccia del deployato: §3.1.

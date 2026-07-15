@@ -2,6 +2,14 @@ function p = snn_decode_hdl(raw) %#codegen
 %SNN_DECODE_HDL  [decode] raw[5x1] (fi Q7.13) -> params[5x1] (fi). Stadio HDL separato.
 %  p = lo + (hi-lo).*sigma((raw-offset).*inv_tau).  sigma via LUT 256pt lineare su [-8,8).
 %  Costanti Donatello baked. Indice LUT via *16 (shift): 16 punti/unita' su [-8,8).
+%
+%  ⚠️ **LEGACY dal 2026-07-14 — non e' piu' il decode del campione.**
+%  Il top deployato (`snn_top_b2`) usa ora `snn_decode_lut(raw, 64)`: lo studio `DECODE_LUT_SWEEP.md`
+%  ha mostrato che 256 punti erano sovradimensionati 4x (accuratezza identica, -288 LUT sul top) e che
+%  **64** e' la LUT piu' piccola il cui errore resta sotto la quantizzazione fixed gia' accettata.
+%  Questo file resta come: (a) riferimento storico del bitstream pre-2026-07-14, (b) golden di
+%  regressione per `snn_decode_lut(.,256)`, che gli e' **bit-identico** (verificato, 0 mismatch/200).
+%  Per un decode nuovo usare `snn_decode_lut(raw, N)` (parametrico).
   Traw = numerictype(1, 21, 13);   % T.raw  Q7.13
   Tadj = numerictype(1, 18, 13);   % adj    Q4.13 (range [-8,8])
   Titau = numerictype(1, 18, 16);  % inv_tau Q1.16
