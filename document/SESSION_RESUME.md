@@ -89,6 +89,30 @@ reciproci una volta + moltiplicazioni** (`fpga-expert` ch09). Lo sweep a slack m
 di `acc_types`, non `setfimath` sparse) · niente riassegnazione di tipo (`v0f` non `v0`) · niente sovra-escape
 apici nella chart. Diagnosi errori chart: `codegen('-config:lib','SNN_ACC','-args',{a,a,a,a})` con `a=fi(0,1,32,20)`.
 
+---
+
+## SP4 — ACC-IIDM fast (recuperare l'Fmax). IN CORSO (2026-07-16), variante L.
+Spec `docs/superpowers/specs/2026-07-16-acc-iidm-fast-design.md` · piano
+`docs/superpowers/plans/2026-07-16-acc-iidm-fast.md`. Studio A/B: **L (reciproci a LUT) prima, poi M (time-mux
+IIDM)**; si decide sui DATI (utente preferisce M). Bersaglio **Fmax ≥ 11,65 MHz** (pari alla SNN).
+
+**Fatto (Task 1-3, commit `457aa6c4`…`a4bc9291`):** `acc_recip_lut.m` (reciproco 1/x via LUT 1-D) · `acc_types`
+ha il campo **`recipN`** (0 = `divide()` SP3, >0 = reciproco-LUT a N punti) · `acc_iidm_open`/`acc_div` scelgono
+la strategia coi range dei divisori. **SP3 invariato** (`run_plant_parity` 0.00e+00, `acciidm_test` dmax=0).
+**Review-catch:** il divisore COSTANTE `DT` resta `divide()` anche con recipN>0 (guardia `nargin>=6`; se no
+usava `lo,hi` non definiti). `run_acc_recip_sweep.m` creato.
+
+**⏳ SWEEP IN CORSO (background, ~5-6h):** `run_acc_recip_sweep([16 32 64 128 256], 60)` → sceglie la **N minima**
+della LUT reciproco il cui errore in accel resta sotto il budget `E_snn` (p99 0.272 / max 1.484). Risultato →
+**`matlab/recip_sweep_full.log`** + `recip_sweep_full.mat` (`best`, `tab`). ⚠️ Il divisore critico è
+**`s_safe∈[2,150]`** (1/x ripido, ~15% err rel a N=64): possibile che serva N grande, o che **nessuna N passi** →
+in quel caso l'assert scatta e **è il dato che motiva M** (non un fallimento).
+
+**RIPRESA (Task 4-6, meglio in sessione NUOVA — contesto pulito):** leggi `recip_sweep_full.log` per `BEST_N`,
+poi esegui il piano dal **Task 4** (blocco `Donatello_ACC_IIDM_L` con `NRECIP=BEST_N`) · **Task 5** (sintesi OOC
+= il numero che decide: L centra 11,65 MHz? la `sqrt` residua è il collo?) · **Task 6** (doc `SP4_ACC_IIDM_FAST.md`
++ decisione L-vs-M + kickoff M se serve). Se lo sweep è andato in assert (nessuna N) → salta a **M** (piano a sé).
+
 **Debito Fase B — RISOLTO in parte (2026-07-16, `4298adf3`).** `report/FPGA_PHASE_B_REPORT` + `results.csv`
 **ri-sintetizzati col campione corretto** (decode-64 + fix §2.1), stesso flusso Fase B: LUT 4223→3868, Fmax
 8.5→**11.65 MHz** (la σ-LUT più piccola accorcia il path), power ~invariata (static 103 mW); conclusioni
