@@ -1,6 +1,6 @@
 """SimApp -- main window with three modes (a QStackedWidget): a Live cockpit, a Meso/Macro analysis
 page, and a Post-run dashboard. The Live cockpit is a dockable workspace (pyqtgraph DockArea) of 13
-docks (Road, NetState, SpikeRate, Trajectory, Safety, Events, Inspector, SynOps + the 5 identified
+docks (Road, NetState, SpikeRate, Trajectory, Safety, Scenario, Inspector, SynOps + the 5 identified
 params v0/T/s0/a/b) + champion/scenario controls + View/Layout menus (presets + persistence),
 driven by a fixed-timestep QTimer loop, with a status bar (incl. network firing %)."""
 import os
@@ -9,8 +9,8 @@ import numpy as np
 from PySide6.QtCore import QElapsedTimer, QEvent, Qt, QTimer
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QFileDialog, QHBoxLayout, QLabel,
-                               QMainWindow, QMessageBox, QPushButton, QSlider, QStackedWidget,
-                               QVBoxLayout, QWidget)
+                               QMainWindow, QMenu, QMessageBox, QPushButton, QSlider, QStackedWidget,
+                               QToolButton, QVBoxLayout, QWidget)
 from pyqtgraph.dockarea import Dock, DockArea
 
 from config import DT
@@ -19,6 +19,7 @@ from sim.events import EventInjector
 from sim.replay import ReplayLog
 from sim.probe import AttributeProbe
 from sim.scenario import manual_scenario, scenario_library
+from sim.scenario_export import write_scenario_csv, write_scenario_mat
 from sim.scenario_spec import Block, LeaderStyle, ScenarioSpec
 from sim.stepper import SimStepper
 from sim.ui.layout import (DOCK_ORDER, LAYOUT_PATH, PRESETS, apply_overview, load_layout,
@@ -68,6 +69,7 @@ class SimApp(QMainWindow):
         self._scenarios = scenario_library(_PARAMS_GT, N=600,
                                             rng=np.random.default_rng(0), include_tail=True)
         self._scenarios.append(self._manual(_PARAMS_GT))
+        self._protected_count = len(self._scenarios)   # library presets + initial manual: Meso indexes these
         self._current_idx = 0
         self._speed = 1
         self._last_result = None
@@ -146,8 +148,16 @@ class SimApp(QMainWindow):
         self._cursor_slider.setToolTip("frecce ←/→: passo; Home/Fine: inizio/fine (in pausa)")
         self._cursor_slider.valueChanged.connect(self._on_cursor)
         self._cursor_readout = QLabel("live")
+        self._scn_menu_btn = QToolButton(); self._scn_menu_btn.setText("⋯")
+        self._scn_menu_btn.setToolTip("scenario: esporta / elimina")
+        self._scn_menu_btn.setPopupMode(QToolButton.InstantPopup)
+        _scn_menu = QMenu(self._scn_menu_btn)
+        self._act_export = _scn_menu.addAction("Esporta…"); self._act_export.triggered.connect(self._export_scenario)
+        self._act_delete = _scn_menu.addAction("Elimina"); self._act_delete.triggered.connect(self._delete_scenario)
+        _scn_menu.aboutToShow.connect(self._sync_scn_menu)
+        self._scn_menu_btn.setMenu(_scn_menu)
         controls = QHBoxLayout()
-        for w in (QLabel("champion"), self._champ_selector, self._selector,
+        for w in (QLabel("champion"), self._champ_selector, self._selector, self._scn_menu_btn,
                   self._run_btn, self._step_btn, self._reset_btn,
                   self._brake_btn, self._ghost_toggle, QLabel("speed"), self._speed_slider,
                   QLabel("t"), self._cursor_slider, self._cursor_readout):
@@ -468,6 +478,30 @@ class SimApp(QMainWindow):
         self._trajectory.set_ghost(None)
         self._safety.set_ghost(None)
         self._topdown.reset()
+
+    def _sync_scn_menu(self):
+        self._act_delete.setEnabled(self._current_idx >= self._protected_count)
+
+    def _delete_scenario(self):
+        idx = self._current_idx
+        if idx < self._protected_count:
+            return                                         # library + initial manual: Meso selects these by index
+        self._scenarios.pop(idx)
+        self._selector.blockSignals(True)
+        self._selector.removeItem(idx)
+        self._selector.blockSignals(False)
+        self.select_scenario(min(idx, len(self._scenarios) - 1))
+
+    def _export_scenario(self):
+        sc = self._scenarios[self._current_idx]
+        path, _ = QFileDialog.getSaveFileName(self, "Esporta scenario", f"{sc.name}.csv",
+                                              "CSV (*.csv);;MATLAB (*.mat)")
+        if not path:
+            return
+        if path.lower().endswith(".mat"):
+            write_scenario_mat(sc, path)
+        else:
+            write_scenario_csv(sc, path)
 
     def reset_run(self):
         self.select_scenario(self._current_idx)
