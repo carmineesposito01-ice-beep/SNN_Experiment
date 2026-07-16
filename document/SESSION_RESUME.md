@@ -22,13 +22,15 @@ solo per `Simulink_Importer`.)*
 **SP4-M make-or-break ESEGUITO**: il resource sharing config-based **non basta** (9,5 MHz < 11,65, area esplosa
 LUT ×2,4/FF ×14) → **FSM esplicita = prossimo piano**.
 
-**AZIONE PENDENTE (immediata):** **aprire il ciclo `superpowers:brainstorming → writing-plans` per la FSM
-esplicita** dell'ACC-IIDM (divisore sequenziale a mano + macchina a stati che lo riusa sulle 5 divisioni,
-**bit-identico a SP3** `dmax=0`, **Fmax ≥ 11,65 MHz CON area ridotta**). Il make-or-break config-based è **chiuso**:
-resource sharing di HDL Coder ESEGUITO (Task 1), **non basta** — numeri e verdetto in
-`document/SP4_ACC_IIDM_FAST.md` §Variante M e nella sezione `## SP4` più sotto. Diagnostico riusabile:
-`matlab/probe_acciidm_sharing.m` (commit `6db20b0a`).
-MATLAB: `"C:\Program Files\MATLAB\R2026a\bin\matlab.exe" -batch`. Vivado: `C:\AMDDesignTools\2026.1`.
+**AZIONE PENDENTE (immediata):** **eseguire il piano FSM dell'ACC-IIDM dal Task 1 (make-or-break)** — piano
+`docs/superpowers/plans/2026-07-16-acc-iidm-fsm.md`, spec `docs/superpowers/specs/2026-07-16-acc-iidm-fsm-design.md`.
+Approccio (design approvato 2026-07-16): FSM che riusa **1 blocco `Divide` HDL pipelinato** (ShiftAdd, latency
+custom) per le 5 divisioni, **bit-identico a SP3** (`dmax=0`), **Fmax ≥ 11,65 con area ridotta**. **Task 1 =
+make-or-break**: il blocco `Divide` è bit-identico a `divide()`-SP3 su **300k coppie reali**? Se sì → prosegui
+(Task 2-5); se no → STOP, fallback #2 (divisore a mano) / #3 (ri-baselinare) = piano a sé. Esegui col ciclo
+`superpowers:executing-plans`. Il make-or-break **config-based** è chiuso (non bastava): diagnostico
+`matlab/probe_acciidm_sharing.m` (`6db20b0a`). MATLAB: `"C:\Program Files\MATLAB\R2026a\bin\matlab.exe" -batch`.
+Vivado: `C:\AMDDesignTools\2026.1`.
 
 **MODI DI LAVORO (vincolanti — la sessione li ha pagati a caro prezzo):**
 - **Verifica sul DATASET, mai su un caso singolo** — riporta *quanti su quanti* (es. 0/240.000, 5/5).
@@ -156,9 +158,13 @@ Verifica empirica (`probe_acciidm_sharing.m` + 3 sintesi OOC su xc7z020 @8 MHz).
 **MA**: Fmax **9,5 MHz < 11,65** (collo = singola divisione digit-recurrence non pipelinata) **e area ESPLOSA**
 (LUT ×2,36, FF ×13,9 dal clock-rate pipelining) → **contro la visione "taglia le risorse"**. Tabella completa in
 `document/SP4_ACC_IIDM_FAST.md` §Variante M.
-- **DECISIONE (utente, 2026-07-16): FSM esplicita** = divisore sequenziale a mano + FSM che lo riusa sulle 5
-  divisioni, **bit-identico a SP3** (`dmax=0`), **Fmax ≥ 11,65 CON area ridotta**. È un **piano a sé** — prossimo
-  ciclo `brainstorming → spec → piano`, non ancora scritto.
+- **DECISIONE (utente, 2026-07-16): FSM esplicita.** Design+piano **SCRITTI** (`docs/superpowers/{specs,plans}/2026-07-16-acc-iidm-fsm*`).
+  Approccio approvato: **NON** divisore a mano ma **1 blocco `Divide` HDL pipelinato** (ShiftAdd) riusato da una FSM
+  per le 5 divisioni, **bit-identico a SP3** (`dmax=0`), Fmax ≥ 11,65 con area ridotta. Bit-identità per
+  transitività (G1 `Divide`==`divide()`, G2 parità dataset, G3 blocco==model); ogni problema Donatello (cast §2.1,
+  buco copertura, start silenzioso, free-running) con il suo cancello dataset assertivo+sensibile. **PENDENTE =
+  ESEGUIRE dal Task 1 (make-or-break: blocco `Divide` bit-identico a `divide()`-SP3 su 300k coppie? se no → fallback
+  #2 divisore a mano / #3 ri-baselinare = piano a sé).**
 - Spec/piano del config-based (superati come esecuzione, utili come record): `docs/superpowers/{specs,plans}/2026-07-16-acc-iidm-timemux*`.
 - **L insegna a M:** divisioni **sequenziate, non approssimate**; **M-v1 insegna alla FSM:** il config esplode
   l'area → la FSM deve sequenziare **1 divisore** a mano (area bassa), non delegare al clock-rate pipelining.
