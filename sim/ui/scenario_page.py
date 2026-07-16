@@ -155,7 +155,7 @@ class ScenarioPage(QWidget):
         self._composer_plot.setLabel("bottom", "tick del blocco")
         self._composer_plot.showGrid(x=False, y=True, alpha=0.2)
         self._composer_curve = self._composer_plot.plot(pen=pg.mkPen("#e8871e", width=2))
-        self._composer_red = self._composer_plot.plot(pen=pg.mkPen("#d1495b", width=4), connect="finite")
+        self._composer_red = self._composer_plot.plot(pen=pg.mkPen("#ff2d2d", width=4), connect="finite")
         self._handles = DragHandles(self._composer_plot, on_change=self._refresh_composer)
         mid.addWidget(self._composer_plot, stretch=1)
         root.addLayout(mid, stretch=1)
@@ -164,7 +164,9 @@ class ScenarioPage(QWidget):
         self._plot.setLabel("left", "v_leader", units="m/s")
         self._plot.setLabel("bottom", "time", units="steps")
         self._plot.showGrid(x=False, y=True, alpha=0.2)
-        self._curve = self._plot.plot(pen=pg.mkPen("#d1495b", width=2))
+        # base curve ORANGE (matches the composer), so the red advisory reads as danger on a neutral
+        # profile rather than as one crimson among another. A safety cue must not look like the profile.
+        self._curve = self._plot.plot(pen=pg.mkPen("#e8871e", width=2))
         self._scenario_red = self._plot.plot(pen=pg.mkPen("#ff2d2d", width=4), connect="finite")
         root.addWidget(self._plot, stretch=1)
 
