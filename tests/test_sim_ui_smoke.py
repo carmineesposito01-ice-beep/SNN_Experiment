@@ -1058,3 +1058,28 @@ def test_the_builder_length_shrinks_and_grows_with_the_blocks(qapp):
     assert page._curve.getOriginalDataset()[1].shape[0] == 300   # 200 + 100
     page._list.setCurrentRow(1); page._on_del()                  # remove the ramp
     assert page._curve.getOriginalDataset()[1].shape[0] == 200
+
+
+def test_the_composer_edge_writes_the_duration(qapp):
+    """TEETH: dragging the composer edge sets the block's duration, and it is the SPINBOX that changed
+    (one owner), not a shadow value. Simulate the drag: setValue on the edge line + release."""
+    from sim.scenario_spec import Block
+    page = _page()
+    page.set_spec(_spec3([Block("ramp", 300, {"to_v": 2.0})]))
+    page.compose_new("ramp", ticks=150, params={"to_v": 18.0})
+    edge = page._composer_edge._lines[0]
+    edge.setValue(250)                                     # drag the edge to x=250
+    edge.sigPositionChangeFinished.emit(edge)              # release
+    assert page._ticks.value() == 250                      # the spinbox is the owner
+    assert page._composer_block().ticks == 250
+
+
+def test_the_composer_edge_caps_a_preset_at_600(qapp):
+    from sim.scenario_spec import Block
+    page = _page()
+    page.set_spec(_spec3([Block("ramp", 300, {"to_v": 2.0})]))
+    page.compose_new("preset", ticks=200, params={"name": "hard_brake"})
+    edge = page._composer_edge._lines[0]
+    edge.setValue(5000)                                    # try to drag a preset past 600
+    edge.sigPositionChangeFinished.emit(edge)
+    assert page._ticks.value() == 600                      # capped at the library length

@@ -15,10 +15,11 @@ from PySide6.QtWidgets import (QComboBox, QDoubleSpinBox, QHBoxLayout, QLabel, Q
                                QPushButton, QSpinBox, QVBoxLayout, QWidget)
 
 from sim.scenario import scenario_library
-from sim.scenario_spec import (A_MAX_RANGE, B_MAX_RANGE, V_RANGE, _KINDS, _custom_node_ticks,
-                               Block, LeaderStyle, ScenarioSpec, block_of_sample, materialise,
-                               physics_gap)
+from sim.scenario_spec import (A_MAX_RANGE, B_MAX_RANGE, V_RANGE, MAX_BLOCK_TICKS, _KINDS,
+                               _custom_node_ticks, Block, LeaderStyle, ScenarioSpec, block_of_sample,
+                               materialise, physics_gap)
 from sim.ui.drag_handles import DragHandles
+from sim.ui.duration_handles import DurationHandles
 
 # Labels for READING the plane, not modes: the point is continuous and may sit anywhere.
 # Parked in the CORNERS with an outward anchor, not at the quadrant centres: the centre is exactly
@@ -112,7 +113,7 @@ class ScenarioPage(QWidget):
         controls = QHBoxLayout()
         self._kind = QComboBox()
         self._kind.addItems(list(_KINDS))
-        self._ticks = QSpinBox(); self._ticks.setRange(1, 600); self._ticks.setValue(150)
+        self._ticks = QSpinBox(); self._ticks.setRange(1, MAX_BLOCK_TICKS); self._ticks.setValue(150)
         self._value = QDoubleSpinBox(); self._value.setRange(0.0, 40.0); self._value.setValue(5.0)
         self._preset = QComboBox()
         self._preset.addItems(sorted(s.name for s in scenario_library(
@@ -157,6 +158,7 @@ class ScenarioPage(QWidget):
         self._composer_plot.showGrid(x=False, y=True, alpha=0.2)
         self._composer_curve = self._composer_plot.plot(pen=pg.mkPen("#e8871e", width=2))
         self._composer_red = self._composer_plot.plot(pen=pg.mkPen("#ff2d2d", width=4), connect="finite")
+        self._composer_edge = DurationHandles(self._composer_plot, on_resize=self._on_composer_edge)
         self._handles = DragHandles(self._composer_plot, on_change=self._refresh_composer)
         mid.addWidget(self._composer_plot, stretch=1)
         root.addLayout(mid, stretch=1)
@@ -393,6 +395,19 @@ class ScenarioPage(QWidget):
             self._composer_red.setData(self._red_from_mask(v, mask))
         else:
             self._composer_red.setData([])
+        self._place_composer_edge()                        # Task 5 moves this into the `if refit:` branch
+
+    def _on_composer_edge(self, _id, new_ticks):
+        """The composer edge was released: write the duration to its single owner, the spinbox."""
+        self._ticks.setValue(int(new_ticks))
+
+    def _place_composer_edge(self):
+        """One edge at x = ticks, capped by kind (a preset stops at its 600-sample library length).
+        A drag is committed on release, so re-placing here never runs mid-drag."""
+        if self._spec is None:
+            return
+        cap = 600 if self._composer_kind() == "preset" else MAX_BLOCK_TICKS
+        self._composer_edge.set_edges([("composed", 0, int(self._ticks.value()), cap)])
 
     def _on_row_selected(self, i):
         if self._spec is None or i < 0 or i >= len(self._spec.blocks):
