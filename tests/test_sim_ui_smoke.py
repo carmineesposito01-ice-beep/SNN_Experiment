@@ -1010,3 +1010,26 @@ def test_the_advisory_is_off_by_default_when_no_custom(qapp):
     page.set_spec(_spec3([Block("ramp", 600, {"to_v": 2.0})], a=1.0, b=1.0))
     red = page._scenario_red.getOriginalDataset()[1]
     assert not np.isfinite(red).any()                      # a ramp is rate-limited -> never red
+
+
+def test_custom_composer_refresh_fits_in_a_frame(qapp):
+    """The 4a budget (2.09 ms pad drag) predates the advisory (O(N) numpy) and 25 handles that
+    re-emit sigPositionChanged. Re-measure with both on. Assert the PEAK -- the eye sees the peak."""
+    import time
+    from sim.scenario_spec import Block
+    page = _page()
+    page.set_spec(_spec3([Block("custom", 150, {"nodes": [21.0] * 25}),
+                          Block("ramp", 150, {"to_v": 2.0}),
+                          Block("const", 150, {"v": 2.0}),
+                          Block("preset", 150, {"name": "stop_and_go"})]))
+    page.compose_new("custom", ticks=150, params={"nodes": [21.0] * 25})
+    for _ in range(3):
+        h = page._handles._items[0]; h.setPos(h._tick, 15.0)          # warm up
+    ts = []
+    for k in range(40):
+        h = page._handles._items[k % 25]
+        t0 = time.perf_counter()
+        h.setPos(h._tick, 5.0 + 0.1 * k)                              # what dragging a node does
+        ts.append((time.perf_counter() - t0) * 1000)
+    peak = max(ts)
+    assert peak < 16.7, f"custom composer refresh peaks at {peak:.2f} ms, over the 60 fps budget"
