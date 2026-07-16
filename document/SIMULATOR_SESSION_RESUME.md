@@ -88,6 +88,10 @@ cambiati con la durata della scena. **Ancora aperte dall'utente (post-verifica 2
 - **generatore dataset** (item 7, il più grosso): randomizzazione seed + mix % → **DRAFT**
   `…/specs/2026-07-16-dataset-generator-DRAFT.md` (⚠️ `data/generator.py` fa GIÀ la randomizzazione
   type-preserving — riusarlo, ma verificare se è invariante).
+  **▶️ PROSSIMA SESSIONE PIANIFICATA (rinviata dall'utente, ~2026-07-17): brainstorming DETTAGLIATO
+  dell'item 7** → design → spec (promuovi la DRAFT, NON eseguirla com'è) → plan → TDD inline, esattamente
+  come item 1/2. Baseline attuale **305 verdi**. Suite = glob SIM (mai `pytest tests/`). Merge→main sempre
+  parcheggiato.
 L'ultima DRAFT rimasta (item 7, generatore dataset) cattura intento + bivi aperti, da finalizzare con brainstorming dedicato a tempo di implementazione. Prossimo item **tecnico** aperto: il
 **merge `Simulator`→`main`** (da sequenziare con `Simulink_Importer`). Vedi §AZIONI PENDENTI. Tutto
 committato e pushato. Il dettaglio sta nelle sezioni sotto (§Architecture, §Phase history) e nella
