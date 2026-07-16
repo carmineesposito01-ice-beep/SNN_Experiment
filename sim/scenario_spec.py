@@ -255,7 +255,10 @@ def from_json(text) -> ScenarioSpec:
         if b["kind"] not in _KINDS:
             raise ValueError(f"unknown block kind: {b['kind']!r} (have: {_KINDS})")
         raw = b.get("bias")
-        blocks.append(Block(kind=b["kind"], ticks=int(b["ticks"]), params=dict(b["params"]),
+        params = dict(b["params"])
+        if b["kind"] == "custom":
+            params["nodes"] = tuple(float(x) for x in params["nodes"])   # list != tuple by value (4a bias trap)
+        blocks.append(Block(kind=b["kind"], ticks=int(b["ticks"]), params=params,
                             bias=tuple(float(x) for x in raw) if raw is not None else None))
     return ScenarioSpec(name=d["name"], blocks=tuple(blocks),
                         style=LeaderStyle(a_max=float(d["style"]["a_max"]),

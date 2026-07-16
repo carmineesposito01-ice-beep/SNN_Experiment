@@ -409,3 +409,26 @@ def test_block_of_sample_marks_the_flat_tail_as_no_block():
     owner = block_of_sample(spec, N=600)
     assert (owner[:150] == 0).all()
     assert (owner[150:] == -1).all()                       # -1 == the hold tail (diff=0 there, never red)
+
+
+def test_json_round_trips_a_custom_with_nodes_as_a_tuple():
+    from sim.scenario_spec import from_json, to_json
+    # nodes canonical form is a TUPLE -- that is what both from_json and the UI's _params_for produce,
+    # so the round-trip source uses it too (a list here would make back != s for the type, not the value)
+    s = _spec([Block("custom", 300, {"nodes": (21.0, 8.0, 8.0, 15.0)}),
+               Block("const", 300, {"v": 15.0})])
+    back = from_json(to_json(s))
+    assert back == s                                       # frozen dataclass compares by value
+    assert isinstance(back.blocks[0].params["nodes"], tuple)   # a list would compare unequal
+    np.testing.assert_array_equal(materialise(back, _PG, N=600).v_leader,
+                                  materialise(s, _PG, N=600).v_leader)
+
+
+def test_a_hand_edited_custom_loads_at_its_own_node_count():
+    """count is len(nodes), never a stored field -- so a file edited to 7 nodes loads and draws at 7."""
+    from sim.scenario_spec import from_json
+    text = ('{"name":"x","s_init":33.5,"v_init":21.0,"style":{"a_max":2.0,"b_max":4.0},'
+            '"blocks":[{"kind":"custom","ticks":210,"params":{"nodes":[20,18,16,14,12,10,8]}}]}')
+    spec = from_json(text)
+    assert len(spec.blocks[0].params["nodes"]) == 7
+    assert materialise(spec, _PG, N=600).v_leader.shape == (600,)
