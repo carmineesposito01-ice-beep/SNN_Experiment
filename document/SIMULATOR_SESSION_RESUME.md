@@ -41,10 +41,18 @@ scenario ora è la SOMMA dei tick dei blocchi** (`_total_ticks()`, un solo propr
 sforare) — scenari di qualsiasi lunghezza gratis (misurato: 50 min di scenario = 4 ms di materialise,
 N=600 era pura convenzione). Fix latente accluso: `_preset_samples` genera la libreria alla lunghezza
 **canonica 600** (`_PRESET_N`), non alla N di output, perché i preset cut-family scalano con N e sarebbero
-cambiati con la durata della scena. **Ancora aperte dall'utente (da brainstormare — ciclo builder-UX)**:
-maniglie laterali per la durata dei blocchi (preview blocco + preview totale), congelare l'autorange del
-composer; e più avanti nome/cancella/**esporta .csv+.mat**, dock anteprima scenario nel cockpit,
-**generatore dataset** (randomizzazione da seed + mix percentuale). Prossimo item **tecnico** aperto: il
+cambiati con la durata della scena. **Ancora aperte dall'utente (post-verifica 2026-07-16)** — spec già depositate:
+- **ciclo builder-UX** (items 3/4/5): maniglie di durata (bordo destro) + autorange congelato →
+  **spec APPROVATA-in-review** `docs/superpowers/specs/2026-07-16-builder-ux-duration-autorange-design.md`
+  (`2844314`). È il **prossimo a implementarsi** (attende ok utente per il plan).
+- **scenario-lifecycle** (item 2): nome/cancella/**esporta .csv+.mat** → **DRAFT**
+  `…/specs/2026-07-16-scenario-lifecycle-DRAFT.md` (⚠️ scipy ASSENTE in cf_sim → .mat serve writer LAPACK-free).
+- **cockpit dock** (item 1): anteprima scenario + marker al posto di Events → **DRAFT**
+  `…/specs/2026-07-16-cockpit-scenario-preview-dock-DRAFT.md`.
+- **generatore dataset** (item 7, il più grosso): randomizzazione seed + mix % → **DRAFT**
+  `…/specs/2026-07-16-dataset-generator-DRAFT.md` (⚠️ `data/generator.py` fa GIÀ la randomizzazione
+  type-preserving — riusarlo, ma verificare se è invariante).
+Le tre DRAFT catturano intento + bivi aperti, da finalizzare con brainstorming dedicato a tempo di implementazione. Prossimo item **tecnico** aperto: il
 **merge `Simulator`→`main`** (da sequenziare con `Simulink_Importer`). Vedi §AZIONI PENDENTI. Tutto
 committato e pushato. Il dettaglio sta nelle sezioni sotto (§Architecture, §Phase history) e nella
 **mappa** `document/SIMULATOR_ARCHITECTURE.md`.
