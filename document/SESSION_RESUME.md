@@ -175,7 +175,7 @@ pronto) · **asserzioni nei cancelli storici** (verdi, sicuro aggiungerle — de
 
 ---
 
-## ⚡ RIPRESA A FREDDO — Fase B/C (2 azioni indipendenti, NON dipendono dal contesto vivo) — 2026-07-11
+## 🗄️ STORICO — SUPERATO (era: RIPRESA Fase B/C, 2026-07-11). Il punto d'ingresso ATTUALE è il blocco ▶ in cima.
 
 > **RUOLO DI QUESTO FILE:** è il **punto d'ingresso di ripresa + lo STATO** del track `Simulink_Importer` (NON la
 > procedura generale — quella è la skill `session-reprise`). Chi riprende a freddo legge QUI e segue i puntatori.
@@ -183,7 +183,7 @@ pronto) · **asserzioni nei cancelli storici** (verdi, sicuro aggiungerle — de
 > `.worktrees/Simulink_Importer` · push libero su `origin`. (Il track ① Simulatore vive su `Simulator`, lo studio
 > EventProp su `main` con master `EVENTPROP_STATUS.md` — QUESTO file copre SOLO il track ② HDL/Simulink_Importer.)
 
-## ⚡ RIPRESA A FREDDO — B1.5 (validazione HW approfondita) + Libreria champion — 2026-07-14
+## 🗄️ STORICO — SUPERATO (era: RIPRESA B1.5 + Libreria champion, 2026-07-14). Punto d'ingresso ATTUALE = blocco ▶ in cima.
 
 > **Stato più recente (in cima; il blocco Fase B/C sotto è il precedente).** ⚠️ Working tree: ci sono modifiche NON
 > mie non committate (`matlab/closed_loop_demo.slx`, `matlab/slblocks.m`) + commit `mpc-vs-snn` di un altro filone —
@@ -301,7 +301,7 @@ quando la scelta è genuinamente dell'utente. **In italiano.** Diretti sui findi
 report è giusto per il motivo sbagliato") senza addolcirli. Checkpoint espliciti sul lavoro lungo. L'utente è
 competente (MBSE/SNN/FPGA): niente spiegazioni base non richieste.
 
-### 📋 PROMPT DI RIPRESA (copia-incolla in una nuova chat dopo il /clear)
+### 🗄️ PROMPT DI RIPRESA — STORICO/SUPERATO (Fase B/C, 2026-07-11). NON usare: il prompt ATTUALE è nel blocco ▶ in cima.
 > Volutamente una **guida a LEGGERE i documenti**, non un dump di informazioni.
 
 ```

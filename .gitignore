@@ -71,6 +71,7 @@ matlab/slprj/
 
 # HDL Coder output + Vivado litter (SP3 sintesi OOC): i numeri restano nel doc, non il VHDL generato
 matlab/hdl_sp3/
+matlab/hdl_sp4m/
 codegen/
 vivado*.jou
 vivado*.log

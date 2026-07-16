@@ -56,9 +56,15 @@ bug-vs-fondamentale: un **reciproco approssimato che alimenta un'amplificazione 
 d'approssimazione) e **scavalca l'intera classe di problema** (niente LUT, niente amplificazione, niente range).
 È anche la variante preferita dall'utente.
 
-**Cosa L insegna a M:** le 5 divisioni vanno **sequenziate**, non approssimate. Il time-mux dell'IIDM (FSM
-multi-ciclo, ~341 clock/control-step disponibili) spezza la catena combinatoria mantenendo la matematica esatta.
-M avrà il suo **brainstorming → spec → piano** (redesign FSM, merita contesto pulito).
+**Cosa L insegna a M:** le 5 divisioni vanno **sequenziate**, non approssimate. Il time-mux dell'IIDM
+(~341 clock/control-step disponibili) spezza la catena combinatoria mantenendo la matematica esatta.
+
+**🔄 M — DESIGN E PIANO FATTI (2026-07-16), pendente = ESEGUIRE.** Spec
+`docs/superpowers/specs/2026-07-16-acc-iidm-timemux-design.md` · piano
+`docs/superpowers/plans/2026-07-16-acc-iidm-timemux.md` (esegui dal **Task 1**, make-or-break). Meccanismo deciso
+da verifica: **resource sharing di HDL Coder PRIMA** (condivide+sequenzia i 5 `divide()` dalla sorgente unica →
+bit-identico by construction), **FSM esplicita in fallback** se non basta. v1 = solo le 5 divisioni; v2
+(sequenziare tutto) = confronto successivo. Stato corrente sempre in `document/SESSION_RESUME.md` (blocco ▶).
 
 ## File (variante L, committati — riusabili se L verrà ripresa)
 `acc_recip_lut.m` · `acc_sweep_kernel.m` · `build_acc_sweep_mex.m` · `run_acc_recip_sweep.m` · `acc_types.recipN`
