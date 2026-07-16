@@ -1,4 +1,4 @@
-function T = acc_types(dt, nfrac)
+function T = acc_types(dt, nfrac, recipN)
 %ACC_TYPES  Prototipi di tipo per `acc_iidm_open` type-parametrizzato (modello: snn_types.m).
 %  dt = 'double' (riferimento algoritmico + plant cf_plant_lib) | 'fixed' (blocco HDL-ready).
 %  nfrac (opz.) = bit frazionari del path fixed; i bit INTERI restano FISSI (il range non cambia),
@@ -29,10 +29,15 @@ function T = acc_types(dt, nfrac)
   % ⚠️ Passa STRETTO: un dry-run su 2 traiettorie dava ~6x di margine, il dataset intero dice 1.75x.
   %    Le code stanno solo nel campione completo -> non tarare questo numero su pochi casi.
   if nargin < 2, nfrac = 8; end
+  % recipN: strategia di divisione del path fixed. 0 = divide() digit-recurrence (SP3, combinatorio
+  % profondo). >0 = reciproco a LUT a recipN punti + moltiplica (SP4 variante L). Vive nei tipi cosi'
+  % la scelta e' coder.const e single-source. Default 0 = comportamento SP3 invariato.
+  if nargin < 3, recipN = 0; end
   switch dt
     case 'double'
       z = double([]);
       T = struct('st', z, 'par', z, 'acc', z, 'out', z);
+      T.recipN = 0;
     case 'fixed'
       f = nfrac;
       % La fimath fa parte del TIPO, non e' una decorazione locale. Due ragioni, entrambe misurate:
@@ -53,6 +58,7 @@ function T = acc_types(dt, nfrac)
         'par', fi([], true,  7 + f, f, FM), ...   % Q6.f
         'acc', fi([], true, 11 + f, f, FM), ...   % Q10.f
         'out', fi([], true,  5 + f, f, FM));      % Q4.f
+      T.recipN = recipN;
     otherwise
       error('acc_types:dt', 'dt deve essere ''double'' o ''fixed''');
   end
