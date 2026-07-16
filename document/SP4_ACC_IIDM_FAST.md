@@ -1,7 +1,8 @@
 # SP4 — ACC-IIDM fast (recuperare l'Fmax)
 
 > Doc di processo. Spec: `docs/superpowers/specs/2026-07-16-acc-iidm-fast-design.md` · piano
-> `docs/superpowers/plans/2026-07-16-acc-iidm-fast.md`. Stato: **variante L chiusa (non viabile) → si va a M**.
+> `docs/superpowers/plans/2026-07-16-acc-iidm-fast.md`. Stato: **L chiusa; M-v1 (resource sharing) ESEGUITO → NON
+> basta** (9,5 MHz < 11,65, area esplosa LUT ×2,4/FF ×14) → **FSM esplicita = prossimo piano**.
 
 ## Problema (SP3, misurato)
 `Donatello_ACC_IIDM` in fixed sintetizza a **2,0 MHz** (WNS −373 ns @8 MHz, timing non chiude). Path critico
@@ -59,12 +60,39 @@ d'approssimazione) e **scavalca l'intera classe di problema** (niente LUT, nient
 **Cosa L insegna a M:** le 5 divisioni vanno **sequenziate**, non approssimate. Il time-mux dell'IIDM
 (~341 clock/control-step disponibili) spezza la catena combinatoria mantenendo la matematica esatta.
 
-**🔄 M — DESIGN E PIANO FATTI (2026-07-16), pendente = ESEGUIRE.** Spec
-`docs/superpowers/specs/2026-07-16-acc-iidm-timemux-design.md` · piano
-`docs/superpowers/plans/2026-07-16-acc-iidm-timemux.md` (esegui dal **Task 1**, make-or-break). Meccanismo deciso
-da verifica: **resource sharing di HDL Coder PRIMA** (condivide+sequenzia i 5 `divide()` dalla sorgente unica →
-bit-identico by construction), **FSM esplicita in fallback** se non basta. v1 = solo le 5 divisioni; v2
-(sequenziare tutto) = confronto successivo. Stato corrente sempre in `document/SESSION_RESUME.md` (blocco ▶).
+## Variante M — time-mux (divisore condiviso): ESEGUITA (make-or-break) → config non basta → FSM
+Spec `docs/superpowers/specs/2026-07-16-acc-iidm-timemux-design.md` · piano
+`docs/superpowers/plans/2026-07-16-acc-iidm-timemux.md`. Meccanismo deciso **da verifica** (non assunto):
+**resource sharing di HDL Coder PRIMA**, FSM esplicita in fallback. **Task 1 (make-or-break) eseguito il
+2026-07-16** (`probe_acciidm_sharing.m`, commit `6db20b0a`; 3 config generate + sintesi OOC su xc7z020 @8 MHz).
+
+### Struttura reale (verificata)
+Le 5 `divide()` stanno **dentro** la MATLAB Function `SNN_ACC` (`acc_iidm_open` inlinato). Il resource sharing va
+quindi sul **blocco MATLAB Function interno** (non sul subsystem esterno) e il blocco copiato va **slinkato** dalla
+libreria (`LinkStatus=none`), o `hdlset_param` fallisce per un artefatto → **falso "config non basta"**. (Il
+codice-esempio del piano, sul subsystem esterno + link intatto, avrebbe dato un falso negativo — corretto nel probe.)
+
+### Verdetto OOC (xc7z020 @8 MHz)
+| config | LUT | FF | DSP | WNS | Fmax | path critico | livelli |
+|---|---|---|---|---|---|---|---|
+| baseline (=SP3) | 10 846 | 1 653 | 69 | −373 ns | **2,01 MHz** | 5 divisioni incatenate (`acc_3`) | 1077 |
+| share5_cp (SF5, CRP on) | 25 557 | 22 922 | 38 | +19,9 ns | **9,51 MHz** | **1 divisione** (`quotient_tmp`) | 172 |
+| share5 (SF5, CRP off) | 25 622 | 22 981 | 38 | +17,7 ns | 9,32 MHz | 1 divisione | 176 |
+
+- `baseline` **riproduce SP3 al bit** (10846 LUT, 69 DSP, −373 ns, 1077 liv) → flusso coerente, controllo passato.
+- Il resource sharing **si attiva davvero**: clock 5× (`DUT_tc`) + moltiplicatori condivisi + **le 5 divisioni
+  incatenate sequenziate in UNA** (`u_multiplier_5/quotient_tmp`). Timing **chiude @8 MHz** (era −373 ns), livelli
+  **1077 → 172**, DSP **69 → 38**.
+- **MA due verità scomode:** (1) **Fmax 9,5 < 11,65 MHz** — il collo è ora la **singola divisione digit-recurrence**
+  (172 liv, non pipelinata internamente); (2) **area ESPLOSA**: LUT **×2,36**, FF **×13,9** (il clock-rate pipelining
+  replica registri) → **contro la visione "taglia le risorse"**. Solo i DSP calano.
+
+### Decisione: → FSM esplicita (piano a sé)
+Il config-based, anche spinto a 11,65 (pipelinando la divisione), resterebbe **caro in area** → fallisce metà
+obiettivo. Scelta utente (2026-07-16): **FSM esplicita** — divisore sequenziale a mano + macchina a stati che lo
+riusa sulle 5 divisioni, **bit-identica a SP3** (`dmax=0`), **Fmax alto CON area ridotta**. È un **piano a sé**
+(nuovo ciclo brainstorming→spec→piano), non improvvisato qui. Il diagnostico `probe_acciidm_sharing.m` resta
+committato e riusabile. Stato corrente sempre in `document/SESSION_RESUME.md` (blocco ▶).
 
 ## File (variante L, committati — riusabili se L verrà ripresa)
 `acc_recip_lut.m` · `acc_sweep_kernel.m` · `build_acc_sweep_mex.m` · `run_acc_recip_sweep.m` · `acc_types.recipN`

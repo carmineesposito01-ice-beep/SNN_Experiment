@@ -18,15 +18,16 @@ toccarli né stagearli**).
 *(Esistono altri track/worktree — es. `Simulator`, `main`/EventProp — con LORO SESSION_RESUME: questo file vale
 solo per `Simulink_Importer`.)*
 
-**Stato in una riga:** SP2/SP3 chiusi, **debito Fase B risolto** (bitstream escluso), **SP4-L scartata sui dati**,
-e **SP4-M (time-mux ACC-IIDM) ha spec + piano pronti** — pendente = **eseguirlo**.
+**Stato in una riga:** SP2/SP3 chiusi, **debito Fase B risolto** (bitstream escluso), **SP4-L scartata**, e
+**SP4-M make-or-break ESEGUITO**: il resource sharing config-based **non basta** (9,5 MHz < 11,65, area esplosa
+LUT ×2,4/FF ×14) → **FSM esplicita = prossimo piano**.
 
-**AZIONE PENDENTE (immediata):** eseguire il piano di **SP4-M** dal **Task 1**.
-→ leggi la sezione **`## SP4 — ACC-IIDM fast`** più sotto in questo file, poi la **spec**
-`docs/superpowers/specs/2026-07-16-acc-iidm-timemux-design.md` e il **piano**
-`docs/superpowers/plans/2026-07-16-acc-iidm-timemux.md`. Esegui col ciclo `superpowers:executing-plans` (o
-`subagent-driven-development`). **Task 1 = make-or-break** (verifica empirica del resource sharing HDL Coder: se
-centra Fmax ≥ 11,65 MHz coi divisori ridotti → prosegui; se no → la FSM esplicita è un piano a sé da scrivere).
+**AZIONE PENDENTE (immediata):** **aprire il ciclo `superpowers:brainstorming → writing-plans` per la FSM
+esplicita** dell'ACC-IIDM (divisore sequenziale a mano + macchina a stati che lo riusa sulle 5 divisioni,
+**bit-identico a SP3** `dmax=0`, **Fmax ≥ 11,65 MHz CON area ridotta**). Il make-or-break config-based è **chiuso**:
+resource sharing di HDL Coder ESEGUITO (Task 1), **non basta** — numeri e verdetto in
+`document/SP4_ACC_IIDM_FAST.md` §Variante M e nella sezione `## SP4` più sotto. Diagnostico riusabile:
+`matlab/probe_acciidm_sharing.m` (commit `6db20b0a`).
 MATLAB: `"C:\Program Files\MATLAB\R2026a\bin\matlab.exe" -batch`. Vivado: `C:\AMDDesignTools\2026.1`.
 
 **MODI DI LAVORO (vincolanti — la sessione li ha pagati a caro prezzo):**
@@ -134,7 +135,7 @@ apici nella chart. Diagnosi errori chart: `codegen('-config:lib','SNN_ACC','-arg
 
 ---
 
-## SP4 — ACC-IIDM fast (recuperare l'Fmax). Variante L CHIUSA (non viabile) → **prossimo = M**.
+## SP4 — ACC-IIDM fast (recuperare l'Fmax). L CHIUSA · M-v1 (resource sharing) NON basta → **prossimo = FSM esplicita**.
 Doc di processo: **`document/SP4_ACC_IIDM_FAST.md`** (leggere quello). Spec/piano in `docs/superpowers/`.
 Problema (SP3): IIDM fixed a **2,0 MHz**, timing non chiude @8 MHz — 1077 livelli, **76% carry** dalle 5
 divisioni combinatorie incatenate. Bersaglio **≥ 11,65 MHz** (pari alla SNN).
@@ -148,18 +149,19 @@ decisione**: un reciproco approssimato che alimenta `z²` è fragile per costruz
 committata e riusabile (`acc_recip_lut`, `acc_types.recipN`, `acc_div`, sweep+MEX); **SP3 invariato** (recipN=0
 byte-identico, `run_plant_parity` 0.00e+00). Review-catch: divisore costante `DT` resta `divide()` (`nargin>=6`).
 
-**M (time-mux IIDM) — DESIGN E PIANO FATTI (2026-07-16, `b3946b59` spec, `7512af36` piano). PENDENTE = ESEGUIRE.**
-Scelto dall'utente: divisione **sequenziale ESATTA** → bit-identica a SP3 (`dmax=0`), zero approssimazione, spezza
-la catena combinatoria. **Meccanismo deciso da VERIFICA (non assunto):** si prova PRIMA il **resource sharing di
-HDL Coder** sui 5 `divide()` (condivide+sequenzia dalla sorgente unica → bit-identico by construction, config,
-minimo lavoro); **FSM esplicita solo in fallback** se il tool non basta (= piano a sé, non ancora scritto).
-v1 = solo le 5 divisioni; v2 (sequenziare tutto) = confronto successivo.
-- **Spec:** `docs/superpowers/specs/2026-07-16-acc-iidm-timemux-design.md`
-- **Piano (ESEGUIRE da qui):** `docs/superpowers/plans/2026-07-16-acc-iidm-timemux.md` — **Task 1 =
-  make-or-break** (`probe_acciidm_sharing` + sintesi OOC → Fmax ≥ 11,65? divisori giù?). Se Task 1 riesce → Task 2
-  (bake + `dmax=0`) + Task 3 (doc). Se il resource sharing NON basta → si ferma, la FSM esplicita è il piano
-  successivo.
-- **L insegna a M:** le divisioni vanno **sequenziate, non approssimate** (`document/SP4_ACC_IIDM_FAST.md`).
+**M-v1 (resource sharing) — make-or-break ESEGUITO (2026-07-16, probe `6db20b0a`). ESITO: config NON basta → FSM.**
+Verifica empirica (`probe_acciidm_sharing.m` + 3 sintesi OOC su xc7z020 @8 MHz). Il resource sharing di HDL Coder
+**si attiva** (clock 5× `DUT_tc` + moltiplicatori condivisi + le 5 divisioni incatenate sequenziate in UNA): timing
+**chiude @8 MHz** (WNS −373 → +20 ns), livelli **1077 → 172**, DSP **69 → 38**, `baseline` riproduce SP3 al bit.
+**MA**: Fmax **9,5 MHz < 11,65** (collo = singola divisione digit-recurrence non pipelinata) **e area ESPLOSA**
+(LUT ×2,36, FF ×13,9 dal clock-rate pipelining) → **contro la visione "taglia le risorse"**. Tabella completa in
+`document/SP4_ACC_IIDM_FAST.md` §Variante M.
+- **DECISIONE (utente, 2026-07-16): FSM esplicita** = divisore sequenziale a mano + FSM che lo riusa sulle 5
+  divisioni, **bit-identico a SP3** (`dmax=0`), **Fmax ≥ 11,65 CON area ridotta**. È un **piano a sé** — prossimo
+  ciclo `brainstorming → spec → piano`, non ancora scritto.
+- Spec/piano del config-based (superati come esecuzione, utili come record): `docs/superpowers/{specs,plans}/2026-07-16-acc-iidm-timemux*`.
+- **L insegna a M:** divisioni **sequenziate, non approssimate**; **M-v1 insegna alla FSM:** il config esplode
+  l'area → la FSM deve sequenziare **1 divisore** a mano (area bassa), non delegare al clock-rate pipelining.
 
 **Debito Fase B — RISOLTO in parte (2026-07-16, `4298adf3`).** `report/FPGA_PHASE_B_REPORT` + `results.csv`
 **ri-sintetizzati col campione corretto** (decode-64 + fix §2.1), stesso flusso Fase B: LUT 4223→3868, Fmax
