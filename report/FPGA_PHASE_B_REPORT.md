@@ -4,6 +4,7 @@
 
 > Livello di fedeltà: stima Vivado post-implementazione con switching reale (SAIF, confidenza alta) — non misura su silicio (Fase C, predisposta).  
 > Fonte dei numeri: matlab/axi/build/phase_b/results.csv (dai report Vivado util/timing/power).  
+> Campione: Donatello con decodifica a LUT a 64 punti (ri-sintesi 2026-07-16 dopo la correzione del forward e la riduzione della LUT da 256 a 64 punti; risorse e timing aggiornati di conseguenza). Il bitstream flashabile su disco precede questa correzione e non è stato ricostruito: i numeri qui riportati provengono dalla ri-sintesi, non da quel file.  
 > Documento gemello: Report FPGA Fase A (profilazione software pre-silicio).  
 
 ---
@@ -30,7 +31,7 @@
 
 Il presente documento riporta la validazione hardware del candidato al deploy della rete spiking per il car-following, ottenuta sintetizzando su Vivado l'architettura B2 (Donatello, rete time-multiplexata con memoria su blocchi RAM) per lo Zynq-7020 della scheda PYNQ-Z1. La generazione dell'RTL preserva la parità bit-esatta con il modello in virgola fissa (e, a monte, con la rete PyTorch): l'implementazione hardware calcola i cinque parametri del controllore senza errore rispetto al riferimento, entro l'incertezza di quantizzazione già nota.
 
-La sintesi con switching reale precisa tre grandezze che la stima software per conteggio di operazioni non poteva fissare. La rete occupa **4223 LUT (7.9% dello Zynq-7020)** e **38 DSP**; il datapath opera a **8 MHz** (frequenza massima della via di calcolo 8.5 MHz), per cui una inferenza dura **42.6 µs** contro una deadline di controllo di 100 ms. La potenza totale è di **112 mW**, dominata al **92%** dalla dispersione statica del dispositivo; la quota dinamica della logica è di soli 9 mW.
+La sintesi con switching reale precisa tre grandezze che la stima software per conteggio di operazioni non poteva fissare. La rete occupa **3868 LUT (7.3% dello Zynq-7020)** e **38 DSP**; il datapath opera a **8 MHz** (frequenza massima della via di calcolo 11.65 MHz), per cui una inferenza dura **42.6 µs** contro una deadline di controllo di 100 ms. La potenza totale è di **111 mW**, dominata al **93%** dalla dispersione statica del dispositivo; la quota dinamica della logica è di soli 8 mW.
 
 Il confronto energetico con una rete densa di pari compito conferma un vantaggio, ma ne individua la vera origine. A pari nodo tecnologico l'energia di un accumulo (AC) eguaglia quella di una moltiplicazione-accumulo (MAC): il guadagno non nasce dal costo unitario dell'operazione, bensì dalla **compattezza del modello** — circa 800 operazioni contro le migliaia-decine di migliaia delle reti di car-following pubblicate. Il vantaggio stimato si colloca nell'intervallo **~5-65x** secondo la scala della rete densa di riferimento.
 
@@ -68,15 +69,15 @@ La sintesi out-of-context del blocco che comprende la rete e il decodificatore r
 ![Figura 4.1 — Occupazione del budget Zynq-7020 per la rete B2 (Donatello), sintesi out-of-context. Valori assoluti e percentuali del dispositivo (53 200 LUT, 106 400 FF, 220 DSP48, 140 BRAM). Fonte: results.csv, gruppo A.](figures_phase_b/resources.png)
 *Figura 4.1 — Occupazione del budget Zynq-7020 per la rete B2 (Donatello), sintesi out-of-context. Valori assoluti e percentuali del dispositivo (53 200 LUT, 106 400 FF, 220 DSP48, 140 BRAM). Fonte: results.csv, gruppo A.*
 
-La presenza di 38 blocchi aritmetici dedicati (DSP48) richiede una lettura attenta, perché la premessa di co-progetto era l'assenza di moltiplicatori sinaptici. L'analisi per nome di cella mostra che questi blocchi sono adder e accumulatori larghi del core e del readout, più poche moltiplicazioni del decodificatore: **nessun moltiplicatore sinaptico**. Le sinapsi a potenza di due restano operazioni di scorrimento, senza blocchi dedicati. Vincolando esplicitamente la sintesi a zero blocchi aritmetici, il progetto chiude comunque, a 9910 LUT (18.6% del dispositivo): la premessa a zero moltiplicatori è dunque **realizzabile**, e i 38 blocchi presenti sono una scelta elettiva del sintetizzatore per dimezzare l'uso di logica combinatoria.
+La presenza di 38 blocchi aritmetici dedicati (DSP48) richiede una lettura attenta, perché la premessa di co-progetto era l'assenza di moltiplicatori sinaptici. L'analisi per nome di cella mostra che questi blocchi sono adder e accumulatori larghi del core e del readout, più poche moltiplicazioni del decodificatore: **nessun moltiplicatore sinaptico**. Le sinapsi a potenza di due restano operazioni di scorrimento, senza blocchi dedicati. Vincolando esplicitamente la sintesi a zero blocchi aritmetici, il progetto chiude comunque, a 10047 LUT (18.9% del dispositivo): la premessa a zero moltiplicatori è dunque **realizzabile**, e i 38 blocchi presenti sono una scelta elettiva del sintetizzatore per dimezzare l'uso di logica combinatoria.
 
-![Figura 4.2 — Il compromesso fra blocchi aritmetici e logica: la sintesi naturale usa 38 DSP e 4223 LUT; il vincolo a zero DSP è realizzabile a 9910 LUT. Fonte: results.csv, gruppo A.](figures_phase_b/dsp_attribution.png)
-*Figura 4.2 — Il compromesso fra blocchi aritmetici e logica: la sintesi naturale usa 38 DSP e 4223 LUT; il vincolo a zero DSP è realizzabile a 9910 LUT. Fonte: results.csv, gruppo A.*
+![Figura 4.2 — Il compromesso fra blocchi aritmetici e logica: la sintesi naturale usa 38 DSP e 3868 LUT; il vincolo a zero DSP è realizzabile a 10047 LUT. Fonte: results.csv, gruppo A.](figures_phase_b/dsp_attribution.png)
+*Figura 4.2 — Il compromesso fra blocchi aritmetici e logica: la sintesi naturale usa 38 DSP e 3868 LUT; il vincolo a zero DSP è realizzabile a 10047 LUT. Fonte: results.csv, gruppo A.*
 
 
 ## 5. Timing e determinismo
 
-Il datapath soddisfa tutti i vincoli temporali a 8 MHz (periodo 125 ns). Una inferenza completa richiede 341 cicli, pari a 42.6 µs, contro una deadline di controllo di 100 ms: il budget temporale impiegato è intorno allo 0.04%. La frequenza massima della via di calcolo si attesta a 8.5 MHz, un solo punto operativo utile — un margine sul deadline di circa 2346x rende irrilevante ogni ulteriore incremento di frequenza.
+Il datapath soddisfa tutti i vincoli temporali a 8 MHz (periodo 125 ns). Una inferenza completa richiede 341 cicli, pari a 42.6 µs, contro una deadline di controllo di 100 ms: il budget temporale impiegato è intorno allo 0.04%. La frequenza massima della via di calcolo si attesta a 11.65 MHz, un solo punto operativo utile — un margine sul deadline di circa 2346x rende irrilevante ogni ulteriore incremento di frequenza.
 
 ![Equazione 5.1 — t_inf = tempo di inferenza (s); N_cyc = numero di cicli per inferenza (341); T_clk = periodo di clock (125 ns); f_clk = frequenza di clock (8 MHz).](figures_phase_b/eq_latency.png)
 *Equazione 5.1 — t_inf = tempo di inferenza (s); N_cyc = numero di cicli per inferenza (341); T_clk = periodo di clock (125 ns); f_clk = frequenza di clock (8 MHz).*
@@ -86,15 +87,15 @@ Il valore qualitativamente più rilevante non è il margine, ma il **determinism
 
 ## 6. Potenza di sistema ed energia
 
-La stima di potenza guidata dall'attività reale colloca il consumo totale a 112 mW, di cui 103 mW di dispersione statica del dispositivo e appena 9 mW di quota dinamica della logica (stimolo tipico; 8 mW nel caso peggiore). La dispersione statica, comune a qualunque progetto sullo stesso dispositivo, domina il bilancio al 92%.
+La stima di potenza guidata dall'attività reale colloca il consumo totale a 111 mW, di cui 103 mW di dispersione statica del dispositivo e appena 8 mW di quota dinamica della logica (stimolo tipico; 8 mW nel caso peggiore). La dispersione statica, comune a qualunque progetto sullo stesso dispositivo, domina il bilancio al 93%.
 
-![Figura 6.1 — A sinistra: la potenza totale (112 mW) è dominata dalla dispersione statica. A destra: la quota dinamica (9 mW) suddivisa per contributo. Fonte: results.csv, gruppo A (SAIF, stimolo tipico).](figures_phase_b/power_breakdown.png)
-*Figura 6.1 — A sinistra: la potenza totale (112 mW) è dominata dalla dispersione statica. A destra: la quota dinamica (9 mW) suddivisa per contributo. Fonte: results.csv, gruppo A (SAIF, stimolo tipico).*
+![Figura 6.1 — A sinistra: la potenza totale (111 mW) è dominata dalla dispersione statica. A destra: la quota dinamica (8 mW) suddivisa per contributo. Fonte: results.csv, gruppo A (SAIF, stimolo tipico).](figures_phase_b/power_breakdown.png)
+*Figura 6.1 — A sinistra: la potenza totale (111 mW) è dominata dalla dispersione statica. A destra: la quota dinamica (8 mW) suddivisa per contributo. Fonte: results.csv, gruppo A (SAIF, stimolo tipico).*
 
-Il fatto più istruttivo riguarda il divario fra l'energia realizzata e quella algoritmica. Moltiplicando la quota dinamica per il tempo di inferenza si ottengono 383 nJ per inferenza, contro i circa 0.72 nJ del solo conteggio di operazioni: oltre due ordini di grandezza di distanza. La multiplazione temporale su 341 cicli e la dispersione statica stravolgono l'energia di sistema rispetto alla stima algoritmica. L'efficienza suggerita dal conteggio di operazioni è una proprietà algoritmica che l'implementazione a multiplazione temporale non esibisce a livello di sistema.
+Il fatto più istruttivo riguarda il divario fra l'energia realizzata e quella algoritmica. Moltiplicando la quota dinamica per il tempo di inferenza si ottengono 341 nJ per inferenza, contro i circa 0.72 nJ del solo conteggio di operazioni: oltre due ordini di grandezza di distanza. La multiplazione temporale su 341 cicli e la dispersione statica stravolgono l'energia di sistema rispetto alla stima algoritmica. L'efficienza suggerita dal conteggio di operazioni è una proprietà algoritmica che l'implementazione a multiplazione temporale non esibisce a livello di sistema.
 
-![Figura 6.2 — Energia dinamica per inferenza: la realizzazione a multiplazione temporale (383 nJ) dista oltre due ordini di grandezza dalla stima algoritmica per conteggio di operazioni (0.72 nJ). Scala logaritmica. Fonte: results.csv, gruppo A.](figures_phase_b/energy_gap.png)
-*Figura 6.2 — Energia dinamica per inferenza: la realizzazione a multiplazione temporale (383 nJ) dista oltre due ordini di grandezza dalla stima algoritmica per conteggio di operazioni (0.72 nJ). Scala logaritmica. Fonte: results.csv, gruppo A.*
+![Figura 6.2 — Energia dinamica per inferenza: la realizzazione a multiplazione temporale (341 nJ) dista oltre due ordini di grandezza dalla stima algoritmica per conteggio di operazioni (0.72 nJ). Scala logaritmica. Fonte: results.csv, gruppo A.](figures_phase_b/energy_gap.png)
+*Figura 6.2 — Energia dinamica per inferenza: la realizzazione a multiplazione temporale (341 nJ) dista oltre due ordini di grandezza dalla stima algoritmica per conteggio di operazioni (0.72 nJ). Scala logaritmica. Fonte: results.csv, gruppo A.*
 
 
 ## 7. Costo per operazione: e_MAC ed e_AC su FPGA
@@ -113,8 +114,8 @@ Il blocco aritmetico dedicato che esegue la moltiplicazione-accumulo consuma qua
 
 Per collocare il vantaggio energetico serve un termine di paragone omogeneo. La rete densa equivalente per numero di operazioni (1312 moltiplicazioni-accumulo, l'analogo denso della rete spiking) è stata sintetizzata e stimata con lo stesso flusso. A pari scala e pari frequenza l'energia di calcolo delle due reti è comparabile: la via spiking brucia più potenza per ciclo ma termina in meno cicli, e i due effetti si compensano.
 
-![Figura 8.1 — Rete spiking B2 contro rete densa di pari numero di operazioni (1312), stesso flusso di sintesi e stesso clock. L'energia dinamica per inferenza è comparabile (383 contro 328 nJ). Fonte: results.csv, gruppi A e C.](figures_phase_b/snn_vs_ann.png)
-*Figura 8.1 — Rete spiking B2 contro rete densa di pari numero di operazioni (1312), stesso flusso di sintesi e stesso clock. L'energia dinamica per inferenza è comparabile (383 contro 328 nJ). Fonte: results.csv, gruppi A e C.*
+![Figura 8.1 — Rete spiking B2 contro rete densa di pari numero di operazioni (1312), stesso flusso di sintesi e stesso clock. L'energia dinamica per inferenza è comparabile (341 contro 328 nJ). Fonte: results.csv, gruppi A e C.](figures_phase_b/snn_vs_ann.png)
+*Figura 8.1 — Rete spiking B2 contro rete densa di pari numero di operazioni (1312), stesso flusso di sintesi e stesso clock. L'energia dinamica per inferenza è comparabile (341 contro 328 nJ). Fonte: results.csv, gruppi A e C.*
 
 La rete densa a 1312 operazioni, tuttavia, non svolge il compito: è l'equivalente dimensionale della rete spiking, non una rete addestrata a identificare i parametri di car-following. Le reti neurali di car-following pubblicate operano su scale ben maggiori, da alcune migliaia fino a oltre centomila operazioni per passo. Scalando l'energia misurata della rete densa in proporzione al numero di operazioni — lecito perché con la multiplazione temporale l'energia cresce con il numero di operazioni, ed è ciò che si osserva — il vantaggio della rete spiking si colloca fra circa cinque e sessantacinque volte.
 
@@ -135,10 +136,10 @@ Le grandezze che la sintesi con switching reale precisa o rivede rispetto alla s
 
 | Grandezza | Stima op-count | Sintesi Vivado | Esito |
 |---|---|---|---|
-| Blocchi aritmetici (DSP) sinaptici | 0 | 38 elettivi (0 realizzabile a 9910 LUT) | precisata |
-| Frequenza massima | 100–200 MHz | 8.5 MHz | rivista |
+| Blocchi aritmetici (DSP) sinaptici | 0 | 38 elettivi (0 realizzabile a 10047 LUT) | precisata |
+| Frequenza massima | 100–200 MHz | 11.65 MHz | rivista |
 | Rapporto e_MAC / e_AC | 5.1 (ASIC 45 nm) | ~1 (FPGA) | rivista |
-| Energia per inferenza | ~0.72 nJ (op-count) | 383 nJ (statica 92%) | precisata |
+| Energia per inferenza | ~0.72 nJ (op-count) | 341 nJ (statica 92%) | precisata |
 | Origine del vantaggio vs ANN | costo AC < MAC | compattezza del modello (~5-65x) | ri-attribuita |
 | Temperatura di giunzione | stima | ~26 °C (non critica) | confermata |
 | Correttezza dei parametri | — | bit-esatta al riferimento | confermata |

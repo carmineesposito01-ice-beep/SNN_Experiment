@@ -144,7 +144,7 @@ def fig_resources():
     plt.close(fig); return p
 
 def fig_dsp_attribution():
-    """Trade-off DSP<->LUT: sintesi naturale (38 DSP) vs vincolo 0-DSP (9910 LUT)."""
+    """Trade-off DSP<->LUT: sintesi naturale (38 DSP) vs vincolo 0-DSP (~10k LUT). Valori da results.csv."""
     fig, (a1, a2) = plt.subplots(1, 2, figsize=(8.2, 2.9))
     a1.bar(['naturale', '0-DSP'], [B2_DSP, 0], color=[PAL['ambra'], PAL['grigio']])
     a1.set_ylabel('DSP48', fontsize=9); a1.set_title('DSP', fontsize=9.5)
@@ -254,6 +254,10 @@ def build_doc():
             'Livello di fedelta\': stima Vivado post-implementazione con switching reale (SAIF, '
             'confidenza alta) — non misura su silicio (Fase C, predisposta).',
             'Fonte dei numeri: matlab/axi/build/phase_b/results.csv (dai report Vivado util/timing/power).',
+            'Campione: Donatello con decodifica a LUT a 64 punti (ri-sintesi 2026-07-16 dopo la correzione '
+            'del forward e la riduzione della LUT da 256 a 64 punti; risorse e timing aggiornati di '
+            'conseguenza). Il bitstream flashabile su disco precede questa correzione e non e\' stato '
+            'ricostruito: i numeri qui riportati provengono dalla ri-sintesi, non da quel file.',
             'Documento gemello: Report FPGA Fase A (profilazione software pre-silicio).',
         ],
     }))

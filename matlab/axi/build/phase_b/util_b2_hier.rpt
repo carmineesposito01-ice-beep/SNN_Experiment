@@ -1,7 +1,7 @@
 Copyright 1986-2022 Xilinx, Inc. All Rights Reserved. Copyright 2022-2026 Advanced Micro Devices, Inc. All Rights Reserved.
 --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 | Tool Version : Vivado v.2026.1 (win64) Build 6511674 Tue Jun 16 11:02:23 MDT 2026
-| Date         : Fri Jul 10 22:34:06 2026
+| Date         : Thu Jul 16 11:09:49 2026
 | Host         : AX16PRO running 64-bit major release  (build 9200)
 | Command      : report_utilization -hierarchical -file {D:/Project_MBSE/1.Reti Neurali/Rete_SNN_Test/CF_FSNN/.worktrees/Simulink_Importer/matlab/axi/build/phase_b/util_b2_hier.rpt}
 | Design       : snn_top_b2_flat
@@ -22,10 +22,10 @@ Table of Contents
 +---------------------+------------+------------+------------+---------+------+------+--------+--------+------------+
 |       Instance      |   Module   | Total LUTs | Logic LUTs | LUTRAMs | SRLs |  FFs | RAMB36 | RAMB18 | DSP Blocks |
 +---------------------+------------+------------+------------+---------+------+------+--------+--------+------------+
-| snn_top_b2_flat     |      (top) |       4223 |       4223 |       0 |    0 | 1584 |      0 |      2 |         38 |
+| snn_top_b2_flat     |      (top) |       3868 |       3868 |       0 |    0 | 1584 |      0 |      2 |         38 |
 |   (snn_top_b2_flat) |      (top) |          0 |          0 |       0 |    0 |    0 |      0 |      0 |          0 |
-|   u_top             | snn_top_b2 |       4223 |       4223 |       0 |    0 | 1584 |      0 |      2 |         38 |
-|     (u_top)         | snn_top_b2 |       4223 |       4223 |       0 |    0 | 1584 |      0 |      0 |         38 |
+|   u_top             | snn_top_b2 |       3868 |       3868 |       0 |    0 | 1584 |      0 |      2 |         38 |
+|     (u_top)         | snn_top_b2 |       3868 |       3868 |       0 |    0 | 1584 |      0 |      0 |         38 |
 +---------------------+------------+------------+------------+---------+------+------+--------+--------+------------+
 
 

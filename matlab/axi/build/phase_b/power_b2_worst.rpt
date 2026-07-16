@@ -1,7 +1,7 @@
 Copyright 1986-2022 Xilinx, Inc. All Rights Reserved. Copyright 2022-2026 Advanced Micro Devices, Inc. All Rights Reserved.
 --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 | Tool Version     : Vivado v.2026.1 (win64) Build 6511674 Tue Jun 16 11:02:23 MDT 2026
-| Date             : Fri Jul 10 22:50:23 2026
+| Date             : Thu Jul 16 11:48:31 2026
 | Host             : AX16PRO running 64-bit major release  (build 9200)
 | Command          : report_power -file {D:/Project_MBSE/1.Reti Neurali/Rete_SNN_Test/CF_FSNN/.worktrees/Simulink_Importer/matlab/axi/build/phase_b/power_b2_worst.rpt}
 | Design           : snn_top_b2_flat
@@ -41,7 +41,7 @@ Table of Contents
 | Confidence Level         | High                     |
 | Setting File             | ---                      |
 | Simulation Activity File | D:/zbd_pb2/b2_worst.saif |
-| Design Nets Matched      | 50%   (4919/9929)        |
+| Design Nets Matched      | 55%   (5219/9559)        |
 +--------------------------+--------------------------+
 * Specify Design Power Budget using, set_operating_conditions -design_power_budget <value in Watts>
 
@@ -53,13 +53,13 @@ Table of Contents
 | On-Chip        | Power (W) | Used     | Available | Utilization (%) |
 +----------------+-----------+----------+-----------+-----------------+
 | Clocks         |    <0.001 |        3 |       --- |             --- |
-| Slice Logic    |     0.003 |     6975 |       --- |             --- |
-|   LUT as Logic |     0.003 |     3907 |     53200 |            7.34 |
-|   CARRY4       |    <0.001 |      545 |     13300 |            4.10 |
+| Slice Logic    |     0.003 |     6560 |       --- |             --- |
+|   LUT as Logic |     0.002 |     3540 |     53200 |            6.65 |
+|   CARRY4       |    <0.001 |      558 |     13300 |            4.20 |
 |   Register     |    <0.001 |     1584 |    106400 |            1.49 |
-|   F7/F8 Muxes  |    <0.001 |      195 |     53200 |            0.37 |
+|   F7/F8 Muxes  |    <0.001 |       67 |     53200 |            0.13 |
 |   Others       |     0.000 |        9 |       --- |             --- |
-| Signals        |     0.003 |     7076 |       --- |             --- |
+| Signals        |     0.003 |     6843 |       --- |             --- |
 | Block RAM      |    <0.001 |        1 |       140 |            0.71 |
 | DSPs           |     0.002 |       38 |       220 |           17.27 |
 | Static Power   |     0.103 |          |           |                 |
@@ -73,7 +73,7 @@ Table of Contents
 +-----------+-------------+-----------+-------------+------------+-------------+-------------+------------+
 | Source    | Voltage (V) | Total (A) | Dynamic (A) | Static (A) | Powerup (A) | Budget (A)  | Margin (A) |
 +-----------+-------------+-----------+-------------+------------+-------------+-------------+------------+
-| Vccint    |       1.000 |     0.016 |       0.008 |      0.007 |       NA    | Unspecified | NA         |
+| Vccint    |       1.000 |     0.015 |       0.008 |      0.007 |       NA    | Unspecified | NA         |
 | Vccaux    |       1.800 |     0.010 |       0.000 |      0.010 |       NA    | Unspecified | NA         |
 | Vcco33    |       3.300 |     0.000 |       0.000 |      0.000 |       NA    | Unspecified | NA         |
 | Vcco25    |       2.500 |     0.000 |       0.000 |      0.000 |       NA    | Unspecified | NA         |

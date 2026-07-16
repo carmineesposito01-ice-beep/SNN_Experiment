@@ -1,7 +1,7 @@
 Copyright 1986-2022 Xilinx, Inc. All Rights Reserved. Copyright 2022-2026 Advanced Micro Devices, Inc. All Rights Reserved.
 -------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 | Tool Version : Vivado v.2026.1 (win64) Build 6511674 Tue Jun 16 11:02:23 MDT 2026
-| Date         : Fri Jul 10 22:41:51 2026
+| Date         : Thu Jul 16 11:46:49 2026
 | Host         : AX16PRO running 64-bit major release  (build 9200)
 | Command      : report_utilization -file {D:/Project_MBSE/1.Reti Neurali/Rete_SNN_Test/CF_FSNN/.worktrees/Simulink_Importer/matlab/axi/build/phase_b/util_b2_nodsp.rpt}
 | Design       : snn_top_b2_flat
@@ -28,19 +28,19 @@ Table of Contents
 1. Slice Logic
 --------------
 
-+-------------------------+------+-------+------------+-----------+-------+
-|        Site Type        | Used | Fixed | Prohibited | Available | Util% |
-+-------------------------+------+-------+------------+-----------+-------+
-| Slice LUTs*             | 9910 |     0 |          0 |     53200 | 18.63 |
-|   LUT as Logic          | 9910 |     0 |          0 |     53200 | 18.63 |
-|   LUT as Memory         |    0 |     0 |          0 |     17400 |  0.00 |
-| Slice Registers         | 1603 |     0 |          0 |    106400 |  1.51 |
-|   Register as Flip Flop | 1603 |     0 |          0 |    106400 |  1.51 |
-|   Register as Latch     |    0 |     0 |          0 |    106400 |  0.00 |
-| F7 Muxes                |   70 |     0 |          0 |     26600 |  0.26 |
-| F8 Muxes                |    0 |     0 |          0 |     13300 |  0.00 |
-| Unique Control Sets     |   14 |       |          0 |     13300 |  0.11 |
-+-------------------------+------+-------+------------+-----------+-------+
++-------------------------+-------+-------+------------+-----------+-------+
+|        Site Type        |  Used | Fixed | Prohibited | Available | Util% |
++-------------------------+-------+-------+------------+-----------+-------+
+| Slice LUTs*             | 10047 |     0 |          0 |     53200 | 18.89 |
+|   LUT as Logic          | 10047 |     0 |          0 |     53200 | 18.89 |
+|   LUT as Memory         |     0 |     0 |          0 |     17400 |  0.00 |
+| Slice Registers         |  1603 |     0 |          0 |    106400 |  1.51 |
+|   Register as Flip Flop |  1603 |     0 |          0 |    106400 |  1.51 |
+|   Register as Latch     |     0 |     0 |          0 |    106400 |  0.00 |
+| F7 Muxes                |    71 |     0 |          0 |     26600 |  0.27 |
+| F8 Muxes                |     0 |     0 |          0 |     13300 |  0.00 |
+| Unique Control Sets     |    14 |       |          0 |     13300 |  0.11 |
++-------------------------+-------+-------+------------+-----------+-------+
 * Warning! The Final LUT count, after physical optimizations and full implementation, is typically lower. Run opt_design after synthesis, if not already completed, for a more realistic count.
 Warning! LUT value is adjusted to account for LUT combining.
 Warning! For any ECO changes, please run place_design if there are unplaced instances
@@ -152,15 +152,15 @@ Warning! For any ECO changes, please run place_design if there are unplaced inst
 +----------+------+---------------------+
 | Ref Name | Used | Functional Category |
 +----------+------+---------------------+
-| LUT6     | 3600 |                 LUT |
-| LUT3     | 2662 |                 LUT |
-| CARRY4   | 2398 |          CarryLogic |
-| LUT4     | 2247 |                 LUT |
-| LUT2     | 2058 |                 LUT |
-| LUT5     | 1867 |                 LUT |
+| LUT6     | 3827 |                 LUT |
+| LUT3     | 2638 |                 LUT |
+| CARRY4   | 2411 |          CarryLogic |
+| LUT4     | 2171 |                 LUT |
+| LUT2     | 2056 |                 LUT |
+| LUT5     | 1752 |                 LUT |
 | FDCE     | 1591 |        Flop & Latch |
-| LUT1     |  282 |                 LUT |
-| MUXF7    |   70 |               MuxFx |
+| LUT1     |  286 |                 LUT |
+| MUXF7    |   71 |               MuxFx |
 | FDRE     |   12 |        Flop & Latch |
 | RAMB18E1 |    2 |        Block Memory |
 +----------+------+---------------------+
