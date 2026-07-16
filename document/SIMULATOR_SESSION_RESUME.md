@@ -15,7 +15,7 @@
   lo scrive lo cambia). **Verificalo tu**: `git log --oneline -1` + `git status` + `git rev-list --count
   origin/Simulator..HEAD`. **Atteso: working tree pulito, 0 commit non pushati.** Se non è così, capisci
   perché prima di lavorare.
-- **Env/test**: conda `cf_sim`. **294 test verdi** (**24** file sim + `test_champion_io.py`; gli isolati
+- **Env/test**: conda `cf_sim`. **305 test verdi** (**28** file sim + `test_champion_io.py`; gli isolati
   sono `test_sim_drag_handles.py` (nodi, 4b), `test_sim_duration_handles.py` (durata, builder-UX) e
   `test_sim_scenario_preview.py` (dock Scenario, item 1)). ⚠️ **La suite è la glob SIM**
   (`pytest tests/test_sim_*.py tests/test_champion_io.py`), **NON `pytest tests/`**: la dir ha anche script
@@ -57,8 +57,18 @@ cambiati con la durata della scena. **Ancora aperte dall'utente (post-verifica 2
   ⚠️ **Interazione = commit-on-finish** (misurato: `setValue` emette `sigPositionChanged` non `Finished`;
   `.moving` esiste): è l'unico design che non distrugge la linea sotto il cursore quando i confini si
   ri-piazzano e non forma il loop handle↔valore.
-- **scenario-lifecycle** (item 2): nome/cancella/**esporta .csv+.mat** → **DRAFT**
-  `…/specs/2026-07-16-scenario-lifecycle-DRAFT.md` (⚠️ scipy ASSENTE in cf_sim → .mat serve writer LAPACK-free).
+- **scenario-lifecycle** (item 2): nome/cancella/**esporta .csv+.mat** → ✅ **FATTO** *(2026-07-16)*.
+  spec `…/specs/2026-07-16-scenario-lifecycle-design.md` (`94c687bb`) → plan
+  `…/plans/2026-07-16-scenario-lifecycle.md` → **TDD completo** (`39bc9d57`→`8297b86c`). **305 test verdi ·
+  core+`closed_loop_eval`+`materialise` intatti (diff vuoto) · functional-verify export.** **Cosa c'è**:
+  (a) **nome** nel builder (`QLineEdit`→`replace(spec,name)` in `_on_use`, vuoto→`scenario_N`, solo-sessione);
+  (b) **elimina** dal selettore via menu **"⋯"** — solo user-built, `_protected_count` protegge i preset di
+  libreria + il manual iniziale (la Meso page li indicizza per posizione); (c) **export** = **cinematica
+  leader** (`t, v_leader, x_leader, a_leader` + metadati), `x_leader = s_init + DT·Σv` **fedele a
+  `stepper.py:88`** (test causale: riproduce il gap di un run vero). Due moduli PURI: `sim/scenario_export.py`
+  + `sim/mat_writer.py` (**writer MAT v5 scipy-free**, isolato, testato con reader accoppiato + assert byte di
+  spec; char=`miUINT16=4`). ⚠️ **.mat validato strutturalmente+round-trip, NON contro MATLAB reale in CI**
+  (niente scipy/MATLAB) — conferma finale = `load()` in MATLAB lato utente.
 - **cockpit dock** (item 1): anteprima scenario + marker al posto di Events → ✅ **FATTO** *(2026-07-16)*.
   spec `…/specs/2026-07-16-cockpit-scenario-preview-dock-design.md` (`33795fac`) → plan
   `…/plans/2026-07-16-cockpit-scenario-preview-dock.md` → **TDD completo** (`e95501e5`→`926b9279`).
@@ -78,7 +88,7 @@ cambiati con la durata della scena. **Ancora aperte dall'utente (post-verifica 2
 - **generatore dataset** (item 7, il più grosso): randomizzazione seed + mix % → **DRAFT**
   `…/specs/2026-07-16-dataset-generator-DRAFT.md` (⚠️ `data/generator.py` fa GIÀ la randomizzazione
   type-preserving — riusarlo, ma verificare se è invariante).
-Le due DRAFT rimaste (item 2, item 7) catturano intento + bivi aperti, da finalizzare con brainstorming dedicato a tempo di implementazione. Prossimo item **tecnico** aperto: il
+L'ultima DRAFT rimasta (item 7, generatore dataset) cattura intento + bivi aperti, da finalizzare con brainstorming dedicato a tempo di implementazione. Prossimo item **tecnico** aperto: il
 **merge `Simulator`→`main`** (da sequenziare con `Simulink_Importer`). Vedi §AZIONI PENDENTI. Tutto
 committato e pushato. Il dettaglio sta nelle sezioni sotto (§Architecture, §Phase history) e nella
 **mappa** `document/SIMULATOR_ARCHITECTURE.md`.

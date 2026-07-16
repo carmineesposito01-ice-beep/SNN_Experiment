@@ -51,6 +51,8 @@ explicit user consent on evidence (`events.py` was unfrozen once, in cycle 3, fo
 |---|---|---|
 | `sim/scenario.py` | `Scenario` dataclass + `scenario_library` + `manual_scenario` | thin wrapper over `build_scenarios`; carries exactly the `SimStepper` inputs |
 | `sim/scenario_spec.py` | **PURE** model + materialiser + JSON | `_KINDS=(preset,const,ramp,sine,custom)`. `materialise(spec,pg,N)` threads `v` as each block's `v0` — blocks join continuously and never teleport. **A built scenario's length = the SUM of its block ticks** (the builder passes `N=sum`, one owner, no fixed cap to overflow — this was the "sine got eaten" bug). **Presets are CANONICAL at `_PRESET_N=600`** regardless of the scenario length (the cut-family scale with N), so a preset block never changes with the total length; presets max out at 600 samples. `effective_style(block,neutral)=clamp(neutral+bias)`. **`custom`** = `_custom_samples(speeds,n,v0)`, a linear `np.interp` polyline anchored at v0 (nodes are SPEEDS on a derived grid `_custom_node_ticks`, clipped to `V_RANGE`). **`physics_gap(v,neutral)`** = the advisory (mask over `diff(v)/DT` vs the neutral). **`block_of_sample(spec,N)`** = per-sample owning-block index, replaying materialise's exact layout (for the advisory's custom-only attribution) |
+| `sim/scenario_export.py` | **PURE** — leader-kinematics export (item 2) | `leader_kinematics(scenario)` → `{t, v_leader, x_leader, a_leader}`; `x_leader = s_init + DT·Σ v_leader` (forward Euler, faithful to `stepper.py:88`) so `gap = x_leader − x_ego`; `a_leader = diff(v)/DT` (= `a_l_raw`). `write_scenario_csv` (commented metadata + 4 cols) and `write_scenario_mat` (via `mat_writer`). Exports the scenario DEFINITION for downstream closed-loop — NOT the ego run (that is `File → Export CSV`, the episode) |
+| `sim/mat_writer.py` | **PURE, no scipy** — a tiny MAT v5 writer (item 2) | `write_mat(path, {name: array\|scalar\|str})` → Level-5 top-level variables (MATLAB `load` binds each). scipy is absent (LAPACK/OMP #15). The isolated binary-format unit: tested alone with a paired reader + spec-byte assertions (header magic, `miMATRIX=14`, class byte) so the round-trip can't be self-consistently wrong. Char = `miUINT16=4`, double = `mxDOUBLE_CLASS=6` |
 | `sim/ui/drag_handles.py` | **Qt only** — the node-drag unit (cycle 4b) | `DragHandles`: a row of `pg.TargetItem` vertically-constrained (reconnect x in `sigPositionChanged`, converges in 2), y clamped to `V_RANGE`; `set_speeds` silent, a drag notifies once. Isolated + tested alone because the drag is the one measured-risk piece |
 | `sim/ui/duration_handles.py` | **Qt only** — the duration-drag unit (builder-UX) | `DurationHandles`: a row of x-draggable `pg.InfiniteLine`s, one per block's right edge. **Commit-on-finish** (`on_resize` fires on `sigPositionChangeFinished`, not continuously) so re-placing the lines never destroys the one under the cursor and no value↔handle loop forms; `setBounds` caps in place. Isolated + tested alone |
 | `sim/ui/scenario_preview.py` | **Qt only** — the cockpit's Scenario dock (item 1) | `ScenarioPreviewPanel`: the running scenario's whole `v_leader` as a static orange curve (`set_scenario`, drawn once) + a white dashed **tick marker** (`set_marker(tick)`, `None`=hidden). Own `InfiniteLine`, isolated + tested alone. **Driven by the current TICK from two app sites only** — `_paint` (live head `_last_result.t`) and `_render_at_cursor` (scrub `frames[idx].t`); deliberately NOT in `_ts_panels` (that group gets a buffer index) and NOT via `_redraw_series` (its paused-context callers would pin the marker to the head). **Y-view floored to `_MIN_Y_SPAN` (15 m/s)** so a narrow-band scenario (e.g. 'following' = v_set+N(0,0.3), a ~2 m/s band) reads as a near-flat cruise instead of the autorange zooming in and amplifying jitter; wider scenarios fit their own data (bottom clamped to ≥0). Shows the PLANNED leader — an injected brake overrides the leader live and does NOT appear here (it shows in Trajectory/Road) |
@@ -69,7 +71,8 @@ The false-red facts every advisory feature must respect (verified from these lin
 
 ### The periphery — not on the spine, one line each
 
-`app.py` (~740) wires the 4 modes + selector + deep-scrub + champion loading; `panels.py` (~570) the live
+`app.py` (~760) wires the 4 modes + selector (+ its "⋯" export/delete menu, `_protected_count` guards the
+Meso-indexed library) + deep-scrub + champion loading; `panels.py` (~570) the live
 dock panels (the **Events** dock is GONE — hard-replaced by the Scenario preview in item 1; `EventInjector` +
 the Brake button stay, only the visual event log went); `topdown.py`/`loop.py`/`reconstruct.py` the road +
 ghost + scrub; `meso_*`/`postrun_page.py`
@@ -118,8 +121,9 @@ a segment `k` is eligible for red iff sample `k+1` is owned by a `custom` block.
 
 ## Tests + the runner gotcha
 
-**294 across 25 files** (24 `test_sim_*.py` + `tests/test_champion_io.py`); **294 green** at end of item 1
-(cockpit scenario-preview dock + the Y min-span polish). `test_sim_ui_smoke.py` alone is ~90 tests; `test_sim_drag_handles.py`,
+**305 across 29 files** (28 `test_sim_*.py` + `tests/test_champion_io.py`); **305 green** at end of item 2
+(scenario lifecycle: name + delete + export). The pure export units (`scenario_export`, `mat_writer`) are
+tested without Qt; `test_sim_scenario_export.py` includes the causal `x_leader` == stepper-gap check. `test_sim_ui_smoke.py` alone is ~90 tests; `test_sim_drag_handles.py`,
 `test_sim_duration_handles.py`, and `test_sim_scenario_preview.py` are the isolated UI units (node drag /
 duration drag / scenario preview).
 
