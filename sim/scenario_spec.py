@@ -211,6 +211,21 @@ def materialise(spec, params_gt, N):
     return manual_scenario(params_gt, out, spec.s_init, spec.v_init, name=spec.name)
 
 
+def block_of_sample(spec, N):
+    """Per-sample owning-block index, built from materialise's OWN layout: the same min(ticks, N-i)
+    clip and the same flat hold tail. -1 marks the tail (no block). The advisory reads this instead of
+    recomputing cumsum(ticks) in Qt, which would drift the moment blocks sum past N."""
+    owner = np.full(N, -1, dtype=np.int64)
+    i = 0
+    for bi, block in enumerate(spec.blocks):
+        if i >= N:
+            break
+        seg = min(int(block.ticks), N - i)                 # same clip as materialise's [: N - i]
+        owner[i:i + seg] = bi
+        i += seg
+    return owner
+
+
 def _block_json(b):
     """A block as JSON. `bias` is omitted when absent, so files that do not use it stay exactly as
     cycle 3 wrote them -- backward compatibility without a version field."""

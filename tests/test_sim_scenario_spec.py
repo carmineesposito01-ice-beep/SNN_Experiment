@@ -390,3 +390,22 @@ def test_physics_gap_never_flags_a_placid_constant():
     from sim.scenario_spec import physics_gap, LeaderStyle
     mask, _ = physics_gap(np.full(100, 15.0), LeaderStyle(1.0, 1.0))
     assert mask.sum() == 0                                 # a flat leader asks nothing of anyone
+
+
+def test_block_of_sample_matches_the_real_layout_under_overflow():
+    """TEETH: two blocks of 400 ticks sum to 800 > N=600, so the second is truncated to 200 and there
+    is no flat tail. cumsum(ticks) would say block 1 owns samples 400..800 -- past the array."""
+    from sim.scenario_spec import block_of_sample
+    spec = _spec([Block("ramp", 400, {"to_v": 5.0}), Block("const", 400, {"v": 5.0})])
+    owner = block_of_sample(spec, N=600)
+    assert owner.shape == (600,)
+    assert (owner[:400] == 0).all()
+    assert (owner[400:] == 1).all()                        # truncated to 200, no -1 tail here
+
+
+def test_block_of_sample_marks_the_flat_tail_as_no_block():
+    from sim.scenario_spec import block_of_sample
+    spec = _spec([Block("const", 150, {"v": 5.0})])        # 150 of 600 -> 450 flat-tail samples
+    owner = block_of_sample(spec, N=600)
+    assert (owner[:150] == 0).all()
+    assert (owner[150:] == -1).all()                       # -1 == the hold tail (diff=0 there, never red)
