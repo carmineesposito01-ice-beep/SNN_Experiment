@@ -161,7 +161,8 @@ class ScenarioPage(QWidget):
         self._composer_curve = self._composer_plot.plot(pen=pg.mkPen("#e8871e", width=2))
         self._composer_red = self._composer_plot.plot(pen=pg.mkPen("#ff2d2d", width=4), connect="finite")
         self._composer_edge = DurationHandles(self._composer_plot, on_resize=self._on_composer_edge)
-        self._handles = DragHandles(self._composer_plot, on_change=self._refresh_composer)
+        self._handles = DragHandles(self._composer_plot,
+                                    on_change=lambda: self._refresh_composer(refit=False))
         mid.addWidget(self._composer_plot, stretch=1)
         root.addLayout(mid, stretch=1)
 
@@ -414,8 +415,12 @@ class ScenarioPage(QWidget):
         self._composer_row = None
         self._load_into_widgets(kind, ticks, params, bias)
 
-    def _refresh_composer(self, *_):
-        """Materialise a ONE-block spec starting from the speed the previous blocks leave behind."""
+    def _refresh_composer(self, *_, refit=True):
+        """Materialise a ONE-block spec starting from the speed the previous blocks leave behind.
+
+        `refit` re-fits the view and re-places the composer edge; a NODE drag passes refit=False so the
+        view does not jump (the item-3 fix) while a kind/params/duration change still re-frames it.
+        """
         if self._loading or self._spec is None:
             return
         blk = self._composer_block()
@@ -429,7 +434,20 @@ class ScenarioPage(QWidget):
             self._composer_red.setData(self._red_from_mask(v, mask))
         else:
             self._composer_red.setData([])
-        self._place_composer_edge()                        # Task 5 moves this into the `if refit:` branch
+        if refit:
+            self._refit_composer()
+            self._place_composer_edge()
+
+    def _refit_composer(self):
+        """Fix the composer's Y to the block's range (+pad) and X to the block's length. Fixing them
+        disables pyqtgraph's autorange, so a subsequent node-drag redraw does NOT move the view."""
+        v = self._composer_curve.getOriginalDataset()[1]
+        if v is None or not len(v):
+            return
+        lo, hi = float(np.min(v)), float(np.max(v))
+        pad = max(0.5, 0.05 * (hi - lo))
+        self._composer_plot.setYRange(lo - pad, hi + pad)
+        self._composer_plot.setXRange(0, max(1, int(self._ticks.value())))
 
     def _on_composer_edge(self, _id, new_ticks):
         """The composer edge was released: write the duration to its single owner, the spinbox."""

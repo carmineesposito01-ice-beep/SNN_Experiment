@@ -1130,3 +1130,28 @@ def test_resizing_an_open_row_syncs_the_composer(qapp):
     assert page._ticks.value() == 320                      # composer synced
     page._on_add()                                         # Apply must not revert it
     assert page._spec.blocks[0].ticks == 320
+
+
+def test_the_composer_autorange_is_frozen_during_a_node_drag(qapp):
+    """TEETH: a node drag must NOT re-fit the Y range -- that IS the jump the user reported. Causal
+    path checked: dragging a node up changes the block's max, so an auto-refit would move YRange."""
+    from sim.scenario_spec import Block
+    page = _page()
+    page.set_spec(_spec3([Block("const", 600, {"v": 21.0})]))
+    page.compose_new("custom", ticks=150, params={"nodes": [12.0, 12.0, 12.0]})
+    y_before = page._composer_plot.getViewBox().viewRange()[1]
+    page._handles._items[1].setPos(page._handles._items[1]._tick, 2.0)   # drag a node way down
+    y_after = page._composer_plot.getViewBox().viewRange()[1]
+    assert y_after == y_before                             # the view did NOT jump
+
+
+def test_the_composer_autorange_refits_on_a_kind_change(qapp):
+    """A structural change DOES re-fit: the view frames the new block."""
+    from sim.scenario_spec import Block
+    page = _page()
+    page.set_spec(_spec3([Block("const", 600, {"v": 21.0})]))
+    page.compose_new("const", ticks=150, params={"v": 21.0})      # a flat block ~21
+    y_flat = page._composer_plot.getViewBox().viewRange()[1]
+    page._kind.setCurrentText("ramp"); page._value.setValue(2.0)  # a ramp 21 -> 2, a wider range
+    y_ramp = page._composer_plot.getViewBox().viewRange()[1]
+    assert y_ramp != y_flat                                # re-fitted to the new, wider curve
