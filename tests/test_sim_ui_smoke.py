@@ -1155,3 +1155,24 @@ def test_the_composer_autorange_refits_on_a_kind_change(qapp):
     page._kind.setCurrentText("ramp"); page._value.setValue(2.0)  # a ramp 21 -> 2, a wider range
     y_ramp = page._composer_plot.getViewBox().viewRange()[1]
     assert y_ramp != y_flat                                # re-fitted to the new, wider curve
+
+
+def test_node_drag_still_fits_in_a_frame_with_the_autorange_change(qapp):
+    """The autorange change touches the node-drag path (now refit=False). Confirm the node drag -- the
+    only LIVE drag -- still peaks under 16.7 ms. The duration drag is commit-on-finish, so it is not a
+    per-frame cost and is not measured here."""
+    import time
+    from sim.scenario_spec import Block
+    page = _page()
+    page.set_spec(_spec3([Block("custom", 150, {"nodes": [21.0] * 25}),
+                          Block("ramp", 150, {"to_v": 2.0})]))
+    page.compose_new("custom", ticks=150, params={"nodes": [21.0] * 25})
+    for _ in range(3):
+        h = page._handles._items[0]; h.setPos(h._tick, 15.0)
+    ts = []
+    for k in range(40):
+        h = page._handles._items[k % 25]
+        t0 = time.perf_counter()
+        h.setPos(h._tick, 5.0 + 0.1 * k)
+        ts.append((time.perf_counter() - t0) * 1000)
+    assert max(ts) < 16.7, f"node drag peaks at {max(ts):.2f} ms"
