@@ -16,7 +16,8 @@ from PySide6.QtWidgets import (QComboBox, QDoubleSpinBox, QHBoxLayout, QLabel, Q
 
 from sim.scenario import scenario_library
 from sim.scenario_spec import (A_MAX_RANGE, B_MAX_RANGE, V_RANGE, _KINDS, _custom_node_ticks,
-                               Block, LeaderStyle, ScenarioSpec, materialise)
+                               Block, LeaderStyle, ScenarioSpec, block_of_sample, materialise,
+                               physics_gap)
 from sim.ui.drag_handles import DragHandles
 
 # Labels for READING the plane, not modes: the point is continuous and may sit anywhere.
@@ -154,6 +155,7 @@ class ScenarioPage(QWidget):
         self._composer_plot.setLabel("bottom", "tick del blocco")
         self._composer_plot.showGrid(x=False, y=True, alpha=0.2)
         self._composer_curve = self._composer_plot.plot(pen=pg.mkPen("#e8871e", width=2))
+        self._composer_red = self._composer_plot.plot(pen=pg.mkPen("#d1495b", width=4), connect="finite")
         self._handles = DragHandles(self._composer_plot, on_change=self._refresh_composer)
         mid.addWidget(self._composer_plot, stretch=1)
         root.addLayout(mid, stretch=1)
@@ -163,6 +165,7 @@ class ScenarioPage(QWidget):
         self._plot.setLabel("bottom", "time", units="steps")
         self._plot.showGrid(x=False, y=True, alpha=0.2)
         self._curve = self._plot.plot(pen=pg.mkPen("#d1495b", width=2))
+        self._scenario_red = self._plot.plot(pen=pg.mkPen("#ff2d2d", width=4), connect="finite")
         root.addWidget(self._plot, stretch=1)
 
         # every input is live: "build the piece while you see it" is false if only the pad redraws
@@ -195,11 +198,33 @@ class ScenarioPage(QWidget):
         self._pad.set_point(a_max, b_max, emit=False)   # the dot must never disagree with the state
         self._refresh_composer()
 
+    def _neutral(self):
+        return self._spec.style if self._spec else LeaderStyle(2.0, 4.0)
+
+    @staticmethod
+    def _red_from_mask(v, seg_mask):
+        """A curve that is NaN on the physical samples and equals v on both endpoints of each bad
+        segment; connect='finite' then draws ONLY the impossible stretches (verified by render)."""
+        red = np.full(len(v), np.nan)
+        idx = np.flatnonzero(seg_mask)                     # segment k -> samples k and k+1
+        if idx.size:
+            red[idx] = v[idx]
+            red[idx + 1] = v[idx + 1]
+        return red
+
     def _refresh(self):
         if self._spec is None or not self._spec.blocks:
             self._curve.setData([])
+            self._scenario_red.setData([])
             return
-        self._curve.setData(materialise(self._spec, self._params_gt, self._N).v_leader)
+        v = materialise(self._spec, self._params_gt, self._N).v_leader
+        self._curve.setData(v)
+        mask, _ = physics_gap(v, self._neutral())          # over N-1 segments
+        owner = block_of_sample(self._spec, self._N)
+        custom_idx = [i for i, b in enumerate(self._spec.blocks) if b.kind == "custom"]
+        # segment k is red iff sample k+1 is owned by a custom block (owner of the produced sample)
+        seg_custom = np.isin(owner[1:], custom_idx) if custom_idx else np.zeros(self._N - 1, bool)
+        self._scenario_red.setData(self._red_from_mask(v, mask & seg_custom))
 
     def _refresh_list(self):
         self._list.clear()
@@ -353,7 +378,13 @@ class ScenarioPage(QWidget):
         upto = self._composer_row if self._composer_row is not None else len(self._spec.blocks)
         one = ScenarioSpec(name="_", blocks=(blk,), style=self._spec.style,
                            s_init=self._spec.s_init, v_init=self._start_speed(upto))
-        self._composer_curve.setData(materialise(one, self._params_gt, blk.ticks).v_leader)
+        v = materialise(one, self._params_gt, blk.ticks).v_leader
+        self._composer_curve.setData(v)
+        if blk.kind == "custom":                           # one block: every bad segment is eligible
+            mask, _ = physics_gap(v, self._neutral())
+            self._composer_red.setData(self._red_from_mask(v, mask))
+        else:
+            self._composer_red.setData([])
 
     def _on_row_selected(self, i):
         if self._spec is None or i < 0 or i >= len(self._spec.blocks):

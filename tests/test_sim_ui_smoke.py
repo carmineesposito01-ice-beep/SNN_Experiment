@@ -964,3 +964,49 @@ def test_node_count_resamples_the_current_curve(qapp):
     v_after = page._composer_curve.getOriginalDataset()[1]
     assert abs(v_after[-1] - v_before[-1]) < 0.5           # same shape, resampled: endpoints unchanged
     assert np.abs(v_after - v_before).max() < 1.0
+
+
+def test_composer_preview_lights_the_impossible_segments(qapp):
+    """The whole preview is one custom block, so every bad segment is eligible."""
+    from sim.scenario_spec import Block
+    page = _page()
+    page.set_spec(_spec3([Block("const", 600, {"v": 21.0})], a=3.0, b=6.0))
+    # ticks=30 makes the segments short (~10 ticks), so braking 21->2 is ~-20 m/s^2, past b_max=6.
+    # MEASURED: the same nodes over 150 ticks are only -3.8 m/s^2 -- gentle, not red. The node count /
+    # block length controls how easy it is to break physics; a lit test must pick a short segment.
+    page.compose_new("custom", ticks=30, params={"nodes": [21.0, 2.0, 2.0]})
+    red = page._composer_red.getOriginalDataset()[1]
+    assert np.isfinite(red).any()                          # something is lit
+
+
+def test_the_advisory_never_paints_a_preset(qapp):
+    """TEETH: the false-red measurement, as a test. cut_in jumps because it is a different vehicle;
+    following is noise. Neither is a manoeuvre, so neither lights -- whatever the neutral."""
+    from sim.scenario_spec import Block
+    page = _page()
+    page.set_spec(_spec3([Block("preset", 300, {"name": "cut_in"}),
+                          Block("preset", 300, {"name": "following"})], a=1.0, b=1.0))
+    red = page._scenario_red.getOriginalDataset()[1]
+    assert not np.isfinite(red).any()                      # zero red on preset stretches
+
+
+def test_the_scenario_advisory_paints_only_custom_via_layout(qapp):
+    """TEETH: attribution from block_of_sample, not cumsum. A custom that overflows N still paints only
+    where its samples are, and the custom->preset seam is the preset's (unpainted)."""
+    from sim.scenario_spec import Block
+    page = _page()
+    page.set_spec(_spec3([Block("custom", 300, {"nodes": [21.0, 2.0, 2.0]}),   # impossible, custom
+                          Block("preset", 300, {"name": "hard_brake"})],       # brakes hard, preset
+                         a=1.0, b=1.0))
+    red = page._scenario_red.getOriginalDataset()[1]
+    lit = np.flatnonzero(np.isfinite(red))
+    assert lit.size > 0                                     # the custom lights
+    assert lit.max() < 302                                  # nothing past the custom's samples (+seam)
+
+
+def test_the_advisory_is_off_by_default_when_no_custom(qapp):
+    from sim.scenario_spec import Block
+    page = _page()
+    page.set_spec(_spec3([Block("ramp", 600, {"to_v": 2.0})], a=1.0, b=1.0))
+    red = page._scenario_red.getOriginalDataset()[1]
+    assert not np.isfinite(red).any()                      # a ramp is rate-limited -> never red
