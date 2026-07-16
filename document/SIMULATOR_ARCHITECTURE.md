@@ -51,8 +51,9 @@ explicit user consent on evidence (`events.py` was unfrozen once, in cycle 3, fo
 |---|---|---|
 | `sim/scenario.py` | `Scenario` dataclass + `scenario_library` + `manual_scenario` | thin wrapper over `build_scenarios`; carries exactly the `SimStepper` inputs |
 | `sim/scenario_spec.py` | **PURE** model + materialiser + JSON | `_KINDS=(preset,const,ramp,sine,custom)`. `materialise(spec,pg,N)` threads `v` as each block's `v0` — blocks join continuously and never teleport. **A built scenario's length = the SUM of its block ticks** (the builder passes `N=sum`, one owner, no fixed cap to overflow — this was the "sine got eaten" bug). **Presets are CANONICAL at `_PRESET_N=600`** regardless of the scenario length (the cut-family scale with N), so a preset block never changes with the total length; presets max out at 600 samples. `effective_style(block,neutral)=clamp(neutral+bias)`. **`custom`** = `_custom_samples(speeds,n,v0)`, a linear `np.interp` polyline anchored at v0 (nodes are SPEEDS on a derived grid `_custom_node_ticks`, clipped to `V_RANGE`). **`physics_gap(v,neutral)`** = the advisory (mask over `diff(v)/DT` vs the neutral). **`block_of_sample(spec,N)`** = per-sample owning-block index, replaying materialise's exact layout (for the advisory's custom-only attribution) |
-| `sim/ui/drag_handles.py` | **Qt only** — the drag unit (cycle 4b) | `DragHandles`: a row of `pg.TargetItem` vertically-constrained (reconnect x in `sigPositionChanged`, converges in 2), y clamped to `V_RANGE`; `set_speeds` silent, a drag notifies once. Isolated + tested alone because the drag is the one measured-risk piece |
-| `sim/ui/scenario_page.py` | **Qt only** — the composer (cycles 4a/4b) | the WIDGETS own the composed block's params (no shadow dict); for `custom` the widget IS the row of handles (`_params_for` returns a TUPLE, the JSON canonical form). The PAD owns the block's point, distance-from-neutral IS the bias; it dies on preset AND custom (both ignore the style); neither records a bias. The advisory is a red overlay (`#ff2d2d`, NaN + `connect="finite"`) on the composer preview (all segments) and the scenario curve (custom segments only, via `block_of_sample`); base curves are orange so red reads as danger |
+| `sim/ui/drag_handles.py` | **Qt only** — the node-drag unit (cycle 4b) | `DragHandles`: a row of `pg.TargetItem` vertically-constrained (reconnect x in `sigPositionChanged`, converges in 2), y clamped to `V_RANGE`; `set_speeds` silent, a drag notifies once. Isolated + tested alone because the drag is the one measured-risk piece |
+| `sim/ui/duration_handles.py` | **Qt only** — the duration-drag unit (builder-UX) | `DurationHandles`: a row of x-draggable `pg.InfiniteLine`s, one per block's right edge. **Commit-on-finish** (`on_resize` fires on `sigPositionChangeFinished`, not continuously) so re-placing the lines never destroys the one under the cursor and no value↔handle loop forms; `setBounds` caps in place. Isolated + tested alone |
+| `sim/ui/scenario_page.py` | **Qt only** — the composer (cycles 4a/4b/builder-UX) | the WIDGETS own the composed block's params (no shadow dict); for `custom` the widget IS the row of handles (`_params_for` returns a TUPLE, the JSON canonical form). The PAD owns the block's point, distance-from-neutral IS the bias; it dies on preset AND custom; neither records a bias. The advisory is a red overlay (`#ff2d2d`, NaN + `connect="finite"`) — composer preview (all segments) + scenario curve (custom segments only, via `block_of_sample`); base curves orange. **Duration edges** (`DurationHandles`): `_composer_edge` (writes `_ticks`, the single owner) + `_boundaries` (one per block, resizes `_spec.blocks[i]`, syncs `_ticks` if that row is open). **Frozen autorange**: `_refresh_composer(refit=…)` — the node drag passes `refit=False` (no re-fit → no jump), every structural change re-fits via `_refit_composer` |
 
 ### The invariant — `utils/closed_loop_eval.py`
 
@@ -114,9 +115,9 @@ a segment `k` is eligible for red iff sample `k+1` is owned by a `custom` block.
 
 ## Tests + the runner gotcha
 
-**272 across 23 files** (22 `test_sim_*.py` + `tests/test_champion_io.py`); **272 green** at `1516596`
-(end of cycle 4b). `test_sim_ui_smoke.py` alone is 81 tests; `test_sim_drag_handles.py` (the 22nd sim
-file) is the cycle-4b drag unit.
+**289 across 24 files** (23 `test_sim_*.py` + `tests/test_champion_io.py`); **289 green** at end of
+builder-UX. `test_sim_ui_smoke.py` alone is 90 tests; `test_sim_drag_handles.py` and
+`test_sim_duration_handles.py` are the isolated drag units (node drag / duration drag).
 
 Runner — **never** `conda run -n cf_sim python -m pytest` (crashes conda's plugin system intermittently):
 

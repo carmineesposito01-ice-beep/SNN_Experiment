@@ -15,9 +15,9 @@
   lo scrive lo cambia). **Verificalo tu**: `git log --oneline -1` + `git status` + `git rev-list --count
   origin/Simulator..HEAD`. **Atteso: working tree pulito, 0 commit non pushati.** Se non è così, capisci
   perché prima di lavorare.
-- **Env/test**: conda `cf_sim`. **275 test verdi** (**22** file sim + `test_champion_io.py`; il 22°
-  è `test_sim_drag_handles.py`, nato col 4b). Core SNN bit-identico **tranne `sim/events.py`**,
-  scongelato di proposito nel ciclo 3 (vedi azione 3).
+- **Env/test**: conda `cf_sim`. **289 test verdi** (**23** file sim + `test_champion_io.py`; gli isolati
+  del drag sono `test_sim_drag_handles.py` (nodi, 4b) e `test_sim_duration_handles.py` (durata, builder-UX)).
+  Core SNN bit-identico **tranne `sim/events.py`**, scongelato di proposito nel ciclo 3 (vedi azione 3).
   ⚠️ La suite intera gira in **~3-4 minuti** (`test_sim_ui_smoke.py` da solo ~2.5: 81 test, molti
   costruiscono `SimApp` col champion). **Non è un blocco**: se lanci col timeout di default a 2 minuti
   sembra appesa. Dalle almeno 420 s, o mandala in background.
@@ -43,8 +43,17 @@ N=600 era pura convenzione). Fix latente accluso: `_preset_samples` genera la li
 **canonica 600** (`_PRESET_N`), non alla N di output, perché i preset cut-family scalano con N e sarebbero
 cambiati con la durata della scena. **Ancora aperte dall'utente (post-verifica 2026-07-16)** — spec già depositate:
 - **ciclo builder-UX** (items 3/4/5): maniglie di durata (bordo destro) + autorange congelato →
-  **spec APPROVATA-in-review** `docs/superpowers/specs/2026-07-16-builder-ux-duration-autorange-design.md`
-  (`2844314`). È il **prossimo a implementarsi** (attende ok utente per il plan).
+  ✅ **FATTO** *(2026-07-16)*. spec `…/specs/2026-07-16-builder-ux-duration-autorange-design.md` (`2844314`)
+  → plan `…/plans/2026-07-16-builder-ux-duration-autorange.md` (`1fd778c`) → **TDD completo**
+  (`858e575`→…). **289 test verdi · core+`materialise` intatti (diff vuoto) · render-verificato.**
+  **Cosa c'è ora**: `DurationHandles` (nuovo `sim/ui/duration_handles.py`, `InfiniteLine` x-trascinabili,
+  **commit-on-finish**) → **bordo destro** trascinabile sul composer (scrive `_ticks`) e **un confine per
+  blocco** sulla preview totale (ridimensiona il blocco, il totale cresce, sync `_ticks` se la riga è
+  aperta; preset cap 600). **Autorange congelato** durante il drag di nodo (`refit=False`), si ri-adatta
+  sul cambio strutturale. `_ticks` esteso a `MAX_BLOCK_TICKS=6000`. `app.py` e `materialise` intatti.
+  ⚠️ **Interazione = commit-on-finish** (misurato: `setValue` emette `sigPositionChanged` non `Finished`;
+  `.moving` esiste): è l'unico design che non distrugge la linea sotto il cursore quando i confini si
+  ri-piazzano e non forma il loop handle↔valore.
 - **scenario-lifecycle** (item 2): nome/cancella/**esporta .csv+.mat** → **DRAFT**
   `…/specs/2026-07-16-scenario-lifecycle-DRAFT.md` (⚠️ scipy ASSENTE in cf_sim → .mat serve writer LAPACK-free).
 - **cockpit dock** (item 1): anteprima scenario + marker al posto di Events → **DRAFT**
