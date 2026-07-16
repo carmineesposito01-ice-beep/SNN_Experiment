@@ -50,8 +50,9 @@ explicit user consent on evidence (`events.py` was unfrozen once, in cycle 3, fo
 | file | responsibility | key facts |
 |---|---|---|
 | `sim/scenario.py` | `Scenario` dataclass + `scenario_library` + `manual_scenario` | thin wrapper over `build_scenarios`; carries exactly the `SimStepper` inputs |
-| `sim/scenario_spec.py` | **PURE** model + materialiser + JSON | `_KINDS=(preset,const,ramp,sine)`. `materialise` threads `v` as each block's `v0` (`:160,168`) — this is why blocks join continuously and never teleport. Truncates the last block to N (`:163,165`) and fills a flat hold tail (`:170`). `effective_style(block,neutral)=clamp(neutral+bias)` (`:134`) |
-| `sim/ui/scenario_page.py` | **Qt only** — the composer (cycle 4a) | the WIDGETS own the composed block's params (no shadow dict); the PAD owns the block's point, distance-from-neutral IS the bias. `_params_for` (`:205`) derives params from widgets; the pad dies on a preset (`:232`); a preset/custom records no bias (`:277`) |
+| `sim/scenario_spec.py` | **PURE** model + materialiser + JSON | `_KINDS=(preset,const,ramp,sine,custom)`. `materialise` threads `v` as each block's `v0` — blocks join continuously and never teleport. Truncates the last block to N and fills a flat hold tail. `effective_style(block,neutral)=clamp(neutral+bias)`. **`custom`** = `_custom_samples(speeds,n,v0)`, a linear `np.interp` polyline anchored at v0 (nodes are SPEEDS on a derived grid `_custom_node_ticks`, clipped to `V_RANGE`). **`physics_gap(v,neutral)`** = the advisory (mask over `diff(v)/DT` vs the neutral). **`block_of_sample(spec,N)`** = per-sample owning-block index, replaying materialise's exact layout (for the advisory's custom-only attribution) |
+| `sim/ui/drag_handles.py` | **Qt only** — the drag unit (cycle 4b) | `DragHandles`: a row of `pg.TargetItem` vertically-constrained (reconnect x in `sigPositionChanged`, converges in 2), y clamped to `V_RANGE`; `set_speeds` silent, a drag notifies once. Isolated + tested alone because the drag is the one measured-risk piece |
+| `sim/ui/scenario_page.py` | **Qt only** — the composer (cycles 4a/4b) | the WIDGETS own the composed block's params (no shadow dict); for `custom` the widget IS the row of handles (`_params_for` returns a TUPLE, the JSON canonical form). The PAD owns the block's point, distance-from-neutral IS the bias; it dies on preset AND custom (both ignore the style); neither records a bias. The advisory is a red overlay (`#ff2d2d`, NaN + `connect="finite"`) on the composer preview (all segments) and the scenario curve (custom segments only, via `block_of_sample`); base curves are orange so red reads as danger |
 
 ### The invariant — `utils/closed_loop_eval.py`
 
@@ -113,8 +114,9 @@ a segment `k` is eligible for red iff sample `k+1` is owned by a `custom` block.
 
 ## Tests + the runner gotcha
 
-**245 across 22 files** (21 `test_sim_*.py` + `tests/test_champion_io.py`); baseline **244 green** at
-`21f45dc` (this file's write does not add tests). `test_sim_ui_smoke.py` alone is 72 tests.
+**272 across 23 files** (22 `test_sim_*.py` + `tests/test_champion_io.py`); **272 green** at `1516596`
+(end of cycle 4b). `test_sim_ui_smoke.py` alone is 81 tests; `test_sim_drag_handles.py` (the 22nd sim
+file) is the cycle-4b drag unit.
 
 Runner — **never** `conda run -n cf_sim python -m pytest` (crashes conda's plugin system intermittently):
 
@@ -131,14 +133,16 @@ timeout **looks like a hang and is not one** — give it ≥420 s or run it in t
 
 ---
 
-## Blast radius of `custom` (cycle 4b), from the study
+## What `custom` cost (cycle 4b), as built
 
-- **`scenario_spec.py`**: `_KINDS += "custom"`, `_custom_samples`/`_custom_node_ticks`, a `_block_samples`
-  branch, `physics_gap`, the layout helper, JSON (custom params round-trip as a **tuple**).
-- **`scenario_page.py`**: drag handles (`pg.TargetItem`, vertical-constrained via `sigPositionChanged`), the
-  advisory overlay on two plots, a node-count spinbox, `kind in ("preset","custom")` generalisations.
+- **`scenario_spec.py`** (+62): `_KINDS += "custom"`, `_custom_samples`/`_custom_node_ticks`, a
+  `_block_samples` branch, `physics_gap`, `block_of_sample`, JSON (custom params round-trip as a **tuple**).
+- **`sim/ui/drag_handles.py`** (new, 59): the isolated drag unit.
+- **`scenario_page.py`** (+107): the handles wired in, the advisory overlay on two plots, a node-count
+  spinbox, `kind in ("preset","custom")` generalisations, orange base curves.
 - **`app.py`**: **nothing** — a built custom flows through `_on_scenario_built` like any scenario.
 - **`to_json`/`from_json`** have **no Save/Load UI hook** — test-only surface today.
+- **Core + `closed_loop_eval.py`**: untouched (empty diff), `materialise` unchanged.
 
 ---
 

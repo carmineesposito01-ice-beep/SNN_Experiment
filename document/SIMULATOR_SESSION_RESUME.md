@@ -15,9 +15,10 @@
   lo scrive lo cambia). **Verificalo tu**: `git log --oneline -1` + `git status` + `git rev-list --count
   origin/Simulator..HEAD`. **Atteso: working tree pulito, 0 commit non pushati.** Se non è così, capisci
   perché prima di lavorare.
-- **Env/test**: conda `cf_sim`. **244 test verdi** (**21** file sim + `test_champion_io.py`). Core SNN
-  bit-identico **tranne `sim/events.py`**, scongelato di proposito nel ciclo 3 (vedi azione 3).
-  ⚠️ La suite intera gira in **~3-4 minuti** (`test_sim_ui_smoke.py` da solo ~2: 72 test, molti
+- **Env/test**: conda `cf_sim`. **272 test verdi** (**22** file sim + `test_champion_io.py`; il 22°
+  è `test_sim_drag_handles.py`, nato col 4b). Core SNN bit-identico **tranne `sim/events.py`**,
+  scongelato di proposito nel ciclo 3 (vedi azione 3).
+  ⚠️ La suite intera gira in **~3-4 minuti** (`test_sim_ui_smoke.py` da solo ~2.5: 81 test, molti
   costruiscono `SimApp` col champion). **Non è un blocco**: se lanci col timeout di default a 2 minuti
   sembra appesa. Dalle almeno 420 s, o mandala in background.
 - **Altri track (NON confonderli con questo)**:
@@ -26,14 +27,16 @@
     lo **studio MPC↔SNN parcheggiato (solo design)**. Ha il suo `document/SESSION_RESUME.md`.
   - `Presentation_NN` → già fuso in `main`.
 
-## 🎯 STATO ATTUALE — 🏁 MILESTONE: cockpit feature-complete (2026-07-13) · builder iterativo (2026-07-16)
+## 🎯 STATO ATTUALE — 🏁 MILESTONE: cockpit feature-complete (2026-07-13) · builder completo (2026-07-16)
 
 Lo strumento è ora a **4 modi** — **Live cockpit (13 dock, + oracolo ghost)** + **Meso/Macro** +
-**Post-run dashboard** + **Scenari (costruttore ITERATIVO)**. I **3 cicli** aperti il 2026-07-15 sono
-**tutti chiusi** (oracolo · identità checkpoint · costruttore di scenari), e **anche il 4a** (costruttore
-iterativo) *(2026-07-16)*. Resta aperto solo il **4b** (drag + `custom` + advisory — da brainstormare
-**dopo** aver usato il 4a). Vedi §AZIONI PENDENTI. Tutto committato e
-pushato. Il dettaglio di com'è fatto sta nelle sezioni sotto (§Architecture, §Phase history).
+**Post-run dashboard** + **Scenari (costruttore ITERATIVO con drag + advisory)**. I **3 cicli** aperti il
+2026-07-15 sono **tutti chiusi** (oracolo · identità checkpoint · costruttore di scenari), e con essi
+**il 4a** (costruttore iterativo) e **il 4b** (drag + `custom` + advisory fisica) *(entrambi 2026-07-16)*.
+**Il follow-up del 2026-07-15 è CHIUSO.** Prossimo item aperto: il **merge `Simulator`→`main`** (da
+sequenziare con `Simulink_Importer`). Vedi §AZIONI PENDENTI. Tutto committato e pushato. Il dettaglio di
+com'è fatto sta nelle sezioni sotto (§Architecture, §Phase history) e nella **mappa**
+`document/SIMULATOR_ARCHITECTURE.md`.
 
 ## ▶️ AZIONI PENDENTI (puntatori, non dump — le azioni 1-3 SUPERANO il "next = merge" della milestone)
 
@@ -191,22 +194,33 @@ pushato. Il dettaglio di com'è fatto sta nelle sezioni sotto (§Architecture, �
    ⚠️ **Nota di processo**: il codice del neutro è stato scritto **prima** dei suoi test (una riscrittura
    dell'intero file se l'è portato dietro). La garanzia è stata recuperata **per sabotaggio**: scollegare il
    controllo — *cioè esattamente ciò che il piano originale avrebbe consegnato* — fa cadere 2 test.
-5. **▶️ PROSSIMA — ciclo 4b: drag + blocco `custom` + advisory fisica** *(da brainstormare **dopo** aver
-   usato il 4a: il punto era proprio sapere se il drag ti serve davvero una volta provato il flusso
-   iterativo)*.
-   ⚠️ **Il taglio 4a/4b è stato spostato DA UNA MISURA, non da un'opinione**: l'advisory ("accendi i tratti
-   che il leader non può fare") sembrava stare in 4a perché i preset sono verbatim e possono eccedere un
-   neutro placido. **Misurato sulla libreria vera: è quasi tutto rosso FALSO.** `cut_in` chiede **−75 m/s²**,
-   `aggressive_cut_in` −120, `cut_out` −210 → **non sono violazioni, è un ALTRO VEICOLO** (`build_scenarios`
-   fa `vl[t_cut:] = 0.45*v0`); e **`following` "viola" in 503 tick su 599** perché somma
-   `rng.normal(0,0.3)` tick per tick e diviso `DT=0.1` diventa ±13 m/s². Quindi **l'advisory dice il vero
-   solo su un profilo DISEGNATO** → va col drag. `custom` idem: senza drag nessuno lo creerebbe.
-   Decisione utente sul 4b: **il drag NON è vincolato**, la UI *avvisa* e basta — perché uno scenario
-   fisicamente inevitabile **è un test** (`brake_margin`, `closed_loop_eval.py:238-241`: `min<0` =
-   «collisione fisicamente inevitabile»), e vincolare cancellerebbe quella classe di prove. Forma scelta:
-   **tratti accesi** (la curva si colora dove viola + di quanto), verificata renderizzando: una seconda
-   curva con `np.nan` sui campioni fisici e `connect="finite"` disegna **solo** gli strappi. ⚠️ Il drag è
-   **l'unico pezzo della sessione senza un numero misurato a supporto** (interazione mouse su pyqtgraph).
+5. **✅ FATTO — ciclo 4b: drag + blocco `custom` + advisory fisica** *(2026-07-16)*. **Preceduto da uno
+   STUDIO del codice** (`document/SIMULATOR_ARCHITECTURE.md`, 17 file:line verificati) che ha ripesato la
+   spec contro il codice vero prima del plan. spec `…/specs/2026-07-16-drag-custom-advisory-design.md`
+   (`34e7a92`→`21f45dc`) → plan `…/plans/2026-07-16-drag-custom-advisory.md` (`6ba7f5f`) → **TDD completo**
+   (`41823cf`→`1516596`). **272 test verdi · core congelato + `closed_loop_eval` intatti (diff vuoto) ·
+   retrocompatibilità e attribuzione cross-checked · render-verificato.**
+   **Cosa c'è ora**: 5° kind **`custom`** = polilinea disegnata a mano. I nodi sono **velocità** su griglia
+   derivata (`_custom_node_ticks`), node-0-è-`v0` (non si salva) → un custom **non teletrasporta** alla
+   giuntura; interpolazione **lineare** (`np.interp`, non spline: una accel per segmento + niente v<0). Si
+   disegna trascinando le **maniglie** (`sim/ui/drag_handles.py`, `pg.TargetItem` vincolate in verticale,
+   file isolato + testato da solo) sull'anteprima del blocco; uno spinbox **nodi** (1..25) ri-campiona la
+   curva invece di buttarla. Il pad **muore** su un custom come sul preset e un custom **non registra bias**.
+   **ADVISORY** (`physics_gap`, puro): la curva si **accende in rosso** dove `diff(v)/DT` supera il neutro
+   — su **due** plot (anteprima del blocco + curva scenario), ma sulla scenario **solo sui tratti `custom`**
+   via `block_of_sample` (attribuzione dal layout vero di `materialise`, non `cumsum`: owner del campione
+   k+1). Tecnica NaN+`connect="finite"`. Base curva **arancione**, rosso = pericolo (leggibilità, dal render).
+   **Advisory AVVISA, non VINCOLA**: uno scenario fisicamente inevitabile **è un test** (`brake_margin`
+   `min<0`). **`app.py` non è cambiato di una riga** (un custom scorre in `_on_scenario_built` come qualsiasi
+   scenario; `to_json/from_json` sono superficie di soli test, nessun Salva/Carica).
+   ⚠️ **Il taglio 4a/4b fu spostato DA UNA MISURA**: l'advisory sui **preset** è quasi tutto rosso FALSO
+   (`cut_in` −75 m/s² perché è un ALTRO VEICOLO `vl[t_cut:]=0.45*v0`; `following` "viola" 503/599 per il suo
+   rumore `normal(0,0.3)/DT`), quindi dice il vero SOLO su un profilo disegnato → va col drag; `custom` idem.
+   ⚠️ **Il drag era l'unico pezzo senza numero: ora misurato** — `TargetItem` niente hit-testing, vincolo
+   verticale converge in 2 chiamate (la sottoclasse crasha in `__init__` su una tupla), budget picco
+   **2.29 ms** con advisory+25 maniglie (i 2.09 del pad 4a + ~0.2). **`const`==`ramp`** resta (il menu ha 5
+   kind di cui 2 identici — decisione utente, non toccato). Lezioni TDD (4 test costruiti sulla strada
+   causale sbagliata, corretti misurando) in memoria `a-test-must-know-the-causal-path`.
 6. **RINVIATA — merge `Simulator`→`main`** (coordinare col track `Simulink_Importer`: entrambi rinviano il
    merge, vanno sequenziati per far atterrare in `main` uno stato coerente).
 7. **STUDIO POST-MILESTONE — A/B float-vs-fixed** (unica idea di Fase 4 mai fatta). ⚠️ richiede un **forward
