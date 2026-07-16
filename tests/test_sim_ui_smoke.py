@@ -653,6 +653,7 @@ def test_scenario_page_emits_the_built_scenario(qapp):
     page.sigScenarioBuilt.connect(got.append)
     page.set_spec(ScenarioSpec(name="mio", blocks=(Block("const", 600, {"v": 15.0}),),
                                style=LeaderStyle(2.0, 4.0), s_init=33.5, v_init=21.0))
+    page._name_edit.setText("mio")   # the name now comes from the builder's field (item 2), not the spec
     page._on_use()
     assert len(got) == 1 and got[0].name == "mio"
     assert got[0].v_leader.shape == (600,)
