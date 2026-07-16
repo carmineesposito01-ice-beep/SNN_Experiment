@@ -15,8 +15,11 @@
   lo scrive lo cambia). **Verificalo tu**: `git log --oneline -1` + `git status` + `git rev-list --count
   origin/Simulator..HEAD`. **Atteso: working tree pulito, 0 commit non pushati.** Se non è così, capisci
   perché prima di lavorare.
-- **Env/test**: conda `cf_sim`. **289 test verdi** (**23** file sim + `test_champion_io.py`; gli isolati
-  del drag sono `test_sim_drag_handles.py` (nodi, 4b) e `test_sim_duration_handles.py` (durata, builder-UX)).
+- **Env/test**: conda `cf_sim`. **292 test verdi** (**24** file sim + `test_champion_io.py`; gli isolati
+  sono `test_sim_drag_handles.py` (nodi, 4b), `test_sim_duration_handles.py` (durata, builder-UX) e
+  `test_sim_scenario_preview.py` (dock Scenario, item 1)). ⚠️ **La suite è la glob SIM**
+  (`pytest tests/test_sim_*.py tests/test_champion_io.py`), **NON `pytest tests/`**: la dir ha anche script
+  del track FPGA (`test_fpga_io.py` fa `sys.exit()` all'import) che abortiscono la collection.
   Core SNN bit-identico **tranne `sim/events.py`**, scongelato di proposito nel ciclo 3 (vedi azione 3).
   ⚠️ La suite intera gira in **~3-4 minuti** (`test_sim_ui_smoke.py` da solo ~2.5: 81 test, molti
   costruiscono `SimApp` col champion). **Non è un blocco**: se lanci col timeout di default a 2 minuti
@@ -27,7 +30,7 @@
     lo **studio MPC↔SNN parcheggiato (solo design)**. Ha il suo `document/SESSION_RESUME.md`.
   - `Presentation_NN` → già fuso in `main`.
 
-## 🎯 STATO ATTUALE — 🏁 MILESTONE: cockpit feature-complete (2026-07-13) · builder completo (2026-07-16)
+## 🎯 STATO ATTUALE — 🏁 cockpit feature-complete (2026-07-13) · builder completo · dock Scenario/item 1 (2026-07-16)
 
 Lo strumento è ora a **4 modi** — **Live cockpit (13 dock, + oracolo ghost)** + **Meso/Macro** +
 **Post-run dashboard** + **Scenari (costruttore ITERATIVO con drag + advisory)**. I **3 cicli** aperti il
@@ -56,12 +59,22 @@ cambiati con la durata della scena. **Ancora aperte dall'utente (post-verifica 2
   ri-piazzano e non forma il loop handle↔valore.
 - **scenario-lifecycle** (item 2): nome/cancella/**esporta .csv+.mat** → **DRAFT**
   `…/specs/2026-07-16-scenario-lifecycle-DRAFT.md` (⚠️ scipy ASSENTE in cf_sim → .mat serve writer LAPACK-free).
-- **cockpit dock** (item 1): anteprima scenario + marker al posto di Events → **DRAFT**
-  `…/specs/2026-07-16-cockpit-scenario-preview-dock-DRAFT.md`.
+- **cockpit dock** (item 1): anteprima scenario + marker al posto di Events → ✅ **FATTO** *(2026-07-16)*.
+  spec `…/specs/2026-07-16-cockpit-scenario-preview-dock-design.md` (`33795fac`) → plan
+  `…/plans/2026-07-16-cockpit-scenario-preview-dock.md` → **TDD completo** (`e95501e5`→`926b9279`).
+  **292 test verdi · core+`closed_loop_eval`+`materialise` intatti (diff vuoto) · render-verificato.**
+  **Sostituzione SECCA**: il dock **Events è sparito**, `ScenarioPreviewPanel` (nuovo
+  `sim/ui/scenario_preview.py`, isolato+testato da solo) prende il suo slot in `DOCK_ORDER` + i 4 preset;
+  **Guida ora lo MOSTRA** (prima nascondeva Events). Traccia `v_leader` statica (solo leader) + **marker al
+  tick corrente**, pilotato da **`_paint`** (live `_last_result.t`) e **`_render_at_cursor`** (scrub
+  `frames[idx].t`) — NON in `_ts_panels` (indice di buffer) e NON da `_redraw_series` (i chiamanti in pausa
+  fisserebbero il marker all'head). `EventInjector` + bottone Brake + uso in reconstruct/replay **restano**
+  (l'iniezione funziona, solo il log visivo è andato). ⚠️ L'anteprima mostra il leader PIANIFICATO: un brake
+  iniettato NON compare qui (si vede in Trajectory/Road).
 - **generatore dataset** (item 7, il più grosso): randomizzazione seed + mix % → **DRAFT**
   `…/specs/2026-07-16-dataset-generator-DRAFT.md` (⚠️ `data/generator.py` fa GIÀ la randomizzazione
   type-preserving — riusarlo, ma verificare se è invariante).
-Le tre DRAFT catturano intento + bivi aperti, da finalizzare con brainstorming dedicato a tempo di implementazione. Prossimo item **tecnico** aperto: il
+Le due DRAFT rimaste (item 2, item 7) catturano intento + bivi aperti, da finalizzare con brainstorming dedicato a tempo di implementazione. Prossimo item **tecnico** aperto: il
 **merge `Simulator`→`main`** (da sequenziare con `Simulink_Importer`). Vedi §AZIONI PENDENTI. Tutto
 committato e pushato. Il dettaglio sta nelle sezioni sotto (§Architecture, §Phase history) e nella
 **mappa** `document/SIMULATOR_ARCHITECTURE.md`.

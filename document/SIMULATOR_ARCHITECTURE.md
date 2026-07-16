@@ -53,6 +53,7 @@ explicit user consent on evidence (`events.py` was unfrozen once, in cycle 3, fo
 | `sim/scenario_spec.py` | **PURE** model + materialiser + JSON | `_KINDS=(preset,const,ramp,sine,custom)`. `materialise(spec,pg,N)` threads `v` as each block's `v0` — blocks join continuously and never teleport. **A built scenario's length = the SUM of its block ticks** (the builder passes `N=sum`, one owner, no fixed cap to overflow — this was the "sine got eaten" bug). **Presets are CANONICAL at `_PRESET_N=600`** regardless of the scenario length (the cut-family scale with N), so a preset block never changes with the total length; presets max out at 600 samples. `effective_style(block,neutral)=clamp(neutral+bias)`. **`custom`** = `_custom_samples(speeds,n,v0)`, a linear `np.interp` polyline anchored at v0 (nodes are SPEEDS on a derived grid `_custom_node_ticks`, clipped to `V_RANGE`). **`physics_gap(v,neutral)`** = the advisory (mask over `diff(v)/DT` vs the neutral). **`block_of_sample(spec,N)`** = per-sample owning-block index, replaying materialise's exact layout (for the advisory's custom-only attribution) |
 | `sim/ui/drag_handles.py` | **Qt only** — the node-drag unit (cycle 4b) | `DragHandles`: a row of `pg.TargetItem` vertically-constrained (reconnect x in `sigPositionChanged`, converges in 2), y clamped to `V_RANGE`; `set_speeds` silent, a drag notifies once. Isolated + tested alone because the drag is the one measured-risk piece |
 | `sim/ui/duration_handles.py` | **Qt only** — the duration-drag unit (builder-UX) | `DurationHandles`: a row of x-draggable `pg.InfiniteLine`s, one per block's right edge. **Commit-on-finish** (`on_resize` fires on `sigPositionChangeFinished`, not continuously) so re-placing the lines never destroys the one under the cursor and no value↔handle loop forms; `setBounds` caps in place. Isolated + tested alone |
+| `sim/ui/scenario_preview.py` | **Qt only** — the cockpit's Scenario dock (item 1) | `ScenarioPreviewPanel`: the running scenario's whole `v_leader` as a static orange curve (`set_scenario`, drawn once) + a white dashed **tick marker** (`set_marker(tick)`, `None`=hidden). Own `InfiniteLine`, isolated + tested alone. **Driven by the current TICK from two app sites only** — `_paint` (live head `_last_result.t`) and `_render_at_cursor` (scrub `frames[idx].t`); deliberately NOT in `_ts_panels` (that group gets a buffer index) and NOT via `_redraw_series` (its paused-context callers would pin the marker to the head). Shows the PLANNED leader — an injected brake overrides the leader live and does NOT appear here (it shows in Trajectory/Road) |
 | `sim/ui/scenario_page.py` | **Qt only** — the composer (cycles 4a/4b/builder-UX) | the WIDGETS own the composed block's params (no shadow dict); for `custom` the widget IS the row of handles (`_params_for` returns a TUPLE, the JSON canonical form). The PAD owns the block's point, distance-from-neutral IS the bias; it dies on preset AND custom; neither records a bias. The advisory is a red overlay (`#ff2d2d`, NaN + `connect="finite"`) — composer preview (all segments) + scenario curve (custom segments only, via `block_of_sample`); base curves orange. **Duration edges** (`DurationHandles`): `_composer_edge` (writes `_ticks`, the single owner) + `_boundaries` (one per block, resizes `_spec.blocks[i]`, syncs `_ticks` if that row is open). **Frozen autorange**: `_refresh_composer(refit=…)` — the node drag passes `refit=False` (no re-fit → no jump), every structural change re-fits via `_refit_composer` |
 
 ### The invariant — `utils/closed_loop_eval.py`
@@ -68,8 +69,10 @@ The false-red facts every advisory feature must respect (verified from these lin
 
 ### The periphery — not on the spine, one line each
 
-`app.py` (742) wires the 4 modes + selector + deep-scrub + champion loading; `panels.py` (640) the live
-dock panels; `topdown.py`/`loop.py`/`reconstruct.py` the road + ghost + scrub; `meso_*`/`postrun_page.py`
+`app.py` (~740) wires the 4 modes + selector + deep-scrub + champion loading; `panels.py` (~570) the live
+dock panels (the **Events** dock is GONE — hard-replaced by the Scenario preview in item 1; `EventInjector` +
+the Brake button stay, only the visual event log went); `topdown.py`/`loop.py`/`reconstruct.py` the road +
+ghost + scrub; `meso_*`/`postrun_page.py`
 the other three modes; `layout.py`/`theme.py`/`replay.py`/`metrics.py`/`platoon.py`/`episode.py` support.
 
 ---
@@ -115,9 +118,14 @@ a segment `k` is eligible for red iff sample `k+1` is owned by a `custom` block.
 
 ## Tests + the runner gotcha
 
-**289 across 24 files** (23 `test_sim_*.py` + `tests/test_champion_io.py`); **289 green** at end of
-builder-UX. `test_sim_ui_smoke.py` alone is 90 tests; `test_sim_drag_handles.py` and
-`test_sim_duration_handles.py` are the isolated drag units (node drag / duration drag).
+**292 across 25 files** (24 `test_sim_*.py` + `tests/test_champion_io.py`); **292 green** at end of item 1
+(cockpit scenario-preview dock). `test_sim_ui_smoke.py` alone is ~90 tests; `test_sim_drag_handles.py`,
+`test_sim_duration_handles.py`, and `test_sim_scenario_preview.py` are the isolated UI units (node drag /
+duration drag / scenario preview).
+
+**The suite is the SIM glob — `pytest tests/test_sim_*.py tests/test_champion_io.py`, NOT `pytest tests/`.**
+The `tests/` dir also holds FPGA-track scripts (`test_fpga_io.py` calls `sys.exit()` at import) that abort
+pytest collection with `INTERNALERROR> SystemExit`. Those files belong to another track; not ours to fix.
 
 Runner — **never** `conda run -n cf_sim python -m pytest` (crashes conda's plugin system intermittently):
 
