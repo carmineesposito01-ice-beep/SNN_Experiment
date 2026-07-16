@@ -21,6 +21,11 @@ two sites — `_paint` (live head) and `_render_at_cursor` (scrub cursor) — de
 ENV=C:/Miniconda/envs/cf_sim
 PATH="$ENV:$ENV/Library/bin:$ENV/Scripts:$PATH" "$ENV/python.exe" -m pytest <args> -p no:cacheprovider
 ```
+**Suite scope — the "full suite" is the SIM tests only:** `tests/test_sim_*.py tests/test_champion_io.py`
+(23 + 1 = 24 files). Do **not** run `pytest tests/` — the dir also holds FPGA-track scripts
+(`tests/test_fpga_io.py` calls `sys.exit()` at import) that abort pytest collection with
+`INTERNALERROR> SystemExit`. Those files belong to another track and are not ours to fix.
+
 Full suite ~3–4 min → run with a **≥420 s timeout or in the background** (a 2-min timeout looks like a hang and
 is not one). Render-verify with `QT_QPA_PLATFORM=windows`. No LAPACK in `cf_sim`. Commits conventional, **no
 `Co-Authored-By`**. Frozen core (`sim/{state,stepper,backend,probe,events,eventprop_stepper}.py`),
@@ -51,7 +56,7 @@ seek test is restructured (stays 1, not removed).
 Run the full suite (background or ≥420 s) and write down the passing count `B`:
 ```bash
 ENV=C:/Miniconda/envs/cf_sim
-PATH="$ENV:$ENV/Library/bin:$ENV/Scripts:$PATH" "$ENV/python.exe" -m pytest tests/ -q -p no:cacheprovider
+PATH="$ENV:$ENV/Library/bin:$ENV/Scripts:$PATH" "$ENV/python.exe" -m pytest tests/test_sim_*.py tests/test_champion_io.py -q -p no:cacheprovider
 ```
 Expected: `B passed` (B is ~289; record the real number).
 
@@ -437,7 +442,7 @@ dock-set assertions green).
 
 ```bash
 ENV=C:/Miniconda/envs/cf_sim
-PATH="$ENV:$ENV/Library/bin:$ENV/Scripts:$PATH" "$ENV/python.exe" -m pytest tests/ -q -p no:cacheprovider
+PATH="$ENV:$ENV/Library/bin:$ENV/Scripts:$PATH" "$ENV/python.exe" -m pytest tests/test_sim_*.py tests/test_champion_io.py -q -p no:cacheprovider
 ```
 Expected: `B+6 passed` (baseline + 3 panel + 3 integration; the 3 `EventTimelinePanel` tests still pass —
 the class is still present). The suite is ~4 min → ≥420 s timeout or background.
@@ -474,7 +479,7 @@ Now nothing references it. Remove the class and its tests together.
 
 ```bash
 ENV=C:/Miniconda/envs/cf_sim
-PATH="$ENV:$ENV/Library/bin:$ENV/Scripts:$PATH" "$ENV/python.exe" -m pytest tests/ -q -p no:cacheprovider -k "not event_timeline" >/dev/null
+PATH="$ENV:$ENV/Library/bin:$ENV/Scripts:$PATH" "$ENV/python.exe" -m pytest tests/test_sim_*.py tests/test_champion_io.py -q -p no:cacheprovider -k "not event_timeline" >/dev/null
 grep -rn "EventTimelinePanel\|_seek_to\|update_events" sim/ tests/
 ```
 Expected grep hits ONLY in `sim/ui/panels.py` (the class itself) and `tests/test_sim_panels.py` (its 3 tests).
@@ -497,7 +502,7 @@ and the three tests (`test_event_timeline_maps_ticks_and_drops_out_of_range`,
 
 ```bash
 ENV=C:/Miniconda/envs/cf_sim
-PATH="$ENV:$ENV/Library/bin:$ENV/Scripts:$PATH" "$ENV/python.exe" -m pytest tests/ -q -p no:cacheprovider
+PATH="$ENV:$ENV/Library/bin:$ENV/Scripts:$PATH" "$ENV/python.exe" -m pytest tests/test_sim_*.py tests/test_champion_io.py -q -p no:cacheprovider
 ```
 Expected: `B+3 passed` (baseline + 3 panel + 3 integration − 3 removed EventTimeline tests). ≥420 s or bg.
 
@@ -519,7 +524,7 @@ git commit -m "refactor(sim): remove the now-dead EventTimelinePanel"
 
 ```bash
 ENV=C:/Miniconda/envs/cf_sim
-PATH="$ENV:$ENV/Library/bin:$ENV/Scripts:$PATH" "$ENV/python.exe" -m pytest tests/ -q -p no:cacheprovider
+PATH="$ENV:$ENV/Library/bin:$ENV/Scripts:$PATH" "$ENV/python.exe" -m pytest tests/test_sim_*.py tests/test_champion_io.py -q -p no:cacheprovider
 git diff --stat HEAD~3 -- sim/state.py sim/stepper.py sim/backend.py sim/probe.py sim/events.py sim/eventprop_stepper.py utils/closed_loop_eval.py sim/scenario_spec.py
 ```
 Expected: `B+3 passed`; the `git diff --stat` prints **nothing** (frozen core + closed_loop_eval + scenario_spec
