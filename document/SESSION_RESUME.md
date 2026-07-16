@@ -91,27 +91,24 @@ apici nella chart. Diagnosi errori chart: `codegen('-config:lib','SNN_ACC','-arg
 
 ---
 
-## SP4 — ACC-IIDM fast (recuperare l'Fmax). IN CORSO (2026-07-16), variante L.
-Spec `docs/superpowers/specs/2026-07-16-acc-iidm-fast-design.md` · piano
-`docs/superpowers/plans/2026-07-16-acc-iidm-fast.md`. Studio A/B: **L (reciproci a LUT) prima, poi M (time-mux
-IIDM)**; si decide sui DATI (utente preferisce M). Bersaglio **Fmax ≥ 11,65 MHz** (pari alla SNN).
+## SP4 — ACC-IIDM fast (recuperare l'Fmax). Variante L CHIUSA (non viabile) → **prossimo = M**.
+Doc di processo: **`document/SP4_ACC_IIDM_FAST.md`** (leggere quello). Spec/piano in `docs/superpowers/`.
+Problema (SP3): IIDM fixed a **2,0 MHz**, timing non chiude @8 MHz — 1077 livelli, **76% carry** dalle 5
+divisioni combinatorie incatenate. Bersaglio **≥ 11,65 MHz** (pari alla SNN).
 
-**Fatto (Task 1-3, commit `457aa6c4`…`a4bc9291`):** `acc_recip_lut.m` (reciproco 1/x via LUT 1-D) · `acc_types`
-ha il campo **`recipN`** (0 = `divide()` SP3, >0 = reciproco-LUT a N punti) · `acc_iidm_open`/`acc_div` scelgono
-la strategia coi range dei divisori. **SP3 invariato** (`run_plant_parity` 0.00e+00, `acciidm_test` dmax=0).
-**Review-catch:** il divisore COSTANTE `DT` resta `divide()` anche con recipN>0 (guardia `nargin>=6`; se no
-usava `lo,hi` non definiti). `run_acc_recip_sweep.m` creato.
+**Variante L (reciproci a LUT) — costruita e SCARTATA sui dati (2026-07-16, `457aa6c4`…`e2cb8062`).** Sweep
+MEXato (12 s vs ~6 h; `acc_sweep_kernel` + `build_acc_sweep_mex`, bit-identico all'interpretato) su 60 traj:
+**nessuna N rispetta il budget** `E_snn` (p99<0.272, max<1.484) e l'errore **NON converge** (max piatto ~4 m/s²,
+p99 bottoma 0.59 a N=64 poi peggiora). Saturazione di range **esclusa** (verificato: solo `2·sab` di 0.006,
+innocuo). Root-cause non stabilita (baco fixed-point o amplificazione `1/s_safe`→`z²`), ma **irrilevante per la
+decisione**: un reciproco approssimato che alimenta `z²` è fragile per costruzione. L'infrastruttura L resta
+committata e riusabile (`acc_recip_lut`, `acc_types.recipN`, `acc_div`, sweep+MEX); **SP3 invariato** (recipN=0
+byte-identico, `run_plant_parity` 0.00e+00). Review-catch: divisore costante `DT` resta `divide()` (`nargin>=6`).
 
-**⏳ SWEEP IN CORSO (background, ~5-6h):** `run_acc_recip_sweep([16 32 64 128 256], 60)` → sceglie la **N minima**
-della LUT reciproco il cui errore in accel resta sotto il budget `E_snn` (p99 0.272 / max 1.484). Risultato →
-**`matlab/recip_sweep_full.log`** + `recip_sweep_full.mat` (`best`, `tab`). ⚠️ Il divisore critico è
-**`s_safe∈[2,150]`** (1/x ripido, ~15% err rel a N=64): possibile che serva N grande, o che **nessuna N passi** →
-in quel caso l'assert scatta e **è il dato che motiva M** (non un fallimento).
-
-**RIPRESA (Task 4-6, meglio in sessione NUOVA — contesto pulito):** leggi `recip_sweep_full.log` per `BEST_N`,
-poi esegui il piano dal **Task 4** (blocco `Donatello_ACC_IIDM_L` con `NRECIP=BEST_N`) · **Task 5** (sintesi OOC
-= il numero che decide: L centra 11,65 MHz? la `sqrt` residua è il collo?) · **Task 6** (doc `SP4_ACC_IIDM_FAST.md`
-+ decisione L-vs-M + kickoff M se serve). Se lo sweep è andato in assert (nessuna N) → salta a **M** (piano a sé).
+**PROSSIMO = M (time-mux IIDM), scelto dall'utente.** Divisione **sequenziale ESATTA** → bit-identica a SP3
+(`dmax=0`), zero approssimazione, spezza la catena combinatoria (FSM multi-ciclo, ~341 clock disponibili). **L
+insegna a M:** le divisioni vanno **sequenziate, non approssimate**. M è un **redesign FSM** → merita il ciclo
+`brainstorming → spec → piano` in **sessione NUOVA** (contesto pulito; questa è carica dopo SP2/SP3/FaseB/SP4-L).
 
 **Debito Fase B — RISOLTO in parte (2026-07-16, `4298adf3`).** `report/FPGA_PHASE_B_REPORT` + `results.csv`
 **ri-sintetizzati col campione corretto** (decode-64 + fix §2.1), stesso flusso Fase B: LUT 4223→3868, Fmax
