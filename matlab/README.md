@@ -26,8 +26,10 @@ chart che inlinea `snn_core` (1 chiamata = 1 inferenza) ⇒ parallela **superata
 σ-LUT **parametrica in N**; **N=64 è il decode del campione** dal 2026-07-14 — `../document/DECODE_LUT_SWEEP.md`) ·
 `snn_decode_hdl.m` (fixed, σ-LUT 256 — **LEGACY**: era il decode deployato *fino al* 2026-07-14; tenuto come
 golden di regressione, `snn_decode_lut(.,256)` gli è bit-identico) · `snn_entry.m` (normalize→core→decode) ·
-`acc_iidm_open.m` (**unica fonte** della matematica ACC-IIDM: `accel = f(stato, params)`, non integra; la usano
-il blocco SP2 e il plant `cf_plant_lib/ACC_IIDM`) · `champ_weights.m` (helper pesi).
+`acc_iidm_open.m` (**unica fonte** della matematica ACC-IIDM: `accel = f(stato, params)`, non integra;
+**type-parametrico** come `snn_core` — `double` per il riferimento, `fixed` per il blocco HDL-ready; la usano
+il blocco SP2/SP3 e il plant `cf_plant_lib/ACC_IIDM`) · `acc_types.m` (prototipi di tipo dell'IIDM: `double` e
+`fixed`, `nfrac` sweepabile — modello `snn_types.m`) · `champ_weights.m` (helper pesi).
 
 ### B2 — architettura deployata
 `snn_b2_fsm.m` (FSM time-mux, `hdl.RAM`, serializzazione **bit-exact** di `snn_core`) · `snn_top_b2.m` (top del
@@ -49,10 +51,12 @@ deployato) · `make_hdl_decode_lut.m` (decode LUT-N, sweep) · `make_hdl_ann.m` 
 (`Donatello_Champion` + `Donatello_LUT{16..512}`) ·
 `build_plant_lib.m` → `cf_plant_lib.slx` (ACC-IIDM) · `build_closed_loop_demo.m`.
 
-Lo stesso builder aggiunge anche **`Donatello_ACC_IIDM`** (SP2): campione LUT-64 + ACC-IIDM **open-loop**,
-`s,v,dv,v_l → accel`, per testare la rete dentro un modello di car-following. ⚠️ **Sola simulazione: NON
-sintetizzabile** (mescola fixed e double) — l'artefatto HDL-ready resta `Donatello_Champion`.
-Doc: `../document/SP2_ACC_IIDM.md`. Cancello: `run_block_acciidm_test.m`.
+Lo stesso builder aggiunge anche **`Donatello_ACC_IIDM`** (SP2/SP3): campione LUT-64 + ACC-IIDM **open-loop**,
+`s,v,dv,v_l → accel`, la catena completa stato→azione. **HDL-Ready dal 2026-07-16** (SP3): l'IIDM è in
+fixed-point (`acc_types`) e HDL Coder ne genera il VHDL. ⚠️ **HDL-ready ≠ deployato**: il bitstream resta la
+sola SNN, e l'IIDM in fixed è **caro** (OOC: +6974 LUT, Fmax 10,6→2,0 MHz per le 4 divisioni srotolate — il
+recupero via reciproci-una-volta è un SP a sé). Doc: `../document/SP3_ACC_IIDM_HDL.md`. Cancelli:
+`run_block_acciidm_test.m` · `run_block_closed_loop_test.m` · `run_acc_fixed_sweep.m` · `run_block_hdl_gate.m`.
 
 La matematica ACC-IIDM ha **una sola fonte**, `acc_iidm_open.m`: la usano sia il blocco SP2 sia il plant
 closed-loop `cf_plant_lib/ACC_IIDM` (che aggiunge solo l'integrazione). Idem `local_normalize`

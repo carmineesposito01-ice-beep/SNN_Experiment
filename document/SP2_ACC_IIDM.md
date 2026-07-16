@@ -8,8 +8,12 @@ Blocco unico `s,v,dv,v_l → accel`: campione Donatello **LUT-64** (fixed, cycle
 del bitstream) + **ACC-IIDM open-loop** (double). Porta la catena completa **stato → azione di controllo**,
 per testare la rete *dentro* un modello di car-following.
 
-**Sola simulazione: NON sintetizzabile** — conseguenza accettata del blocco unico (spec §3): l'artefatto
-HDL-ready resta `Donatello_Champion`. Non è un'assunzione di design: è **misurato** (vedi §Sintetizzabilità).
+> **🔄 SUPERATO dal 2026-07-16 (SP3): il blocco è ora HDL-READY.** L'IIDM è stato portato in fixed-point e HDL
+> Coder ne genera il VHDL. Quanto segue in questo doc resta come **record storico** (com'era finché l'IIDM era
+> in double). Per lo stato attuale, i numeri OOC e la premessa smentita: **`document/SP3_ACC_IIDM_HDL.md`**.
+
+**~~Sola simulazione: NON sintetizzabile~~** (finché l'IIDM era in double) — l'artefatto HDL-ready allora era
+solo `Donatello_Champion`. Dal 2026-07-16 l'IIDM è fixed e **anche questo blocco è sintetizzabile** (SP3).
 
 ## Interfaccia e uso
 | | |
@@ -41,6 +45,11 @@ cancello — è la lezione di `HDL_PHASE.md` §2.1, dove un bug nel forward è v
 stampavano e basta.
 
 ## Sintetizzabilità — misurata, non assunta
+> **🔄 Doppiamente superata da SP3.** Il rifiuto qui descritto era vero **solo perché l'IIDM era in double**. In
+> SP3 l'IIDM è passato in fixed e il blocco genera VHDL. E la causa qui indicata («servirebbe una LUT come per la
+> sigmoide») è **falsa**: `sqrt`/`tanh` sono nativi, la divisione passa con `RoundingMethod='Zero'` —
+> `document/SP3_ACC_IIDM_HDL.md`. Sotto resta il record di com'era misurato il 2026-07-15.
+
 Il «non sintetizzabile» era inizialmente una **claim di design mai verificata** (scritta in Description, doc e
 commit). Messa alla prova il 2026-07-15 dando il blocco a HDL Coder nello stesso isolamento del cancello «altro
 PC»: **rifiutato, 14 errori**. La claim regge, ma la spiegazione «mescola fixed e double» era incompleta. La
@@ -164,6 +173,11 @@ l'arrotondamento dell'harness invece del blocco.
   lettere greche e `§` in un commento di un sorgente inlinato: la chart si parsa e la parità resta 0.
 
 ## Fuori scope
-ACC-IIDM su FPGA (fixed): è un **SP a sé** — `sqrt(a·b)` e le divisioni sono lo stesso genere di problema che
-per la sigmoide ha richiesto una LUT; avrà i suoi numeri e i suoi cancelli. Fuori scope anche: chiudere il
+> **🔄 SMENTITO da SP3 (2026-07-16).** «Lo stesso genere di problema della sigmoide» era una claim mai
+> verificata ed è **falsa**: `sqrt`/`tanh`/`x^4` sono nativi in HDL Coder, la divisione passa con
+> `RoundingMethod='Zero'`. L'ACC-IIDM su FPGA è stato fatto — niente LUT, solo tipizzazione fixed:
+> `document/SP3_ACC_IIDM_HDL.md`. (Resta fuori scope: chiudere il loop dentro il blocco, altri champion/plant.)
+
+~~ACC-IIDM su FPGA (fixed): è un **SP a sé** — `sqrt(a·b)` e le divisioni sono lo stesso genere di problema che
+per la sigmoide ha richiesto una LUT; avrà i suoi numeri e i suoi cancelli.~~ Fuori scope anche: chiudere il
 loop dentro il blocco, altri champion, altri plant (Gipps/OVM…).

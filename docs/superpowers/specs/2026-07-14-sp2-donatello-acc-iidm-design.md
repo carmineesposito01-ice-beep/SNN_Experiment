@@ -68,8 +68,11 @@ interno della SNN). Così `Δv_l` è la differenza vera fra due control-step e *
 | **Sync coi sorgenti** | `run_block_sync_check` esteso al nuovo blocco |
 
 ## 7. Fuori scope (esplicito)
-- **ACC-IIDM su FPGA** (fixed/HDL-ready): è un **SP a sé** — `sqrt(a·b)` e le divisioni sono lo stesso genere di
-  problema che per la sigmoide ha richiesto una LUT. Se servirà, avrà i suoi numeri e i suoi cancelli.
+> **🔄 2026-07-16 — la prima riga è SMENTITA.** «Lo stesso genere di problema della sigmoide» era una claim mai
+> verificata: `sqrt`/`tanh` sono nativi in HDL Coder, la divisione passa con `RoundingMethod='Zero'`. L'ACC-IIDM
+> su FPGA è stato fatto in **SP3** (niente LUT): `docs/superpowers/specs/2026-07-15-acc-iidm-hdl-ready-design.md`.
+- ~~**ACC-IIDM su FPGA** (fixed/HDL-ready): è un **SP a sé** — `sqrt(a·b)` e le divisioni sono lo stesso genere di
+  problema che per la sigmoide ha richiesto una LUT. Se servirà, avrà i suoi numeri e i suoi cancelli.~~ (Fatto in SP3.)
 - Chiudere il loop dentro il blocco.
 - Altri champion (SP2 è **solo Donatello**) e altri plant (Gipps/OVM…).
 

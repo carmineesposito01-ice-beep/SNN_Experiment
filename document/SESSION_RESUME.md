@@ -58,28 +58,36 @@ sul dataset intero la `dv` istantanea non degrada la stima (20.64% vs 20.97%, **
 realizzabile su strada è utilizzabile. Nuovo kernel `snn_cl_step` (+MEX): un control-step della catena di
 riferimento — i MEX esistenti macinano una traiettoria *già nota*, in anello chiuso serve passo-passo.
 
-**SP3 — ACC-IIDM HDL-Ready. IN CORSO (2026-07-16): Task 1-3 chiusi, Task 4 aperto.**
-Spec `docs/superpowers/specs/2026-07-15-acc-iidm-hdl-ready-design.md` · piano
-`docs/superpowers/plans/2026-07-15-acc-iidm-hdl-ready.md` (**riprendere dal Task 4 Step 2**).
-*Scopo:* chiude un **buco di equità** del confronto MPC: la spec MPC dice che la legge ACC-IIDM appartiene al
-*nostro* controllore, ma con l'IIDM in double il suo Piano 2 conterebbe solo la rete (~4,2k LUT) e ometterebbe
-in silenzio la legge che produce `a_cmd`, mentre per l'MPC conta tutto il QP.
+**SP3 — ACC-IIDM HDL-Ready. ⇒ COMPLETO (2026-07-16).** Doc di processo: **`document/SP3_ACC_IIDM_HDL.md`**
+(leggere quello; qui solo stato + numeri chiave). Spec `docs/superpowers/specs/2026-07-15-acc-iidm-hdl-ready-design.md`
+· piano `docs/superpowers/plans/2026-07-15-acc-iidm-hdl-ready.md`.
+*Scopo:* chiude un **buco di equità** del confronto MPC (la legge ACC-IIDM appartiene al *nostro* controllore, ma
+con l'IIDM in double il Piano 2 conterebbe solo la rete e ometterebbe la legge che produce `a_cmd`).
 
-**Fatto:** `acc_types.m` (tipi sui range misurati) · `acc_iidm_open` **type-parametrico** (`T=[]`→double,
-`T=acc_types('fixed')`→fixed; `run_plant_parity` **invariato bit per bit** = il double non si è mosso) ·
-**`nfrac = 8`** misurato sul dataset intero (budget `E_snn` p99 **0.272** / max **1.484**; IIDM fixed **0.156** /
-**0.834** → margine 1,75×; a `nfrac=6` **non passa** ⇒ il cancello discrimina) · `run_block_hdl_gate`
-generalizzato alle **N uscite** (era fisso a 5 e falliva sull'harness sul blocco SP2).
+`Donatello_ACC_IIDM` è **HDL-ready**: IIDM in fixed (`acc_types`, **`nfrac=8`**), HDL Coder genera VHDL dal solo
+`.slx` con `DualPortRAM`. `acc_iidm_open` **type-parametrico** (double = riferimento, `run_plant_parity`
+invariato bit per bit). Budget derivato: `E_iidm` 0.156/0.834 < `E_snn` 0.272/1.484 (margine 1,75×; a `nfrac=6`
+non passa ⇒ discrimina). ⚠️ **HDL-ready ≠ deployato**: il bitstream resta la sola SNN.
 
-**Premessa SMENTITA (misurata):** «serve una LUT come per la sigmoide» era **falso**. HDL Coder genera
-`sqrt`/`tanh`/`x^4` **nativamente**; la divisione passa con **`RoundingMethod='Zero'`**. `exp` è l'unica non
-generabile — ed è il motivo per cui la sigmoide (σ=1/(1+exp(−x))) richiese la LUT, ma `tanh` no.
+**Premessa SMENTITA (misurata):** «serve una LUT come per la sigmoide» era **falso**. `sqrt`/`tanh`/`x^4` sono
+nativi in HDL Coder; la divisione passa con **`RoundingMethod='Zero'`**. `exp` è l'unica non generabile — motivo
+per cui la sigmoide (σ=1/(1+exp(−x))) richiese la LUT ma `tanh` no. **Corretta la claim in SP2_ACC_IIDM.md,
+spec SP2 §7, README** (era «sola simulazione / non sintetizzabile»).
 
-**⚠️ APERTO:** passando la chart a fixed resta **un secondo errore di tipo** (il primo era una riassegnazione
-che cambiava tipo — `v0` da `sfix21_En13` a `sfix15_En8`, gotcha di HDL_PHASE §9, corretto in `246f0191`).
-Blocco e libreria **ripristinati alla versione double**: il repo è **verde**. Ricetta nel commit `246f0191`:
-Simulink mostra solo l'errore di propagazione, il messaggio VERO (riga+colonna) si ottiene estraendo lo script
-della chart e dandolo a `codegen('-config:lib','SNN_ACC','-args',{a,a,a,a})` con `a = fi(0,1,32,20)`.
+**Numeri OOC (xc7z020 @8 MHz) — l'IIDM in fixed è CARO:**
+| | LUT | DSP | Fmax | liv.logici |
+|---|---|---|---|---|
+| SNN sola | 3 872 | 52 | **10,6 MHz** ✓ | 172 |
+| catena SNN+IIDM | 10 846 | 69 | **2,0 MHz** ✗ (WNS −373 ns) | **1 077** |
+
+Risorse ×2,8, Fmax ÷5,3, a 8 MHz **il timing non chiude**. Causa misurata: le 4 divisioni srotolate in array
+combinatorio (path critico dentro l'IIDM). **Funzionalmente regge** (a 2 MHz un control-step dura 200k clock,
+l'inferenza 341). **Via d'uscita già identificata (SP a sé): i 4 divisori sono costanti entro il control-step →
+reciproci una volta + moltiplicazioni** (`fpga-expert` ch09). Lo sweep a slack minima è previsto ma non ora.
+
+**Gotcha superati (dettaglio in SP3_ACC_IIDM_HDL.md §insidie):** la **fimath è parte del tipo** (va nei prototipi
+di `acc_types`, non `setfimath` sparse) · niente riassegnazione di tipo (`v0f` non `v0`) · niente sovra-escape
+apici nella chart. Diagnosi errori chart: `codegen('-config:lib','SNN_ACC','-args',{a,a,a,a})` con `a=fi(0,1,32,20)`.
 
 **Prossimi:** **bitstream + `report/FPGA_PHASE_B_REPORT`** da rigenerare (disallineati: costruiti col forward
 buggato §2.1 **e** col decode-256, mentre il campione ora è LUT-64) · **riordino fisico di `matlab/`** (refactor a
