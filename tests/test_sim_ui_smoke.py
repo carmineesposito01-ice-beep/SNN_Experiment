@@ -1033,3 +1033,28 @@ def test_custom_composer_refresh_fits_in_a_frame(qapp):
         ts.append((time.perf_counter() - t0) * 1000)
     peak = max(ts)
     assert peak < 16.7, f"custom composer refresh peaks at {peak:.2f} ms, over the 60 fps budget"
+
+
+def test_the_builder_length_is_the_sum_of_the_blocks(qapp):
+    """The user's bug: the builder materialised at a fixed N=600, so a sine added after a 600-tick
+    const got 0 samples and the scenario came out flat (a 'standard following'). Length = sum now."""
+    from sim.scenario_spec import Block
+    page = _page()
+    page.set_spec(_spec3([Block("const", 600, {"v": 21.0})]))
+    page._kind.setCurrentText("sine"); page._value.setValue(6.0); page._on_add()
+    got = []
+    page.sigScenarioBuilt.connect(got.append)
+    page._on_use()
+    vl = got[0].v_leader
+    assert vl.shape[0] == 750                       # 600 + 150, not clipped to 600
+    assert vl[600:].std() > 0.5                     # the sine actually oscillates (was flat before)
+    assert page._curve.getOriginalDataset()[1].shape[0] == 750   # the total preview shows all of it
+
+
+def test_the_builder_length_shrinks_and_grows_with_the_blocks(qapp):
+    from sim.scenario_spec import Block
+    page = _page()
+    page.set_spec(_spec3([Block("const", 200, {"v": 21.0}), Block("ramp", 100, {"to_v": 5.0})]))
+    assert page._curve.getOriginalDataset()[1].shape[0] == 300   # 200 + 100
+    page._list.setCurrentRow(1); page._on_del()                  # remove the ramp
+    assert page._curve.getOriginalDataset()[1].shape[0] == 200

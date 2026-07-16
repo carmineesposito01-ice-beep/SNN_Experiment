@@ -102,7 +102,8 @@ class ScenarioPage(QWidget):
     def __init__(self, params_gt, N=600):
         super().__init__()
         self._params_gt = np.asarray(params_gt, dtype=np.float64)
-        self._N = int(N)
+        self._N = int(N)             # the preset-library length ONLY (for the dropdown); the SCENARIO's
+                                     # length is _total_ticks() = the sum of its blocks, not this.
         self._spec = None
         self._loading = False        # re-entrancy guard: setValue() fires valueChanged
         self._composer_row = None    # the timeline row being edited, or None for a new block
@@ -203,6 +204,11 @@ class ScenarioPage(QWidget):
     def _neutral(self):
         return self._spec.style if self._spec else LeaderStyle(2.0, 4.0)
 
+    def _total_ticks(self):
+        """The scenario's length IS the sum of its blocks' ticks -- one owner, no fixed N to overflow.
+        So a block added past the old 600-tick cap is no longer silently dropped."""
+        return sum(int(b.ticks) for b in self._spec.blocks) if self._spec else 0
+
     @staticmethod
     def _red_from_mask(v, seg_mask):
         """A curve that is NaN on the physical samples and equals v on both endpoints of each bad
@@ -219,13 +225,14 @@ class ScenarioPage(QWidget):
             self._curve.setData([])
             self._scenario_red.setData([])
             return
-        v = materialise(self._spec, self._params_gt, self._N).v_leader
+        n = self._total_ticks()
+        v = materialise(self._spec, self._params_gt, n).v_leader
         self._curve.setData(v)
-        mask, _ = physics_gap(v, self._neutral())          # over N-1 segments
-        owner = block_of_sample(self._spec, self._N)
+        mask, _ = physics_gap(v, self._neutral())          # over n-1 segments
+        owner = block_of_sample(self._spec, n)
         custom_idx = [i for i, b in enumerate(self._spec.blocks) if b.kind == "custom"]
         # segment k is red iff sample k+1 is owned by a custom block (owner of the produced sample)
-        seg_custom = np.isin(owner[1:], custom_idx) if custom_idx else np.zeros(self._N - 1, bool)
+        seg_custom = np.isin(owner[1:], custom_idx) if custom_idx else np.zeros(n - 1, bool)
         self._scenario_red.setData(self._red_from_mask(v, mask & seg_custom))
 
     def _refresh_list(self):
@@ -363,9 +370,8 @@ class ScenarioPage(QWidget):
             return float(self._spec.v_init)
         prefix = ScenarioSpec(name="_", blocks=self._spec.blocks[:upto], style=self._spec.style,
                               s_init=self._spec.s_init, v_init=self._spec.v_init)
-        used = sum(b.ticks for b in prefix.blocks)
-        return float(materialise(prefix, self._params_gt,
-                                 max(1, min(used, self._N))).v_leader[-1])
+        used = sum(int(b.ticks) for b in prefix.blocks)     # the prefix's own length, uncapped
+        return float(materialise(prefix, self._params_gt, max(1, used)).v_leader[-1])
 
     def compose_new(self, kind, ticks, params, bias=None):
         """Open a NEW block in the composer. Nothing reaches the timeline until Add."""
@@ -446,4 +452,4 @@ class ScenarioPage(QWidget):
     def _on_use(self):
         if self._spec is None or not self._spec.blocks:
             return
-        self.sigScenarioBuilt.emit(materialise(self._spec, self._params_gt, self._N))
+        self.sigScenarioBuilt.emit(materialise(self._spec, self._params_gt, self._total_ticks()))
