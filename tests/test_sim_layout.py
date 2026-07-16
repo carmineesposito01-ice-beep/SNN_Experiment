@@ -57,6 +57,7 @@ def test_guida_shows_trajectory_and_safety(qapp):
     area, docks = _build_area()
     apply_guida(area, docks)
     assert {"Road", "Trajectory", "Safety"} <= visible_docks(area)
+    assert "Scenario" in visible_docks(area)   # decision (4): the driving preset SHOWS the preview
 
 
 def test_preset_then_overview_restores_all(qapp):

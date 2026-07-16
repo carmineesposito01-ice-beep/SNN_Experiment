@@ -24,9 +24,10 @@ from sim.stepper import SimStepper
 from sim.ui.layout import (DOCK_ORDER, LAYOUT_PATH, PRESETS, apply_overview, load_layout,
                            save_layout, visible_docks)
 from sim.ui.loop import SimLoop
-from sim.ui.panels import (PARAM_COLORS, PARAM_NAMES, PARAM_UNITS, EventTimelinePanel,
+from sim.ui.panels import (PARAM_COLORS, PARAM_NAMES, PARAM_UNITS,
                            NeuronGraphPanel, NeuronInspectorPanel, ParamPanel, SafetyPanel,
                            SpikeRatePanel, SynOpsPanel, TrajectoryPanel)
+from sim.ui.scenario_preview import ScenarioPreviewPanel
 from sim.ui.meso_page import MesoMacroPage
 from sim.ui.postrun_page import PostRunPage
 from sim.ui.scenario_page import ScenarioPage
@@ -77,7 +78,7 @@ class SimApp(QMainWindow):
         self._spikerate = SpikeRatePanel()
         self._trajectory = TrajectoryPanel()
         self._safety = SafetyPanel()
-        self._timeline = EventTimelinePanel()
+        self._preview = ScenarioPreviewPanel()
         self._inspector = NeuronInspectorPanel()
         self._synops = SynOpsPanel()
         self._params = [ParamPanel(i, n, u, c)
@@ -88,9 +89,8 @@ class SimApp(QMainWindow):
         # param can be a hidden tab, whose stale range would corrupt SpikeRate's axis. A unified time
         # cursor is a Phase-3b (scrub) concern; here each time-series autoranges to its own data.
         self._ts_panels = [*self._params, self._spikerate, self._trajectory,
-                           self._safety, self._timeline, self._inspector, self._synops]
+                           self._safety, self._inspector, self._synops]
         self._apply_champion_topology()              # topology into NetState/Inspector/SynOps (re-run on swap)
-        self._timeline.set_on_seek(self._seek_to)
         self._netstate.sigNeuronClicked.connect(self._on_neuron_selected)
         self._src_probe = None
         self._src_traj = None
@@ -99,7 +99,7 @@ class SimApp(QMainWindow):
 
         widgets = {"Road": self._topdown, "NetState": self._netstate, "SpikeRate": self._spikerate,
                    "Trajectory": self._trajectory, "Safety": self._safety,
-                   "Events": self._timeline, "Inspector": self._inspector, "SynOps": self._synops,
+                   "Scenario": self._preview, "Inspector": self._inspector, "SynOps": self._synops,
                    "v0": self._params[0], "T": self._params[1],
                    "s0": self._params[2], "a": self._params[3], "b": self._params[4]}
         self._area = DockArea()
@@ -455,13 +455,15 @@ class SimApp(QMainWindow):
             p.set_cursor(None)
         self._cursor_readout.setText("live")
         self._clear_panels()                              # blank stale curves/road so Reset visibly resets
+        self._preview.set_scenario(sc.v_leader)           # the whole leader profile for THIS scenario
+        self._preview.set_marker(None)                    # no marker until the first tick
         self._refresh_status()
 
     def _clear_panels(self):
         """Blank every cockpit panel (empty buffers early-return in update_frame, so a redraw would
         NOT clear the old curves) and reset the road's integrated ego/ghost positions."""
         for p in (*self._params, self._spikerate, self._trajectory,
-                  self._safety, self._timeline, self._synops, self._netstate):
+                  self._safety, self._preview, self._synops, self._netstate):
             p.clear()
         self._trajectory.set_ghost(None)
         self._safety.set_ghost(None)
@@ -488,6 +490,8 @@ class SimApp(QMainWindow):
             self._last_result = results[-1]
             self._src_probe, self._src_traj = self._probe, self._traj   # live advanced -> scrub source = live
             self._src_ghost_traj = self._ghost_traj
+            if self._dock_on("Scenario"):
+                self._preview.set_marker(self._last_result.t)           # marker follows the live tick
             last = len(results) - 1
             g_results = self._ghost_traj.results()[-len(results):]      # ghost stepped in lockstep by SimLoop
             for i, r in enumerate(results):                             # speed>1 -> many results per paint
@@ -535,7 +539,6 @@ class SimApp(QMainWindow):
             self._safety.update_frame(traj)
             self._safety.set_ghost(ghost_traj if show_ghost else None)
         if self._dock_on("NetState"): self._netstate.update_frame(probe)   # head; scrub overrides via _render_at_cursor
-        if self._dock_on("Events"): self._timeline.update_events(self._injector.log(), probe.frames())
         if self._dock_on("Inspector") and self._inspector.neuron is not None:
             self._inspector.update_frame(probe)
 
@@ -666,18 +669,7 @@ class SimApp(QMainWindow):
         if self._ghost_toggle.isChecked():
             self._topdown.render_ghost_at(self._src_ghost_traj, idx)
         self._cursor_readout.setText(f"t={frames[idx].t} ({frames[idx].t * DT:.1f}s)")
-
-    def _seek_to(self, tick):
-        if self._run_btn.isChecked():
-            self._run_btn.setChecked(False)               # pause -> builds the scrub source
-        frames = self._src_probe.frames()
-        idx = next((i for i, f in enumerate(frames) if f.t == tick), None)
-        if idx is None:
-            return
-        self._render_at_cursor(idx)
-        self._cursor_slider.blockSignals(True)
-        self._cursor_slider.setValue(idx)
-        self._cursor_slider.blockSignals(False)
+        self._preview.set_marker(frames[idx].t)   # scrub: marker follows the cursor's absolute tick
 
     def _on_neuron_selected(self, i):
         self._inspector.set_neuron(i)

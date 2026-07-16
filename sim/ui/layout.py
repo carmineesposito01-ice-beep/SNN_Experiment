@@ -8,7 +8,7 @@ import logging
 import os
 
 DOCK_ORDER = ["Road", "NetState", "SpikeRate", "Trajectory", "Safety",
-              "Events", "Inspector", "SynOps", "v0", "T", "s0", "a", "b"]
+              "Scenario", "Inspector", "SynOps", "v0", "T", "s0", "a", "b"]
 _PARAMS = ["v0", "T", "s0", "a", "b"]
 LAYOUT_PATH = os.path.expanduser(os.path.join("~", ".cf_fsnn_sim", "layout.json"))
 
@@ -54,16 +54,17 @@ def apply_overview(area, docks):
         _show(area, docks, n, "right", prev)
     _show(area, docks, "SpikeRate", "right", "NetState")   # last: split NetState's row -> NetState | SpikeRate
     _show(area, docks, "Inspector", "right", "SpikeRate")
-    _show(area, docks, "Events", "bottom", "Safety")
+    _show(area, docks, "Scenario", "bottom", "Safety")
     _show(area, docks, "SynOps", "bottom", "SpikeRate")
 
 
 def apply_guida(area, docks):
-    for d in ("NetState", "SpikeRate", "Inspector", "Events", "SynOps"):
+    for d in ("NetState", "SpikeRate", "Inspector", "SynOps"):
         _hide(docks, d)
     _show(area, docks, "Road", "top")
     _show(area, docks, "Trajectory", "bottom", "Road")   # driving story: road + trajectory + safety
     _show(area, docks, "Safety", "right", "Trajectory")
+    _show(area, docks, "Scenario", "bottom", "Safety")   # decision (4): preview visible while driving
     _show(area, docks, "v0", "bottom", "Trajectory")
     for n in ["T", "s0", "a", "b"]:
         _show(area, docks, n, "above", "v0")   # tab-stack params together
@@ -76,7 +77,7 @@ def apply_identificazione(area, docks):
     _show(area, docks, "v0", "bottom", "Road")
     for prev, n in zip(["v0", "T", "s0", "a"], ["T", "s0", "a", "b"]):
         _show(area, docks, n, "bottom", prev)   # 5 params stacked, dominant
-    _show(area, docks, "Events", "bottom", "b")   # event marks next to the params
+    _show(area, docks, "Scenario", "bottom", "b")   # preview next to the params
 
 
 def apply_neuro_debug(area, docks):
@@ -87,7 +88,7 @@ def apply_neuro_debug(area, docks):
     _show(area, docks, "Inspector", "bottom", "NetState")
     _show(area, docks, "SynOps", "bottom", "SpikeRate")
     _show(area, docks, "Road", "bottom", "Inspector")
-    _show(area, docks, "Events", "bottom", "Road")
+    _show(area, docks, "Scenario", "bottom", "Road")
     _show(area, docks, "v0", "right", "SpikeRate")
     for n in ["T", "s0", "a", "b"]:
         _show(area, docks, n, "above", "v0")   # params tab-stacked, compact

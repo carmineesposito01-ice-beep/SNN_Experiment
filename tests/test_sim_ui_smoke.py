@@ -91,7 +91,7 @@ def test_dark_theme_applies(qapp):
 # --- Extension Phase 2: dockable shell ---
 def test_simapp_builds_docks(qapp):
     win = SimApp(CHAMP)
-    assert set(win._docks.keys()) == set(DOCK_ORDER)     # Road/NetState/SpikeRate/Trajectory/Safety/Events/Inspector/SynOps + 5 params
+    assert set(win._docks.keys()) == set(DOCK_ORDER)     # Road/NetState/SpikeRate/Trajectory/Safety/Scenario/Inspector/SynOps + 5 params
     assert visible_docks(win._area) == set(DOCK_ORDER)   # Overview on startup (no layout_path)
 
 
@@ -220,7 +220,7 @@ def test_simapp_scrub_cursor(qapp):
 # --- Phase 3b (rest): deep-scrub + events + inspector ---
 def test_simapp_builds_all_docks(qapp):
     win = SimApp(CHAMP)
-    assert {"Events", "Inspector", "SynOps"} <= set(win._docks)
+    assert {"Scenario", "Inspector", "SynOps"} <= set(win._docks)
     assert len(win._docks) == 13     # 8 fixed docks + 5 param docks
 
 
@@ -237,17 +237,11 @@ def test_simapp_deep_scrub_reconstructs_beyond_buffer(qapp):
     assert win._cursor == 0 and win._cursor_readout.text().startswith("t=0")
 
 
-def test_simapp_event_click_and_neuron_select(qapp):
+def test_simapp_neuron_select(qapp):
     win = SimApp(CHAMP)
     win.select_scenario(0)
     win._advance(0.5)
-    win.inject_brake()
-    win._advance(0.5)
     win._on_run_toggled(False)                   # pause
-    log = win._injector.log()
-    assert log
-    win._seek_to(log[0]["tick"])                 # click the brake mark -> seek to its tick
-    assert win._src_probe.frames()[win._cursor].t == log[0]["tick"]
     win._on_neuron_selected(1)                   # select hidden neuron 1
     assert win._inspector.neuron == 1
     assert win._netstate._highlight.adjacency.shape[0] > 0
@@ -1176,3 +1170,33 @@ def test_node_drag_still_fits_in_a_frame_with_the_autorange_change(qapp):
         h.setPos(h._tick, 5.0 + 0.1 * k)
         ts.append((time.perf_counter() - t0) * 1000)
     assert max(ts) < 16.7, f"node drag peaks at {max(ts):.2f} ms"
+
+
+# --- item 1: scenario-preview dock + tick marker ---
+def test_scenario_marker_follows_the_live_tick(qapp):
+    win = SimApp(CHAMP)
+    win.select_scenario(0)
+    win._advance(0.5)                                   # 5 live steps
+    expected = win._last_result.t                       # the tick the engine just produced
+    assert win._preview._marker.isVisible()
+    assert abs(win._preview._marker.value() - expected) < 1e-6
+
+
+def test_scenario_marker_follows_the_scrub_cursor(qapp):
+    win = SimApp(CHAMP)
+    win.select_scenario(0)
+    win._advance(0.5)
+    win._on_run_toggled(False)                          # pause -> scrub source ready
+    win._render_at_cursor(2)                            # scrub to buffer index 2
+    expected = win._src_probe.frames()[2].t             # its absolute tick
+    assert abs(win._preview._marker.value() - expected) < 1e-6
+
+
+def test_select_scenario_redraws_the_preview_curve(qapp):
+    win = SimApp(CHAMP)
+    win.select_scenario(0)
+    y0 = win._preview._curve.getData()[1]
+    assert np.allclose(y0, win._scenarios[0].v_leader)
+    win.select_scenario(1)
+    y1 = win._preview._curve.getData()[1]
+    assert np.allclose(y1, win._scenarios[1].v_leader)  # redrawn to the new scenario
