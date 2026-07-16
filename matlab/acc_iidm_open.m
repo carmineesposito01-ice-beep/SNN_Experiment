@@ -76,9 +76,12 @@ end
 
 function q = acc_div(T, isFx, num, den, lo, hi)
 %ACC_DIV  num/den type-parametrica. Fixed: T.recipN==0 -> divide() (SP3); T.recipN>0 -> reciproco-LUT
-%  (SP4 var. L). lo,hi = range GARANTITO di `den` (dai clamp dell'IIDM) per dimensionare la LUT.
+%  (SP4 var. L) SOLO per divisori VARIABILI (chiamata a 6 arg, con range lo,hi).
+%  Un divisore COSTANTE (es. DT nel filtro OU) si chiama a 4 arg (senza lo,hi): resta divide(), che
+%  per una costante HDL Coder ripiega in un moltiplicatore shallow -- non e' il problema di profondita'
+%  delle 5 divisioni a divisore variabile. `nargin` e' coder.const per specializzazione -> HDL-safe.
   if isFx
-    if T.recipN > 0
+    if T.recipN > 0 && nargin >= 6
       q = cast(num * acc_recip_lut(den, lo, hi, T.recipN), 'like', T.acc);
     else
       q = divide(numerictype(T.acc), num, den);
