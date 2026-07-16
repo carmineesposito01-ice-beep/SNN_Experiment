@@ -8,6 +8,8 @@ Two things own state here, and only two:
 * the WIDGETS own the composed block's params -- they are never mirrored into a dict beside them;
 * the PAD owns the composed block's point, and the distance from the neutral IS its bias.
 """
+from dataclasses import replace
+
 import numpy as np
 import pyqtgraph as pg
 from PySide6.QtCore import Signal
@@ -171,6 +173,7 @@ class ScenarioPage(QWidget):
         # profile rather than as one crimson among another. A safety cue must not look like the profile.
         self._curve = self._plot.plot(pen=pg.mkPen("#e8871e", width=2))
         self._scenario_red = self._plot.plot(pen=pg.mkPen("#ff2d2d", width=4), connect="finite")
+        self._boundaries = DurationHandles(self._plot, on_resize=self._on_boundary_resize)
         root.addWidget(self._plot, stretch=1)
 
         # every input is live: "build the piece while you see it" is false if only the pad redraws
@@ -236,6 +239,37 @@ class ScenarioPage(QWidget):
         # segment k is red iff sample k+1 is owned by a custom block (owner of the produced sample)
         seg_custom = np.isin(owner[1:], custom_idx) if custom_idx else np.zeros(n - 1, bool)
         self._scenario_red.setData(self._red_from_mask(v, mask & seg_custom))
+        self._place_boundaries()
+
+    def _place_boundaries(self):
+        """One edge per block at its right edge (its cumulative boundary), capped by kind. Re-placed
+        on every _refresh; a drag commits on release, so this never runs mid-drag."""
+        if self._spec is None or not self._spec.blocks:
+            self._boundaries.clear()
+            return
+        edges, cum = [], 0
+        for i, b in enumerate(self._spec.blocks):
+            cap = 600 if b.kind == "preset" else MAX_BLOCK_TICKS
+            edges.append((i, cum, int(b.ticks), cap))
+            cum += int(b.ticks)
+        self._boundaries.set_edges(edges)
+
+    def _on_boundary_resize(self, i, new_ticks):
+        """Block i's boundary was released: resize block i (the total grows), sync the composer if
+        that row is open, then refresh (which re-places all boundaries at the new cumulative sums)."""
+        if self._spec is None or i >= len(self._spec.blocks):
+            return
+        blocks = list(self._spec.blocks)
+        blocks[i] = replace(blocks[i], ticks=int(new_ticks))
+        self._spec = ScenarioSpec(name=self._spec.name, blocks=tuple(blocks),
+                                  style=self._spec.style, s_init=self._spec.s_init,
+                                  v_init=self._spec.v_init)
+        if self._composer_row == i:                        # the open working copy must not diverge
+            self._loading = True
+            self._ticks.setValue(int(new_ticks))
+            self._loading = False
+        self._refresh_list()
+        self._refresh()
 
     def _refresh_list(self):
         self._list.clear()

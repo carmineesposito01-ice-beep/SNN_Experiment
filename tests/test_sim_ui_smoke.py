@@ -1083,3 +1083,50 @@ def test_the_composer_edge_caps_a_preset_at_600(qapp):
     edge.setValue(5000)                                    # try to drag a preset past 600
     edge.sigPositionChangeFinished.emit(edge)
     assert page._ticks.value() == 600                      # capped at the library length
+
+
+def test_a_boundary_resizes_only_its_block_and_grows_the_total(qapp):
+    """TEETH: dragging block 1's boundary by +80 grows block 1 by 80 and the total by 80; block 0 is
+    byte-identical, block 2 keeps its ticks (it only shifts). The causal path was checked: cum[1]=200,
+    so a drag to x=380 -> new_ticks = 380-200 = 180 = 100+80."""
+    from sim.scenario_spec import Block, materialise
+    page = _page()
+    page.set_spec(_spec3([Block("const", 200, {"v": 21.0}),
+                          Block("ramp", 100, {"to_v": 5.0}),
+                          Block("const", 150, {"v": 5.0})]))
+    before0 = materialise(page._spec, page._params_gt, page._total_ticks()).v_leader[:200].copy()
+    total_before = page._total_ticks()                     # 450
+    line = page._boundaries._lines[1]                      # block 1's edge, at cum=200+100=300
+    line.setValue(380)                                     # drag right by 80
+    line.sigPositionChangeFinished.emit(line)
+    assert page._spec.blocks[1].ticks == 180               # 100 + 80
+    assert page._spec.blocks[2].ticks == 150               # untouched (only shifts)
+    assert page._total_ticks() == total_before + 80
+    after0 = materialise(page._spec, page._params_gt, page._total_ticks()).v_leader[:200]
+    np.testing.assert_array_equal(before0, after0)         # block 0 byte-identical
+
+
+def test_a_preset_boundary_caps_at_600(qapp):
+    from sim.scenario_spec import Block
+    page = _page()
+    page.set_spec(_spec3([Block("preset", 300, {"name": "hard_brake"}),
+                          Block("const", 100, {"v": 5.0})]))
+    line = page._boundaries._lines[0]                      # preset edge, at 300
+    line.setValue(5000)
+    line.sigPositionChangeFinished.emit(line)
+    assert page._spec.blocks[0].ticks == 600               # capped at the library length
+
+
+def test_resizing_an_open_row_syncs_the_composer(qapp):
+    """TEETH: the composer<->total sync. Block 0 is open in the composer; resizing it in the total
+    updates _ticks, so a later Apply does not revert the resize."""
+    from sim.scenario_spec import Block
+    page = _page()
+    page.set_spec(_spec3([Block("const", 200, {"v": 21.0}), Block("ramp", 100, {"to_v": 5.0})]))
+    page._on_row_selected(0)                               # open block 0 in the composer
+    line = page._boundaries._lines[0]                      # block 0's edge, at 200
+    line.setValue(320)                                     # resize to 320
+    line.sigPositionChangeFinished.emit(line)
+    assert page._ticks.value() == 320                      # composer synced
+    page._on_add()                                         # Apply must not revert it
+    assert page._spec.blocks[0].ticks == 320
