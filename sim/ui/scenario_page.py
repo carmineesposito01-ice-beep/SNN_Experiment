@@ -13,7 +13,7 @@ from dataclasses import replace
 import numpy as np
 import pyqtgraph as pg
 from PySide6.QtCore import Signal
-from PySide6.QtWidgets import (QComboBox, QDoubleSpinBox, QHBoxLayout, QLabel, QListWidget,
+from PySide6.QtWidgets import (QComboBox, QDoubleSpinBox, QHBoxLayout, QLabel, QLineEdit, QListWidget,
                                QPushButton, QSpinBox, QVBoxLayout, QWidget)
 
 from sim.scenario import scenario_library
@@ -132,12 +132,14 @@ class ScenarioPage(QWidget):
         self._add = QPushButton("Aggiungi blocco"); self._add.clicked.connect(self._on_add)
         self._del = QPushButton("Rimuovi"); self._del.clicked.connect(self._on_del)
         self._use = QPushButton("Usa questo scenario"); self._use.clicked.connect(self._on_use)
+        self._name_edit = QLineEdit(); self._name_edit.setPlaceholderText("nome scenario")
+        self._built_count = 0
         self._value_lbl, self._period_lbl = QLabel("valore"), QLabel("periodo")
         for w in (QLabel("blocco"), self._kind, QLabel("durata"), self._ticks,
                   self._preset, self._value_lbl, self._value, self._period_lbl, self._period,
                   self._nodes_lbl, self._nodes,
                   QLabel("neutro a/b"), self._neu_a, self._neu_b,
-                  self._add, self._del, self._use):
+                  self._add, self._del, QLabel("nome"), self._name_edit, self._use):
             controls.addWidget(w)
         controls.addStretch(1)
         root.addLayout(controls)
@@ -519,4 +521,7 @@ class ScenarioPage(QWidget):
     def _on_use(self):
         if self._spec is None or not self._spec.blocks:
             return
-        self.sigScenarioBuilt.emit(materialise(self._spec, self._params_gt, self._total_ticks()))
+        self._built_count += 1
+        name = self._name_edit.text().strip() or f"scenario_{self._built_count}"
+        spec = replace(self._spec, name=name)
+        self.sigScenarioBuilt.emit(materialise(spec, self._params_gt, self._total_ticks()))
