@@ -15,7 +15,7 @@
   lo scrive lo cambia). **Verificalo tu**: `git log --oneline -1` + `git status` + `git rev-list --count
   origin/Simulator..HEAD`. **Atteso: working tree pulito, 0 commit non pushati.** Se non è così, capisci
   perché prima di lavorare.
-- **Env/test**: conda `cf_sim`. **272 test verdi** (**22** file sim + `test_champion_io.py`; il 22°
+- **Env/test**: conda `cf_sim`. **275 test verdi** (**22** file sim + `test_champion_io.py`; il 22°
   è `test_sim_drag_handles.py`, nato col 4b). Core SNN bit-identico **tranne `sim/events.py`**,
   scongelato di proposito nel ciclo 3 (vedi azione 3).
   ⚠️ La suite intera gira in **~3-4 minuti** (`test_sim_ui_smoke.py` da solo ~2.5: 81 test, molti
@@ -33,10 +33,21 @@ Lo strumento è ora a **4 modi** — **Live cockpit (13 dock, + oracolo ghost)**
 **Post-run dashboard** + **Scenari (costruttore ITERATIVO con drag + advisory)**. I **3 cicli** aperti il
 2026-07-15 sono **tutti chiusi** (oracolo · identità checkpoint · costruttore di scenari), e con essi
 **il 4a** (costruttore iterativo) e **il 4b** (drag + `custom` + advisory fisica) *(entrambi 2026-07-16)*.
-**Il follow-up del 2026-07-15 è CHIUSO.** Prossimo item aperto: il **merge `Simulator`→`main`** (da
-sequenziare con `Simulink_Importer`). Vedi §AZIONI PENDENTI. Tutto committato e pushato. Il dettaglio di
-com'è fatto sta nelle sezioni sotto (§Architecture, §Phase history) e nella **mappa**
-`document/SIMULATOR_ARCHITECTURE.md`.
+**Il follow-up del 2026-07-15 è CHIUSO.**
+🐛 **FIX post-verifica utente (2026-07-16, `44f8c19`+`c48fa50`)**: il builder materializzava a **N=600
+fisso**, quindi un blocco aggiunto oltre i 600 tick (es. una sine dopo un const-600) **spariva in
+silenzio** → lo scenario usciva piatto (l'utente vedeva "un following standard"). **La lunghezza dello
+scenario ora è la SOMMA dei tick dei blocchi** (`_total_ticks()`, un solo proprietario, nessun cap da
+sforare) — scenari di qualsiasi lunghezza gratis (misurato: 50 min di scenario = 4 ms di materialise,
+N=600 era pura convenzione). Fix latente accluso: `_preset_samples` genera la libreria alla lunghezza
+**canonica 600** (`_PRESET_N`), non alla N di output, perché i preset cut-family scalano con N e sarebbero
+cambiati con la durata della scena. **Ancora aperte dall'utente (da brainstormare — ciclo builder-UX)**:
+maniglie laterali per la durata dei blocchi (preview blocco + preview totale), congelare l'autorange del
+composer; e più avanti nome/cancella/**esporta .csv+.mat**, dock anteprima scenario nel cockpit,
+**generatore dataset** (randomizzazione da seed + mix percentuale). Prossimo item **tecnico** aperto: il
+**merge `Simulator`→`main`** (da sequenziare con `Simulink_Importer`). Vedi §AZIONI PENDENTI. Tutto
+committato e pushato. Il dettaglio sta nelle sezioni sotto (§Architecture, §Phase history) e nella
+**mappa** `document/SIMULATOR_ARCHITECTURE.md`.
 
 ## ▶️ AZIONI PENDENTI (puntatori, non dump — le azioni 1-3 SUPERANO il "next = merge" della milestone)
 
