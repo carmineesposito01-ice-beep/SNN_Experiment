@@ -357,3 +357,36 @@ def test_a_custom_block_joins_continuously():
     two = materialise(_spec([Block("ramp", 200, {"to_v": 6.0}),
                              Block("custom", 200, {"nodes": [18.0, 18.0]})]), _PG, N=400).v_leader
     assert abs(two[200] - prev_last) < 1e-9               # first custom sample == previous last: no jump
+
+
+def test_physics_gap_lights_just_outside_the_limit_not_just_inside():
+    """TEETH, both directions and both signs: a segment just INSIDE the leader's rate is allowed, one
+    just OUTSIDE lights. The margin (0.05 m/s^2) is far above float noise -- 'exactly at b_max' is
+    unconstructible when acc = diff(v)/DT goes through DT=0.1 (measured: 6.0*DT/DT rounds to
+    -5.9999999999999964, and 3.0*DT/DT to 3.0000000000000004), so it is not asserted. What is asserted
+    is the thing that matters and can go wrong: the inequality points the right way, with the right
+    sign, on the right axis."""
+    from sim.scenario_spec import physics_gap, LeaderStyle
+    neutral = LeaderStyle(a_max=3.0, b_max=6.0)
+    # explicit accelerations, not margin arithmetic (which I got sign-wrong once): a segment whose
+    # acc sits just inside the limit is allowed, just outside lights. |5.95|<6 and 2.95<3 -> allowed.
+    for acc_val, red in [(-5.95, False), (-6.05, True)]:               # deceleration axis (b_max=6)
+        v = np.array([10.0, 10.0 + acc_val * DT])
+        assert bool(physics_gap(v, neutral)[0].sum()) is red, f"brake acc {acc_val}"
+    for acc_val, red in [(2.95, False), (3.05, True)]:                 # acceleration axis (a_max=3)
+        v = np.array([10.0, 10.0 + acc_val * DT])
+        assert bool(physics_gap(v, neutral)[0].sum()) is red, f"accel acc {acc_val}"
+
+
+def test_physics_gap_returns_the_acceleration_for_the_annotation():
+    from sim.scenario_spec import physics_gap, LeaderStyle
+    v = np.array([21.0, 4.0])                              # -170 m/s^2 in one tick
+    mask, acc = physics_gap(v, LeaderStyle(3.0, 9.0))
+    assert mask[0]
+    assert abs(acc[0] - (4.0 - 21.0) / DT) < 1e-9         # the number the UI quotes
+
+
+def test_physics_gap_never_flags_a_placid_constant():
+    from sim.scenario_spec import physics_gap, LeaderStyle
+    mask, _ = physics_gap(np.full(100, 15.0), LeaderStyle(1.0, 1.0))
+    assert mask.sum() == 0                                 # a flat leader asks nothing of anyone

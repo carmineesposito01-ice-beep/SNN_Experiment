@@ -174,6 +174,20 @@ def effective_style(block, neutral):
                        b_max=float(np.clip(neutral.b_max + db, *B_MAX_RANGE)))
 
 
+def physics_gap(v, neutral):
+    """Which segments this driver cannot produce, and the acceleration each one demands. PURE.
+
+    The reference is the NEUTRAL, not an effective style: on a custom the pad is dead and the bias is
+    always None, so effective_style(block, neutral) == neutral anyway. acc = diff(v)/DT is exactly the
+    leader acceleration the engine reads (stepper.py:76, simulate:189), so the red is the same
+    arithmetic the physics runs -- not a UI approximation. `>` and `<` (strict): a segment AT the limit
+    is allowed; only past it lights.
+    """
+    acc = np.diff(np.asarray(v, dtype=np.float64)) / DT
+    mask = (acc > neutral.a_max) | (acc < -neutral.b_max)
+    return mask, acc
+
+
 def materialise(spec, params_gt, N):
     """ScenarioSpec -> Scenario. Pure: same spec, same v_leader, byte for byte.
 
