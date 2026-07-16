@@ -15,7 +15,7 @@
   lo scrive lo cambia). **Verificalo tu**: `git log --oneline -1` + `git status` + `git rev-list --count
   origin/Simulator..HEAD`. **Atteso: working tree pulito, 0 commit non pushati.** Se non è così, capisci
   perché prima di lavorare.
-- **Env/test**: conda `cf_sim`. **292 test verdi** (**24** file sim + `test_champion_io.py`; gli isolati
+- **Env/test**: conda `cf_sim`. **294 test verdi** (**24** file sim + `test_champion_io.py`; gli isolati
   sono `test_sim_drag_handles.py` (nodi, 4b), `test_sim_duration_handles.py` (durata, builder-UX) e
   `test_sim_scenario_preview.py` (dock Scenario, item 1)). ⚠️ **La suite è la glob SIM**
   (`pytest tests/test_sim_*.py tests/test_champion_io.py`), **NON `pytest tests/`**: la dir ha anche script
@@ -62,7 +62,11 @@ cambiati con la durata della scena. **Ancora aperte dall'utente (post-verifica 2
 - **cockpit dock** (item 1): anteprima scenario + marker al posto di Events → ✅ **FATTO** *(2026-07-16)*.
   spec `…/specs/2026-07-16-cockpit-scenario-preview-dock-design.md` (`33795fac`) → plan
   `…/plans/2026-07-16-cockpit-scenario-preview-dock.md` → **TDD completo** (`e95501e5`→`926b9279`).
-  **292 test verdi · core+`closed_loop_eval`+`materialise` intatti (diff vuoto) · render-verificato.**
+  **294 test verdi · core+`closed_loop_eval`+`materialise` intatti (diff vuoto) · render-verificato.**
+  **Polish (post-verifica utente)**: `set_scenario` impone uno **span Y minimo `_MIN_Y_SPAN`=15 m/s** — lo
+  scenario `following` (v_set + rumore std 0.3, banda ~2 m/s) NON è un bug (è il benchmark congelato,
+  verificato: preview==v_leader, seedato), ma l'autorange stretto lo faceva sembrare rumore violento; ora si
+  legge come crociera quasi piatta (fondo clampato a ≥0).
   **Sostituzione SECCA**: il dock **Events è sparito**, `ScenarioPreviewPanel` (nuovo
   `sim/ui/scenario_preview.py`, isolato+testato da solo) prende il suo slot in `DOCK_ORDER` + i 4 preset;
   **Guida ora lo MOSTRA** (prima nascondeva Events). Traccia `v_leader` statica (solo leader) + **marker al
