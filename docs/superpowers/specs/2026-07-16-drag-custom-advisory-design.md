@@ -197,8 +197,45 @@ handles. One owner, no shadow list.
 On the composer's preview while you draw, **and** on the scenario curve below — but only on the samples
 that come from `custom` blocks. Presets and parametric blocks are never painted: the first are a
 different vehicle, the second are rate-limited by construction, and painting either would be exactly
-the falsehood the preset measurement already exposed. It costs nothing: the page knows each block's
-sample range from the running sum of `ticks`, so `materialise` is not touched.
+the falsehood the preset measurement already exposed.
+
+**The composer preview is trivial**: it is a one-block spec, so every one of its `n-1` segments belongs
+to the custom block — paint wherever `physics_gap` is `True`.
+
+**The scenario curve needs an attribution rule, and the study found the naïve one wrong.** The spec
+first said "the running sum of `ticks`". But `materialise` does not lay samples out that way: it
+**truncates** the last block to `N` (`scenario_spec.py:163,165`) and fills a **flat hold tail** after
+the blocks (`:170`). A cumsum recomputed in the page would drift from that the moment the blocks sum
+past 600. So:
+
+- **The layout is exposed by the pure module, not recomputed in Qt.** `materialise` already walks the
+  exact segment sizes; it (or a sibling `block_of_sample(spec, N) -> np.ndarray[int]`) returns the
+  per-sample owning-block index, built from the same `min(ticks, N-i)` clip and the same tail fill. The
+  page reads it; it never re-derives it. This is the one line that keeps the red honest when a scenario
+  overflows N.
+- **A segment `k` (the value `diff(v)[k]`, i.e. arriving at sample `k+1`) is eligible for red iff sample
+  `k+1` is owned by a `custom` block.** `k+1`, not `k`: the acceleration is the change *produced* on
+  arrival, so it belongs to the block that produced `k+1`. At the seam `custom → next`, that segment is
+  the next block's first step — owned by `next`, which is parametric (rate-limited, never red) or a
+  preset (excluded); correct. At the seam `prev → custom`, the first custom segment is owned by `custom`
+  and *is* eligible — honest, and it is the "an earlier block changes v0 → the first segment may turn
+  red" row in §Errors.
+- **The flat tail is moot**: `diff = 0` there, so it is never red regardless of who owns it.
+- **Truncation is automatic**: the mask is over the real `N-1` segments, so a custom cut by `N` only
+  paints its visible part.
+
+`materialise` itself stays untouched — the layout helper is additive and pure.
+
+### ⑥ The handle lifecycle (a scenario_page constraint, not a model one)
+
+The nodes are params and the handles are their only widget (§④), so `_params_for("custom")` reads the
+`TargetItem`s live. That imposes an **ordering constraint the plan must honour**, and it is the same
+shape as the two-owner bug 4a paid for: the handles must **exist before any `_composer_block()` runs for
+a custom**. Concretely, `_on_kind_changed` and `_load_into_widgets` create/place the handles *before*
+their trailing `_refresh_composer()` call, and switching *away* from `custom` clears them. A handle read
+while the list is empty or half-built would fabricate a wrong `nodes`, silently — exactly the failure
+mode the "one owner" rule exists to prevent, so a test drives kind→custom→kind→custom and asserts the
+params survive.
 
 ## Errors and edge cases
 
@@ -211,6 +248,8 @@ sample range from the running sum of `ticks`, so `materialise` is not touched.
 | the last node before `ticks-1` | the last value HOLDS to the end — same rule as `materialise` |
 | an earlier block changes `v0` | node 0 follows; the first segment may turn red, which is honest |
 | a bias or a pad click on a `custom` | ignored and **not recorded**; the pad greys out and says why |
+| blocks sum past `N` under a `custom` | the red stops where the samples stop: the mask is over the real `N-1` segments (§⑤), so the clipped part is simply absent |
+| the `custom → preset` seam | the joining segment is the preset's first step → unpainted (a preset is never red); attributed by "owner of sample `k+1`" (§⑤) |
 | a cycle-3/4a JSON | loads unchanged: it contains no `custom` |
 
 ## Testing
@@ -231,9 +270,20 @@ sample range from the running sum of `ticks`, so `materialise` is not touched.
 7. **JSON round-trips a `custom`** — `from_json(to_json(s)) == s`, with the speeds rebuilt as a
    **tuple** (a list compares unequal while printing identically -- the 4a `bias` trap, verbatim); and a
    file whose nodes were hand-edited to a different COUNT loads and draws at that count.
-8. **The frame budget holds** with the handles live and the advisory recomputed per drag.
-9. **A spline would fail test 1's sibling** — not a test, a note: if anyone swaps `np.interp` for a
-   spline, tests 2 and 4 go soft and `v < 0` becomes reachable. The docstring says so.
+8. **The attribution matches materialise's real layout (teeth)** — two cases the naïve cumsum gets
+   wrong: (a) blocks summing **past N** truncate the last block, and the red must stop where the samples
+   stop, not where the ticks say; (b) at a `custom → preset` seam the joining segment must be attributed
+   to the preset (unpainted), not the custom. A test builds both and asserts the red mask equals the one
+   derived from the layout helper, not from `cumsum(ticks)`.
+9. **The handle lifecycle keeps one owner (teeth)** — kind→custom→(drag)→kind→custom→Apply: the params
+   survive, and reading the handles while they do not exist never fabricates a `nodes`. This is §⑥.
+10. **The frame budget holds — RE-MEASURED, not inherited.** The 4a number (2.09 ms pad drag) predates
+    both the advisory (O(N) numpy per refresh) and up to 25 handles that re-emit `sigPositionChanged`
+    ~2× per move (the x-snap re-emits). Assert the PEAK with the advisory on and a full node set, on a
+    4-block scenario. If it fails: the advisory mask is the cost — cache it per (spec, N) and invalidate
+    on edit, not recompute per drag frame. Do not raise the number.
+11. **A spline would fail test 1's sibling** — not a test, a note: if anyone swaps `np.interp` for a
+    spline, tests 2 and 4 go soft and `v < 0` becomes reachable. The docstring says so.
 
 Baseline: **244 tests green** (21 sim files + `test_champion_io.py`). Env `cf_sim`, no LAPACK. ⚠️ The
 full suite takes ~3–4 minutes — a 2-minute default timeout looks like a hang and is not one.
