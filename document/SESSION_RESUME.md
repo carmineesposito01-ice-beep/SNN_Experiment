@@ -5,6 +5,48 @@
 
 ---
 
+## ▶ RIPRESA A FREDDO — LEGGERE QUESTO BLOCCO PER PRIMO (2026-07-16)
+
+> **Ruolo di questo file:** punto d'ingresso + **STATO** del track `Simulink_Importer`. NON è la procedura
+> generale (quella è la skill `session-reprise`). È un **guida ai documenti**: quando dice «leggi X», leggi X —
+> non ricostruire a memoria.
+
+**Repo/posizione:** `D:\Project_MBSE\1.Reti Neurali\Rete_SNN_Test\CF_FSNN\.worktrees\Simulink_Importer`,
+branch **`Simulink_Importer`**. **Tutto committato e pushato**, working tree pulito (restano solo file
+dell'utente `closed_loop_demo.slx`/`slblocks.m` e i `*.mexw64` untracked — **NON toccarli né stagearli**).
+*(Esistono altri track/worktree — es. `Simulator`, `main`/EventProp — con LORO SESSION_RESUME: questo file vale
+solo per `Simulink_Importer`.)*
+
+**Stato in una riga:** SP2/SP3 chiusi, **debito Fase B risolto** (bitstream escluso), **SP4-L scartata sui dati**,
+e **SP4-M (time-mux ACC-IIDM) ha spec + piano pronti** — pendente = **eseguirlo**.
+
+**AZIONE PENDENTE (immediata):** eseguire il piano di **SP4-M** dal **Task 1**.
+→ leggi la sezione **`## SP4 — ACC-IIDM fast`** più sotto in questo file, poi la **spec**
+`docs/superpowers/specs/2026-07-16-acc-iidm-timemux-design.md` e il **piano**
+`docs/superpowers/plans/2026-07-16-acc-iidm-timemux.md`. Esegui col ciclo `superpowers:executing-plans` (o
+`subagent-driven-development`). **Task 1 = make-or-break** (verifica empirica del resource sharing HDL Coder: se
+centra Fmax ≥ 11,65 MHz coi divisori ridotti → prosegui; se no → la FSM esplicita è un piano a sé da scrivere).
+MATLAB: `"C:\Program Files\MATLAB\R2026a\bin\matlab.exe" -batch`. Vivado: `C:\AMDDesignTools\2026.1`.
+
+**MODI DI LAVORO (vincolanti — la sessione li ha pagati a caro prezzo):**
+- **Verifica sul DATASET, mai su un caso singolo** — riporta *quanti su quanti* (es. 0/240.000, 5/5).
+- **Un cancello che non può fallire non è un cancello**: deve `assert`, e va **provato sensibile** (rompilo apposta).
+- **Una claim scritta in un doc/commit/Description è una claim da VERIFICARE**, non un ragionamento da dichiarare
+  (in questa sessione 4-5 mie deduzioni plausibili sono risultate false alla misura).
+- **Root cause prima del fix**; se un loop `fi` è lento → **MEXalo**, non ridurre il campione.
+- Il messaggio VERO di un errore di chart si ha da `codegen('-config:lib',…,{a,a,a,a})` con `a=fi(0,1,32,20)`,
+  non da Simulink. Gotcha fixed-point in `document/SP3_ACC_IIDM_HDL.md` §insidie.
+- **Design prima del codice** (`brainstorming → spec → piano → esecuzione`). Doc aggiornati nei **doc di processo**,
+  non solo qui. Commit **conventional SENZA `Co-Authored-By`**; push libero su `Simulink_Importer`.
+
+**TONO:** italiano, deciso, **evidence-first**, onesto fino all'osso (ammetti gli errori, smaschera le claim non
+verificate anche tue, niente compiacenza). Conciso; quando una scelta è dell'utente, chiedi con un'opzione
+raccomandata; quando puoi decidere sui dati, decidi e mostralo.
+
+**Dopo aver ricostruito lo stato: riporta (stato · azione pendente · modi di lavoro · tono) e ASPETTA il via.**
+
+---
+
 ## 🔴 BUG DEL FORWARD DEPLOYATO — TROVATO E CORRETTO (2026-07-14) — LEGGERE PER PRIMO
 
 > **`snn_b2_fsm` (il forward del bitstream) NON era bit-exact a `snn_core`**: divergeva sull'**82,4 %** dei
@@ -105,10 +147,18 @@ decisione**: un reciproco approssimato che alimenta `z²` è fragile per costruz
 committata e riusabile (`acc_recip_lut`, `acc_types.recipN`, `acc_div`, sweep+MEX); **SP3 invariato** (recipN=0
 byte-identico, `run_plant_parity` 0.00e+00). Review-catch: divisore costante `DT` resta `divide()` (`nargin>=6`).
 
-**PROSSIMO = M (time-mux IIDM), scelto dall'utente.** Divisione **sequenziale ESATTA** → bit-identica a SP3
-(`dmax=0`), zero approssimazione, spezza la catena combinatoria (FSM multi-ciclo, ~341 clock disponibili). **L
-insegna a M:** le divisioni vanno **sequenziate, non approssimate**. M è un **redesign FSM** → merita il ciclo
-`brainstorming → spec → piano` in **sessione NUOVA** (contesto pulito; questa è carica dopo SP2/SP3/FaseB/SP4-L).
+**M (time-mux IIDM) — DESIGN E PIANO FATTI (2026-07-16, `b3946b59` spec, `7512af36` piano). PENDENTE = ESEGUIRE.**
+Scelto dall'utente: divisione **sequenziale ESATTA** → bit-identica a SP3 (`dmax=0`), zero approssimazione, spezza
+la catena combinatoria. **Meccanismo deciso da VERIFICA (non assunto):** si prova PRIMA il **resource sharing di
+HDL Coder** sui 5 `divide()` (condivide+sequenzia dalla sorgente unica → bit-identico by construction, config,
+minimo lavoro); **FSM esplicita solo in fallback** se il tool non basta (= piano a sé, non ancora scritto).
+v1 = solo le 5 divisioni; v2 (sequenziare tutto) = confronto successivo.
+- **Spec:** `docs/superpowers/specs/2026-07-16-acc-iidm-timemux-design.md`
+- **Piano (ESEGUIRE da qui):** `docs/superpowers/plans/2026-07-16-acc-iidm-timemux.md` — **Task 1 =
+  make-or-break** (`probe_acciidm_sharing` + sintesi OOC → Fmax ≥ 11,65? divisori giù?). Se Task 1 riesce → Task 2
+  (bake + `dmax=0`) + Task 3 (doc). Se il resource sharing NON basta → si ferma, la FSM esplicita è il piano
+  successivo.
+- **L insegna a M:** le divisioni vanno **sequenziate, non approssimate** (`document/SP4_ACC_IIDM_FAST.md`).
 
 **Debito Fase B — RISOLTO in parte (2026-07-16, `4298adf3`).** `report/FPGA_PHASE_B_REPORT` + `results.csv`
 **ri-sintetizzati col campione corretto** (decode-64 + fix §2.1), stesso flusso Fase B: LUT 4223→3868, Fmax
