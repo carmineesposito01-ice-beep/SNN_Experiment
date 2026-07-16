@@ -67,8 +67,9 @@ count to shorten the segments. The count is not only a resolution knob.
 2. **`physics_gap(v, neutral)`** — pure; which segments the leader cannot produce, and by how much.
 3. **The drag** — one draggable handle per free node, **constrained to vertical**, on the composer's
    block preview. Only when `kind == "custom"`.
-4. **A node-count control** — a spinbox; changing it **re-samples the current curve** at the new node
-   positions rather than discarding the drawing.
+4. **A node-count control** — a spinbox (**1..25** free nodes, default **5**); changing it **re-samples
+   the current curve** at the new node positions rather than discarding the drawing. `count` is not a
+   stored field: it is `len(nodes)`.
 5. **The advisory drawn in two places** — the composer's block preview while you draw, **and** the
    scenario curve below, but **only on samples that come from `custom` blocks**.
 6. **`custom` inherits the preset's two rules** — the pad dies on it, and it never records a bias.
