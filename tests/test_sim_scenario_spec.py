@@ -310,3 +310,50 @@ def test_json_omits_bias_when_absent_and_round_trips_it_when_present():
     assert back.blocks[0].bias == (1.5, -2.0)                   # a TUPLE, not the JSON list
     np.testing.assert_array_equal(materialise(back, _PG, N=600).v_leader,
                                   materialise(biased, _PG, N=600).v_leader)
+
+
+# ---- custom: a hand-drawn polyline -------------------------------------------------------------
+
+def test_custom_is_a_linear_polyline_anchored_at_v0():
+    """Node 0 IS v0 (not stored); the nodes are SPEEDS on a derived, evenly-spaced tick grid."""
+    from sim.scenario_spec import _custom_node_ticks, _custom_samples
+    v = _custom_samples([10.0, 10.0, 4.0], n=90, v0=21.0)
+    assert v.shape == (90,)
+    assert v[0] == 21.0                                   # anchored at v0
+    assert abs(v[-1] - 4.0) < 1e-9                        # last node is the last sample
+    # linear between anchor (0,21) and first node (~30,10): midpoint ~ (21+10)/2
+    assert abs(v[15] - (21.0 + (10.0 - 21.0) * 15 / 30.0)) < 0.2
+
+
+def test_custom_with_zero_nodes_is_flat_at_v0():
+    from sim.scenario_spec import _custom_samples
+    v = _custom_samples([], n=50, v0=13.5)
+    np.testing.assert_array_equal(v, np.full(50, 13.5))   # np.interp on a single point
+
+
+def test_custom_clips_speeds_to_v_range_no_reverse_leader():
+    """A hand-edited node beyond the physical range is pinned: v<0 is the leader in reverse, which is
+    not a scenario. Clipping the NODES (not the samples) keeps the polyline linear in-range."""
+    from sim.scenario_spec import _custom_samples, V_RANGE
+    v = _custom_samples([-5.0, 99.0], n=40, v0=10.0)
+    assert v.min() >= V_RANGE[0] - 1e-9 and v.max() <= V_RANGE[1] + 1e-9
+
+
+def test_moving_one_node_changes_only_its_two_segments():
+    """TEETH: interp locality IS the drawing model. A change that leaked past the neighbouring nodes
+    would still 'change the curve' and pass a naive test."""
+    from sim.scenario_spec import _custom_samples
+    base = _custom_samples([10.0, 10.0, 10.0, 10.0], n=200, v0=21.0)
+    moved = _custom_samples([10.0, 4.0, 10.0, 10.0], n=200, v0=21.0)   # node index 1 moved
+    d = np.flatnonzero(np.abs(base - moved) > 1e-9)
+    # node 1 sits at tick ~ linspace(0,199,5)[2]=99.5; its neighbours at ~49.75 and ~149.25.
+    assert d.min() > 45 and d.max() < 155                 # untouched outside [node0..node2]
+
+
+def test_a_custom_block_joins_continuously():
+    """Extends cycle 3's boundary property to custom: node-0-is-v0 means a custom never teleports at a
+    junction (materialise threads v as each block's v0). preset is the ONLY kind that may seam."""
+    prev_last = materialise(_spec([Block("ramp", 200, {"to_v": 6.0})]), _PG, N=200).v_leader[-1]
+    two = materialise(_spec([Block("ramp", 200, {"to_v": 6.0}),
+                             Block("custom", 200, {"nodes": [18.0, 18.0]})]), _PG, N=400).v_leader
+    assert abs(two[200] - prev_last) < 1e-9               # first custom sample == previous last: no jump

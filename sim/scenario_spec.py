@@ -21,8 +21,10 @@ from sim.scenario import manual_scenario, scenario_library
 # (utils/closed_loop_eval.py:22) -- the same one panic_stop uses. Not a number picked for looks.
 A_MAX_RANGE = (1.0, 4.0)
 B_MAX_RANGE = (1.0, 9.0)
+V_RANGE = (0.0, 40.0)          # the leader's speed range: same as the builder's value spinbox.
+                               # v<0 is the leader in reverse -- not a scenario -- so custom clips to it.
 
-_KINDS = ("preset", "const", "ramp", "sine")
+_KINDS = ("preset", "const", "ramp", "sine", "custom")
 
 
 @dataclass(frozen=True)
@@ -108,6 +110,28 @@ def _sine_samples(amp, period, n, v0, style):
     return v0 + amp_eff * np.sin(2.0 * np.pi * t / float(period))
 
 
+def _custom_node_ticks(n, count):
+    """Where the free nodes sit: evenly spaced, ending at the last sample. DERIVED from (n, count),
+    never stored -- storing a tick would create a second owner of a derived value (the 4a
+    reopen-corruption bug). count == len(speeds); node 0 is not here (it IS v0)."""
+    return np.linspace(0.0, n - 1, count + 1)[1:]
+
+
+def _custom_samples(speeds, n, v0):
+    """A hand-drawn polyline: v0 at tick 0, then straight to each node's speed in turn.
+
+    LINEAR (np.interp), not spline: each segment has ONE constant acceleration, so the advisory can
+    light a whole segment and quote the number exactly; and a spline can overshoot past its own nodes
+    and produce v<0 (the leader in reverse), which np.interp cannot. Nodes are clipped to V_RANGE
+    BEFORE interpolation, so an out-of-range node is pinned and the line between in-range nodes stays
+    in range. If anyone swaps this for a spline, the edge-exact advisory test and the no-reverse test
+    both go soft -- that is the guard.
+    """
+    xs = np.concatenate(([0.0], _custom_node_ticks(n, len(speeds))))
+    ys = np.clip(np.concatenate(([float(v0)], np.asarray(speeds, dtype=np.float64))), *V_RANGE)
+    return np.interp(np.arange(n), xs, ys)
+
+
 def _block_samples(block, v0, style, params_gt, N):
     """The samples this block contributes, starting from speed v0."""
     n = int(block.ticks)
@@ -119,6 +143,8 @@ def _block_samples(block, v0, style, params_gt, N):
         return _preset_samples(str(block.params["name"]), n, params_gt, N)
     if block.kind == "sine":
         return _sine_samples(float(block.params["amp"]), float(block.params["period"]), n, v0, style)
+    if block.kind == "custom":
+        return _custom_samples(block.params["nodes"], n, v0)   # ignores style, like preset
     raise ValueError(f"unknown block kind: {block.kind!r} (have: {_KINDS})")
 
 
