@@ -1,4 +1,4 @@
-function accel = acc_iidm_open(s, v, dv, v_l, p, rst, T) %#codegen
+function [accel, pairs] = acc_iidm_open(s, v, dv, v_l, p, rst, T) %#codegen
 %ACC_IIDM_OPEN  ACC-IIDM **open-loop**: accel = f(stato, parametri). NON integra v ne' s.
 %  s, v, dv, v_l : stato fornito DA FUORI (il loop lo chiude il sistema che testa)
 %  p             : [v0; T; s0; a; b]
@@ -71,6 +71,19 @@ function accel = acc_iidm_open(s, v, dv, v_l, p, rst, T) %#codegen
   a_blend = cast((1-COOL)*a_iidm + COOL*(a_cah + bf*tanh(dd)), 'like', T.acc);
   if a_iidm >= a_cah, ac = a_iidm; else, ac = a_blend; end
   accel = cast(min(max(ac, -9), af), 'like', T.out);
+
+  % [SP4-M-FSM G1] Coppie (num,den) REALI delle 5 divisioni variabili, per il gate di bit-identita' del
+  % blocco Divide (probe_divide_bitexact). Ramo nargout-gated: nargout e' coder.const -> il path HDL a 1
+  % output (il blocco) NON genera questo ramo, quindi SP3 resta invariato. Cast a T.acc = LOSSLESS: tutti i
+  % tipi (st/par/acc/out) hanno f=8 frazionari e T.acc ha il MAX di bit interi (10) -> il valore non cambia
+  % (G2 lo ri-verifica sul dataset). Niente double() qui (vietato nel datapath, HDL_PHASE §9): restano fi.
+  if nargout >= 2
+    pairs = [cast(vq*dq,'like',T.acc),          cast(2*sab,'like',T.acc); ...
+             cast(vq,'like',T.acc),             cast(v0f,'like',T.acc); ...
+             cast(s_star,'like',T.acc),         cast(s_safe,'like',T.acc); ...
+             cast(max(dq,0)^2,'like',T.acc),    cast(2*s_safe + 1e-6,'like',T.acc); ...
+             cast(a_iidm - a_cah,'like',T.acc),  cast(bf + 1e-6,'like',T.acc)];
+  end
 end
 
 
