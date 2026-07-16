@@ -432,3 +432,18 @@ def test_a_hand_edited_custom_loads_at_its_own_node_count():
     spec = from_json(text)
     assert len(spec.blocks[0].params["nodes"]) == 7
     assert materialise(spec, _PG, N=600).v_leader.shape == (600,)
+
+
+def test_a_preset_block_is_canonical_regardless_of_scenario_length():
+    """MEASURED: cut_in cuts at N//2 and hard_brake brakes from N//3, so the library preset SCALES
+    with the length it is generated at. A preset block must reproduce the canonical 600-length
+    version even when the scenario's total length is not 600 -- else changing the scenario length
+    would silently rewrite a validated preset."""
+    from sim.scenario import scenario_library
+    lib = {s.name: s.v_leader for s in scenario_library(_PG, N=600, rng=np.random.default_rng(0),
+                                                        include_tail=True)}
+    # a 300-tick hard_brake in a SHORT scenario (total 400): its content must be the 600-canonical one,
+    # not the N=400 version (where the brake would start at 400//3 instead of 600//3).
+    spec = _spec([Block("preset", 300, {"name": "hard_brake"}), Block("const", 100, {"v": 5.0})])
+    vl = materialise(spec, _PG, N=400).v_leader
+    np.testing.assert_array_equal(vl[:300], lib["hard_brake"][:300])

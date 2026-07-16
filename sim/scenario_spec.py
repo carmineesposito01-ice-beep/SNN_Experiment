@@ -26,6 +26,13 @@ V_RANGE = (0.0, 40.0)          # the leader's speed range: same as the builder's
 
 _KINDS = ("preset", "const", "ramp", "sine", "custom")
 
+# The library's CANONICAL length. A preset is a slice of scenario_library() -- and the cut-family
+# presets SCALE with the length they are generated at (cut_in cuts at N//2, hard_brake brakes from
+# N//3), MEASURED. So a preset block is always taken from the 600-length library, independent of the
+# scenario's OUTPUT length -- otherwise a scenario of a different total length would silently rewrite a
+# validated preset. (Presets therefore max out at 600 samples; a longer preset block is clamped.)
+_PRESET_N = 600
+
 
 @dataclass(frozen=True)
 class Block:
@@ -73,18 +80,22 @@ def _rate_limited_toward(v0, target, n, style):
     return np.clip(ramp, lo, hi)
 
 
-def _preset_samples(name, n, params_gt, N):
-    """A slice of scenario_library() AS-IS.
+def _preset_samples(name, n, params_gt):
+    """A slice of scenario_library() AS-IS, from the CANONICAL 600-length library.
 
     build_scenarios (utils/closed_loop_eval.py:332) is INVARIANT by the contract in its own docstring
     -- the reports run on it -- so a preset is reproduced exactly and the style does NOT touch it.
     A validated preset you rewrite is no longer that preset.
 
+    Generated at `_PRESET_N` (600), NEVER at the scenario's output length: the cut-family presets scale
+    with N (cut at N//2, brake from N//3), so a scenario of a different total length would otherwise
+    rewrite the preset. n > 600 is clamped by the slice (presets max out at the library length).
+
     The honest trade: because it is verbatim, a preset does NOT join continuously to the block before
     it -- it starts where the library starts. Every other kind joins seamlessly; the alternative here
     would be rewriting a validated profile. Put presets first, or accept the seam.
     """
-    lib = {s.name: s for s in scenario_library(params_gt, N=N,
+    lib = {s.name: s for s in scenario_library(params_gt, N=_PRESET_N,
                                                rng=np.random.default_rng(0), include_tail=True)}
     if name not in lib:
         raise ValueError(f"unknown preset: {name!r} (have: {sorted(lib)})")
@@ -132,7 +143,7 @@ def _custom_samples(speeds, n, v0):
     return np.interp(np.arange(n), xs, ys)
 
 
-def _block_samples(block, v0, style, params_gt, N):
+def _block_samples(block, v0, style, params_gt):
     """The samples this block contributes, starting from speed v0."""
     n = int(block.ticks)
     if block.kind == "const":
@@ -140,7 +151,7 @@ def _block_samples(block, v0, style, params_gt, N):
     if block.kind == "ramp":
         return _rate_limited_toward(v0, float(block.params["to_v"]), n, style)
     if block.kind == "preset":
-        return _preset_samples(str(block.params["name"]), n, params_gt, N)
+        return _preset_samples(str(block.params["name"]), n, params_gt)
     if block.kind == "sine":
         return _sine_samples(float(block.params["amp"]), float(block.params["period"]), n, v0, style)
     if block.kind == "custom":
@@ -202,7 +213,7 @@ def materialise(spec, params_gt, N):
     for block in spec.blocks:
         if i >= N:
             break
-        seg = _block_samples(block, v, effective_style(block, spec.style), params_gt, N)[: N - i]
+        seg = _block_samples(block, v, effective_style(block, spec.style), params_gt)[: N - i]
         out[i:i + seg.size] = seg
         if seg.size:
             v = float(seg[-1])
