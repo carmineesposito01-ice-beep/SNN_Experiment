@@ -23,6 +23,8 @@ A_MAX_RANGE = (1.0, 4.0)
 B_MAX_RANGE = (1.0, 9.0)
 V_RANGE = (0.0, 40.0)          # the leader's speed range: same as the builder's value spinbox.
                                # v<0 is the leader in reverse -- not a scenario -- so custom clips to it.
+MAX_BLOCK_TICKS = 6000         # the builder's per-block duration cap: 10 min at DT=0.1. materialise is
+                               # vectorised (4 ms even at 30000), so this is generosity, not a limit.
 
 _KINDS = ("preset", "const", "ramp", "sine", "custom")
 

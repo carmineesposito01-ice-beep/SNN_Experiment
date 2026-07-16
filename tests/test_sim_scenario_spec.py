@@ -447,3 +447,17 @@ def test_a_preset_block_is_canonical_regardless_of_scenario_length():
     spec = _spec([Block("preset", 300, {"name": "hard_brake"}), Block("const", 100, {"v": 5.0})])
     vl = materialise(spec, _PG, N=400).v_leader
     np.testing.assert_array_equal(vl[:300], lib["hard_brake"][:300])
+
+
+def test_a_block_longer_than_600_materialises_fully():
+    """The length is the sum of ticks; a block > 600 is not special. MAX_BLOCK_TICKS is the UI cap,
+    not a model limit -- materialise handles any N (4 ms at 30000)."""
+    from sim.scenario_spec import MAX_BLOCK_TICKS
+    assert MAX_BLOCK_TICKS == 6000
+    n = 1500
+    # v_init=12 so the const does not rate-limit down from 21 first -- a const block ramps toward its
+    # value at the style's rate, it does not teleport (the recurring causal-path check). The point of
+    # the test is only that a block > 600 materialises to its FULL length, N=1500.
+    vl = materialise(_spec([Block("const", n, {"v": 12.0})], v_init=12.0), _PG, N=n).v_leader
+    assert vl.shape == (n,)
+    np.testing.assert_allclose(vl, 12.0)
