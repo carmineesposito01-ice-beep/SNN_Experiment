@@ -13,7 +13,8 @@
 
 **Repo/posizione:** `D:\Project_MBSE\1.Reti Neurali\Rete_SNN_Test\CF_FSNN\.worktrees\Simulink_Importer`,
 branch **`Simulink_Importer`**. **Tutto committato e pushato**, working tree pulito (restano solo file
-dell'utente `closed_loop_demo.slx`/`slblocks.m` e i `*.mexw64` untracked — **NON toccarli né stagearli**).
+dell'utente: `closed_loop_demo.slx` modificato-non-mio [`M`], `slblocks.m` + i `*.mexw64` untracked [`??`] — **NON
+toccarli né stagearli**).
 *(Esistono altri track/worktree — es. `Simulator`, `main`/EventProp — con LORO SESSION_RESUME: questo file vale
 solo per `Simulink_Importer`.)*
 
@@ -167,10 +168,11 @@ qualitative immutate. Colmato il gap del SAIF: `gen_saif_b2.sh` (era non-scripta
 ricostruito** (scelta utente = sintesi+power+report): il file su disco precede la correzione — nota di
 provenienza aggiunta nel report. Rigenerarlo se/quando servirà flashare.
 
-**Prossimi:** **ottimizzazione ACC-IIDM** (recupero Fmax: i 4 divisori sono costanti entro il control-step →
-reciproci-una-volta + moltiplicazioni, `fpga-expert` ch09 — vedi `SP3_ACC_IIDM_HDL.md` §Fmax) · **`.bit` Fase B**
-da rigenerare quando si flasha · **riordino fisico di `matlab/`** (21 file caricano i `.mat` via
-`fullfile(here,…)` → riscrivere i path + ri-verificare) · **report** della digressione LUT (`DECODE_LUT_SWEEP.md`
+**Prossimi:** **ottimizzazione ACC-IIDM Fmax = SP4, IN CORSO** (⚠️ NB: l'idea «reciproci-una-volta» qui accennata
+= variante **L, poi SCARTATA sui dati**; SP4-M usa l'opposto, divisione sequenziale esatta — vedi il blocco ▶ in
+cima e la sezione `## SP4`) · **`.bit` Fase B** da rigenerare quando si flasha · **riordino fisico di `matlab/`**
+(21 file caricano i `.mat` via `fullfile(here,…)` → riscrivere i path + ri-verificare) · **report** della
+digressione LUT (`DECODE_LUT_SWEEP.md`
 pronto) · **asserzioni nei cancelli storici** (verdi, sicuro aggiungerle — decisione utente in sospeso).
 
 ---
@@ -328,7 +330,7 @@ core SNN congelato; commit senza Co-Authored-By; tono tecnico, onesto senza over
 
 ---
 
-## 🎯 Stato attuale (2026-07-10 — **Simulink_Importer / fase ②-HDL: B2 REALIZZATO — SNN 6.9% LUT bit-exact**)
+## 🗄️ STORICO — Stato precedente (2026-07-10 — **B2 REALIZZATO, SNN 6.9% LUT bit-exact**). Stato ATTUALE = blocco ▶ in cima.
 
 > **✅ B2 (SNN Donatello time-multiplexata, `hdl.RAM`) REALIZZATA E VERIFICATA (commit `f20e812`).** Da **44% → 6.9%
 > LUT** (~6.3× meno), 22 DSP, 2 BRAM, **bit-exact** (`test_b2_fsm` err=0), **cosim xsim PASSED**. È l'architettura di
