@@ -904,3 +904,63 @@ def test_a_preset_block_never_carries_a_bias(qapp):
     page._on_add()
     assert page._spec.blocks[-1].bias is None
     assert "bias" not in page._list.item(page._list.count() - 1).text()
+
+
+# --- cycle 4b: the custom block, the drag, the advisory ---
+def test_custom_kind_shows_handles_and_kills_the_pad(qapp):
+    from sim.scenario_spec import Block
+    page = _page()
+    page.set_spec(_spec3([Block("ramp", 300, {"to_v": 2.0})]))
+    page.compose_new("custom", ticks=300, params={"nodes": [10.0, 10.0, 10.0, 10.0, 10.0]})
+    assert len(page._handles) == 5                          # a handle per node
+    assert not page._pad.isEnabled()                        # a drawn profile ignores the style
+    assert not page._pad_note.isHidden()
+    page._kind.setCurrentText("ramp")
+    assert len(page._handles) == 0                          # switching away clears them
+    assert page._pad.isEnabled()
+
+
+def test_a_custom_records_no_bias(qapp):
+    from sim.scenario_spec import Block
+    page = _page()
+    page.set_spec(_spec3([Block("ramp", 300, {"to_v": 2.0})]))
+    page.compose_new("ramp", ticks=150, params={"to_v": 18.0}, bias=(1.6, 4.2))
+    assert page._composer_block().bias == (1.6, 4.2)        # a ramp obeys it
+    page._kind.setCurrentText("custom")
+    assert page._composer_block().bias is None              # a custom cannot, so it does not keep it
+
+
+def test_params_for_custom_reads_the_handles(qapp):
+    from sim.scenario_spec import Block
+    page = _page()
+    page.set_spec(_spec3([Block("ramp", 300, {"to_v": 2.0})]))
+    page.compose_new("custom", ticks=300, params={"nodes": [12.0, 9.0, 6.0]})
+    assert page._params_for("custom") == {"nodes": (12.0, 9.0, 6.0)}   # a TUPLE: matches JSON's form
+
+
+def test_the_handle_lifecycle_keeps_one_owner(qapp):
+    """TEETH: kind->custom->(read)->kind->custom->Apply. A handle read while the row does not exist
+    would fabricate a wrong nodes -- the two-owner failure 4a paid for."""
+    from sim.scenario_spec import Block
+    page = _page()
+    page.set_spec(_spec3([Block("custom", 300, {"nodes": (20.0, 4.0, 4.0)}),
+                          Block("const", 300, {"v": 4.0})]))
+    page._on_row_selected(0)                                # reopen the custom
+    assert page._composer_kind() == "custom"
+    assert page._handles.speeds() == [20.0, 4.0, 4.0]       # handles came back
+    page._on_add()                                          # Apply, no edit
+    assert page._spec.blocks[0] == Block("custom", 300, {"nodes": (20.0, 4.0, 4.0)})
+
+
+def test_node_count_resamples_the_current_curve(qapp):
+    """Raising the count refines the drawing, it does not erase it: the shape survives."""
+    from sim.scenario_spec import Block
+    page = _page()
+    page.set_spec(_spec3([Block("ramp", 300, {"to_v": 2.0})]))
+    page.compose_new("custom", ticks=300, params={"nodes": [20.0, 10.0]})
+    v_before = page._composer_curve.getOriginalDataset()[1].copy()
+    page._nodes.setValue(6)
+    assert len(page._handles) == 6
+    v_after = page._composer_curve.getOriginalDataset()[1]
+    assert abs(v_after[-1] - v_before[-1]) < 0.5           # same shape, resampled: endpoints unchanged
+    assert np.abs(v_after - v_before).max() < 1.0

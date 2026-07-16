@@ -15,8 +15,9 @@ from PySide6.QtWidgets import (QComboBox, QDoubleSpinBox, QHBoxLayout, QLabel, Q
                                QPushButton, QSpinBox, QVBoxLayout, QWidget)
 
 from sim.scenario import scenario_library
-from sim.scenario_spec import (A_MAX_RANGE, B_MAX_RANGE, _KINDS, Block, LeaderStyle, ScenarioSpec,
-                               materialise)
+from sim.scenario_spec import (A_MAX_RANGE, B_MAX_RANGE, V_RANGE, _KINDS, _custom_node_ticks,
+                               Block, LeaderStyle, ScenarioSpec, materialise)
+from sim.ui.drag_handles import DragHandles
 
 # Labels for READING the plane, not modes: the point is continuous and may sit anywhere.
 # Parked in the CORNERS with an outward anchor, not at the quadrant centres: the centre is exactly
@@ -115,6 +116,8 @@ class ScenarioPage(QWidget):
         self._preset.addItems(sorted(s.name for s in scenario_library(
             self._params_gt, N=self._N, rng=np.random.default_rng(0), include_tail=True)))
         self._period = QSpinBox(); self._period.setRange(4, 600); self._period.setValue(80)
+        self._nodes = QSpinBox(); self._nodes.setRange(1, 25); self._nodes.setValue(5)
+        self._nodes_lbl = QLabel("nodi")
         self._neu_a = QDoubleSpinBox(); self._neu_a.setRange(*A_MAX_RANGE)
         self._neu_b = QDoubleSpinBox(); self._neu_b.setRange(*B_MAX_RANGE)
         self._neu_a.setSingleStep(0.1); self._neu_b.setSingleStep(0.1)
@@ -127,6 +130,7 @@ class ScenarioPage(QWidget):
         self._value_lbl, self._period_lbl = QLabel("valore"), QLabel("periodo")
         for w in (QLabel("blocco"), self._kind, QLabel("durata"), self._ticks,
                   self._preset, self._value_lbl, self._value, self._period_lbl, self._period,
+                  self._nodes_lbl, self._nodes,
                   QLabel("neutro a/b"), self._neu_a, self._neu_b,
                   self._add, self._del, self._use):
             controls.addWidget(w)
@@ -150,6 +154,7 @@ class ScenarioPage(QWidget):
         self._composer_plot.setLabel("bottom", "tick del blocco")
         self._composer_plot.showGrid(x=False, y=True, alpha=0.2)
         self._composer_curve = self._composer_plot.plot(pen=pg.mkPen("#e8871e", width=2))
+        self._handles = DragHandles(self._composer_plot, on_change=self._refresh_composer)
         mid.addWidget(self._composer_plot, stretch=1)
         root.addLayout(mid, stretch=1)
 
@@ -165,6 +170,7 @@ class ScenarioPage(QWidget):
         for sig in (self._ticks.valueChanged, self._value.valueChanged,
                     self._period.valueChanged, self._preset.currentTextChanged):
             sig.connect(self._refresh_composer)
+        self._nodes.valueChanged.connect(self._on_node_count_changed)
         for sig in (self._neu_a.valueChanged, self._neu_b.valueChanged):
             sig.connect(self._on_neutral_changed)
         self._list.currentRowChanged.connect(self._on_row_selected)
@@ -213,24 +219,65 @@ class ScenarioPage(QWidget):
         return {"preset": {"name": self._preset.currentText()},
                 "const": {"v": v},
                 "ramp": {"to_v": v},
-                "sine": {"amp": v, "period": int(self._period.value())}}[kind]
+                "sine": {"amp": v, "period": int(self._period.value())},
+                "custom": {"nodes": tuple(self._handles.speeds())}}[kind]
 
     def _on_kind_changed(self, kind):
         """Show only the inputs this kind actually has: an input that does nothing is a lie.
 
-        The pad is one of them. A preset is reproduced verbatim -- _preset_samples never receives a
-        style -- so on a preset the pad cannot move anything, and leaving it live would be the
-        biggest lie on the page rather than the smallest. It goes dead, and says why.
+        The pad dies on preset AND custom -- both ignore the style (a preset is verbatim, a custom is
+        hand-drawn) -- so a live pad there is a lie. custom shows the node-count and a row of handles;
+        the handles are created BEFORE the trailing refresh so _params_for('custom') never reads an
+        empty row (the lifecycle constraint, spec 6).
         """
-        is_preset, is_sine = kind == "preset", kind == "sine"
+        is_preset, is_sine, is_custom = kind == "preset", kind == "sine", kind == "custom"
         self._preset.setVisible(is_preset)
         for w in (self._value_lbl, self._value):
-            w.setVisible(not is_preset)
+            w.setVisible(not (is_preset or is_custom))
         for w in (self._period_lbl, self._period):
             w.setVisible(is_sine)
+        for w in (self._nodes_lbl, self._nodes):
+            w.setVisible(is_custom)
         self._value_lbl.setText("ampiezza" if is_sine else "valore")
-        self._pad.setEnabled(not is_preset)
-        self._pad_note.setVisible(is_preset)
+        self._pad.setEnabled(not (is_preset or is_custom))
+        self._pad_note.setVisible(is_preset or is_custom)
+        self._pad_note.setText("il preset è verbatim: il bias non lo tocca" if is_preset
+                               else "il profilo disegnato non segue un rate: trascina i nodi")
+        if is_custom:
+            # setCurrentText fires this while _load_into_widgets is mid-write (loading=True); skip the
+            # flat seed then -- the custom branch there places the real nodes. When the user picks
+            # custom from the combo (not loading), seed a flat line to bend.
+            if not self._loading:
+                self._place_custom_handles(self._handles.speeds() or None)
+        else:
+            self._handles.clear()
+        self._refresh_composer()
+
+    def _place_custom_handles(self, speeds):
+        """Position the handles on the current tick grid. speeds=None seeds a flat line at the start
+        speed (a fresh custom you then bend); otherwise re-place the given speeds."""
+        n = int(self._ticks.value())
+        count = int(self._nodes.value())
+        ticks = _custom_node_ticks(n, count)
+        if speeds is None:
+            speeds = [self._start_speed(self._composer_row
+                                        if self._composer_row is not None
+                                        else len(self._spec.blocks))] * count
+        self._handles.set_speeds(ticks, speeds)
+
+    def _on_node_count_changed(self, count):
+        """Re-sample the current drawing at the new grid instead of discarding it."""
+        if self._loading or self._composer_kind() != "custom":
+            return
+        n = int(self._ticks.value())
+        old_ticks = _custom_node_ticks(n, len(self._handles))
+        old_speeds = self._handles.speeds()
+        v0 = self._start_speed(self._composer_row if self._composer_row is not None
+                               else len(self._spec.blocks))
+        new_ticks = _custom_node_ticks(n, int(count))
+        new_speeds = np.interp(new_ticks, np.concatenate(([0.0], old_ticks)),
+                               np.concatenate(([v0], old_speeds))).tolist()
+        self._handles.set_speeds(new_ticks, new_speeds)
         self._refresh_composer()
 
     def _load_into_widgets(self, kind, ticks, params, bias):
@@ -249,6 +296,9 @@ class ScenarioPage(QWidget):
             elif kind == "sine":
                 self._value.setValue(float(params["amp"]))
                 self._period.setValue(int(params["period"]))
+            elif kind == "custom":
+                self._nodes.setValue(len(params["nodes"]))
+                self._place_custom_handles(list(params["nodes"]))
             else:
                 self._value.setValue(float(params["v" if kind == "const" else "to_v"]))
             na, nb = self._pad._neutral
@@ -274,7 +324,7 @@ class ScenarioPage(QWidget):
         # A preset is verbatim, so it cannot obey a bias -- and the pad keeps its point across a kind
         # change, so composing a ramp, moving the pad and switching to preset would RECORD one.
         # materialise ignoring it is not enough: the timeline would print a bias the block has not.
-        bias = None if kind == "preset" else self._composer_bias()
+        bias = None if kind in ("preset", "custom") else self._composer_bias()
         return Block(kind, int(self._ticks.value()), self._params_for(kind), bias=bias)
 
     def _start_speed(self, upto):
