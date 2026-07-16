@@ -47,3 +47,25 @@ def test_clear_blanks_curve_and_marker(qapp):
     _, y = panel._curve.getData()
     assert y is None or len(y) == 0                # curve blanked
     assert not panel._marker.isVisible()           # marker hidden
+
+
+def test_narrow_scenario_gets_at_least_the_minimum_y_span(qapp):
+    from sim.ui.scenario_preview import _MIN_Y_SPAN
+    panel = ScenarioPreviewPanel()
+    v = np.linspace(20.8, 21.2, 100)               # span 0.4 m/s -- the "following" jitter case
+    panel.set_scenario(v)
+    lo, hi = panel._plot.getViewBox().viewRange()[1]
+    assert (hi - lo) >= _MIN_Y_SPAN - 1e-6         # window floored to the min span, NOT zoomed onto 0.4 m/s
+    assert lo <= float(v.min()) and hi >= float(v.max())   # the data is still inside the view
+
+
+def test_wide_scenario_fits_the_data_not_the_floor(qapp):
+    from sim.ui.scenario_preview import _MIN_Y_SPAN
+    panel = ScenarioPreviewPanel()
+    v = np.linspace(0.0, 21.0, 100)                # span 21 m/s > the floor -> fit to data, not blown up
+    panel.set_scenario(v)
+    lo, hi = panel._plot.getViewBox().viewRange()[1]
+    span = hi - lo
+    data_span = float(v.max() - v.min())
+    assert span >= data_span                        # the whole profile fits
+    assert span < data_span + _MIN_Y_SPAN           # fitted with light padding, not floored to a fixed big window
