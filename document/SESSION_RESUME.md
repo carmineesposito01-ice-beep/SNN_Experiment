@@ -89,12 +89,18 @@ reciproci una volta + moltiplicazioni** (`fpga-expert` ch09). Lo sweep a slack m
 di `acc_types`, non `setfimath` sparse) · niente riassegnazione di tipo (`v0f` non `v0`) · niente sovra-escape
 apici nella chart. Diagnosi errori chart: `codegen('-config:lib','SNN_ACC','-args',{a,a,a,a})` con `a=fi(0,1,32,20)`.
 
-**Prossimi:** **bitstream + `report/FPGA_PHASE_B_REPORT`** da rigenerare (disallineati: costruiti col forward
-buggato §2.1 **e** col decode-256, mentre il campione ora è LUT-64) · **riordino fisico di `matlab/`** (refactor a
-sé: 21 file caricano i `.mat` via `fullfile(here,…)` → vanno riscritti i path e ri-verificato con
-`run_parity_tests` + `run_b2_parity`; target `core/ b2/ hdl/ lib/ test/ ann/ micro/ diag/ data/`) · **report**
-della digressione LUT (sorgente pronto: `DECODE_LUT_SWEEP.md`) · **asserzioni nei cancelli storici** (oggi
-stampano e basta; sono tutti verdi, quindi aggiungerle è sicuro — decisione dell'utente in sospeso).
+**Debito Fase B — RISOLTO in parte (2026-07-16, `4298adf3`).** `report/FPGA_PHASE_B_REPORT` + `results.csv`
+**ri-sintetizzati col campione corretto** (decode-64 + fix §2.1), stesso flusso Fase B: LUT 4223→3868, Fmax
+8.5→**11.65 MHz** (la σ-LUT più piccola accorcia il path), power ~invariata (static 103 mW); conclusioni
+qualitative immutate. Colmato il gap del SAIF: `gen_saif_b2.sh` (era non-scriptato). ⚠️ **Il `.bit` NON è stato
+ricostruito** (scelta utente = sintesi+power+report): il file su disco precede la correzione — nota di
+provenienza aggiunta nel report. Rigenerarlo se/quando servirà flashare.
+
+**Prossimi:** **ottimizzazione ACC-IIDM** (recupero Fmax: i 4 divisori sono costanti entro il control-step →
+reciproci-una-volta + moltiplicazioni, `fpga-expert` ch09 — vedi `SP3_ACC_IIDM_HDL.md` §Fmax) · **`.bit` Fase B**
+da rigenerare quando si flasha · **riordino fisico di `matlab/`** (21 file caricano i `.mat` via
+`fullfile(here,…)` → riscrivere i path + ri-verificare) · **report** della digressione LUT (`DECODE_LUT_SWEEP.md`
+pronto) · **asserzioni nei cancelli storici** (verdi, sicuro aggiungerle — decisione utente in sospeso).
 
 ---
 
