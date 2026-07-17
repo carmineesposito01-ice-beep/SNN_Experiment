@@ -18,32 +18,27 @@ toccarli né stagearli**).
 *(Esistono altri track/worktree — es. `Simulator`, `main`/EventProp — con LORO SESSION_RESUME: questo file vale
 solo per `Simulink_Importer`.)*
 
-**Stato in una riga:** SP2/SP3 chiusi, **debito Fase B risolto** (bitstream escluso); su SP4: L e M-v1 chiuse,
-**M-FSM #1 morto** (blocco Divide → dataflow → niente `tanh` fixed), e **#2a FATTO E FUNZIONANTE**: la FSM
-riusa **una** `divide()` dentro la chart → **8658 LUT · 2158 FF · Fmax 7,35 MHz · `dmax=0` · G5 verde**
-(−20% LUT vs SP3, **−66% LUT / −91% FF vs M-v1**, Fmax ×3,7 vs SP3). **Collo ora: `iidm_final` (tanh, 237
-liv)**, non più la divisione → prossimo: spezzare `iidm_final` (~9,5 atteso), poi #2b per 11,65.
+**Stato in una riga:** SP2/SP3 chiusi, **debito Fase B risolto** (bitstream escluso), e **✅ SP4 CHIUSO
+(2026-07-17)**: il blocco `Donatello_ACC_IIDM_M` porta il controllore completo da **2,0 a 9,30 MHz** con
+**area −21%** (8614 LUT · 2134 FF), **`dmax = 0`** e **timing chiuso** @8 MHz. Il bersaglio 11,65 **non è
+raggiunto ed è dimostrato irraggiungibile** per questa strada (era simmetria con la SNN, non un requisito:
+358 clock su 800.000 per control-step). Riferimento SP3 e **deployato intatti**.
 
-**AZIONE PENDENTE (immediata):** **aprire il ciclo `brainstorming → spec → piano` per l'APPROCCIO #2** —
-divisore digit-recurrence **DENTRO la chart**, sequenziato dalla FSM. È l'**unico rimasto**: niente blocco
-esterno → niente convivenza chart+blocchi → **niente conversione dataflow** → `tanh` fixed torna nativa (come
-in SP3) e il core (`snn_types`: 37 file, **col deployato** `snn_hdl_*`) **non si tocca**. Prezzo: la
-bit-identità del divisore va **guadagnata** (era ciò che #1 comprava con G1) — ma l'infrastruttura per provarla
-è **già in piedi e committata**: `probe_divide_bitexact` (300k coppie reali in **44s**) e
-`run_acciidm_m_dataset` (60k control-step, ~12 min, MEXato).
+**AZIONE PENDENTE:** *nessuna su SP4 — è chiuso.* Il prossimo passo del track è una **decisione tua**, non
+una continuazione: (a) **promuovere M a deploy** (oggi il bitstream resta la sola SNN; M è HDL-ready, non
+deployato) · (b) **V2I in Simulink** (il progetto che seguiva) · (c) **confronto MPC↔SNN** (design parcheggiato,
+`cf-fsnn-mpc-vs-snn-design`) · (d) **merge → main** (finora rinviato per policy di track).
 
-**LEGGI PRIMA — non ricostruire a memoria:**
-- `document/SP4_ACC_IIDM_FAST.md` **§Variante M-FSM** → cosa è stato PROVATO (G1/G2/G3/G4 verdi e sensibili),
-  cosa è MORTO e **perché** (catena: blocco `Divide` → convivenza → dataflow → **niente `tanh` fixed** →
-  aggirarla = approssimare = `dmax≠0`), e **cosa si riusa identico** (funzioni-fase, model, G2, G3/G4).
-- `document/HDL_PHASE.md` **§9** → i 4 vincoli della conversione MATLAB-to-dataflow e **quando scatta** (una
-  MATLAB Function che convive con blocchi Simulink). Vale per **qualunque** blocco bit-exact futuro, non solo SP4.
-- Spec/piano di #1 (`docs/superpowers/{specs,plans}/2026-07-16-acc-iidm-fsm*`) = **record decisionale**,
-  marcati 🗄️ in testa: **non ri-eseguirli**. Idem `probe_acciidm_sharing.m` (`6db20b0a`) per il config-based.
+**Se si torna su SP4, LEGGI PRIMA** `document/SP4_ACC_IIDM_FAST.md` (in testa: il riquadro ✅ SP4 CHIUSO, poi
+§Variante M-FSM #2a): contiene i numeri, le **quattro strade chiuse coi loro perché** (L approssima · M-v1
+area esplosa · #1 dataflow/`tanh` · #2b e #2c escluse dal probe) e cosa si riusa. I vincoli della conversione
+MATLAB-to-dataflow, che valgono **oltre SP4** per qualunque blocco bit-exact, sono in `document/HDL_PHASE.md` §9.
 
-⚠️ **Il verdetto OOC di M non è mai stato raggiunto**: ci si è fermati alla generazione VHDL, prima della
-sintesi. Fmax/area della strada FSM restano quindi **ignoti** — non dedurli dai numeri di M-v1 config.
-MATLAB: `"C:\Program Files\MATLAB\R2026a\bin\matlab.exe" -batch`. Vivado: `C:\AMDDesignTools\2026.1`.
+⚠️ **Non ripetere**: #2b (divisore sequenziale a mano) e #2c (tanh CORDIC) sono **esclusi dai dati**, non da
+un'opinione — la divisione non compare in nessun path critico misurato, e col `tanh` a costo zero il tetto è
+10,58 con il collo **fuori dall'IIDM** (SNN→decode = il deployato).
+
+MATLAB: `"C:\Program Files\MATLAB\R2026ain\matlab.exe" -batch`. Vivado: `C:\AMDDesignTools6.1`.
 
 **MODI DI LAVORO (vincolanti — la sessione li ha pagati a caro prezzo):**
 - **Verifica sul DATASET, mai su un caso singolo** — riporta *quanti su quanti* (es. 0/240.000, 5/5).
