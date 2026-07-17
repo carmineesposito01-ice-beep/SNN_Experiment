@@ -341,6 +341,14 @@ Config in `make_hdl.m`: `LoopOptimization='StreamLoops'`, `ConstantMultiplierOpt
   (non-vincolante). **Cosim ③ ✅ PASSED** (xsim, `TEST COMPLETED (PASSED)`, bit-esatto vs golden, 2026-07-10).
 - ✅ **Decode (sigmoid)**: implementato (`snn_decode_hdl.m`, σ-LUT, `test_decode` err 0.002) e **dentro `snn_top_b2_flat`** (`snn_top_b2` = `snn_b2_fsm` → `snn_decode_hdl`) → è nelle risorse Fase B e nel bitstream. *(Correzione 2026-07-13: la voce precedente "escluso / non implementato" era stale.)*
 - ⏳ **Altri 3 champion**: wrapper generati; RTL prodotto solo per Donatello.
+- ✅ **Controllore completo `Donatello_ACC_IIDM_M`** (SNN-decode + ACC-IIDM, **SP4 CHIUSO 2026-07-17**): OOC
+  xc7z020 @8 MHz = **8614 LUT · 2134 FF · 71 DSP · 9,30 MHz** (WNS +17,4 ns, latenza 358 clk), `dmax=0` vs SP3,
+  **self-contained + HDL-ready** (gate `run_block_hdl_gate` PASSED, 2026-07-17). **BRAM non catturato** nel run
+  OOC. Tecnica: time-mux dell'IIDM via FSM a stadi (1 divisore condiviso). Doc: `SP4_ACC_IIDM_FAST.md`.
+- ⏳ **[FASE B2.0 — aperta 2026-07-17] Validazione RTL del blocco M**: il VHDL generato è solo *generato*, **mai
+  simulato in xsim** vs riferimento sul **dataset intero** (anello ③ = cosim, finora fatto per la sola SNN B2, non
+  per il controllore). Da fare: testbench HDL full-dataset con metriche vere (non traiettoria ridotta — lezione
+  Fase B) + utilizzo post-route completo (incl. BRAM). Vedi §8 e `SESSION_RESUME.md` §AZIONE PENDENTE.
 
 ## §7 File (worktree)
 - **Sorgente HDL:** `matlab/snn_core.m` (mod), `matlab/snn_types.m` (mod, +`accw`),
@@ -356,6 +364,15 @@ Config in `make_hdl.m`: `LoopOptimization='StreamLoops'`, `ConstantMultiplierOpt
   clock-rate), test-config `*_tc.vhd`, package `*_pkg.vhd`, testbench `*_tb.vhd` + vettori `xn.dat`/`raw_expected.dat`.
 
 ## §8 Prossimi passi
+
+> **🟢 PRIORITÀ ATTUALE — FASE B2.0 (validazione RTL della versione FPGA del controllore + report).** SP4 ha
+> ottimizzato il blocco `Donatello_ACC_IIDM_M` (9,30 MHz, `dmax=0`, self-contained); B2.0 **prova che l'RTL
+> generato funziona davvero** a livello di simulatore HDL, con metriche vere sul **dataset intero**, e ne scrive
+> il report. Sequenza: **Fase 1** `/fpga-expert` (disegno studio RTL + audit headroom) → **Fase 2** testbench HDL
+> full-dataset + utilizzo post-route completo (incl. BRAM) → **Fase 3** `create-report`. La **Fase C** (test
+> sull'FPGA *fisica*) resta separata. Backlog dopo B2.0: timing study · quantization study · MPC. Stato/dettaglio
+> completo in `SESSION_RESUME.md` §AZIONE PENDENTE.
+
 1. ✅ **[FATTO 2026-07-10] Sintesi + P&R reali** RTL Donatello su Zynq-7020 (`xc7z020clg400-1`): LUT 44%/slice 53%,
    DSP 32, 0 BRAM, ~5 MHz. + ③ **cosim xsim PASSED** (bit-esatto vs golden). Vedi §0 e `HDL_ARCHITECTURE_STUDY.md`.
 2. ⛔ **[INVESTIGATO 2026-07-10 → NON PERSEGUITO] streaming ÷32.** Tentato (circular-buffer + `RAMThreshold` +

@@ -3,6 +3,7 @@
 > ## ✅ SP4 CHIUSO (2026-07-17) — 2,0 → **9,30 MHz**, area **−21%**, **`dmax = 0`**, timing **chiuso** @8 MHz
 > Il blocco **`Donatello_ACC_IIDM_M`** (`snn_champions_lib`) è la variante veloce del controllore completo:
 > **8614 LUT · 2134 FF · 71 DSP · Fmax 9,30 · WNS +17,4 ns · latenza 358 clk**, bit-identica a SP3.
+> *(BRAM non catturato nel run OOC G6 — il numero completo, post-route, si misura in **Fase B2.0**.)*
 > `Donatello_ACC_IIDM` (SP3) resta il **riferimento** e non è stato toccato; il **deployato** nemmeno.
 > **Il bersaglio 11,65 MHz NON è raggiunto ed è stato dimostrato irraggiungibile** per questa strada
 > (probe: tetto 10,58 anche con `tanh` gratis, e il collo esce dall'IIDM → SNN/decode = il deployato).
@@ -10,6 +11,17 @@
 > 800.000** per control-step (margine ~2200×).
 > Cancelli finali tutti verdi: G7 plant parity · SP3 `dmax=0` · **G2 0/60000** · G3/G4 5/5 traj ·
 > G5 su M **e** su SP3 **e** su Champion.
+>
+> **Ri-verificato 2026-07-17 sulla libreria committata** (non a memoria): il blocco è **aggiornato** (FSM #2a
+> a 7 stadi, 1 sola `divide()`), **self-contained** (13 funzioni-fase inlinate come funzioni locali, zero `.m`
+> esterni) e **HDL-ready su PC vergine** — `run_block_hdl_gate('Donatello_ACC_IIDM_M')` PASSA con `matlab/` fuori
+> dal path: 4 VHDL generati (incl. `DualPortRAM_generic.vhd` = time-mux vero), 0 errori. Il gate è stato reso
+> **sensibile anche alle dipendenze di M** (`iidm_*`/`fsm_div`/`acc_types`, commit `ab232fc8`).
+>
+> ⚠️ **Questi numeri sono OOC + livello Simulink.** SP4 chiude l'**ottimizzazione**; la **prova RTL** — il VHDL
+> simulato in xsim vs riferimento sul **dataset intero**, con metriche vere, + utilizzo post-route completo — è la
+> **Fase B2.0** (validazione della versione FPGA + report). Vedi `SESSION_RESUME.md` §AZIONE PENDENTE e
+> `HDL_PHASE.md` §8.
 
 > Doc di processo. Spec: `docs/superpowers/specs/2026-07-16-acc-iidm-fast-design.md` · piano
 > `docs/superpowers/plans/2026-07-16-acc-iidm-fast.md`.

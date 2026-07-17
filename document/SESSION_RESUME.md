@@ -5,7 +5,7 @@
 
 ---
 
-## ▶ RIPRESA A FREDDO — LEGGERE QUESTO BLOCCO PER PRIMO (2026-07-16)
+## ▶ RIPRESA A FREDDO — LEGGERE QUESTO BLOCCO PER PRIMO (2026-07-17)
 
 > **Ruolo di questo file:** punto d'ingresso + **STATO** del track `Simulink_Importer`. NON è la procedura
 > generale (quella è la skill `session-reprise`). È un **guida ai documenti**: quando dice «leggi X», leggi X —
@@ -20,14 +20,42 @@ solo per `Simulink_Importer`.)*
 
 **Stato in una riga:** SP2/SP3 chiusi, **debito Fase B risolto** (bitstream escluso), e **✅ SP4 CHIUSO
 (2026-07-17)**: il blocco `Donatello_ACC_IIDM_M` porta il controllore completo da **2,0 a 9,30 MHz** con
-**area −21%** (8614 LUT · 2134 FF), **`dmax = 0`** e **timing chiuso** @8 MHz. Il bersaglio 11,65 **non è
-raggiunto ed è dimostrato irraggiungibile** per questa strada (era simmetria con la SNN, non un requisito:
-358 clock su 800.000 per control-step). Riferimento SP3 e **deployato intatti**.
+**area −21%** (8614 LUT · 2134 FF · **71 DSP**; BRAM **non catturato** nel run OOC → si misura in Fase B2.0),
+**`dmax = 0`** e **timing chiuso** @8 MHz. Il bersaglio 11,65 **non è raggiunto ed è dimostrato
+irraggiungibile** per questa strada (era simmetria con la SNN, non un requisito: 358 clock su 800.000 per
+control-step). Riferimento SP3 e **deployato intatti**. **Ri-verificato in questa sessione (2026-07-17) sulla
+libreria committata**: il blocco è **aggiornato + self-contained + HDL-ready** — 13 funzioni-fase inlinate,
+gate isolato `run_block_hdl_gate` PASSATO (4 VHDL, DualPortRAM presente, 0 errori) col path `matlab/` rimosso;
+gate reso sensibile anche alle dipendenze di M (commit `ab232fc8`). ⚠️ Questi numeri sono **OOC + livello
+Simulink**: la prova RTL (testbench HDL) è la Fase B2.0 qui sotto.
 
-**AZIONE PENDENTE:** *nessuna su SP4 — è chiuso.* Il prossimo passo del track è una **decisione tua**, non
-una continuazione: (a) **promuovere M a deploy** (oggi il bitstream resta la sola SNN; M è HDL-ready, non
-deployato) · (b) **V2I in Simulink** (il progetto che seguiva) · (c) **confronto MPC↔SNN** (design parcheggiato,
-`cf-fsnn-mpc-vs-snn-design`) · (d) **merge → main** (finora rinviato per policy di track).
+**AZIONE PENDENTE — 🟢 FASE B2.0 APERTA (2026-07-17): validazione RTL della versione FPGA + report.**
+Decisa dall'utente. SP4 ha *ottimizzato* il blocco; **B2.0 prova che l'RTL generato funziona davvero** e ne
+scrive il report. La **Fase C** (test sull'FPGA *fisica*) resta separata e in attesa.
+
+> **Perché B2.0 esiste — il gap, in una riga:** oggi è provato **a livello Simulink/MATLAB** (`dmax=0`: G2
+> 0/60000, G3/G4 5/5; `makehdl` *genera* il VHDL) ma **NON a livello RTL**: il VHDL generato **non è mai stato
+> simulato in un simulatore HDL** (xsim) contro il riferimento, sull'**intero dataset**, con metriche vere. Finché
+> non lo è, "versione FPGA" è una claim Simulink travestita — **è l'errore Fase B** (report su traiettoria ridotta,
+> poi corretto). B2.0 lo chiude.
+
+**Piano (una fase alla volta):**
+- **Fase 0 — allineamento doc:** ✅ in corso/fatto (questo blocco + HDL_PHASE §6/§8 + SP4 box + memoria).
+- **Fase 1 — `/fpga-expert`:** (a) **progetta lo studio RTL esemplare** (testbench, stimoli full-dataset, *quali*
+  metriche e *come*); (b) **audit headroom** su modello/VHDL/sintesi — c'è altro da spremere oltre 9,30 MHz?
+  → prossima azione concreta: **invocare `/fpga-expert`**.
+- **Fase 2 — evidenza RTL:** costruire+eseguire il **testbench HDL del blocco M** sul **dataset intero** (accel
+  RTL vs riferimento, metriche su coda/picco, cancelli che possono fallire) **+ utilizzo d'implementazione
+  completo** (post-route, **incl. BRAM oggi mancante**) e timing reale. Metodologia **riusabile**: `matlab/axi/`
+  ha già la cosim xsim del B2 (`tb_b2_stream.v`, `gen_saif_b2.sh`, cosim ③ **PASSED** 2026-07-10) → **adattarla al
+  blocco M**.
+- **Fase 3 — `create-report`:** report della grande fase Donatello+ACC-IIDM, **grounded sulla Fase 2** (tecniche:
+  time-mux, srotolamento/parallelismo, FSM a stadi, registro-fra-stadi; drawback e vincoli).
+
+**Backlog (studi a sé, DOPO B2.0):** 1) **Timing study** (spingere lo slack → max Fmax); 2) **Quantization study**
+(meno bit fixed → meno FPGA vs perdita accuracy, mappa non-lineare — grande); 3) **Fase C + confronto MPC↔SNN**
+(design parcheggiato, `cf-fsnn-mpc-vs-snn-design`). Restano anche le opzioni di track: promuovere M a deploy · V2I
+in Simulink · merge → main.
 
 **Se si torna su SP4, LEGGI PRIMA** `document/SP4_ACC_IIDM_FAST.md` (in testa: il riquadro ✅ SP4 CHIUSO, poi
 §Variante M-FSM #2a): contiene i numeri, le **quattro strade chiuse coi loro perché** (L approssima · M-v1
