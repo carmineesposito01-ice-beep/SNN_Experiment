@@ -15,7 +15,7 @@
   lo scrive lo cambia). **Verificalo tu**: `git log --oneline -1` + `git status` + `git rev-list --count
   origin/Simulator..HEAD`. **Atteso: working tree pulito, 0 commit non pushati.** Se non è così, capisci
   perché prima di lavorare.
-- **Env/test**: conda `cf_sim`. **371 test verdi** (**36** file sim + `test_champion_io.py`; gli isolati
+- **Env/test**: conda `cf_sim`. **373 test verdi** (**37** file sim + `test_champion_io.py`; gli isolati
   sono `test_sim_drag_handles.py` (nodi, 4b), `test_sim_duration_handles.py` (durata, builder-UX),
   `test_sim_scenario_preview.py` (dock Scenario, item 1) e `test_sim_provenance.py` (il guardiano 7b)).
   ⚠️ **La suite è la glob SIM**
@@ -138,18 +138,29 @@ cambiati con la durata della scena. **Ancora aperte dall'utente (post-verifica 2
     stack-trace faulthandler a shutdown (torch/OMP) sembrava un fallimento ed era rumore. Ri-eseguito **senza
     pipe** con exit code su file → `369 passed, PYTEST_EXIT=0`. Il subagent del T1 ha anche trovato un errore
     del piano (il sabotaggio tocca DUE siti 280/385, non uno) eseguendo.
-  - **▶️ PROSSIMO: 7b Piano B — la UI** (non ancora pianificato): un solo modo "Dataset" con **toggle
-    Analisi | Training** in cima; `MixTable` estratta a widget (train e val = due istanze); colonna **regime**,
-    famiglia **cut_in**, **quota-in-finestre** viva, conteggi train/val, selettore validazione a **3 modi**
-    (standard · forme-nuove · mix-diverso) coi loro avvisi, frequenza **spenta** (DT nella PINN loss), formato
-    **`.pt`**, **Cancel + ETA** (batch di default ~4-6 min). Design nella spec §UI + **mock renderizzato
-    approvato** (⚠️ il mock PRECEDE il vincolo tempo → non mostra Cancel/ETA; il Piano B li aggiunge).
+  - **7b Piano B — la UI, SPEZZATO in B1 (refactor) + B2 (feature)** perché l'estrazione della MixTable tocca
+    i test verdi del 7a (stesso rischio-churn di prima → isolata in un piano suo).
+    - **B1 — estrazione MixTable: ✅ FATTO** *(2026-07-17)*, plan `…/plans/2026-07-17-dataset-generator-7b-ui-extraction.md`,
+      TDD `2031f2f1`→`1d2d97c8` (3 task, subagent-driven). **373 test verdi (+2) · invarianti VUOTE
+      (`app.py` INCLUSO — il seam ha tenuto) · render Analisi IDENTICO al 7a**. `sim/ui/mix_table.py` NUOVO =
+      `MixTable(QWidget)` riusabile (righe/cascata/occhio/mix()/quota/gate + segnale `changed`; `strength`
+      iniettato; `with_regime`→NotImplementedError, è B2); `dataset_page.py` da 281→145 righe, tiene una MixTable
+      e delega; occhio `👁`→`⊙`. ⚠️ **Churn ri-morso**: il piano enumerò `test_sim_dataset_page.py`+`app.py` ma
+      mancò `test_sim_app_lifecycle.py` (`_specs`/`_rows` migrati) → la suite piena del T3 lo prese (2 rossi),
+      fix `1d2d97c8`. Lezione: il churn va enumerato su TUTTI i file, non solo quelli nominati dal piano.
+    - **▶️ PROSSIMO: B2 — la destinazione Training** (non pianificato): toggle **Analisi | Training** in cima;
+      `MixTable(with_regime=True)` con colonna **regime** + famiglia **cut_in** (righe `TrainMixEntry`); controlli
+      Training impilati (`QStackedWidget`): conteggi train/val, selettore validazione a **3 modi**
+      (standard · forme-nuove · mix-diverso) coi loro avvisi, jitter col caveat RIFORMULATO, frequenza **spenta**
+      (DT nella PINN loss), formato **`.pt`**, **quota-in-finestre** viva, **Cancel + ETA** (batch ~4-6 min);
+      `app.py` `_run_dataset` instrada analisi→`generate_dataset` / training→`build_training_cache`. Design nella
+      spec §UI + **mock renderizzato approvato** (⚠️ il mock PRECEDE il vincolo tempo → non mostra Cancel/ETA).
   ⚠️ **Fatti verificati nel brainstorming** (alcuni ribaltarono la draft originale): `data/generator.py` è la
   **provenienza dati dei champion** ma **NON è congelato** — 7b lo modifica additivamente (v. sopra); il suo
   `parse_scenario_mix` pesa i **regimi**, che sono lo stesso vocabolario dell'asse regime del 7b (raggiunto
   VERBATIM, non copiato); i **preset non hanno knob** → jitter via `params_gt`; **DT=0.1 è il V2X 10 Hz** dentro
   gli invarianti → la frequenza è decimazione solo in analisi, **spenta** nel training.
-**Dopo il 7b Piano B** resta il **merge `Simulator`→`main`** (da sequenziare con `Simulink_Importer`). Vedi
+**Dopo il 7b Piano B (B2)** resta il **merge `Simulator`→`main`** (da sequenziare con `Simulink_Importer`). Vedi
 §AZIONI PENDENTI. Tutto committato e pushato. Il dettaglio sta nelle sezioni sotto (§Architecture, §Phase
 history) e nella **mappa** `document/SIMULATOR_ARCHITECTURE.md`.
 
