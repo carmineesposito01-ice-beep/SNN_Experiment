@@ -1,5 +1,16 @@
 # SP4 — ACC-IIDM fast (recuperare l'Fmax)
 
+> ## ✅ SP4 CHIUSO (2026-07-17) — 2,0 → **9,30 MHz**, area **−21%**, **`dmax = 0`**, timing **chiuso** @8 MHz
+> Il blocco **`Donatello_ACC_IIDM_M`** (`snn_champions_lib`) è la variante veloce del controllore completo:
+> **8614 LUT · 2134 FF · 71 DSP · Fmax 9,30 · WNS +17,4 ns · latenza 358 clk**, bit-identica a SP3.
+> `Donatello_ACC_IIDM` (SP3) resta il **riferimento** e non è stato toccato; il **deployato** nemmeno.
+> **Il bersaglio 11,65 MHz NON è raggiunto ed è stato dimostrato irraggiungibile** per questa strada
+> (probe: tetto 10,58 anche con `tanh` gratis, e il collo esce dall'IIDM → SNN/decode = il deployato).
+> Era comunque un criterio di **simmetria con la SNN, non un requisito**: il blocco consuma **358 clock su
+> 800.000** per control-step (margine ~2200×).
+> Cancelli finali tutti verdi: G7 plant parity · SP3 `dmax=0` · **G2 0/60000** · G3/G4 5/5 traj ·
+> G5 su M **e** su SP3 **e** su Champion.
+
 > Doc di processo. Spec: `docs/superpowers/specs/2026-07-16-acc-iidm-fast-design.md` · piano
 > `docs/superpowers/plans/2026-07-16-acc-iidm-fast.md`.
 >
