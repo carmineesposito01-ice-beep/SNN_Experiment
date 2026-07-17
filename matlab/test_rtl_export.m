@@ -3,6 +3,7 @@ function test_rtl_export()
   here = fileparts(mfilename('fullpath'));
   outdir = fullfile(tempdir,'rtl_export_test'); if exist(outdir,'dir'), rmdir(outdir,'s'); end; mkdir(outdir);
   trajList = [1 7];
+  build_champion_golden();                                    % golden fedele al blocco
   rtl_export_vectors('snn', trajList, 'rt', outdir);
   m    = load(fullfile(outdir,'meta_rt.mat'));                 % K, trajList
   stim = readmem(fullfile(outdir,'stim_rt.mem'));
@@ -20,10 +21,9 @@ function test_rtl_export()
     exp_s = typecast(int32(storedInteger(val(j,1))),'uint32');
     assert(stim(j)==exp_s, 'stim ingresso %d: file=%08X atteso=%08X', j, stim(j), exp_s);
   end
-  R = double(snn_traj_fixed_r16_mex(tr{trajList(1)}.val, W));
-  p = snn_decode_lut(fi(R(1,:).',Tp),64);
+  clear snn_traj_champion_mex; P = snn_traj_champion_mex(tr{trajList(1)}.val, 500);   % golden fedele
   for i = 1:5
-    exp_i = bitand(typecast(int32(storedInteger(p(i))),'uint32'), uint32(2^21-1));
+    exp_i = bitand(typecast(int32(storedInteger(fi(P(1,i),Tp))),'uint32'), uint32(2^21-1));
     assert(gold(i)==exp_i, 'gold param %d: file=%06X atteso=%06X', i, gold(i), exp_i);
   end
   fprintf('=== TEST_RTL_EXPORT PASSATO: %d control-step, round-trip stim+gold bit-exact ===\n', m.K);

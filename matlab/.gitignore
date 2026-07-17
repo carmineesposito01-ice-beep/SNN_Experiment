@@ -18,3 +18,7 @@ axi/champion/stim_*.mem
 axi/champion/gold_*.mem
 axi/champion/meta_*.mat
 axi/champion/compile_order.txt
+
+# Fase B2.0 — golden fedele al blocco (rigenerabile via build_champion_golden)
+snn_champion_algo.m
+snn_traj_champion_mex.*
