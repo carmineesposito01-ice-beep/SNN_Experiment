@@ -49,10 +49,15 @@ scrive il report. La **Fase C** (test sull'FPGA *fisica*) resta separata e in at
     al blocco su 3 traj), cancello sensibile, metriche param. Commit `c961bc85`. ⚠️ **Finding:** il golden r16 non
     è il blocco (diverge a step ~52: `local_normalize` fixed + pilotaggio a ingresso tenuto) → costruito golden
     **fedele al blocco** `snn_traj_champion` (== blocco, cross-check dmax=0). Dettaglio in `HDL_PHASE.md` §6.
-  - **2a-M2 (Harness B, controllore `Donatello_ACC_IIDM_M`, open + closed-loop):** ⏳ **PROSSIMO** — riusa il core;
-    stesso trattamento **golden-fedele** (l'ACC-IIDM_M ha la stessa `local_normalize`); plant nel TB + cancello
-    PLANT-PAR (vedi spec §Harness B). Poi: caratterizzare l'impatto della deriva blocco-vs-deployato sul car-following.
-  - **2b (ottimizzazione timing `tanh`)** → **2c (validazione COMPLETA full-dataset + gate-level)**: dopo M2.
+  - **2a-M2 (Harness B, controllore `Donatello_ACC_IIDM_M`, open + closed-loop):** ✅ **FATTO 2026-07-18**
+    (commit `f3847650` open, `c78872dc` closed). **B-1** RTL accel == blocco **0/3000** (open-loop, 3 traj);
+    **PLANT-PAR** plant-nel-TB == riferimento **1800/1800** (sensibile); **B-LOOP** anello RTL == riferimento
+    **2400/2400** + **BEHAV** gap>0 sempre (car-following corretto, non solo bit-exact). Golden-fedele
+    (`acciidm_m_traj`, algoritmo estratto). ⚠️ **DUT in VERILOG** (il divisore combinatorio IIDM manda un
+    indice-LUT a -1 a time-0 in xsim col VHDL, registri U; Verilog init a 0). Plan `docs/…/2026-07-18-…-m2-harness-b.md`.
+    Resta (piccolo): caratterizzare l'impatto della deriva blocco-vs-deployato (local_normalize) sul car-following.
+  - **2b (ottimizzazione timing `tanh`)** → **2c (validazione COMPLETA full-dataset 60k + gate-level, entrambi
+    gli harness sulla versione ottimizzata)**: **PROSSIMO**. La 2c riusa gli harness A+B con `mode` full.
 - **Fase 3 — `create-report`:** grounded sulla Fase 2 (tecniche: time-mux, FSM a stadi, registro-fra-stadi; drawback).
 
 **Backlog (studi a sé, DOPO B2.0):** 1) **Timing study** (spingere lo slack → max Fmax); 2) **Quantization study**

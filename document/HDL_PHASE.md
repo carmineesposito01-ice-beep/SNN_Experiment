@@ -362,8 +362,16 @@ Config in `make_hdl.m`: `LoopOptimization='StreamLoops'`, `ConstantMultiplierOpt
     ingresso tenuto), verificato **== blocco** (cross-check dmax=0).
   - ⚠️ **Metrica param:** accuratezza param vs `gt_params` mostra `v0` err ~15 = **identificabilità** (v0 osservabile
     solo a flusso libero; Dynamic_Study), NON RTL. La qualità SNN vera è il **closed-loop (Harness B)**.
-  - ⏳ **Resta:** Harness B (M2, controllore open+closed-loop) userà lo **stesso** golden-fedele (l'ACC-IIDM_M ha la
-    stessa `local_normalize`); + caratterizzare l'impatto della deriva blocco-vs-deployato sul car-following.
+- ✅ **[FASE B2.0-2a M2 — 2026-07-18] Harness B (controllore `Donatello_ACC_IIDM_M`) validato a livello RTL**:
+  **B-1** accel RTL == blocco **0/3000** (open-loop) · **PLANT-PAR** plant-nel-TB == riferimento **1800/1800**
+  (sensibile) · **B-LOOP** anello RTL == riferimento **2400/2400** · **BEHAV** gap>0 sempre (car-following
+  corretto in anello chiuso vero, non solo bit-exact). Golden-fedele `acciidm_m_traj`; anello self-contained
+  in xsim (plant EGO nel TB in `real`, double bit-esatti). Commit `f3847650`/`c78872dc`.
+  - ⚠️ **DUT in VERILOG** (non VHDL): il divisore combinatorio dell'IIDM manda un indice-LUT a **-1 a time-0**
+    in xsim col VHDL (registri partono `U` → metavalue); Verilog inizializza i registri a 0. La SNN (M1) resta
+    VHDL (no divisore). `rtl_gen_dut` ha ora il parametro lingua.
+  - ⏳ **Resta (piccolo):** caratterizzare l'impatto della deriva blocco-vs-riferimento (local_normalize) sul
+    car-following. **PROSSIMO grande:** 2b (ottimizzazione `tanh`) → 2c (full-dataset 60k + gate-level).
 
 ## §7 File (worktree)
 - **Sorgente HDL:** `matlab/snn_core.m` (mod), `matlab/snn_types.m` (mod, +`accw`),
