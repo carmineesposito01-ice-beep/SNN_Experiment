@@ -126,3 +126,63 @@ def test_the_preview_is_hidden_until_asked_and_hides_again(qapp):
     assert t._popup.isVisible()
     t.hide_preview()
     assert not t._popup.isVisible()
+
+
+# --- B2: with_regime=True (the training mix) ---
+def _train_table(qapp, specs=None):
+    t = MixTable(params_gt=_PG, strength=lambda: 0.25, with_regime=True)
+    t.set_sources(specs if specs is not None else _specs(), ["following", "hard_brake"])
+    return t
+
+
+def test_with_regime_adds_the_cut_in_family_and_a_regime_column(qapp):
+    from sim.train_mix import FAMILIES_TRAIN, REGIMES
+    t = _train_table(qapp)
+    r = t._rows[0]
+    assert [r.family.itemText(i) for i in range(r.family.count())] == list(FAMILIES_TRAIN)   # cut_in is here
+    assert r.regime is not None                                                              # the extra combo
+    assert [r.regime.itemText(i) for i in range(r.regime.count())] == list(REGIMES)
+
+
+def test_with_regime_mix_returns_TrainMixEntry(qapp):
+    from sim.train_mix import TrainMixEntry, validate_train_mix
+    t = _train_table(qapp)
+    t._rows[0].family.setCurrentText("generator")
+    t._rows[0].source.setCurrentText("sinusoidal")
+    t._rows[0].regime.setCurrentText("launch")
+    t._rows[0].weight.setValue(100.0)
+    mix = t.mix()
+    assert mix == [TrainMixEntry("generator", "sinusoidal", "launch", 100.0)]
+    validate_train_mix(mix)                       # the engine accepts what the table produces
+
+
+def test_the_window_share_column_is_live(qapp):
+    from sim.train_gen import training_windows
+    t = _train_table(qapp)
+    t.set_count(100)
+    t._rows[0].family.setCurrentText("generator")
+    t._rows[0].source.setCurrentText("sinusoidal")
+    t._rows[0].weight.setValue(100.0)
+    # 100 trajectories * training_windows(generator) each
+    expected = 100 * training_windows("generator", "sinusoidal", t.specs(), stride=50)
+    assert t._rows[0].windows.text() == str(expected)
+
+
+def test_the_analysis_table_has_no_regime_column(qapp):
+    """with_regime=False rows carry no regime combo -- the 3-field mix is untouched."""
+    t = _table(qapp)                              # the with_regime=False helper from earlier
+    assert t._rows[0].regime is None
+
+
+def test_the_eye_maps_cut_in_to_the_leader_profile(qapp):
+    """preview_sample raises for family='cut_in' (draw_scenario knows only built/preset/generator). A cut_in row's
+    source IS a generator leader profile (leader A), so the eye previews it as 'generator' and says so."""
+    from sim.dataset_gen import preview_sample
+    t = _train_table(qapp)
+    r = t._rows[0]
+    r.family.setCurrentText("cut_in")
+    r.source.setCurrentText("sinusoidal")
+    t.show_preview(r)                             # must NOT raise
+    expected = preview_sample("generator", "sinusoidal", t.PREVIEW_SEED, 0.25, t._specs, t._params_gt)
+    assert np.allclose(t._popup_panel._curve.getData()[1], expected)
+    assert "leader A" in t._popup_title.text()

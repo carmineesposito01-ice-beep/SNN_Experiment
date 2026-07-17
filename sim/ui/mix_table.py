@@ -28,19 +28,25 @@ class _Row:
     weight: QDoubleSpinBox
     quota: QLabel
     kill: QPushButton
+    regime: QComboBox = None      # only in with_regime mode
+    windows: QLabel = None        # only in with_regime mode: the window-share column
 
 
 class MixTable(QWidget):
     PREVIEW_SEED = 0            # FIXED: the eye must show the same curve every time you hover the same source
+    _TRAIN_STRIDE = 50         # the window-share column uses the train stride (seq_len//2, train.py:1467)
     changed = Signal()
 
     def __init__(self, params_gt, strength, with_regime=False):
         super().__init__()
-        if with_regime:
-            raise NotImplementedError("with_regime is B2; B1 ships the 3-field mix only")
         self._params_gt = params_gt
         self._strength = strength           # callable -> float in [0,1] (the page's jitter slider)
         self._with_regime = with_regime
+        if with_regime:
+            from sim.train_mix import FAMILIES_TRAIN, REGIMES
+            self._families, self._regimes = list(FAMILIES_TRAIN), list(REGIMES)
+        else:
+            self._families, self._regimes = list(FAMILIES), None
         self._specs = {}
         self._preset_names = []
         self._rows = []
@@ -59,7 +65,9 @@ class MixTable(QWidget):
         self._popup.hide()
 
         head = QHBoxLayout()
-        for t in ("famiglia", "sorgente", "", "peso %", "→ traiettorie", ""):
+        cols = (("famiglia", "sorgente", "", "regime", "peso %", "→ traiettorie", "→ finestre", "")
+                if with_regime else ("famiglia", "sorgente", "", "peso %", "→ traiettorie", ""))
+        for t in cols:
             lbl = QLabel(t); lbl.setStyleSheet("color:#8b949e"); head.addWidget(lbl)
         root = QVBoxLayout(self); root.setContentsMargins(0, 0, 0, 0)
         root.addLayout(head)
@@ -86,7 +94,7 @@ class MixTable(QWidget):
         return self._specs
 
     def _sync_family_enabled(self, row):
-        item = row.family.model().item(FAMILIES.index("built"))
+        item = row.family.model().item(self._families.index("built"))
         if self._specs:
             item.setEnabled(True); item.setToolTip("")
         else:
@@ -112,21 +120,31 @@ class MixTable(QWidget):
     def add_row(self):
         frame = QFrame()
         lay = QHBoxLayout(frame); lay.setContentsMargins(0, 0, 0, 0)
-        family = QComboBox(); family.addItems(FAMILIES)
+        family = QComboBox(); family.addItems(self._families)
         source = QComboBox()
         eye = QLabel(_EYE); eye.setToolTip("anteprima di un campione di questa sorgente")
         eye.setAttribute(Qt.WA_Hover, True)
         eye.installEventFilter(self)
+        regime = QComboBox() if self._with_regime else None
+        if regime is not None:
+            regime.addItems(self._regimes)
         weight = QDoubleSpinBox(); weight.setRange(0.0, 100.0); weight.setDecimals(1)
         quota = QLabel("0")
+        windows = QLabel("0") if self._with_regime else None
+        if windows is not None:
+            windows.setStyleSheet("color:#6e7681")
         kill = QPushButton("✕"); kill.setFixedWidth(28)
-        for w in (family, source, eye, weight, quota, kill):
+        widgets = ([family, source, eye, regime, weight, quota, windows, kill] if self._with_regime
+                   else [family, source, eye, weight, quota, kill])
+        for w in widgets:
             lay.addWidget(w)
-        row = _Row(frame, family, source, eye, weight, quota, kill)
+        row = _Row(frame, family, source, eye, weight, quota, kill, regime, windows)
         self._rows.append(row)
         self._rows_box.addWidget(frame)
         family.currentTextChanged.connect(lambda _t, r=row: (self._reload_sources(r), self._refresh()))
         weight.valueChanged.connect(self._refresh)
+        if regime is not None:
+            regime.currentTextChanged.connect(self._refresh)
         kill.clicked.connect(lambda _c=False, r=row: self.remove_row(r))
         self._sync_family_enabled(row)
         self._reload_sources(row)
@@ -145,9 +163,11 @@ class MixTable(QWidget):
         fam, src = row.family.currentText(), row.source.currentText()
         if not src:
             return
-        v = preview_sample(fam, src, self.PREVIEW_SEED, self._strength(), self._specs, self._params_gt)
+        eye_fam = "generator" if fam == "cut_in" else fam
+        v = preview_sample(eye_fam, src, self.PREVIEW_SEED, self._strength(), self._specs, self._params_gt)
         self._popup_panel.set_scenario(v)
-        self._popup_title.setText(f"{fam} · {src} — campione (seed {self.PREVIEW_SEED})")
+        suffix = " — leader A" if fam == "cut_in" else ""
+        self._popup_title.setText(f"{fam} · {src} — campione (seed {self.PREVIEW_SEED}){suffix}")
         self._popup.adjustSize()
         self._popup.move(row.eye.mapToGlobal(row.eye.rect().bottomLeft()))
         self._popup.show()
@@ -168,6 +188,10 @@ class MixTable(QWidget):
 
     # ---- the mix ----
     def mix(self):
+        if self._with_regime:
+            from sim.train_mix import TrainMixEntry
+            return [TrainMixEntry(r.family.currentText(), r.source.currentText(),
+                                  r.regime.currentText(), float(r.weight.value())) for r in self._rows]
         return [MixEntry(r.family.currentText(), r.source.currentText(), float(r.weight.value()))
                 for r in self._rows]
 
@@ -183,9 +207,16 @@ class MixTable(QWidget):
         self._total_lbl.setText(f"totale {self.total():.0f}% {'✓' if ok else '✗'}")
         self._total_lbl.setStyleSheet(f"color:{'#2e8b57' if ok else '#d1495b'}")
         if ok:
-            for r, q in zip(self._rows, quotas(self.mix(), self._count)):
+            qs = quotas(self.mix(), self._count, self._families) if self._with_regime else quotas(self.mix(), self._count)
+            for r, q in zip(self._rows, qs):
                 r.quota.setText(str(q))
+                if r.windows is not None:
+                    from sim.train_gen import training_windows
+                    r.windows.setText(str(q * training_windows(r.family.currentText(), r.source.currentText(),
+                                                               self._specs, stride=self._TRAIN_STRIDE)))
         else:
             for r in self._rows:
                 r.quota.setText("—")
+                if r.windows is not None:
+                    r.windows.setText("—")
         self.changed.emit()
