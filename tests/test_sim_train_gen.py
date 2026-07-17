@@ -121,3 +121,55 @@ def test_windows_per_traj_agrees_with_the_real_CFDataset(n_ticks, stride, expect
             "mask": np.ones(n_ticks, dtype=np.float32), "params": dict(IDM_HWY)}
     assert len(CFDataset([fake], seq_len=100, stride=stride)) == expected
     assert windows_per_traj(n_ticks, seq_len=100, stride=stride) == expected
+
+
+def test_the_two_batches_are_disjoint_and_the_cache_is_what_train_py_reads(tmp_path):
+    import torch
+    from sim.train_gen import build_training_cache
+    mix = [TrainMixEntry("generator", "sinusoidal", "highway", 100.0)]
+    path = str(tmp_path / "cache.pt")
+    man = build_training_cache(mix, n_train=3, n_val=2, seed=11, strength=0.0, specs={}, path=path)
+    blob = torch.load(path, weights_only=False)
+    assert set(blob) >= {"train", "val", "seed"}            # train.py:1423-1426 reads exactly these
+    assert len(blob["train"]) == 3 and len(blob["val"]) == 2 and blob["seed"] == 11
+    assert man["quotas"] == [3]
+    # seeds S and S+1 -> two i.i.d. samples, nothing shared
+    keys_tr = {d["raw"][:, 3].tobytes() for d in blob["train"]}
+    keys_va = {d["raw"][:, 3].tobytes() for d in blob["val"]}
+    assert keys_tr.isdisjoint(keys_va)
+
+
+def test_the_new_shapes_gate_catches_a_leader_shared_between_train_and_val(tmp_path):
+    """jitter_spec at strength=0 is the IDENTITY (proven in 7a), and a const-only spec does not depend on v0 --
+    so train and val would get byte-identical leaders. Mode 2 must refuse instead of quietly weakening the val."""
+    from sim.train_gen import VAL_MODE_NEW_SHAPES, build_training_cache
+    mix = [TrainMixEntry("built", "mine", "highway", 100.0)]
+    with pytest.raises(ValueError, match="STESSO leader"):
+        build_training_cache(mix, n_train=2, n_val=2, seed=11, strength=0.0, specs=_specs(),
+                             path=str(tmp_path / "c.pt"), val_mode=VAL_MODE_NEW_SHAPES)
+
+
+def test_the_standard_mode_allows_what_the_new_shapes_mode_refuses(tmp_path):
+    """The two modes must actually differ -- otherwise the selector is decoration."""
+    from sim.train_gen import build_training_cache
+    mix = [TrainMixEntry("built", "mine", "highway", 100.0)]
+    man = build_training_cache(mix, n_train=2, n_val=2, seed=11, strength=0.0, specs=_specs(),
+                               path=str(tmp_path / "c.pt"))
+    assert man["n_train"] == 2
+
+
+def test_cancelling_writes_nothing(tmp_path):
+    """A half dataset that looks whole is the failure this project hunts."""
+    from sim.train_gen import build_training_cache
+    path = str(tmp_path / "cache.pt")
+    mix = [TrainMixEntry("generator", "sinusoidal", "highway", 100.0)]
+    seen = []
+
+    def on_progress(done, total):
+        seen.append((done, total))
+        return False                      # cancel at the first tick
+    man = build_training_cache(mix, n_train=3, n_val=2, seed=11, strength=0.0, specs={}, path=path,
+                               on_progress=on_progress)
+    assert man is None
+    assert not os.path.exists(path)
+    assert seen[0] == (1, 5)              # progress is over BOTH batches, not per batch
