@@ -188,6 +188,9 @@ class SimApp(QMainWindow):
         self._scenario_page.sigScenarioBuilt.connect(self._on_scenario_built)
         self._dataset_page = DatasetPage(params_gt=_PARAMS_GT)
         self._dataset_page._on_generate = self._run_dataset   # the page has the button, the APP owns the run
+        self._dataset_page._training._on_generate = self._run_dataset
+        self._dataset_page._training._cancel_btn.clicked.connect(self._cancel_dataset)
+        self._cancel_requested = False
         self._mode_stack = QStackedWidget()
         self._mode_stack.addWidget(container)          # page 0: Live cockpit
         self._mode_stack.addWidget(self._meso_page)    # page 1: Meso/Macro analysis
@@ -398,7 +401,7 @@ class SimApp(QMainWindow):
 
     def _busy_controls(self):
         return (self._meso_page._run_platoon_btn, self._meso_page._run_ring_btn, self._mode_sel,
-                self._dataset_page._gen_btn)
+                self._dataset_page._gen_btn, self._dataset_page._training._gen_btn)
 
     def _busy(self, msg):
         """These batch sims run the frozen SNN synchronously on the GUI thread. Disable EVERY control
@@ -425,12 +428,41 @@ class SimApp(QMainWindow):
     def _dataset_progress(self, i, total):
         # bounded progress + a pump between trajectories; every re-entry control is disabled (see _busy)
         # so processEvents cannot nest a second batch -- it only lets the window repaint instead of hanging.
-        self._dataset_page._progress.setValue(int(100 * i / max(total, 1)))
+        # The pump is ALSO what makes Cancel work: it delivers the (still-enabled) Cancel click, which sets the
+        # flag this returns -- generate_dataset ignores the return, build_training_cache aborts on True.
+        pct = int(100 * i / max(total, 1))
+        self._dataset_page._progress.setValue(pct)
+        self._dataset_page._training._progress.setValue(pct)
         self._status.showMessage(f"dataset {i}/{total}…")
         QApplication.processEvents()
+        # the engine cancels when on_progress returns False; return False ONLY on cancel, else None to continue
+        return False if self._cancel_requested else None
+
+    def _cancel_dataset(self):
+        self._cancel_requested = True
+        self._status.showMessage("annullo…")
 
     def _run_dataset(self):
         page = self._dataset_page
+        self._cancel_requested = False
+        if page.destination() == "training":
+            tp = page._training
+            tp._cancel_btn.setEnabled(True)
+            self._busy("genero training set…")
+            try:
+                from sim.train_gen import build_training_cache
+                build_training_cache(tp.mix(), tp.n_train(), tp.n_val(), tp.seed(), tp.strength(),
+                                     self._built_specs(), tp.out_path(), val_mode=tp.val_mode(),
+                                     val_mix=tp.val_mix(), on_progress=self._dataset_progress)
+            except ValueError as e:
+                # the engine refuses loudly: a shared-leader val (mode 2), a too-short built scenario, an
+                # invalid mix. Surface it in the status bar instead of letting it escape the click handler.
+                self._status.showMessage(f"training non generato: {e}", 8000)
+            finally:
+                self._done_busy()
+                tp._cancel_btn.setEnabled(False)
+                tp._progress.setValue(0)
+            return
         self._busy("genero dataset…")
         try:
             generate_dataset(page.mix(), page.count(), page.seed(), page.strength(), page.k(),
