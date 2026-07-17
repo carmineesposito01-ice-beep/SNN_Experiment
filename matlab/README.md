@@ -1,8 +1,9 @@
 # `matlab/` — mappa della cartella
 
-> **Perché questo file**: nella root ci sono ~63 `.m` di **8 scopi diversi**. Questa è la mappa per orientarsi senza
-> aprirli a caso. *(Il riordino in sottocartelle è un refactor pianificato a parte: 21 file caricano i `.mat` con
-> `fullfile(here,…)` e si romperebbero con un semplice `mv` — vedi §Riordino.)*
+> **Perché questo file**: nella root ci sono **106 `.m`** di ~10 scopi diversi. Questa è la mappa per orientarsi
+> senza aprirli a caso. *(Il riordino fisico in sottocartelle è stato VALUTATO e rimandato — 2026-07-18: 65 file
+> caricano i dati con `fullfile(here,…)` e si romperebbero con un `mv`; si tiene la struttura flat + questa mappa.
+> Vedi §Riordino.)*
 >
 > **Documenti di processo** (la verità sta lì, non qui): architettura/metodo HDL → `../document/HDL_PHASE.md`
 > (§3.1 = contratto d'interfaccia, §3.1.1 = *l'architettura segue il sorgente*, §9 = gotcha) · studio decode LUT →
@@ -41,8 +42,7 @@ del champion attivo; **il file generato è gitignored**).
 
 ### Generazione HDL
 `make_hdl_top_b2.m` (**il top deployato**) · `make_hdl_b2.m` · `make_hdl_b2fsm.m` · `make_hdl_decode.m` (decode
-deployato) · `make_hdl_decode_lut.m` (decode LUT-N, sweep) · `make_hdl_ann.m` · `make_hdl_micro.m` ·
-`make_hdl_probe|probe2|ram_probe.m` (esperimenti) · `check_hdl.m`.
+deployato) · `make_hdl_decode_lut.m` (decode LUT-N, sweep) · `make_hdl_ann.m` · `make_hdl_micro.m` · `check_hdl.m`.
 
 ### Librerie Simulink (builder + `.slx`)
 `build_library.m` → **`snn_champions_lib.slx`**: 4 blocchi champion **comportamentali** (double, self-contained,
@@ -61,6 +61,17 @@ recupero via reciproci-una-volta è un SP a sé). Doc: `../document/SP3_ACC_IIDM
 La matematica ACC-IIDM ha **una sola fonte**, `acc_iidm_open.m`: la usano sia il blocco SP2 sia il plant
 closed-loop `cf_plant_lib/ACC_IIDM` (che aggiunge solo l'integrazione). Idem `local_normalize`
 (`build_hdl_variants:normalize_code`), condivisa fra i blocchi HDL-ready e quello SP2.
+
+### ACC-IIDM — controllore VELOCE `Donatello_ACC_IIDM_M` (SP4) + varianti
+`build_hdl_variants` aggiunge anche **`Donatello_ACC_IIDM_M`** (SP4, doc `../document/SP4_ACC_IIDM_FAST.md`): la
+variante veloce del controllore, con le 5 divisioni dell'IIDM **sequenziate su UN divisore** da una FSM a stadi
+(OOC **8614 LUT · 2134 FF · 71 DSP · 9,30 MHz**, `dmax=0` vs SP3; SP3 era 2,0 MHz per le 4 divisioni srotolate).
+Funzioni-fase (single-source col model, inlinate nella chart): `iidm_prep.m` (guardie/sqrt/filtro OU) ·
+`iidm_nd.m` (operandi della divisione k) · `iidm_use.m` (consumo del quoziente) · `iidm_tanh.m` (stadio `tanh`
+a sé, il collo) · `iidm_final.m` (blend+clamp→accel) · `fsm_div.m` (la **UNICA** `divide()` → 1 divisore in HW).
+Model + MEX: `acc_iidm_fsm.m` (model FSM) · `fsm_step.m`/`collect_step.m` (step MEX: FSM / riferimento SP3) ·
+`build_acc_iidm_fsm_mex.m`. Variante L (reciproci a LUT, **scartata** ma committata per storia):
+`acc_recip_lut.m` · `acc_sweep_kernel.m` · `build_acc_sweep_mex.m`.
 
 #### Come si usano i blocchi HDL-ready (`Donatello_Champion`, `Donatello_LUT{N}`)
 *(ogni blocco porta la stessa spiegazione nella propria **Description**, visibile in Block Properties)*
@@ -106,6 +117,31 @@ e `dv`, li passa al blocco e integra l'ego con l'`accel` che ne esce; vs riferim
 `../document/SP2_ACC_IIDM.md` §Anello chiuso, che riporta anche perché la convenzione **non** cambia i risultati) ·
 `test_b2_fsm.m` · `test_top_b2.m` · `test_decode.m` · `test_ann_mlp.m` · `tb_b2_fsm.m` · `tb_hdl_Donatello.m`.
 
+### Harness RTL — Fase B2.0 (validazione in Vivado xsim del VHDL/Verilog GENERATO)
+
+> Validano che l'**RTL generato** (non il blocco Simulink) riproduca il blocco **bit-exact** in xsim, sul dataset,
+> in anello aperto e chiuso. Report: `../report/B2_0_CHECKPOINT_REPORT.pdf`. Metodo chiave: golden **fedele al
+> blocco** — il riferimento `r16` NON è il blocco (diverge a step ~52 per la `local_normalize` fixed + il
+> pilotaggio a ingresso tenuto), quindi si estrae l'algoritmo esatto della chart e lo si guida clock-per-clock.
+
+**Generazione + I/O:** `rtl_gen_dut.m` (blocco → VHDL/**Verilog**, avvolge in subsystem, legge l'entità; param
+lingua) · `rtl_export_vectors.m` (stim/gold `.mem` dal golden fedele) · `rtl_run_xsim.m` (invoca il runner + parse
+`RTLRES`) · `test_rtl_export.m` (round-trip `.mem`).
+**Golden fedele al blocco:** `extract_champion_algo.m` / `extract_acciidm_m_algo.m` (estraggono l'algoritmo della
+chart) · `snn_traj_champion.m` / `acciidm_m_traj.m` (driver clock-per-clock = il blocco) · `build_champion_golden.m`
+/ `build_acciidm_m_golden.m` (estrai + codegen MEX).
+**Harness A — SNN (`Donatello_Champion`, VHDL):** `run_rtl_validate.m` (cancello **A-1**: 5 param RTL == blocco,
+**0/15000**) · `sensitivity_A1.m` · `rtl_metrics.m` (accuratezza param, metriche SNN RTL-grounded).
+**Harness B — controllore (`Donatello_ACC_IIDM_M`, VERILOG):** `run_rtl_validate_b.m` (**B-1**: accel, **0/3000**) ·
+`sensitivity_B1.m` · `cl_ref_acciidm_m.m` (anello di riferimento block-faithful) · `cl_export_plant_par.m` (vettori
+anello, double bit-esatti IEEE-754) · `run_plant_par.m` (**PLANT-PAR**: plant-nel-TB == riferimento, **1800/1800**) ·
+`run_closed_loop.m` (**B-LOOP** + **BEHAV**: anello RTL == riferimento **2400/2400**, gap>0). Testbench Verilog in
+`axi/champion/` e `axi/acciidm_m/`.
+**Caratterizzazione:** `characterize_drift.m` (deriva blocco-fisico vs riferimento sull'accel: **sparsa** —
+mediana 0 — ma coda ~69% del budget `E_snn`).
+⚠️ Il controllore va in **Verilog** (in VHDL il divisore combinatorio dell'IIDM manda un indice-LUT a −1 a
+time-0 in xsim, registri `U`); la SNN resta VHDL. Dettagli e numeri: `../document/HDL_PHASE.md` §6.
+
 ### Confronto ANN (Fase B)
 `ann_mlp.m` · `ann_rom.m` · `gen_ann_rom.m` · `test_ann_mlp.m` · `make_hdl_ann.m`.
 
@@ -113,7 +149,10 @@ e `dv`, li passa al blocco e integra l'ego con l'`accel` che ne esce; vs riferim
 `micro_ac.m` · `micro_mac.m` · `make_hdl_micro.m`.
 
 ### Diagnostica / probe
-`diag_quant.m` · `diag_ranges.m` · `snn_ram_probe.m` · `snn_tick_probe.m` · `snn_tick_probe2.m`.
+`diag_quant.m` (quantizzazione stato vs bug) · `diag_ranges.m` (range segnali interni) ·
+`probe_divide_bitexact.m` (G1 di SP4: blocco `Divide` == `divide()`, 300k coppie) ·
+`probe_acciidm_sharing.m` (probe resource-sharing SP4). *(I probe di serializzazione B2 —
+`snn_tick_probe*`/`snn_ram_probe`/`make_hdl_probe*` — rimossi il 2026-07-18: dead, chiusi da tempo.)*
 
 ### MEX (accelerazione)
 `snn_traj_fixed.m` (kernel: normalize + core, traiettoria intera) · `build_traj_mex.m` (genera
@@ -129,8 +168,15 @@ e `dv`, li passa al blocco e integra l'ego con l'`accel` che ne esce; vs riferim
 ### Non gestiti da qui
 `closed_loop_demo.slx` · `slblocks.m` — **file dell'utente, non toccare**.
 
-## Riordino (pianificato, non ancora fatto)
-Struttura target: `core/` · `b2/` · `hdl/` · `lib/` · `test/` · `ann/` · `micro/` · `diag/` · `data/`.
-**Vincolo**: 36 file usano `fileparts(mfilename('fullpath'))` e **21 caricano i `.mat` via `fullfile(here,…)`** → lo
-spostamento richiede di riscrivere quei path e **ri-verificare con `run_parity_tests` + `run_b2_parity`** (cancelli).
+## Riordino (VALUTATO e rimandato — 2026-07-18: si tiene flat + questa mappa)
+Il riordino fisico in sottocartelle è stato **valutato e deciso NO** (per ora). Motivo, coi numeri: **65 file su
+106** usano `fileparts(mfilename('fullpath'))` per caricare i dati (`test_dataset.mat`, `champions_export.mat`) e
+raggiungere le sottocartelle (`axi/`, `hdlsrc_*`); un `mv` gli **romperebbe i path relativi**. Per spostarli in
+sicurezza servirebbe un helper `mldir()` (matlab-root robusta) + un `startup.m` con `addpath(genpath)` — che
+introduce una **fragilità**: se MATLAB parte da un'altra cartella senza quell'`addpath`, le funzioni spostate
+spariscono dal path. Rapporto costo/valore sfavorevole → **struttura flat** (convenzione tipica MATLAB) + **questa
+mappa** tenuta aggiornata. **Fatto** il 2026-07-18: pulizia del dead-code (6 probe di serializzazione B2, commit
+`8d040dd8`) + aggiornamento di questa mappa. Se un domani il riordino fisico diventasse necessario, la struttura
+target resta `core/ · b2/ · hdl/ · lib/ · acc_iidm/ · harness_rtl/ · test/ · ann/ · diag/ · data/`, da fare con
+`mldir()` + non-regressione (rilanciare A-1/B-1/PLANT-PAR/B-LOOP + `run_b2_parity_dataset`).
 Da fare come refactor a sé, non insieme ad altro.
