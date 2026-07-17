@@ -100,12 +100,12 @@ def test_the_app_has_a_fifth_dataset_mode(qapp):
 def test_entering_the_dataset_mode_refreshes_the_built_sources(qapp):
     win = SimApp(CHAMP)
     win.set_mode(4)
-    assert win._dataset_page._specs == {}                 # nothing built yet
+    assert win._dataset_page._mix.specs() == {}           # nothing built yet (the mix table owns the sources now)
     win._scenario_page.set_spec(_a_spec())
     win._scenario_page._name_edit.setText("mine")
     win._scenario_page._on_use()
     win.set_mode(4)                                      # re-entering must pick the new spec up
-    assert "mine" in win._dataset_page._specs
+    assert "mine" in win._dataset_page._mix.specs()
 
 
 def test_the_generate_button_is_a_busy_control(qapp):
@@ -118,9 +118,9 @@ def test_run_dataset_writes_a_dataset_and_restores_the_ui(qapp, tmp_path):
     win = SimApp(CHAMP)
     win.set_mode(4)
     p = win._dataset_page
-    p._rows[0].family.setCurrentText("preset")
-    p._rows[0].source.setCurrentText("following")
-    p._rows[0].weight.setValue(100.0)
+    p._mix._rows[0].family.setCurrentText("preset")
+    p._mix._rows[0].source.setCurrentText("following")
+    p._mix._rows[0].weight.setValue(100.0)
     p._count.setValue(2)
     for b in p._fmt_boxes.values():
         b.setChecked(False)
