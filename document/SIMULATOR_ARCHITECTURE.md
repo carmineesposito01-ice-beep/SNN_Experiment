@@ -57,6 +57,8 @@ explicit user consent on evidence (`events.py` was unfrozen once, in cycle 3, fo
 | `sim/dataset_mix.py` | **PURE** — the mix + exact quotas (7a) | `MixEntry(family, source, weight)` over `FAMILIES=("built","preset","generator")`; `quotas()` gives **exact** counts (largest remainder), so 30% of 100 is exactly 30 and 1/3+1/3+1/3 of 100 is 33/33/34 — no trajectory lost to rounding. "Percentage" for a controlled dataset means a count, not an expectation |
 | `sim/export_formats.py` | **PURE** — the format registry (7a) | `FORMATS = {name: FormatSpec(writer, bytes_per_tick, available, reason)}` = the **single source of truth**; the UI renders its checkboxes FROM it, so no hardcoded list can diverge. csv/mat reuse item 2's writers; json is stdlib; **xlsx is hand-rolled** (a zip of XML via `zipfile` — same school as the MAT v5 writer, easier: text not binary). `parquet`/`hdf5` are **registered but disabled** (`richiede pyarrow`/`richiede h5py`): both are COMPILED libs and this env has a known OMP fragility (torch already brings one) — declaring + explaining beats risking a green suite. `bytes_per_tick` **measured, not guessed**: csv 100.7 · mat 33.5 · json 70.0 · xlsx 31.6, pinned by a test that re-measures within 10% |
 | `sim/dataset_gen.py` | **PURE** — the 3-family sampler + batch (7a) | `draw_scenario(family, source, seed, strength, specs, params_gt) → Scenario` is the one funnel: built→`jitter_spec`+`materialise` (its own length) · preset→`jitter_params_gt`+`materialise` of a one-preset-block spec (600) · generator→**`_leader_profile` called READ-ONLY** from `data/generator.py`. `preview_sample` (the eye's curve — ONE representative sample where the scenario is a distribution). `decimate(kin,k)` — the physics is ALWAYS 10 Hz; the export subsamples and **recomputes `a_leader` at `dt_out`** (the 0.2 s acceleration is not the 0.1 s one); no upsampling. `generate_dataset` writes the files + `manifest.json`; same seed → identical dataset |
+| `sim/train_mix.py` | **PURE** — the TRAINING mix (7b) | `TrainMixEntry(family, source, **regime**, weight)` over `FAMILIES_TRAIN=("built","preset","generator","cut_in")` and `REGIMES=(highway/urban/truck/mixed/freeflow/launch)`. The extra axis vs 7a: the **regime gives the params, and the params ARE the labels**. `cut_in` is a **family** (an exact row), not a hidden `0.20` dice roll. Reuses 7a's `quotas()` via an **additive `families=` parameter** on `validate_mix`/`quotas` — a trap, because `quotas()` calls `validate_mix()` internally and that rejected any family outside 7a's three; the default keeps all 13 existing call sites byte-identical |
+| `sim/train_gen.py` | **PURE** — the training sink (7b) | `draw_training_sample(entry, seed, strength, specs) → the 8-key dict train.py's CFDataset eats`. **Two rules:** the regime forces `_sample_scenario(rng, {regime:1.0}, 0.0)` **VERBATIM** (ranges can't drift from the champions'); the family gives the leader — built/preset **inject** a materialised `v_leader` (Task-2's new param), generator/cut_in take the **untouched standard path** (so a mix of only those reproduces the standard dataset). `scenario`=the **regime name** (or `train.py:1428` warns); `leader_family`/`leader_source` ride as additive keys CFDataset ignores. Refuses `L<300` **loudly** (below it CFDataset yields ZERO windows silently). `windows_per_traj` is **pinned against the REAL CFDataset** (the user weights trajectories, training eats windows; share depends on stride, train `//2` ≠ val). `build_training_cache` → two i.i.d. batches (seed S / S+1) → the `.pt` cache `train.py --data_cache` reads unchanged; **cancel writes NOTHING**; mode-2 gate checks the PROPERTY (no shared leader), not the `jitter>0` proxy. `SECONDS_PER_TRAJ` for the UI's ETA is a constant, **not test-pinned** (it measures the machine) |
 | `sim/ui/drag_handles.py` | **Qt only** — the node-drag unit (cycle 4b) | `DragHandles`: a row of `pg.TargetItem` vertically-constrained (reconnect x in `sigPositionChanged`, converges in 2), y clamped to `V_RANGE`; `set_speeds` silent, a drag notifies once. Isolated + tested alone because the drag is the one measured-risk piece |
 | `sim/ui/duration_handles.py` | **Qt only** — the duration-drag unit (builder-UX) | `DurationHandles`: a row of x-draggable `pg.InfiniteLine`s, one per block's right edge. **Commit-on-finish** (`on_resize` fires on `sigPositionChangeFinished`, not continuously) so re-placing the lines never destroys the one under the cursor and no value↔handle loop forms; `setBounds` caps in place. Isolated + tested alone |
 | `sim/ui/scenario_preview.py` | **Qt only** — the cockpit's Scenario dock (item 1) | `ScenarioPreviewPanel`: the running scenario's whole `v_leader` as a static orange curve (`set_scenario`, drawn once) + a white dashed **tick marker** (`set_marker(tick)`, `None`=hidden). Own `InfiniteLine`, isolated + tested alone. **Driven by the current TICK from two app sites only** — `_paint` (live head `_last_result.t`) and `_render_at_cursor` (scrub `frames[idx].t`); deliberately NOT in `_ts_panels` (that group gets a buffer index) and NOT via `_redraw_series` (its paused-context callers would pin the marker to the head). **Y-view floored to `_MIN_Y_SPAN` (15 m/s)** so a narrow-band scenario (e.g. 'following' = v_set+N(0,0.3), a ~2 m/s band) reads as a near-flat cruise instead of the autorange zooming in and amplifying jitter; wider scenarios fit their own data (bottom clamped to ≥0). Shows the PLANNED leader — an injected brake overrides the leader live and does NOT appear here (it shows in Trajectory/Road) |
@@ -132,21 +134,27 @@ a segment `k` is eligible for red iff sample `k+1` is owned by a `custom` block.
 
 ## Tests + the runner gotcha
 
-**345 across 34 files** (33 `test_sim_*.py` + `tests/test_champion_io.py`); **345 green** at end of 7a
-(plan A the dataset engine + plan B the Dataset mode). The pure units (`scenario_export`, `mat_writer`, `jitter`, `dataset_mix`,
+**369 across 37 files** (36 `test_sim_*.py` + `tests/test_champion_io.py`); **369 green** at end of 7b plan A
+(the training-sink engine; +24 over 7a). The pure units (`scenario_export`, `mat_writer`, `jitter`, `dataset_mix`,
 `export_formats`, `dataset_gen`) are tested without Qt. Two tests earn their keep by construction:
 `test_sim_scenario_export.py`'s causal `x_leader` == stepper-gap check, and `test_sim_dataset_gen.py`'s
 `test_the_generator_family_is_the_REAL_training_randomisation` — a plausible-looking constant profile passes
 every other test and only that one catches it.
 
-**`data/generator.py` is CALLED, never modified.** It is the frozen provenance of the champions' training data
-(`train.py` imports it; `Arch_Tested/README.md:63` calls it *"shared (intero)"*; a copy is archived in
-`Arch_Tested/R24F_MIXED_.../data/generator.py`). 7a imports `_leader_profile` and `_PHYS_BOUNDS` read-only —
-the precedent is `Dynamic_Study_L1_6.ipynb`. Its `parse_scenario_mix` weights driver REGIMES
-(highway/urban/truck/…), a **different vocabulary** from the simulator's scenarios — not reusable for the
-dataset mix. `test_sim_ui_smoke.py` alone is ~90 tests; `test_sim_drag_handles.py`,
-`test_sim_duration_handles.py`, and `test_sim_scenario_preview.py` are the isolated UI units (node drag /
-duration drag / scenario preview).
+**`data/generator.py` is the champions' training-data provenance** (`train.py` imports it; `Arch_Tested/README.md:63`
+calls it *"shared (intero)"*; a copy is archived in `Arch_Tested/R24F_MIXED_.../data/generator.py`). 7a only ever
+**called** it (`_leader_profile`, `_PHYS_BOUNDS`, read-only). **7b MODIFIES it** — `simulate_trajectory` gained a
+`v_leader=None` parameter (additive, default-off, the `wide_params=False` mould already in the file), so a built
+leader can reach the real physics. ⚠️ **The invariant therefore changed shape:** for this file the gate is NOT an
+empty `git diff` (it is deliberately non-empty) but **`tests/test_sim_provenance.py`** — it proves, by comparing
+OUTPUT not text, that the live generator still reproduces the champion's dataset byte-for-byte (8/8, both branches,
+dtype included) despite the edit. That is a stronger gate than a diff, and it is why the change was safe. Measured
+fact behind it: the live file is already 56 lines ahead of every archived copy (the `launch`/`freeflow` additions),
+all additive and default-off, and provenance still holds. `parse_scenario_mix` weights driver REGIMES
+(highway/urban/truck/…) — the same vocabulary 7b's regime axis now uses, reached VERBATIM via
+`_sample_scenario(rng, {regime:1.0}, 0.0)` rather than copied. `test_sim_ui_smoke.py` alone is ~90 tests;
+`test_sim_drag_handles.py`, `test_sim_duration_handles.py`, and `test_sim_scenario_preview.py` are the isolated UI
+units (node drag / duration drag / scenario preview).
 
 **The suite is the SIM glob — `pytest tests/test_sim_*.py tests/test_champion_io.py`, NOT `pytest tests/`.**
 The `tests/` dir also holds FPGA-track scripts (`test_fpga_io.py` calls `sys.exit()` at import) that abort

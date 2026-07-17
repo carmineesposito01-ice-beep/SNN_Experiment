@@ -15,12 +15,14 @@
   lo scrive lo cambia). **Verificalo tu**: `git log --oneline -1` + `git status` + `git rev-list --count
   origin/Simulator..HEAD`. **Atteso: working tree pulito, 0 commit non pushati.** Se non è così, capisci
   perché prima di lavorare.
-- **Env/test**: conda `cf_sim`. **345 test verdi** (**33** file sim + `test_champion_io.py`; gli isolati
-  sono `test_sim_drag_handles.py` (nodi, 4b), `test_sim_duration_handles.py` (durata, builder-UX) e
-  `test_sim_scenario_preview.py` (dock Scenario, item 1)). ⚠️ **La suite è la glob SIM**
+- **Env/test**: conda `cf_sim`. **369 test verdi** (**36** file sim + `test_champion_io.py`; gli isolati
+  sono `test_sim_drag_handles.py` (nodi, 4b), `test_sim_duration_handles.py` (durata, builder-UX),
+  `test_sim_scenario_preview.py` (dock Scenario, item 1) e `test_sim_provenance.py` (il guardiano 7b)).
+  ⚠️ **La suite è la glob SIM**
   (`pytest tests/test_sim_*.py tests/test_champion_io.py`), **NON `pytest tests/`**: la dir ha anche script
   del track FPGA (`test_fpga_io.py` fa `sys.exit()` all'import) che abortiscono la collection.
-  Core SNN bit-identico **tranne `sim/events.py`**, scongelato di proposito nel ciclo 3 (vedi azione 3).
+  Core SNN bit-identico **tranne `sim/events.py`** (scongelato nel ciclo 3) **e `data/generator.py`**
+  (7b: +4 righe additive default-off; il suo cancello è `test_sim_provenance.py`, non il diff — vedi §DOVE SIAMO).
   ⚠️ La suite intera gira in **~3-4 minuti** (`test_sim_ui_smoke.py` da solo ~2.5: 81 test, molti
   costruiscono `SimApp` col champion). **Non è un blocco**: se lanci col timeout di default a 2 minuti
   sembra appesa. Dalle almeno 420 s, o mandala in background.
@@ -118,21 +120,38 @@ cambiati con la durata della scena. **Ancora aperte dall'utente (post-verifica 2
     la lezione è che avevo enumerato il churn del *segnale* e non quello del *conteggio modi*.
     ⚠️ **Polish noto, non fatto**: l'icona 👁 rende come un pallino nel font di default di Windows (funziona,
     ma non si legge come un occhio) → candidato a un glifo diverso.
-  ⚠️ **Fatti che hanno ribaltato la draft originale** (verificati): `data/generator.py` è la **provenienza
-  dati dei champion** (copia congelata nell'archivio) → si CHIAMA, non si tocca; il suo `parse_scenario_mix`
-  pesa i **regimi di guidatore**, non gli scenari del simulatore (vocabolari diversi); i **preset non hanno
-  knob** (verbatim, rng hardcoded) → si jitterano via `params_gt`; **DT=0.1 è il V2X 10 Hz** dentro 3
-  invarianti → la frequenza è solo decimazione in export.
-**▶️ L'UNICO ITEM IN CODA È IL 7b — il sink training**: spec **FINALE e approvata**
-(`…/specs/2026-07-17-dataset-generator-7b-design.md`), **brainstorming FATTO 2026-07-17**, prossimo passo =
-**writing-plans** (una spec, due piani: motore / UI). Il **bivio ① è deciso**: parametro additivo
-`v_leader=None` in `simulate_trajectory`, perché — **misurato** — `data/generator.py` NON è congelato (le 6
-copie in `Arch_Tested/` differiscono per le stesse 56 righe, tutte additive e default-off, tra cui
-`wide_params=False` che è la stessa identica mossa) e quelle estensioni **non hanno mosso la provenienza**:
-8/8 dataset byte-identici alla copia del champion, su entrambi i rami. Dopo il 7b resta il **merge
-`Simulator`→`main`** (da sequenziare con `Simulink_Importer`). Vedi §AZIONI PENDENTI. Tutto
-committato e pushato. Il dettaglio sta nelle sezioni sotto (§Architecture, §Phase history) e nella
-**mappa** `document/SIMULATOR_ARCHITECTURE.md`.
+- **generatore dataset — 7b (il sink TRAINING)**: spec **FINALE approvata**
+  (`…/specs/2026-07-17-dataset-generator-7b-design.md`), brainstorming FATTO 2026-07-17.
+  - **7b Piano A — il MOTORE: ✅ FATTO** *(2026-07-17)*, plan `…/plans/2026-07-17-dataset-generator-7b-engine.md`,
+    TDD `10597d30`→`03e1558f` (7 task, subagent-driven). **369 test verdi (+24) · invarianti VUOTE
+    (`train.py` INCLUSO) · functional-verify** (cache `.pt` vera a 3 famiglie: quote esatte, il manifest
+    concorda con la `CFDataset` VERA su 189 finestre, `scenario`=regimi, **bytes/tick .pt = 78.3** per il
+    Piano B). **Il bivio ① è realizzato**: `simulate_trajectory(..., v_leader=None)` additivo default-off in
+    `data/generator.py`; il guardiano `test_sim_provenance.py` resta **8/8 dopo** la modifica (confronta
+    l'OUTPUT non il testo — cancello più forte del diff). `sim/train_mix.py` (riga a 4 campi
+    famiglia/sorgente/**regime**/peso; `cut_in` è una famiglia; `families=` additivo riusa `quotas()` senza
+    toccare i 13 siti) · `sim/train_gen.py` (regime→etichette via `_sample_scenario` VERBATIM; famiglia→leader,
+    built/preset iniettano e generator/cut_in no; rifiuto `L<300`; `windows_per_traj` pinnato alla `CFDataset`
+    vera; `build_training_cache` seed S/S+1, cancel non scrive NULLA, cancello forme mode-2; `SECONDS_PER_TRAJ`
+    non pinnato — misura la macchina, verificato: 43-61 ms/traj a seconda del carico).
+    ⚠️ **Lezione ri-imparata**: `pytest … 2>&1 | tail` fa riportare l'exit di *tail*, non di pytest; uno
+    stack-trace faulthandler a shutdown (torch/OMP) sembrava un fallimento ed era rumore. Ri-eseguito **senza
+    pipe** con exit code su file → `369 passed, PYTEST_EXIT=0`. Il subagent del T1 ha anche trovato un errore
+    del piano (il sabotaggio tocca DUE siti 280/385, non uno) eseguendo.
+  - **▶️ PROSSIMO: 7b Piano B — la UI** (non ancora pianificato): un solo modo "Dataset" con **toggle
+    Analisi | Training** in cima; `MixTable` estratta a widget (train e val = due istanze); colonna **regime**,
+    famiglia **cut_in**, **quota-in-finestre** viva, conteggi train/val, selettore validazione a **3 modi**
+    (standard · forme-nuove · mix-diverso) coi loro avvisi, frequenza **spenta** (DT nella PINN loss), formato
+    **`.pt`**, **Cancel + ETA** (batch di default ~4-6 min). Design nella spec §UI + **mock renderizzato
+    approvato** (⚠️ il mock PRECEDE il vincolo tempo → non mostra Cancel/ETA; il Piano B li aggiunge).
+  ⚠️ **Fatti verificati nel brainstorming** (alcuni ribaltarono la draft originale): `data/generator.py` è la
+  **provenienza dati dei champion** ma **NON è congelato** — 7b lo modifica additivamente (v. sopra); il suo
+  `parse_scenario_mix` pesa i **regimi**, che sono lo stesso vocabolario dell'asse regime del 7b (raggiunto
+  VERBATIM, non copiato); i **preset non hanno knob** → jitter via `params_gt`; **DT=0.1 è il V2X 10 Hz** dentro
+  gli invarianti → la frequenza è decimazione solo in analisi, **spenta** nel training.
+**Dopo il 7b Piano B** resta il **merge `Simulator`→`main`** (da sequenziare con `Simulink_Importer`). Vedi
+§AZIONI PENDENTI. Tutto committato e pushato. Il dettaglio sta nelle sezioni sotto (§Architecture, §Phase
+history) e nella **mappa** `document/SIMULATOR_ARCHITECTURE.md`.
 
 ## ▶️ AZIONI PENDENTI (puntatori, non dump — le azioni 1-3 SUPERANO il "next = merge" della milestone)
 
