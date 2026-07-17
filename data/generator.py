@@ -249,7 +249,7 @@ def _leader_profile(profile, N, dt, rng, v0):
 # 4. SIMULATORE DI TRAIETTORIA (normale — no cut-in)
 # ===========================================================
 
-def simulate_trajectory(params, profile='sinusoidal', seed=None, noise_scale=1.0):
+def simulate_trajectory(params, profile='sinusoidal', seed=None, noise_scale=1.0, v_leader=None):
     """
     Simula una traiettoria follower-leader con ACC-IDM + rumore OU.
     Restituisce array (N_steps, 7) float32.
@@ -264,6 +264,13 @@ def simulate_trajectory(params, profile='sinusoidal', seed=None, noise_scale=1.0
     noise_scale=0.0 disattiva il rumore (dataset deterministico ideale, usato
     per Floor diagnostic 2D.2 — quantificare quanto del floor val~0.28 e'
     dovuto a OU noise irriducibile).
+
+    7b — v_leader (default None): un profilo leader ESTERNO. Con None il profilo si costruisce
+    internamente esattamente come prima (percorso di default byte-identico: lo tiene
+    tests/test_sim_provenance.py contro la copia congelata del champion). Se dato, N segue la sua
+    lunghezza e _leader_profile NON viene chiamato -- e siccome l'rng e' CONDIVISO con OU/packet-loss,
+    il rumore a valle non e' quello che lo stesso seed darebbe con un profilo.
+    Stampo additivo default-off: lo stesso di wide_params in generate_dataset().
     """
     # STEP 2D: applico noise_scale alle ampiezze OU (i tau restano invariati)
     noise_gap_rel = NOISE_GAP_REL * noise_scale
@@ -271,9 +278,12 @@ def simulate_trajectory(params, profile='sinusoidal', seed=None, noise_scale=1.0
     noise_accel   = NOISE_ACCEL   * noise_scale
 
     rng = np.random.default_rng(seed)
-    N   = int(SIM_DURATION / DT)
+    N   = int(SIM_DURATION / DT) if v_leader is None else len(v_leader)
 
-    v_l_profile = _leader_profile(profile, N, DT, rng, params['v0'])
+    if v_leader is None:
+        v_l_profile = _leader_profile(profile, N, DT, rng, params['v0'])
+    else:
+        v_l_profile = np.asarray(v_leader, dtype=np.float32)
 
     # Condizioni iniziali
     T_cur = rng.uniform(IDM2D_T1, IDM2D_T2)
