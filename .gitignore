@@ -82,3 +82,4 @@ vivado*.backup.jou
 
 # MEX dello sweep SP4-L (regenerabili via build_acc_sweep_mex)
 matlab/acc_sweep_kernel_r*_mex.mexw64
+matlab/hdl_sp4m2c/
