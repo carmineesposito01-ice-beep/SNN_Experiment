@@ -2,10 +2,12 @@ function dmax = run_block_acciidm_m_test(K, trajIdx, hold)
 %RUN_BLOCK_ACCIIDM_M_TEST  [SP4-M-FSM G3+G4] Il blocco Donatello_ACC_IIDM_M (5 divisioni sequenziate su
 %  UN blocco Divide HDL) riproduce il model acc_iidm_fsm E il riferimento SP3 acc_iidm_open?
 %
-%  G4  latenza + edge-trigger MISURATI, non assunti: M costa la SNN time-mux (~341 clk) PIU' le 5
-%      divisioni sequenziali (~510 clk in totale), non ~341 come SP3 -> il vincolo di rate del blocco M
-%      e' DIVERSO e va misurato. Copre anche il free-running (§3.1.4): su ingresso costante il blocco
-%      deve fare UNA sola inferenza, altrimenti lo stato (filtro OU) evolve troppo in fretta, in silenzio.
+%  G4  latenza + edge-trigger MISURATI, non assunti: M costa la SNN time-mux (~341 clk) PIU' 5 cicli,
+%      uno per divisione (~346 clk in totale), non ~341 come SP3 -> il vincolo di rate del blocco M e'
+%      DIVERSO e va misurato. (Con l'handshake del blocco Divide di #1 erano 509: quella variante e'
+%      morta, vedi SP4_ACC_IIDM_FAST.md §Variante M-FSM.) Copre anche il free-running (§3.1.4): su
+%      ingresso costante il blocco deve fare UNA sola inferenza, altrimenti lo stato (filtro OU) evolve
+%      troppo in fretta, in silenzio.
 %  G3  blocco reale == model (isola l'integrazione Simulink/handshake col Divide) E == SP3 (end-to-end).
 %      Con G1 (Divide==divide(), 300k coppie) e G2 (model==SP3, 60000 control-step) la catena si chiude
 %      per transitivita'.
@@ -15,7 +17,7 @@ function dmax = run_block_acciidm_m_test(K, trajIdx, hold)
 %  dataset intero ce l'hanno G1 e G2, che girano MEXati. Nessun campionamento silenzioso: e' dichiarato.
   if nargin < 1 || isempty(K),       K = 12;       end
   if nargin < 2 || isempty(trajIdx), trajIdx = 1;  end
-  if nargin < 3 || isempty(hold),    hold = 700;   end     % >= latenza misurata (~510)
+  if nargin < 3 || isempty(hold),    hold = 500;   end     % >= latenza misurata (~346), con margine
   here = fileparts(mfilename('fullpath'));
   assert(~isempty(which('fsm_step_mex')) && ~isempty(which('collect_step_mex')), ...
          'MEX mancanti: esegui build_acc_iidm_fsm_mex');
