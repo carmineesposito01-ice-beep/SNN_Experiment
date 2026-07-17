@@ -85,3 +85,49 @@ def test_delete_keeps_specs_aligned_with_scenarios(qapp):
     n = len(win._scenarios)
     win._delete_scenario()                                   # the built one is selected
     assert len(win._specs) == len(win._scenarios) == n - 1   # both popped -> still aligned
+
+
+# --- 7a plan B: the 5th mode ---
+def test_the_app_has_a_fifth_dataset_mode(qapp):
+    win = SimApp(CHAMP)
+    assert [win._mode_sel.itemText(i) for i in range(win._mode_sel.count())] == [
+        "Live", "Meso/Macro", "Post-run", "Scenari", "Dataset"]
+    assert win._mode_stack.count() == 5
+    win.set_mode(4)
+    assert win._mode_stack.currentIndex() == 4
+
+
+def test_entering_the_dataset_mode_refreshes_the_built_sources(qapp):
+    win = SimApp(CHAMP)
+    win.set_mode(4)
+    assert win._dataset_page._specs == {}                 # nothing built yet
+    win._scenario_page.set_spec(_a_spec())
+    win._scenario_page._name_edit.setText("mine")
+    win._scenario_page._on_use()
+    win.set_mode(4)                                      # re-entering must pick the new spec up
+    assert "mine" in win._dataset_page._specs
+
+
+def test_the_generate_button_is_a_busy_control(qapp):
+    win = SimApp(CHAMP)
+    assert win._dataset_page._gen_btn in win._busy_controls()   # so a click cannot nest a second batch
+
+
+def test_run_dataset_writes_a_dataset_and_restores_the_ui(qapp, tmp_path):
+    import json
+    win = SimApp(CHAMP)
+    win.set_mode(4)
+    p = win._dataset_page
+    p._rows[0].family.setCurrentText("preset")
+    p._rows[0].source.setCurrentText("following")
+    p._rows[0].weight.setValue(100.0)
+    p._count.setValue(2)
+    for b in p._fmt_boxes.values():
+        b.setChecked(False)
+    p._fmt_boxes["csv"].setChecked(True)
+    p._out_dir.setText(str(tmp_path))
+    win._run_dataset()
+    with open(str(tmp_path / "manifest.json")) as f:
+        man = json.load(f)
+    assert man["count"] == 2 and len(man["trajectories"]) == 2
+    assert win._dataset_page._gen_btn.isEnabled()          # _done_busy ran (try/finally)

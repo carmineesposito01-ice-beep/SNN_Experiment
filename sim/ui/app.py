@@ -18,8 +18,10 @@ from sim.backend import SoftwareBackend
 from sim.events import EventInjector
 from sim.replay import ReplayLog
 from sim.probe import AttributeProbe
+from sim.dataset_gen import generate_dataset
 from sim.scenario import manual_scenario, scenario_library
 from sim.scenario_export import write_scenario_csv, write_scenario_mat
+from sim.ui.dataset_page import DatasetPage
 from sim.scenario_spec import Block, LeaderStyle, ScenarioSpec
 from sim.stepper import SimStepper
 from sim.ui.layout import (DOCK_ORDER, LAYOUT_PATH, PRESETS, apply_overview, load_layout,
@@ -184,13 +186,16 @@ class SimApp(QMainWindow):
             name="nuovo", blocks=(Block("const", 600, {"v": 21.0}),),
             style=LeaderStyle(2.0, 4.0), s_init=33.5, v_init=21.0))
         self._scenario_page.sigScenarioBuilt.connect(self._on_scenario_built)
+        self._dataset_page = DatasetPage(params_gt=_PARAMS_GT)
+        self._dataset_page._on_generate = self._run_dataset   # the page has the button, the APP owns the run
         self._mode_stack = QStackedWidget()
         self._mode_stack.addWidget(container)          # page 0: Live cockpit
         self._mode_stack.addWidget(self._meso_page)    # page 1: Meso/Macro analysis
         self._mode_stack.addWidget(self._postrun_page) # page 2: Post-run report card
         self._mode_stack.addWidget(self._scenario_page)  # page 3: scenario builder
+        self._mode_stack.addWidget(self._dataset_page)   # page 4: dataset generator
         self._mode_sel = QComboBox()
-        self._mode_sel.addItems(["Live", "Meso/Macro", "Post-run", "Scenari"])
+        self._mode_sel.addItems(["Live", "Meso/Macro", "Post-run", "Scenari", "Dataset"])
         self._mode_sel.currentIndexChanged.connect(self.set_mode)
         outer = QVBoxLayout(); outer.setContentsMargins(0, 0, 0, 0)
         outer.addWidget(self._mode_sel)
@@ -378,14 +383,22 @@ class SimApp(QMainWindow):
         if idx == 2:
             self._postrun_page.set_summary(self._episode.summary(), self._episode.rows(),
                                            self._champ_name, self._scenarios[self._current_idx].name)
+        if idx == 4:                                   # the built scenarios may have changed since last time
+            self._dataset_page.set_sources(
+                self._built_specs(), [s.name for s in self._scenarios[:self._protected_count]])
         self._mode_stack.setCurrentIndex(idx)
         if self._mode_sel.currentIndex() != idx:
             self._mode_sel.blockSignals(True)
             self._mode_sel.setCurrentIndex(idx)
             self._mode_sel.blockSignals(False)
 
+    def _built_specs(self):
+        """{name: spec} for the user-built scenarios -- the only family with blocks to jitter."""
+        return {sc.name: sp for sc, sp in zip(self._scenarios, self._specs) if sp is not None}
+
     def _busy_controls(self):
-        return (self._meso_page._run_platoon_btn, self._meso_page._run_ring_btn, self._mode_sel)
+        return (self._meso_page._run_platoon_btn, self._meso_page._run_ring_btn, self._mode_sel,
+                self._dataset_page._gen_btn)
 
     def _busy(self, msg):
         """These batch sims run the frozen SNN synchronously on the GUI thread. Disable EVERY control
@@ -408,6 +421,24 @@ class SimApp(QMainWindow):
         # so processEvents cannot nest a second sim -- it only lets the window repaint instead of hanging.
         self._status.showMessage(f"ring sweep {i + 1}/{total}…")
         QApplication.processEvents()
+
+    def _dataset_progress(self, i, total):
+        # bounded progress + a pump between trajectories; every re-entry control is disabled (see _busy)
+        # so processEvents cannot nest a second batch -- it only lets the window repaint instead of hanging.
+        self._dataset_page._progress.setValue(int(100 * i / max(total, 1)))
+        self._status.showMessage(f"dataset {i}/{total}…")
+        QApplication.processEvents()
+
+    def _run_dataset(self):
+        page = self._dataset_page
+        self._busy("genero dataset…")
+        try:
+            generate_dataset(page.mix(), page.count(), page.seed(), page.strength(), page.k(),
+                             page.formats(), page.out_dir(), self._built_specs(), _PARAMS_GT,
+                             on_progress=self._dataset_progress)
+        finally:
+            self._done_busy()
+            page._progress.setValue(0)
 
     def _run_platoon(self):
         self._busy("calcolo platoon…")
