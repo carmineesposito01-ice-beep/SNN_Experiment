@@ -370,8 +370,13 @@ Config in `make_hdl.m`: `LoopOptimization='StreamLoops'`, `ConstantMultiplierOpt
   - ⚠️ **DUT in VERILOG** (non VHDL): il divisore combinatorio dell'IIDM manda un indice-LUT a **-1 a time-0**
     in xsim col VHDL (registri partono `U` → metavalue); Verilog inizializza i registri a 0. La SNN (M1) resta
     VHDL (no divisore). `rtl_gen_dut` ha ora il parametro lingua.
-  - ⏳ **Resta (piccolo):** caratterizzare l'impatto della deriva blocco-vs-riferimento (local_normalize) sul
-    car-following. **PROSSIMO grande:** 2b (ottimizzazione `tanh`) → 2c (full-dataset 60k + gate-level).
+  - ✅ **[2026-07-18] Deriva blocco-fisico vs riferimento CARATTERIZZATA** (`characterize_drift`, 20k control-step):
+    `|Δaccel|` **mediana 0** (identica sulla maggioranza degli step), **media 0.015**, **p99 0.188**, **max 0.977**
+    [m/s²] = **69% / 66% del budget E_snn**. Cioe' **sparsa** (solo spike-flip) ma con **coda significativa** —
+    stesso ordine della quantizzazione che la rete gia' si porta. **Non trascurabile in coda**; e' la differenza
+    tra il blocco fisico (local_normalize) e il riferimento software (snn_normalize), da tenere per il confronto MPC.
+    ⏳ Misura CLOSED-LOOP della deriva (si smorza o accumula?) = nota, non ancora fatta.
+  - **PROSSIMO grande:** report intermedio (checkpoint) → riordino file matlab → 2b (ottimizzazione `tanh`) → 2c.
 
 ## §7 File (worktree)
 - **Sorgente HDL:** `matlab/snn_core.m` (mod), `matlab/snn_types.m` (mod, +`accw`),
