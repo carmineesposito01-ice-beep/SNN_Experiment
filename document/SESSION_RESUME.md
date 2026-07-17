@@ -38,7 +38,7 @@ MATLAB-to-dataflow, che valgono **oltre SP4** per qualunque blocco bit-exact, so
 un'opinione — la divisione non compare in nessun path critico misurato, e col `tanh` a costo zero il tetto è
 10,58 con il collo **fuori dall'IIDM** (SNN→decode = il deployato).
 
-MATLAB: `"C:\Program Files\MATLAB\R2026ain\matlab.exe" -batch`. Vivado: `C:\AMDDesignTools6.1`.
+MATLAB: `"C:\Program Files\MATLAB\R2026a\bin\matlab.exe" -batch`. Vivado: `C:\AMDDesignTools\2026.1\Vivado\bin\vivado.bat`.
 
 **MODI DI LAVORO (vincolanti — la sessione li ha pagati a caro prezzo):**
 - **Verifica sul DATASET, mai su un caso singolo** — riporta *quanti su quanti* (es. 0/240.000, 5/5).
