@@ -173,3 +173,32 @@ def test_cancelling_writes_nothing(tmp_path):
     assert man is None
     assert not os.path.exists(path)
     assert seen[0] == (1, 5)              # progress is over BOTH batches, not per batch
+
+
+def test_training_windows_matches_the_real_length_rule():
+    """The UI's 'window share' column must equal what training actually cuts. A generator trajectory is
+    1200 ticks; after the 200-tick warmup strip, 1000; at the train stride (seq_len//2=50) that is 19 windows
+    (windows_per_traj(1000, stride=50))."""
+    from sim.train_gen import training_windows, windows_per_traj, WARMUP_STEPS
+    # generator / cut_in: fixed 1200 - warmup
+    assert training_windows("generator", "sinusoidal", {}, stride=50) == windows_per_traj(1200 - WARMUP_STEPS, stride=50)
+    assert training_windows("cut_in", "sinusoidal", {}, stride=50) == windows_per_traj(1200 - WARMUP_STEPS, stride=50)
+
+
+def test_training_windows_uses_the_built_scenario_length():
+    from sim.train_gen import training_windows, windows_per_traj, WARMUP_STEPS
+    from sim.scenario_spec import Block, LeaderStyle, ScenarioSpec
+    specs = {"mine": ScenarioSpec(name="mine", blocks=(Block("const", 600, {"v": 15.0}),),
+                                  style=LeaderStyle(2.0, 4.0), s_init=33.5, v_init=21.0)}
+    # built: sum(blocks)=600, minus warmup 200 = 400; preset: _PRESET_N=600 minus warmup = 400
+    assert training_windows("built", "mine", specs, stride=50) == windows_per_traj(600 - WARMUP_STEPS, stride=50)
+    assert training_windows("preset", "hard_brake", specs, stride=50) == windows_per_traj(600 - WARMUP_STEPS, stride=50)
+
+
+def test_training_windows_is_zero_for_a_too_short_built_scenario():
+    """A built scenario shorter than warmup+seq_len yields no windows -- the column must show 0, not a negative."""
+    from sim.train_gen import training_windows
+    from sim.scenario_spec import Block, LeaderStyle, ScenarioSpec
+    specs = {"tiny": ScenarioSpec(name="tiny", blocks=(Block("const", 250, {"v": 15.0}),),
+                                  style=LeaderStyle(2.0, 4.0), s_init=33.5, v_init=21.0)}
+    assert training_windows("built", "tiny", specs, stride=50) == 0

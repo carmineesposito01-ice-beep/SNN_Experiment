@@ -12,7 +12,7 @@ import os
 
 import numpy as np
 
-from config import DT, WARMUP_DURATION
+from config import DT, SIM_DURATION, WARMUP_DURATION
 from data.generator import _sample_scenario, normalize, simulate_cut_in_trajectory, simulate_trajectory
 from sim.jitter import jitter_spec
 from sim.scenario_spec import Block, LeaderStyle, ScenarioSpec, _PRESET_N, materialise
@@ -103,6 +103,21 @@ def windows_per_traj(n_ticks, seq_len=SEQ_LEN, stride=None):
     if n_ticks < seq_len:
         return 0
     return (n_ticks - seq_len) // stride + 1
+
+
+def training_windows(family, source, specs, stride=None):
+    """How many CFDataset windows one training trajectory of this family/source yields, AFTER the warmup strip.
+
+    The engine owns the length rule so the UI's 'window share' column cannot drift from what training cuts:
+    generator/cut_in run the fixed SIM_DURATION path (1200 ticks); built is its blocks' sum; preset is _PRESET_N
+    (600). All lose WARMUP_STEPS. Below one window the count is 0 (a too-short built scenario)."""
+    if family == "built":
+        raw = sum(int(b.ticks) for b in specs[source].blocks) if source in specs else 0
+    elif family == "preset":
+        raw = _PRESET_N
+    else:                                   # generator / cut_in: the fixed-duration path
+        raw = int(SIM_DURATION / DT)
+    return windows_per_traj(max(raw - WARMUP_STEPS, 0), stride=stride)
 
 
 VAL_MODE_STANDARD = "standard"
