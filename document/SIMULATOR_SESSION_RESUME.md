@@ -15,7 +15,7 @@
   lo scrive lo cambia). **Verificalo tu**: `git log --oneline -1` + `git status` + `git rev-list --count
   origin/Simulator..HEAD`. **Atteso: working tree pulito, 0 commit non pushati.** Se non è così, capisci
   perché prima di lavorare.
-- **Env/test**: conda `cf_sim`. **373 test verdi** (**37** file sim + `test_champion_io.py`; gli isolati
+- **Env/test**: conda `cf_sim`. **399 test verdi** (**38** file sim + `test_champion_io.py`; gli isolati
   sono `test_sim_drag_handles.py` (nodi, 4b), `test_sim_duration_handles.py` (durata, builder-UX),
   `test_sim_scenario_preview.py` (dock Scenario, item 1) e `test_sim_provenance.py` (il guardiano 7b)).
   ⚠️ **La suite è la glob SIM**
@@ -148,13 +148,22 @@ cambiati con la durata della scena. **Ancora aperte dall'utente (post-verifica 2
       e delega; occhio `👁`→`⊙`. ⚠️ **Churn ri-morso**: il piano enumerò `test_sim_dataset_page.py`+`app.py` ma
       mancò `test_sim_app_lifecycle.py` (`_specs`/`_rows` migrati) → la suite piena del T3 lo prese (2 rossi),
       fix `1d2d97c8`. Lezione: il churn va enumerato su TUTTI i file, non solo quelli nominati dal piano.
-    - **▶️ PROSSIMO: B2 — la destinazione Training** (non pianificato): toggle **Analisi | Training** in cima;
-      `MixTable(with_regime=True)` con colonna **regime** + famiglia **cut_in** (righe `TrainMixEntry`); controlli
-      Training impilati (`QStackedWidget`): conteggi train/val, selettore validazione a **3 modi**
-      (standard · forme-nuove · mix-diverso) coi loro avvisi, jitter col caveat RIFORMULATO, frequenza **spenta**
-      (DT nella PINN loss), formato **`.pt`**, **quota-in-finestre** viva, **Cancel + ETA** (batch ~4-6 min);
-      `app.py` `_run_dataset` instrada analisi→`generate_dataset` / training→`build_training_cache`. Design nella
-      spec §UI + **mock renderizzato approvato** (⚠️ il mock PRECEDE il vincolo tempo → non mostra Cancel/ETA).
+    - **B2 — la destinazione Training: ✅ FATTO** *(2026-07-17)*, plan `…/plans/2026-07-17-dataset-generator-7b-ui-training.md`,
+      TDD `f06170c8`→`6bc3b4f1` (7 task, INLINE). **399 test verdi (+26) · invarianti VUOTE
+      (`train.py`+`data/generator.py` intatti, provenienza 8/8) · render Training verificato** (regime, cut_in,
+      → finestre, validazione 3 modi, freq spenta, .pt, Cancel, ETA ≈ 6 min, stima ≈ 431 MB). **Cosa c'è ora**:
+      toggle **Analisi | Training** su un `QStackedWidget`; `sim/ui/training_panel.py` NUOVO = MixTable(with_regime)
+      + seed/train/val + selettore validazione a 3 modi (2ª MixTable per il mix-diverso) + jitter riformulato +
+      freq disabilitata + .pt + ETA + Cancel; `MixTable(with_regime=True)` con colonna regime/cut_in/→finestre;
+      `training_windows` nel motore per la colonna. `_run_dataset` instrada; il **Cancel resta fuori da
+      `_busy_controls`** (cliccabile) ma il training Generate DENTRO (anti-nesting); il ValueError del modo-2 va
+      nella status bar.
+      ⚠️ **Bug pescato in TDD**: `_dataset_progress` ritornava il flag diretto, ma il motore annulla su
+      `on_progress()==False` → un run normale veniva letto come annullato e non scriveva. Invertito: `False`
+      SOLO su cancel. ⚠️ **Lezione test**: `isVisible()` è sempre False in un pannello offscreen non mostrato →
+      usare `isHidden()`.
+  ✅ **ITEM 7 (il generatore dataset, 7a + 7b) È CHIUSO.** Analisi (csv/mat/json/xlsx + manifest) e Training
+  (cache `.pt` che `train.py --data_cache` legge, con asse regime, validazione a 3 modi, Cancel+ETA).
   ⚠️ **Fatti verificati nel brainstorming** (alcuni ribaltarono la draft originale): `data/generator.py` è la
   **provenienza dati dei champion** ma **NON è congelato** — 7b lo modifica additivamente (v. sopra); il suo
   `parse_scenario_mix` pesa i **regimi**, che sono lo stesso vocabolario dell'asse regime del 7b (raggiunto
