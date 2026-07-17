@@ -6,3 +6,15 @@ b2_rom_active.m
 # MEX compilati — rigenerabili con build_traj_mex
 snn_traj_fixed_r16_mex.*
 snn_traj_fixed_r8_mex.*
+
+# Fase B2.0 — VHDL generato per la validazione RTL (rigenerabile via rtl_gen_dut) + artefatti xsim
+hdlsrc_*/
+axi/champion/xsim.dir/
+axi/champion/*.jou
+axi/champion/*.log
+axi/champion/*.pb
+axi/champion/*.wdb
+axi/champion/stim_*.mem
+axi/champion/gold_*.mem
+axi/champion/meta_*.mat
+axi/champion/compile_order.txt
