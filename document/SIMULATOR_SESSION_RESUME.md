@@ -15,7 +15,7 @@
   lo scrive lo cambia). **Verificalo tu**: `git log --oneline -1` + `git status` + `git rev-list --count
   origin/Simulator..HEAD`. **Atteso: working tree pulito, 0 commit non pushati.** Se non è così, capisci
   perché prima di lavorare.
-- **Env/test**: conda `cf_sim`. **369 test verdi** (**36** file sim + `test_champion_io.py`; gli isolati
+- **Env/test**: conda `cf_sim`. **371 test verdi** (**36** file sim + `test_champion_io.py`; gli isolati
   sono `test_sim_drag_handles.py` (nodi, 4b), `test_sim_duration_handles.py` (durata, builder-UX),
   `test_sim_scenario_preview.py` (dock Scenario, item 1) e `test_sim_provenance.py` (il guardiano 7b)).
   ⚠️ **La suite è la glob SIM**
