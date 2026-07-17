@@ -29,5 +29,6 @@ function accel = acc_iidm_fsm(s, v, dv, v_l, p, rst) %#codegen
     q = fsm_div(num, den);
     st = iidm_use(k, q, st);
   end
-  accel = iidm_final(st);
+  th = iidm_tanh(st);                % stadio a se' nella chart (era il path critico: tanh fixed)
+  accel = iidm_final(st, th);
 end

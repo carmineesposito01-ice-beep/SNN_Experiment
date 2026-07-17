@@ -9,12 +9,14 @@
 > | **L** — reciproci a LUT | chiusa | errore non convergente ~4 m/s²: **approssima** |
 > | **M-v1** — resource sharing (config) | chiusa | 9,5 MHz < 11,65 **e** area esplosa (LUT ×2,4, FF ×14) |
 > | **M-FSM #1** — FSM + blocco `Divide` HDL | **chiusa: strada MORTA** | bit-identità **provata** (G1/G2/G3/G4 verdi) ma **non genera VHDL**: il blocco accanto alla chart impone la conversione dataflow, che **vieta `tanh` fixed** → §Variante M-FSM |
-> | **#2a** — FSM che riusa **una `divide()`** (chart sola) | ✅ **FATTA e FUNZIONA** | **8658 LUT · 2158 FF · Fmax 7,35 · `dmax=0` · G5 verde**: −20% LUT vs SP3, **−66% LUT e −91% FF vs M-v1**, Fmax ×3,7 vs SP3 → §Variante M-FSM #2a |
-> | **#2b** — divisore **sequenziale a mano** | non ancora necessaria | serve solo per l'ultimo tratto verso 11,65, **dopo** aver spezzato `iidm_final` |
+> | **#2a** — FSM che riusa **una `divide()`** (chart sola) + stadi | ✅ **FATTA, FUNZIONA, CHIUDE** | **8614 LUT · 2134 FF · Fmax 9,30 · WNS +17,4 · `dmax=0` · G5 verde**: eguaglia M-v1 (9,51) con **1/3 delle LUT e 1/10 dei FF**; vs SP3 Fmax ×4,6 e LUT −21% → §Variante M-FSM #2a |
+> | **#2b** — divisore **sequenziale a mano** | ❌ **CASSATA sui dati** | il collo NON è più la divisione ma il **`tanh`** (207 liv > 172): #2b non alzerebbe l'Fmax di un MHz |
 >
 > Bersaglio invariato: **Fmax ≥ 11,65 MHz** con area ridotta, **`dmax = 0`** (mai approssimare).
-> **Stato: 7,35 MHz misurati a `dmax=0`, con l'area finalmente in discesa.** Collo attuale: `iidm_final`
-> (il `tanh` fixed, 237 livelli), non più la divisione (~172).
+> **Stato: 9,30 MHz misurati a `dmax=0`, timing CHIUSO @8 MHz, area in discesa.** Collo finale: **il `tanh`
+> fixed** (207 liv) — non la divisione. ~9,3 è il **tetto** di questa architettura a bit-identità intatta; gli
+> 11,65 richiederebbero di approssimare il tanh (LUT) o un CORDIC sequenziale a mano (#2c). Nota: 11,65 era
+> simmetria con la SNN, non un requisito: il blocco usa **358 clock** su **800.000** per control-step.
 
 ## Problema (SP3, misurato)
 `Donatello_ACC_IIDM` in fixed sintetizza a **2,0 MHz** (WNS −373 ns @8 MHz, timing non chiude). Path critico
@@ -184,13 +186,15 @@ handshake, niente Unit Delay, niente loop algebrico → **`tanh` fixed nativa e 
 ### I numeri (OOC xc7z020 @8 MHz, tutti misurati)
 | | LUT | FF | DSP | **Fmax** | livelli | WNS |
 |---|---|---|---|---|---|---|
-| SP3 (5 divisori incatenati) | 10846 | 1653 | 69 | 2,01 | 1077 | −373 ns |
-| M-v1 config (resource sharing) | 25557 | 22922 | 38 | 9,51 | 172 | +19,9 ns |
-| #2a **v1** (tutto in un ciclo) | 8564 | 1919 | 71 | 2,85 | 701 | −225 ns |
-| **#2a a stadi** (uno stadio per ciclo) | **8658** | **2158** | 71 | **7,35** | **237** | **−11,1 ns** |
+| SP3 (5 divisori incatenati) | 10846 | 1653 | 69 | 2,01 | 1077 | −373 ns ❌ |
+| M-v1 config (resource sharing) | 25557 | 22922 | 38 | 9,51 | 172 | +19,9 ns ✅ |
+| #2a **v1** (tutto in un ciclo) | 8564 | 1919 | 71 | 2,85 | 701 | −225 ns ❌ |
+| #2a **a stadi** (uno stadio per ciclo) | 8658 | 2158 | 71 | 7,35 | 237 | −11,1 ns ❌ |
+| **#2a + stadio TANH** ← **FINALE** | **8614** | **2134** | 71 | **9,30** | **207** | **+17,4 ns ✅** |
 
-**#2a ottiene il 77% dell'Fmax di M-v1 con un TERZO delle LUT e un DECIMO dei FF** — cioè il time-mux della
-FSM taglia l'area *davvero*, dove il config-based la gonfiava (LUT ×2,36, FF ×13,9). E lo fa a **`dmax = 0`**.
+**#2a EGUAGLIA M-v1 (9,30 vs 9,51: −2%) con UN TERZO delle LUT e UN DECIMO dei FF, a `dmax = 0`, e il timing
+CHIUDE @8 MHz.** Contro SP3: Fmax **×4,6**, LUT **−21%**, e da "non chiude" (−373 ns) a **chiude** (+17,4 ns).
+Il time-mux della FSM taglia l'area *davvero*, dove il config-based la gonfiava (LUT ×2,36, FF ×13,9).
 
 ### Le due lezioni, misurate
 1. **Il time-mux della FSM taglia l'AREA; l'Fmax la dà il REGISTRO fra gli stadi.** La prima versione faceva
@@ -207,14 +211,27 @@ FSM taglia l'area *davvero*, dove il config-based la gonfiava (LUT ×2,36, FF ×
 **MISURATA 357 clk** (341 SNN + latch + decode + prep + 5×3), edge-triggered · **G5 PASSATO**
 (self-contained, `DualPortRAM` presente) · plant parity ALL PASS. Le funzioni-fase non sono state toccate.
 
-### Collo attuale e prossimo passo
+### Il collo finale: il `tanh` — e perché **#2b non serve più**
 ```
-CRITPATH: st_dd_12_reg -> acc_3_reg   237 livelli
+CRITPATH: st_dd_12_reg -> thl_7_reg   207 livelli      <- e' lo stadio TANH stesso
 ```
-Non è più la divisione (~172): è **`iidm_final`**, cioè `a_blend = (1-COOL)*a_iidm + COOL*(a_cah + bf*tanh(dd))`
-— **il `tanh` fixed**, lo stesso che aveva ucciso #1. Spezzando anche `iidm_final` (tanh in un ciclo, blend nel
-successivo) il collo tornerebbe **sulla divisione** (~172 → i ~9,5 MHz veri). Solo **dopo** servirebbe **#2b**
-(divisore sequenziale a mano) per l'ultimo tratto verso 11,65.
+Dopo aver isolato il `tanh` in uno stadio suo, il path critico **è il `tanh` in sé** (207 livelli): non
+`iidm_final`, e **non la divisione** (~172). Conseguenza diretta e importante:
+
+> **#2b (divisore sequenziale a mano) NON alzerebbe l'Fmax di un MHz**: serviva ad accorciare la divisione, che
+> **non è più il collo**. Sarebbe lavoro e rischio (aritmetica riscritta a mano, cioè il rischio-§2.1 che #1
+> comprava con G1) per **zero guadagno**. Cassata sui dati, come L.
+
+Per superare i **9,30 MHz** bisognerebbe attaccare il `tanh`, e le strade sono tutte chiuse o costose:
+| strada per il tanh | esito |
+|---|---|
+| pipelinarlo con un **blocco HDL esterno** | rimette un blocco accanto alla chart → **conversione dataflow → `tanh` fixed vietata**: è esattamente ciò che ha ucciso #1 |
+| **LUT** per il tanh | **approssima** → `dmax ≠ 0` → è il motivo per cui L fu scartata e M esiste |
+| **CORDIC sequenziale a mano** dentro la chart (#2c) | l'unica praticabile a `dmax=0`, ma: bit-identità del tanh **da guadagnare** + lavoro, per +25% di Fmax **funzionalmente irrilevante** (vedi sotto) |
+
+**Lettura: ~9,3 MHz è il tetto di questa architettura a bit-identità intatta.** E il bersaglio 11,65 (= Fmax
+della SNN sola) era un criterio di *simmetria*, non un requisito funzionale: un control-step dura **0,1 s =
+800.000 clock a 8 MHz**, e il blocco M ne consuma **358**. A 9,3 MHz il margine è ~2200×.
 
 ## File (variante L, committati — riusabili se L verrà ripresa)
 `acc_recip_lut.m` · `acc_sweep_kernel.m` · `build_acc_sweep_mex.m` · `run_acc_recip_sweep.m` · `acc_types.recipN`

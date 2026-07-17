@@ -33,6 +33,7 @@ function build_hdl_variants()
   srcPrep  = fileread(fullfile(here, 'iidm_prep.m'));
   srcNd    = fileread(fullfile(here, 'iidm_nd.m'));
   srcUse   = fileread(fullfile(here, 'iidm_use.m'));
+  srcTanh  = fileread(fullfile(here, 'iidm_tanh.m'));
   srcFinal = fileread(fullfile(here, 'iidm_final.m'));
 
   d = load(fullfile(here, 'champions_export.mat')); champs = d.champions;
@@ -121,7 +122,7 @@ function build_hdl_variants()
   add_block('simulink/User-Defined Functions/MATLAB Function', [subM '/IIDM_CTRL']);
   chartM = sfroot().find('-isa', 'Stateflow.EMChart', 'Path', [subM '/IIDM_CTRL']);
   chartM.Script = acciidm_m_chart_code(NCHAMP, srcRom, srcTypes, srcFsm, srcLut, srcAccT, ...
-                                       srcFDiv, srcPrep, srcNd, srcUse, srcFinal, nrm);
+                                       srcFDiv, srcPrep, srcNd, srcUse, srcTanh, srcFinal, nrm);
   % SOLA CHART nel subsystem (4 ingressi, 1 uscita: identico a SP3). Niente blocco `Divide`, niente Unit
   % Delay, niente handshake, niente feedback: erano l'impalcatura di #1, morta il 2026-07-17 perche' un
   % blocco ACCANTO alla chart impone la conversione MATLAB-to-dataflow, che VIETA `tanh` fixed -- e `tanh`
@@ -365,7 +366,7 @@ function d = acciidm_description(N)
 end
 
 
-function code = acciidm_m_chart_code(N, srcRom, srcTypes, srcFsm, srcLut, srcAccT, srcFDiv, srcPrep, srcNd, srcUse, srcFinal, nrm)
+function code = acciidm_m_chart_code(N, srcRom, srcTypes, srcFsm, srcLut, srcAccT, srcFDiv, srcPrep, srcNd, srcUse, srcTanh, srcFinal, nrm)
 %ACCIIDM_M_CHART_CODE  SP4-M-FSM: chart del blocco M. Macro-FSM:
 %    IDLE -(edge-trigger)-> SNN (time-mux ~341 clk) -(valid)-> decode + iidm_prep
 %      -> per k=1..5 { iidm_nd(k) -> emetti (num,den,vin) -> attendi vout -> iidm_use(k,quot) }
@@ -393,7 +394,7 @@ function code = acciidm_m_chart_code(N, srcRom, srcTypes, srcFsm, srcLut, srcAcc
     '  xn = local_normalize(s, v, dv, v_l, Tt);'
     '  % alf/vlp (stato del filtro OU) vivono QUI, nel top-level: HDL Coder vieta i persistent in una'
     '  % funzione non-entry-point chiamata in un condizionale, e iidm_prep e'' chiamata in due rami.'
-    '  persistent pv xprev started acc phase kdiv st alf vlp rawl numl denl ql'
+    '  persistent pv xprev started acc phase kdiv st alf vlp rawl numl denl ql thl'
     '  if isempty(started)'
     '    pv = fi(zeros(5,1), 1, 21, 13);'
     '    xprev = xn; started = true;'
@@ -405,6 +406,9 @@ function code = acciidm_m_chart_code(N, srcRom, srcTypes, srcFsm, srcLut, srcAcc
     '    [st, alf, vlp] = iidm_prep(s, v, dv, v_l, pv(:), true, alf, vlp);'
     '    rawl = fi(zeros(5,1), 1, 21, 13);   % latch del readout SNN: spezza il path SNN -> decode'
     '    numl = cast(0, ''like'', Ta.acc); denl = cast(1, ''like'', Ta.acc); ql = cast(0, ''like'', Ta.acc);'
+    '    % thl col TIPO NATIVO di tanh (NON cast a Ta.acc: butterebbe i bit frazionari del tanh prima'
+    '    % del prodotto con bf -> bug §2.1). Il tipo lo da'' tanh stesso su un argomento di tipo Ta.acc.'
+    '    thl = tanh(cast(0, ''like'', Ta.acc));'
     '    go = true;'
     '  else'
     '    go = any(xn ~= xprev);             % edge-triggered: 1 campione = 1 inferenza (§3.1.4)'
@@ -434,8 +438,11 @@ function code = acciidm_m_chart_code(N, srcRom, srcTypes, srcFsm, srcLut, srcAcc
     '    else'
     '      kdiv = kdiv + 1; phase = uint8(3);'
     '    end'
-    '  elseif phase == 6                    % FINAL: blend + clamp -> accel (tenuta fino al prossimo)'
-    '    acc = iidm_final(st);'
+    '  elseif phase == 6                    % TANH: stadio a se'' -- era il PATH CRITICO (237 liv, 7,35 MHz)'
+    '    thl(:) = iidm_tanh(st);'
+    '    phase = uint8(7);'
+    '  elseif phase == 7                    % FINAL: blend + clamp -> accel (tenuta fino al prossimo)'
+    '    acc = iidm_final(st, thl);'
     '    phase = uint8(0);'
     '  end'
     '  accel = acc;'
@@ -446,7 +453,7 @@ function code = acciidm_m_chart_code(N, srcRom, srcTypes, srcFsm, srcLut, srcAcc
   code = [code newline newline srcRom newline newline srcTypes newline newline srcFsm ...
           newline newline srcLut newline newline srcAccT newline newline srcFDiv ...
           newline newline srcPrep newline newline srcNd newline newline srcUse ...
-          newline newline srcFinal];
+          newline newline srcTanh newline newline srcFinal];
 end
 
 
