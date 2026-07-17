@@ -122,48 +122,20 @@ function build_hdl_variants()
   chartM = sfroot().find('-isa', 'Stateflow.EMChart', 'Path', [subM '/IIDM_CTRL']);
   chartM.Script = acciidm_m_chart_code(NCHAMP, srcRom, srcTypes, srcFsm, srcLut, srcAccT, ...
                                        srcFDiv, srcPrep, srcNd, srcUse, srcFinal, nrm);
-  % ARCHITETTURA HDL della chart: 'MATLAB Function' e NON 'MATLAB Datapath'. Datapath = conversione
-  % MATLAB-to-dataflow, che HDL Coder sceglie per ottimizzare ATTRAVERSO il confine chart<->blocchi
-  % Simulink (M ha chart + Divide + Unit Delay nello stesso subsystem; SP3 ha solo la chart e resta su
-  % 'MATLAB Function', il default del fixed-point). Quel flusso impone vincoli molto piu' stretti: niente
-  % struct di prototipi 'empty-typed' (acc_types/snn_types usano fi([])), niente persistent in funzioni
-  % non-entry-point chiamate in un condizionale, niente divide() con argomenti variabili. Imponendola qui,
-  % quei vincoli non si applicano -> snn_types (37 file, INCLUSO il deployato snn_hdl_*) non si tocca.
-  % Costo: niente ottimizzazioni HDL Coder attraverso il confine -- che e' proprio cio' che NON vogliamo
-  % (SP4-M config-based le ha misurate: Fmax 9,5 MHz e area esplosa. Qui il time-mux lo fa la FSM).
-  hdlset_param([subM '/IIDM_CTRL'], 'Architecture', 'MATLAB Function');
-  % Tipi delle porte di RITORNO dal Divide: una chart creata da script crea i dati come DOUBLE, ma dal
-  % blocco arrivano `vout` (boolean) e `quot` (fixdt(1,19,8)) -> Simulink rifiuta con "boolean ... is
-  % driving a signal of data type double". Vanno fissati esplicitamente (gli altri input ereditano).
-  dVout = chartM.find('-isa','Stateflow.Data','-and','Name','vout');
-  if ~isempty(dVout), dVout.DataType = 'boolean'; end
-  dQuot = chartM.find('-isa','Stateflow.Data','-and','Name','quot');
-  if ~isempty(dQuot), dQuot.DataType = 'Inherit: Same as Simulink'; end
-  % L'UNICO divisore, condiviso dalle 5 divisioni. latencyMode 'Max' = pipelinato: e' cio' che deve
-  % alzare l'Fmax, e la latenza rompe il loop algebrico del feedback (con 'Zero' sarebbe combinatorio ->
-  % loop algebrico + nessun guadagno). RndMeth 'Zero' + OutDataType T.acc (fixdt(1,19,8)) = ESATTAMENTE
-  % la config che G1 (probe_divide_bitexact) ha provato bit-identica a divide()-SP3 su 300k coppie reali.
-  add_block('HDLMathLib/Divide', [subM '/DIV']);
-  set_param([subM '/DIV'], 'latencyMode','Max', 'RndMeth','Zero', 'OutDataTypeStr','fixdt(1,19,8)');
+  % SOLA CHART nel subsystem (4 ingressi, 1 uscita: identico a SP3). Niente blocco `Divide`, niente Unit
+  % Delay, niente handshake, niente feedback: erano l'impalcatura di #1, morta il 2026-07-17 perche' un
+  % blocco ACCANTO alla chart impone la conversione MATLAB-to-dataflow, che VIETA `tanh` fixed -- e `tanh`
+  % e' nel cuore dell'IIDM (HDL_PHASE §9 · SP4_ACC_IIDM_FAST.md §Variante M-FSM).
+  % Il time-mux lo fa la FSM dentro la chart: UNA sola chiamata a `fsm_div` nel sorgente => HDL Coder
+  % genera UN divisore, riusato in 5 cicli. (Assunto da MISURARE in OOC, non da credere: se le LUT
+  % restassero ~10846 come SP3, il tool non avrebbe condiviso e #2a non avrebbe senso.)
   for j = 1:4
     add_block('built-in/Inport', [subM '/' in_names{j}], 'Port', num2str(j));
     add_line(subM, [in_names{j} '/1'], ['IIDM_CTRL/' num2str(j)]);
   end
-  % Unit Delay sul RITORNO: senza, chart -> Divide -> chart e' un LOOP ALGEBRICO. Simulink assume che gli
-  % output di una MATLAB Function dipendano dagli input nello stesso passo; qui non e' vero (num/den
-  % vengono dallo STATO st/phase, non da quot/vout), ma il tool non puo' dedurlo -- e il Divide ha
-  % feedthrough su ValidLine/Switch. Il ritardo costa 1 clock per divisione, assorbito dalla FSM che
-  % attende comunque vout, e rende il feedback esplicito invece che affidato a un'inferenza del tool.
-  add_block('simulink/Discrete/Unit Delay', [subM '/z_q'], 'InitialCondition','0');
-  add_block('simulink/Discrete/Unit Delay', [subM '/z_v'], 'InitialCondition','0');
-  add_line(subM, 'DIV/1', 'z_q/1');  add_line(subM, 'z_q/1', 'IIDM_CTRL/5');   % quot -> z -> chart
-  add_line(subM, 'DIV/2', 'z_v/1');  add_line(subM, 'z_v/1', 'IIDM_CTRL/6');   % vout -> z -> chart
-  add_line(subM, 'IIDM_CTRL/2', 'DIV/1');     % num  -> Divide
-  add_line(subM, 'IIDM_CTRL/3', 'DIV/2');     % den  -> Divide
-  add_line(subM, 'IIDM_CTRL/4', 'DIV/3');     % vin  -> Divide
   add_block('built-in/Outport', [subM '/accel'], 'Port', '1');
   add_line(subM, 'IIDM_CTRL/1', 'accel/1');
-  fprintf('  costruito Donatello_ACC_IIDM_M (SP4-M-FSM: 5 divisioni su 1 blocco Divide)\n');
+  fprintf('  costruito Donatello_ACC_IIDM_M (SP4-M-FSM #2a: 5 divisioni su 1 divide() condivisa)\n');
 
   set_param(lib, 'EnableLBRepository', 'on');
   save_system(lib, libfile);
@@ -401,12 +373,16 @@ function code = acciidm_m_chart_code(N, srcRom, srcTypes, srcFsm, srcLut, srcAcc
 %  Le funzioni-fase sono INLINATE dai sorgenti VERI (single source col model acc_iidm_fsm, che G2 valida
 %  a dmax=0 su 60000 control-step): la chart NON ricalcola la matematica -> non puo' divergere (§2.1).
   Lmain = {
-    'function [accel, num, den, vin] = IIDM_CTRL(s, v, dv, v_l, quot, vout)'
+    'function accel = IIDM_CTRL(s, v, dv, v_l)'
     '%#codegen'
-    '% SP4-M-FSM - Donatello + ACC-IIDM con le 5 divisioni sequenziate su UN blocco Divide HDL esterno.'
-    '%  Handshake: la chart emette (num,den,vin); il Divide (ShiftAdd, latenza fissa nota) risponde con'
-    '%  (quot,vout). La matematica NON e'' qui: sta in iidm_prep/iidm_nd/iidm_use/iidm_final, le STESSE'
-    '%  del model acc_iidm_fsm (G2). Qui c''e'' solo l''orchestrazione.'
+    '% SP4-M-FSM #2a - Donatello + ACC-IIDM con le 5 divisioni sequenziate su UNA divide() condivisa.'
+    '%  UNA sola chiamata a fsm_div in tutto il sorgente, dentro uno stato della FSM -> HDL Coder genera'
+    '%  UN divisore, riusato in 5 cicli. `kdiv` e'' STATO, non indice di loop: un `for k=1:5` verrebbe'
+    '%  SROTOLATO dal codegen -> 5 divisori (giusto nel model acc_iidm_fsm, LETALE qui).'
+    '%  Nessun blocco accanto alla chart -> niente conversione MATLAB-to-dataflow -> tanh fixed NATIVA:'
+    '%  e'' cio'' che ha ucciso #1 (blocco Divide esterno) -- HDL_PHASE §9.'
+    '%  La matematica NON e'' qui: sta in iidm_prep/iidm_nd/iidm_use/iidm_final, le STESSE del model'
+    '%  acc_iidm_fsm (G2: dmax=0 su 60000 control-step). Qui c''e'' solo l''orchestrazione.'
     '  Tt = snn_types(''fixed'', 13);'
     '  Ta = acc_types(''fixed'');'
     '  xn = local_normalize(s, v, dv, v_l, Tt);'
@@ -427,28 +403,21 @@ function code = acciidm_m_chart_code(N, srcRom, srcTypes, srcFsm, srcLut, srcAcc
     '    go = any(xn ~= xprev);             % edge-triggered: 1 campione = 1 inferenza (§3.1.4)'
     '  end'
     '  xprev = xn;'
-    '  num = cast(0, ''like'', Ta.acc); den = cast(1, ''like'', Ta.acc); vin = false;'
     '  [raw, valid] = snn_b2_fsm(xn, go);'
     '  if valid'
     ['    pv = snn_decode_lut(raw, ' num2str(N) ');']
     '    [st, alf, vlp] = iidm_prep(s, v, dv, v_l, pv(:), false, alf, vlp);   % 1 volta per control-step (§5)'
     '    kdiv = uint8(1); phase = uint8(1);'
     '  end'
-    '  if phase == 1                        % ISSUE: operandi della divisione k -> Divide'
+    '  if phase == 1                        % RUN: UNA divisione per ciclo (k = 1..5)'
     '    [num, den] = iidm_nd(kdiv, st);'
-    '    vin = true;'
-    '    phase = uint8(2);'
-    '  elseif phase == 2                    % WAIT: il quoziente arriva dopo la latenza del Divide'
-    '    if vout'
-    '      % cast ''like'' Ta.acc: il segnale di ritorno ha il tipo giusto ma non la FIMATH di acc_types,'
-    '      % e la fimath e'' parte del tipo (SP3 §2). Il valore non cambia (stesso numerictype).'
-    '      st = iidm_use(kdiv, cast(quot, ''like'', Ta.acc), st);'
-    '      if kdiv >= 5'
-    '        acc = iidm_final(st);          % DONE: accel tenuta fino al control-step successivo'
-    '        phase = uint8(0);'
-    '      else'
-    '        kdiv = kdiv + 1; phase = uint8(1);'
-    '      end'
+    '    q = fsm_div(num, den);             % <== UNICA chiamata nel sorgente: UN divisore in HDL'
+    '    st = iidm_use(kdiv, q, st);'
+    '    if kdiv >= 5'
+    '      acc = iidm_final(st);            % DONE: accel tenuta fino al control-step successivo'
+    '      phase = uint8(0);'
+    '    else'
+    '      kdiv = kdiv + 1;'
     '    end'
     '  end'
     '  accel = acc;'
@@ -468,11 +437,12 @@ function d = acciidm_m_description(N)
   L = {
     sprintf('Donatello_ACC_IIDM_M - Donatello (LUT-%d) + ACC-IIDM con le 5 divisioni SEQUENZIATE.', N)
     ''
-    'COS''E'' (SP4-M-FSM)'
+    'COS''E'' (SP4-M-FSM #2a)'
     '  Variante di Donatello_ACC_IIDM: le 5 divisioni a divisore variabile dell''IIDM non sono piu'' 5'
-    '  divisori combinatori INCATENATI (1077 livelli logici, Fmax 2,0 MHz), ma UNA sola unita'' -- un'
-    '  blocco Divide HDL (ShiftAdd, pipelinato) -- riusata da una macchina a stati. Scopo: recuperare'
-    '  l''Fmax (bersaglio >= 11,65 MHz, pari alla SNN) TAGLIANDO le risorse.'
+    '  divisori combinatori INCATENATI (1077 livelli logici, Fmax 2,0 MHz), ma UNA sola divide()'
+    '  riusata da una macchina a stati -- una divisione per ciclo. Scopo: TAGLIARE L''AREA tenendo'
+    '  dmax=0. Il path critico resta una divisione combinatoria: questo blocco NON punta agli 11,65 MHz'
+    '  (per quelli servirebbe un divisore sequenziale, studio #2b: SP4_ACC_IIDM_FAST.md).'
     ''
     'BIT-IDENTICO A Donatello_ACC_IIDM (SP3)'
     '  La matematica e'' la stessa, solo distribuita nel tempo: nessuna approssimazione. Garantito da'
@@ -489,10 +459,10 @@ function d = acciidm_m_description(N)
     '  accel [m/s^2]'
     ''
     '⚠️ VINCOLO DI RATE (DIVERSO da Donatello_ACC_IIDM)'
-    '  Una inferenza costa la SNN time-mux (~341 clock) PIU'' le 5 divisioni sequenziali (~5x(1+latenza)'
-    '  del Divide). Ogni ingresso va quindi tenuto per PIU'' campioni che nel blocco SP3 (~341): il valore'
-    '  esatto lo MISURA run_block_acciidm_m_test (non e'' assunto). Sull''FPGA e'' irrilevante: un'
-    '  control-step da 0,1 s dura 800.000 clock a 8 MHz.'
+    '  Una inferenza costa la SNN time-mux (~341 clock) PIU'' 5 cicli, uno per divisione. Ogni ingresso'
+    '  va quindi tenuto per PIU'' campioni che nel blocco SP3 (~341): il valore esatto lo MISURA'
+    '  run_block_acciidm_m_test (non e'' assunto). Sull''FPGA e'' irrilevante: un control-step da 0,1 s'
+    '  dura 800.000 clock a 8 MHz.'
     ''
     'SEMANTICA'
     '  1 cambio d''ingresso = 1 inferenza (edge-triggered, niente start/done esposti: uno start'
