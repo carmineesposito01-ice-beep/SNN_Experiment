@@ -18,10 +18,11 @@ toccarli né stagearli**).
 *(Esistono altri track/worktree — es. `Simulator`, `main`/EventProp — con LORO SESSION_RESUME: questo file vale
 solo per `Simulink_Importer`.)*
 
-**Stato in una riga:** SP2/SP3 chiusi, **debito Fase B risolto** (bitstream escluso); su **SP4 tre strade
-chiuse** — L (approssima) · M-v1 resource sharing (9,5 MHz + area esplosa) · **M-FSM #1 blocco Divide
-(bit-identità PROVATA G1/G2/G3/G4, ma NON genera VHDL: la conversione dataflow vieta `tanh` fixed)** →
-**resta l'approccio #2: divisore DENTRO la chart** (nuovo ciclo di design).
+**Stato in una riga:** SP2/SP3 chiusi, **debito Fase B risolto** (bitstream escluso); su SP4: L e M-v1 chiuse,
+**M-FSM #1 morto** (blocco Divide → dataflow → niente `tanh` fixed), e **#2a FATTO E FUNZIONANTE**: la FSM
+riusa **una** `divide()` dentro la chart → **8658 LUT · 2158 FF · Fmax 7,35 MHz · `dmax=0` · G5 verde**
+(−20% LUT vs SP3, **−66% LUT / −91% FF vs M-v1**, Fmax ×3,7 vs SP3). **Collo ora: `iidm_final` (tanh, 237
+liv)**, non più la divisione → prossimo: spezzare `iidm_final` (~9,5 atteso), poi #2b per 11,65.
 
 **AZIONE PENDENTE (immediata):** **aprire il ciclo `brainstorming → spec → piano` per l'APPROCCIO #2** —
 divisore digit-recurrence **DENTRO la chart**, sequenziato dalla FSM. È l'**unico rimasto**: niente blocco

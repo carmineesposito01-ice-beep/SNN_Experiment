@@ -9,9 +9,12 @@
 > | **L** — reciproci a LUT | chiusa | errore non convergente ~4 m/s²: **approssima** |
 > | **M-v1** — resource sharing (config) | chiusa | 9,5 MHz < 11,65 **e** area esplosa (LUT ×2,4, FF ×14) |
 > | **M-FSM #1** — FSM + blocco `Divide` HDL | **chiusa: strada MORTA** | bit-identità **provata** (G1/G2/G3/G4 verdi) ma **non genera VHDL**: il blocco accanto alla chart impone la conversione dataflow, che **vieta `tanh` fixed** → §Variante M-FSM |
-> | **#2** — divisore **dentro** la chart | **l'unica rimasta** | niente blocco esterno → niente dataflow → `tanh` nativa e core intatto. Bit-identità da guadagnare |
+> | **#2a** — FSM che riusa **una `divide()`** (chart sola) | ✅ **FATTA e FUNZIONA** | **8658 LUT · 2158 FF · Fmax 7,35 · `dmax=0` · G5 verde**: −20% LUT vs SP3, **−66% LUT e −91% FF vs M-v1**, Fmax ×3,7 vs SP3 → §Variante M-FSM #2a |
+> | **#2b** — divisore **sequenziale a mano** | non ancora necessaria | serve solo per l'ultimo tratto verso 11,65, **dopo** aver spezzato `iidm_final` |
 >
 > Bersaglio invariato: **Fmax ≥ 11,65 MHz** con area ridotta, **`dmax = 0`** (mai approssimare).
+> **Stato: 7,35 MHz misurati a `dmax=0`, con l'area finalmente in discesa.** Collo attuale: `iidm_final`
+> (il `tanh` fixed, 237 livelli), non più la divisione (~172).
 
 ## Problema (SP3, misurato)
 `Donatello_ACC_IIDM` in fixed sintetizza a **2,0 MHz** (WNS −373 ns @8 MHz, timing non chiude). Path critico
@@ -169,6 +172,49 @@ Il design #1 è **incompatibile con questa matematica**, punto.
 convivenza → niente conversione dataflow → `tanh` fixed torna nativa (come in SP3) e il core resta intatto.
 Prezzo: la bit-identità del divisore va **guadagnata** (era ciò che #1 comprava) — ma l'infrastruttura per
 provarla su 300k coppie reali è già in piedi. Richiede un nuovo ciclo `brainstorming → spec → piano`.
+
+## Variante M-FSM #2a — FSM che riusa UNA `divide()`: FATTA (2026-07-17) — **funziona**
+Spec `docs/superpowers/specs/2026-07-17-acc-iidm-fsm-2a-design.md` · piano
+`docs/superpowers/plans/2026-07-17-acc-iidm-fsm-2a.md`. Dopo la morte di #1 (blocco `Divide` accanto alla
+chart → dataflow → niente `tanh` fixed), il divisore condiviso è stato portato **dentro** la chart: **UNA
+sola chiamata a `fsm_div` nel sorgente**, dentro uno stato della FSM → HDL Coder genera **un divisore**,
+riusato in 5 cicli. Il blocco è tornato **sola chart** (4 in / 1 out come SP3): niente blocco esterno, niente
+handshake, niente Unit Delay, niente loop algebrico → **`tanh` fixed nativa e il VHDL si genera (G5 verde)**.
+
+### I numeri (OOC xc7z020 @8 MHz, tutti misurati)
+| | LUT | FF | DSP | **Fmax** | livelli | WNS |
+|---|---|---|---|---|---|---|
+| SP3 (5 divisori incatenati) | 10846 | 1653 | 69 | 2,01 | 1077 | −373 ns |
+| M-v1 config (resource sharing) | 25557 | 22922 | 38 | 9,51 | 172 | +19,9 ns |
+| #2a **v1** (tutto in un ciclo) | 8564 | 1919 | 71 | 2,85 | 701 | −225 ns |
+| **#2a a stadi** (uno stadio per ciclo) | **8658** | **2158** | 71 | **7,35** | **237** | **−11,1 ns** |
+
+**#2a ottiene il 77% dell'Fmax di M-v1 con un TERZO delle LUT e un DECIMO dei FF** — cioè il time-mux della
+FSM taglia l'area *davvero*, dove il config-based la gonfiava (LUT ×2,36, FF ×13,9). E lo fa a **`dmax = 0`**.
+
+### Le due lezioni, misurate
+1. **Il time-mux della FSM taglia l'AREA; l'Fmax la dà il REGISTRO fra gli stadi.** La prima versione faceva
+   decode+prep in un ciclo e nd+div+use in un altro → **701 livelli, 2,85 MHz**. Spezzata in **uno stadio per
+   ciclo** (`DECODE | PREP | ND | DIV | USE | FINAL`, con latch di `raw`) → **237 livelli, 7,35 MHz** a parità
+   di area (8564 → 8658 LUT, +239 FF). ⚠️ La stima iniziale "~9,5 MHz perché il path è una divisione" era
+   **sbagliata**: quei 172 livelli di M-v1 erano il frutto del clock-rate pipelining (i registri che gli
+   costavano FF ×13,9), non della sola condivisione.
+2. **L'assunto "1 chiamata nel sorgente = 1 divisore in HDL" regge** (lo dice l'area: −20% vs SP3, −66% vs
+   M-v1 a Fmax comparabile), ma **da solo non basta**: senza registri fra gli stadi il path resta lungo.
+
+### Verifica (invariata, tutta verde)
+`dmax = 0` vs model **e** vs SP3 su **5/5 traiettorie** (G3) · **G2 `0/60000` control-step** · latenza
+**MISURATA 357 clk** (341 SNN + latch + decode + prep + 5×3), edge-triggered · **G5 PASSATO**
+(self-contained, `DualPortRAM` presente) · plant parity ALL PASS. Le funzioni-fase non sono state toccate.
+
+### Collo attuale e prossimo passo
+```
+CRITPATH: st_dd_12_reg -> acc_3_reg   237 livelli
+```
+Non è più la divisione (~172): è **`iidm_final`**, cioè `a_blend = (1-COOL)*a_iidm + COOL*(a_cah + bf*tanh(dd))`
+— **il `tanh` fixed**, lo stesso che aveva ucciso #1. Spezzando anche `iidm_final` (tanh in un ciclo, blend nel
+successivo) il collo tornerebbe **sulla divisione** (~172 → i ~9,5 MHz veri). Solo **dopo** servirebbe **#2b**
+(divisore sequenziale a mano) per l'ultimo tratto verso 11,65.
 
 ## File (variante L, committati — riusabili se L verrà ripresa)
 `acc_recip_lut.m` · `acc_sweep_kernel.m` · `build_acc_sweep_mex.m` · `run_acc_recip_sweep.m` · `acc_types.recipN`
