@@ -39,6 +39,9 @@ def frozen():
 
 
 def _same(a, b):
+    arrays = ("raw", "x", "y", "mask")
+    if any(a[k].dtype != b[k].dtype for k in arrays):
+        return False
     return (np.array_equal(a["raw"], b["raw"]) and np.array_equal(a["x"], b["x"])
             and np.array_equal(a["y"], b["y"]) and np.array_equal(a["mask"], b["mask"])
             and a["params"] == b["params"]
