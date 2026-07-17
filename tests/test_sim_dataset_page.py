@@ -90,3 +90,34 @@ def test_the_size_estimate_matches_the_engines_formula(qapp):
     expected = estimate_bytes([300] * 10, ["csv"])
     assert abs(p.estimated_bytes() - expected) < 1.0
     assert "MB" in p._size_lbl.text()
+
+
+# --- B2 Task 5: the destination toggle + stack ---
+def test_the_destination_toggle_switches_analysis_and_training(qapp):
+    from sim.ui.training_panel import TrainingPanel
+    p = _page(qapp)
+    assert p.destination() == "analisi"                    # default
+    assert p._stack.currentIndex() == 0
+    p._dest_training.setChecked(True)
+    assert p.destination() == "training"
+    assert p._stack.currentIndex() == 1
+    assert isinstance(p._training, TrainingPanel)
+
+
+def test_the_analysis_getters_still_work(qapp):
+    """The analysis destination is unchanged -- the app's generate_dataset path must keep reading these."""
+    p = _page(qapp)
+    p._mix._rows[0].family.setCurrentText("preset")
+    p._mix._rows[0].source.setCurrentText("hard_brake")
+    p._mix._rows[0].weight.setValue(100.0)
+    from sim.dataset_mix import MixEntry
+    assert p.mix() == [MixEntry("preset", "hard_brake", 100.0)]
+    assert p.count() >= 1 and 0.0 <= p.strength() <= 1.0
+
+
+def test_set_sources_reaches_both_tables(qapp):
+    specs = {"mine": ScenarioSpec(name="mine", blocks=(Block("const", 400, {"v": 15.0}),),
+                                  style=LeaderStyle(2.0, 4.0), s_init=33.5, v_init=21.0)}
+    p = _page(qapp, specs=specs)
+    assert "mine" in p._mix.specs()                        # analysis table
+    assert "mine" in p._training._mix.specs()              # training table

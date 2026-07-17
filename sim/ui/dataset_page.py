@@ -5,12 +5,14 @@ destination. This page owns seed/count/jitter/frequency/formats/size/folder/gene
 whenever the table emits `changed`. The page owns WIDGETS and exposes getters; the APP owns the run (the Meso
 idiom, app.py:174) -- Generate only calls self._on_generate."""
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import (QCheckBox, QComboBox, QFileDialog, QHBoxLayout, QLabel, QLineEdit,
-                               QProgressBar, QPushButton, QSlider, QSpinBox, QVBoxLayout, QWidget)
+from PySide6.QtWidgets import (QButtonGroup, QCheckBox, QComboBox, QFileDialog, QHBoxLayout, QLabel, QLineEdit,
+                               QProgressBar, QPushButton, QRadioButton, QSlider, QSpinBox, QStackedWidget,
+                               QVBoxLayout, QWidget)
 
 from sim.export_formats import FORMATS, estimate_bytes
 from sim.scenario_spec import _PRESET_N
 from sim.ui.mix_table import MixTable
+from sim.ui.training_panel import TrainingPanel
 
 _K_CHOICES = [("10 Hz (nativa)", 1), ("5 Hz", 2), ("2 Hz", 5), ("1 Hz", 10)]
 
@@ -63,9 +65,11 @@ class DatasetPage(QWidget):
         self._out_dir = QLineEdit()
         self._browse = QPushButton("Sfoglia…"); self._browse.clicked.connect(self._pick_dir)
 
-        root = QVBoxLayout(self)
-        root.addWidget(QLabel("MIX"))
-        root.addWidget(self._mix)
+        # -- analysis container: today's content, unchanged --
+        analysis = QWidget()
+        aroot = QVBoxLayout(analysis)
+        aroot.addWidget(QLabel("MIX"))
+        aroot.addWidget(self._mix)
         ctl = QHBoxLayout()
         for w in (QLabel("seed"), self._seed, QLabel("traiettorie"), self._count,
                   QLabel("jitter"), self._jitter, self._jitter_lbl, self._jitter_note):
@@ -84,13 +88,35 @@ class DatasetPage(QWidget):
             out.addWidget(w)
         run = QHBoxLayout(); run.addWidget(self._gen_btn); run.addWidget(self._progress)
         for lay in (ctl, fmt_row, freq, out, run):
-            root.addLayout(lay)
-        root.addStretch(1)
+            aroot.addLayout(lay)
+        aroot.addStretch(1)
+
+        # -- training panel --
+        self._training = TrainingPanel(self._params_gt)
+
+        # -- destination toggle + stack --
+        self._dest_analisi = QRadioButton("Analisi"); self._dest_analisi.setChecked(True)
+        self._dest_training = QRadioButton("Training")
+        grp = QButtonGroup(self); grp.addButton(self._dest_analisi); grp.addButton(self._dest_training)
+        self._stack = QStackedWidget(); self._stack.addWidget(analysis); self._stack.addWidget(self._training)
+        self._dest_training.toggled.connect(lambda on: self._stack.setCurrentIndex(1 if on else 0))
+
+        root = QVBoxLayout(self)
+        dest = QHBoxLayout()
+        dest.addWidget(QLabel("<b>Destinazione</b>")); dest.addWidget(self._dest_analisi)
+        dest.addWidget(self._dest_training); dest.addStretch(1)
+        root.addLayout(dest)
+        root.addWidget(self._stack)
         self._refresh()
 
-    # ---- sources (delegated to the table) ----
+    # ---- destination ----
+    def destination(self):
+        return "training" if self._dest_training.isChecked() else "analisi"
+
+    # ---- sources (delegated to both tables) ----
     def set_sources(self, specs, preset_names):
         self._mix.set_sources(specs, preset_names)
+        self._training.set_sources(specs, preset_names)
 
     # ---- getters (the app reads these; the Meso idiom) ----
     def mix(self):
