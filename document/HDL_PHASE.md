@@ -349,6 +349,21 @@ Config in `make_hdl.m`: `LoopOptimization='StreamLoops'`, `ConstantMultiplierOpt
   simulato in xsim** vs riferimento sul **dataset intero** (anello ③ = cosim, finora fatto per la sola SNN B2, non
   per il controllore). Da fare: testbench HDL full-dataset con metriche vere (non traiettoria ridotta — lezione
   Fase B) + utilizzo post-route completo (incl. BRAM). Vedi §8 e `SESSION_RESUME.md` §AZIONE PENDENTE.
+- ✅ **[FASE B2.0-2a M1 — 2026-07-18] Harness A (SNN `Donatello_Champion`) validato a livello RTL**: il VHDL
+  generato è **bit-exact al blocco Simulink** su 3 traj × 1000 × 5 param (**A-1: 0/15000**), cancello provato
+  sensibile (1 LSB → nMismatch=1). Tre implementazioni concordi: blocco == golden MEX == RTL VHDL. Harness in
+  `run_rtl_validate`/`rtl_export_vectors`/`tb_champion_stream.v` (commit `c961bc85`).
+  - ⚠️ **FINDING (golden):** il riferimento `snn_traj_fixed_r16` **NON è il blocco** — diverge a step ~52. Cause
+    misurate: (1) la `local_normalize` **fixed** del blocco (fisico→xn) devia 1 LSB da `snn_normalize` (xn diverge
+    a step 85); (2) il blocco pilota il forward a **ingresso tenuto**, `snn_traj_b2` con **zeri** (param divergono
+    già a 52). Il forward inlinato **== `snn_b2_fsm.m`** (0 diff, non stale). **`run_block_traj_test` lo mascherava
+    girando a K=20<52** (lezione §2.1 — gate corto; la sua comparazione vs r16 vale solo fino a K~50, da rivedere).
+    Fix: golden **fedele al blocco** `snn_traj_champion` (algoritmo esatto della chart, guidato clock-per-clock a
+    ingresso tenuto), verificato **== blocco** (cross-check dmax=0).
+  - ⚠️ **Metrica param:** accuratezza param vs `gt_params` mostra `v0` err ~15 = **identificabilità** (v0 osservabile
+    solo a flusso libero; Dynamic_Study), NON RTL. La qualità SNN vera è il **closed-loop (Harness B)**.
+  - ⏳ **Resta:** Harness B (M2, controllore open+closed-loop) userà lo **stesso** golden-fedele (l'ACC-IIDM_M ha la
+    stessa `local_normalize`); + caratterizzare l'impatto della deriva blocco-vs-deployato sul car-following.
 
 ## §7 File (worktree)
 - **Sorgente HDL:** `matlab/snn_core.m` (mod), `matlab/snn_types.m` (mod, +`accw`),

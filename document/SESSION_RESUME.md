@@ -41,16 +41,19 @@ scrive il report. La **Fase C** (test sull'FPGA *fisica*) resta separata e in at
 
 **Piano (una fase alla volta):**
 - **Fase 0 — allineamento doc:** ✅ in corso/fatto (questo blocco + HDL_PHASE §6/§8 + SP4 box + memoria).
-- **Fase 1 — `/fpga-expert`:** (a) **progetta lo studio RTL esemplare** (testbench, stimoli full-dataset, *quali*
-  metriche e *come*); (b) **audit headroom** su modello/VHDL/sintesi — c'è altro da spremere oltre 9,30 MHz?
-  → prossima azione concreta: **invocare `/fpga-expert`**.
-- **Fase 2 — evidenza RTL:** costruire+eseguire il **testbench HDL del blocco M** sul **dataset intero** (accel
-  RTL vs riferimento, metriche su coda/picco, cancelli che possono fallire) **+ utilizzo d'implementazione
-  completo** (post-route, **incl. BRAM oggi mancante**) e timing reale. Metodologia **riusabile**: `matlab/axi/`
-  ha già la cosim xsim del B2 (`tb_b2_stream.v`, `gen_saif_b2.sh`, cosim ③ **PASSED** 2026-07-10) → **adattarla al
-  blocco M**.
-- **Fase 3 — `create-report`:** report della grande fase Donatello+ACC-IIDM, **grounded sulla Fase 2** (tecniche:
-  time-mux, srotolamento/parallelismo, FSM a stadi, registro-fra-stadi; drawback e vincoli).
+- **Fase 1 — `/fpga-expert`:** ✅ FATTO. Audit: oltre 9,30 MHz c'è margine **bit-exact** (retiming/pipelining di
+  `tanh`+SNN→decode) = lo Studio Timing, incluso in B2.0 per scelta utente. Studio RTL disegnato: 2 harness
+  (SNN + controllore), closed-loop self-contained per il controllore. Spec `docs/…/2026-07-17-b2.0-rtl-validation-harness-design.md`.
+- **Fase 2 — evidenza RTL (a DUE harness, plan `docs/…/2026-07-17-b2.0-2a-m1-core-harness-snn.md`):**
+  - **2a-M1 (core + Harness A, SNN `Donatello_Champion`):** ✅ **FATTO 2026-07-18** — A-1 **0/15000** (RTL bit-exact
+    al blocco su 3 traj), cancello sensibile, metriche param. Commit `c961bc85`. ⚠️ **Finding:** il golden r16 non
+    è il blocco (diverge a step ~52: `local_normalize` fixed + pilotaggio a ingresso tenuto) → costruito golden
+    **fedele al blocco** `snn_traj_champion` (== blocco, cross-check dmax=0). Dettaglio in `HDL_PHASE.md` §6.
+  - **2a-M2 (Harness B, controllore `Donatello_ACC_IIDM_M`, open + closed-loop):** ⏳ **PROSSIMO** — riusa il core;
+    stesso trattamento **golden-fedele** (l'ACC-IIDM_M ha la stessa `local_normalize`); plant nel TB + cancello
+    PLANT-PAR (vedi spec §Harness B). Poi: caratterizzare l'impatto della deriva blocco-vs-deployato sul car-following.
+  - **2b (ottimizzazione timing `tanh`)** → **2c (validazione COMPLETA full-dataset + gate-level)**: dopo M2.
+- **Fase 3 — `create-report`:** grounded sulla Fase 2 (tecniche: time-mux, FSM a stadi, registro-fra-stadi; drawback).
 
 **Backlog (studi a sé, DOPO B2.0):** 1) **Timing study** (spingere lo slack → max Fmax); 2) **Quantization study**
 (meno bit fixed → meno FPGA vs perdita accuracy, mappa non-lineare — grande); 3) **Fase C + confronto MPC↔SNN**
