@@ -26,11 +26,17 @@ function ok = run_block_hdl_gate(blockName)
   rmpath(here);                                      % simula l'altro PC
   cd(work);
 
-  % l'isolamento e' parte del test: se un .m e' ancora raggiungibile, il gate non prova nulla
-  for f = {'snn_b2_fsm', 'b2_rom_active', 'snn_types', 'snn_decode_hdl', 'snn_decode_lut'}
+  % l'isolamento e' parte del test: se un .m e' ancora raggiungibile, il gate non prova nulla.
+  % La lista copre le dipendenze di TUTTI i blocchi: SP1 (snn_*) E le funzioni-fase dell'ACC-IIDM
+  % (iidm_*/fsm_div/acc_*), che sono le dipendenze inlinate nella chart di Donatello_ACC_IIDM_M -> se
+  % una fosse ancora sul path, il gate su M NON proverebbe il self-containment (proverebbe la copia sul
+  % path, non quella nel .slx). Tutte stanno in matlab/, che rmpath(here) ha appena tolto.
+  for f = {'snn_b2_fsm', 'b2_rom_active', 'snn_types', 'snn_decode_hdl', 'snn_decode_lut', ...
+           'iidm_prep', 'iidm_nd', 'fsm_div', 'iidm_use', 'iidm_tanh', 'iidm_final', ...
+           'acc_types', 'acc_iidm_open'}
     assert(isempty(which(f{1})), 'gate non valido: %s ancora sul path', f{1});
   end
-  fprintf('isolamento OK: nessun .m del progetto raggiungibile\n');
+  fprintf('isolamento OK: nessun .m del progetto raggiungibile (SP1 + funzioni-fase ACC-IIDM)\n');
 
   ok = false;
   load_system(fullfile(work, [lib '.slx']));
