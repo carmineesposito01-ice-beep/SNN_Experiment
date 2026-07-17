@@ -79,3 +79,40 @@ def test_the_eta_is_shown_before_the_click(qapp):
     p._n_train.setValue(5000); p._n_val.setValue(500)
     # 5500 * SECONDS_PER_TRAJ ~ 335 s ~ 5-6 min: the label mentions minutes
     assert "min" in p._eta_lbl.text().lower()
+
+
+# --- Task 4: the validation selector ---
+def test_the_validation_selector_has_three_modes_and_maps_to_the_engine(qapp):
+    from sim.train_gen import VAL_MODE_STANDARD, VAL_MODE_NEW_SHAPES, VAL_MODE_DIFFERENT_MIX
+    p = _panel(qapp)
+    assert p._val_sel.count() == 3
+    p._val_sel.setCurrentIndex(0); assert p.val_mode() == VAL_MODE_STANDARD
+    p._val_sel.setCurrentIndex(1); assert p.val_mode() == VAL_MODE_NEW_SHAPES
+    p._val_sel.setCurrentIndex(2); assert p.val_mode() == VAL_MODE_DIFFERENT_MIX
+
+
+def test_each_mode_shows_its_consequence(qapp):
+    p = _panel(qapp)
+    seen = set()
+    for i in range(3):
+        p._val_sel.setCurrentIndex(i)
+        seen.add(p._val_note.text())
+    assert len(seen) == 3                          # each mode states a different consequence
+    p._val_sel.setCurrentIndex(2)
+    assert "overfitting" in p._val_note.text().lower()   # mode 3's strong warning
+
+
+def test_the_val_mix_table_appears_only_in_mode_3(qapp):
+    # isHidden() reflects the explicit show/hide flag -- isVisible() is always False in an unshown offscreen panel
+    p = _panel(qapp)
+    p._val_sel.setCurrentIndex(0); assert p._val_mix.isHidden()
+    p._val_sel.setCurrentIndex(2); assert not p._val_mix.isHidden()
+    p._val_sel.setCurrentIndex(1); assert p._val_mix.isHidden()
+
+
+def test_val_mix_is_returned_only_in_mode_3(qapp):
+    p = _panel(qapp)
+    p._val_sel.setCurrentIndex(0)
+    assert p.val_mix() is None                     # standard/new_shapes reuse the train mix -> engine wants None
+    p._val_sel.setCurrentIndex(2)
+    assert p.val_mix() is not None                 # mode 3 supplies a separate mix

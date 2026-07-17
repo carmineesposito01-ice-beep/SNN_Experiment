@@ -47,6 +47,17 @@ class TrainingPanel(QWidget):
         self._cmd_lbl = QLabel(); self._cmd_lbl.setStyleSheet("font-family:Consolas,monospace; color:#6e7681")
         self._out_dir.textChanged.connect(self._refresh)
 
+        from sim.train_gen import VAL_MODE_STANDARD, VAL_MODE_NEW_SHAPES, VAL_MODE_DIFFERENT_MIX
+        self._val_modes = [VAL_MODE_STANDARD, VAL_MODE_NEW_SHAPES, VAL_MODE_DIFFERENT_MIX]
+        self._val_sel = QComboBox()
+        self._val_sel.addItems(["Standard (stesso mix, seed S+1)",
+                                "Forme nuove (nessuna condivisa col train)",
+                                "Mix diverso (sonda fuori-distribuzione)"])
+        self._val_note = QLabel(); self._val_note.setWordWrap(True); self._val_note.setStyleSheet("color:#6e7681")
+        self._val_mix = MixTable(self._params_gt, strength=self.strength, with_regime=True)
+        self._val_mix.hide()
+        self._val_sel.currentIndexChanged.connect(self._on_val_mode)
+
         self._gen_btn = QPushButton("Genera")
         self._gen_btn.clicked.connect(lambda: self._on_generate() if self._on_generate else None)
         self._cancel_btn = QPushButton("Annulla"); self._cancel_btn.setEnabled(False)
@@ -60,6 +71,10 @@ class TrainingPanel(QWidget):
                   QLabel("jitter"), self._jitter, self._jitter_lbl, self._jitter_note):
             c1.addWidget(w)
         c1.addStretch(1)
+        val_row = QHBoxLayout()
+        for w in (QLabel("validazione"), self._val_sel):
+            val_row.addWidget(w)
+        val_row.addStretch(1)
         c2 = QHBoxLayout()
         for w in (QLabel("frequenza"), self._freq, self._freq_note, QLabel("formato"), self._fmt_lbl):
             c2.addWidget(w)
@@ -70,15 +85,41 @@ class TrainingPanel(QWidget):
         run = QHBoxLayout()
         for w in (self._gen_btn, self._cancel_btn, self._progress, self._eta_lbl):
             run.addWidget(w)
-        for lay in (c1, c2, out, run):
+        root.addLayout(c1)
+        root.addLayout(val_row)
+        root.addWidget(self._val_note)
+        root.addWidget(self._val_mix)
+        for lay in (c2, out, run):
             root.addLayout(lay)
         root.addWidget(self._cmd_lbl)
         root.addStretch(1)
+        self._on_val_mode(0)
         self._refresh()
+
+    _VAL_NOTES = {
+        0: "il divario train↔val misura overfitting (due campioni i.i.d., seed S e S+1).",
+        1: "↳ cancello VERIFICATO: nessun v_leader del val è copia di uno del train; se il mix ne produce, "
+           "la generazione si ferma e dice quale.",
+        2: "⚠ il divario NON misura più overfitting: val_loss sceglie il checkpoint, guida l'early-stop e "
+           "l'LR. È una sonda fuori-distribuzione, da scegliere sapendolo.",
+    }
+
+    def _on_val_mode(self, i):
+        self._val_note.setText(self._VAL_NOTES[i])
+        self._val_mix.setVisible(i == 2)
+        self._refresh()
+
+    def val_mode(self):
+        return self._val_modes[self._val_sel.currentIndex()]
+
+    def val_mix(self):
+        from sim.train_gen import VAL_MODE_DIFFERENT_MIX
+        return self._val_mix.mix() if self.val_mode() == VAL_MODE_DIFFERENT_MIX else None
 
     # ---- sources / getters (the app reads these) ----
     def set_sources(self, specs, preset_names):
         self._mix.set_sources(specs, preset_names)
+        self._val_mix.set_sources(specs, preset_names)
 
     def mix(self):
         return self._mix.mix()
