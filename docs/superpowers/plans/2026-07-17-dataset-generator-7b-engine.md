@@ -182,16 +182,28 @@ PATH="$ENV:$ENV/Library/bin:$ENV/Scripts:$PATH" "$ENV/python.exe" -m pytest test
 ```
 Expected: `2 passed` in ~5 s.
 
-- [ ] **Step 3: Prove it can fail — sabotage the DEFAULT path**
+- [ ] **Step 3: Prove it can fail — sabotage BOTH branches, one at a time**
 
-In `data/generator.py:280`, change `v = params['v0'] * 0.8` to `v = params['v0'] * 0.81`. This is a
-**value-level** sabotage: it moves the ego's initial speed, so `raw` differs numerically. (A shape-level
-sabotage would be weak — it would fail on a shape error rather than on the property.)
+⚠️ **Corrected during execution (2026-07-17):** the two `cut_in_ratio` cases run through **two independent
+functions**, each with its own copy of `v = params['v0'] * 0.8` — `simulate_trajectory:280` (the `None` case)
+and `simulate_cut_in_trajectory:385` (the `1.0` case). A single edit therefore reddens **only one** parametrised
+case, not both. The plan originally said "2 failed" from the line-280 edit alone — that was **unreachable**.
+Prove each branch is sensitive to its own path, in isolation:
+
+- Sabotage `data/generator.py:280` (`* 0.8` → `* 0.81`): expect `[None]` **RED `8/8`**, `[1.0]` green. Revert.
+- Sabotage `data/generator.py:385` (`* 0.8` → `* 0.81`): expect `[1.0]` **RED `8/8`**, `[None]` green. Revert.
+
+Both use a **value-level** sabotage (a shape-level one would be weak — it would fail on a shape error, not on
+the property). The `v = params['v0'] * 0.8` string is **not unique** (two sites) → use Edit with enough
+surrounding context to target the right line, never a blind `replace()`.
 
 ```bash
 PATH="$ENV:$ENV/Library/bin:$ENV/Scripts:$PATH" "$ENV/python.exe" -m pytest tests/test_sim_provenance.py -q -p no:cacheprovider
 ```
-Expected: **2 failed**, with `la provenienza si e' MOSSA su 8/8 scenari`.
+
+The `[None]`-RED-on-line-280 result doubles as proof that all 8 default scenarios route through
+`simulate_trajectory` (had any been a cut-in, it would have gone through the untouched twin and stayed
+identical) — i.e. "0 cut-ins drawn in 8 scenarios at the default ratio" is **measured, not assumed**.
 
 - [ ] **Step 4: Revert the sabotage and confirm green**
 
