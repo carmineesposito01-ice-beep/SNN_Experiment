@@ -307,7 +307,7 @@ def test_simapp_champion_selector_lists_and_swaps(qapp):
 
 def test_simapp_mode_toggle(qapp):
     win = SimApp(CHAMP)
-    assert win._mode_stack.count() == 4                  # Live + Meso/Macro + Post-run + Scenari
+    assert win._mode_stack.count() == 5                  # Live + Meso/Macro + Post-run + Scenari + Dataset
     assert win._mode_stack.currentIndex() == 0           # starts Live
     win._run_btn.setChecked(True)
     win.set_mode(1)                                       # switch to analysis
@@ -423,7 +423,7 @@ def test_simapp_feeds_episode_summary(qapp):
 
 def test_simapp_postrun_mode(qapp):
     win = SimApp(CHAMP)
-    assert win._mode_stack.count() == 4                  # Live + Meso/Macro + Post-run + Scenari
+    assert win._mode_stack.count() == 5                  # Live + Meso/Macro + Post-run + Scenari + Dataset
     win.select_scenario(0)
     win._advance(0.5)
     win.set_mode(2)                                       # Post-run
@@ -611,7 +611,7 @@ def test_app_unsupported_variant_is_refused_by_name(qapp, tmp_path):
 # --- scenario builder: the fourth mode ---
 def test_app_has_a_fourth_mode(qapp):
     win = SimApp(CHAMP)
-    assert win._mode_sel.count() == 4
+    assert win._mode_sel.count() == 5                 # Dataset joined as the fifth; Scenari stays the fourth
     assert win._mode_sel.itemText(3) == "Scenari"
     win.set_mode(3)                                   # must not raise
     assert win._mode_stack.currentIndex() == 3
