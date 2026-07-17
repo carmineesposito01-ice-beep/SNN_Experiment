@@ -144,3 +144,26 @@ def test_the_size_estimate_matches_the_engines_formula(qapp):
     expected = estimate_bytes([300] * 10, ["csv"])      # computed from the engine, not from memory
     assert abs(p.estimated_bytes() - expected) < 1.0
     assert "MB" in p._size_lbl.text()
+
+
+# --- the eye ---
+def test_the_eye_shows_the_engines_sample_and_calls_it_a_sample(qapp):
+    from sim.dataset_gen import preview_sample
+    p = _page(qapp)
+    r = p._rows[0]
+    r.family.setCurrentText("preset")
+    r.source.setCurrentText("hard_brake")
+    p.show_preview(r)
+    expected = preview_sample("preset", "hard_brake", p.PREVIEW_SEED, p.strength(), p._specs, p._params_gt)
+    shown = p._popup_panel._curve.getData()[1]
+    assert np.allclose(shown, expected)                 # the popup draws what the engine draws
+    assert "campione" in p._popup_title.text()          # it says it is ONE sample, not "the" scenario
+
+
+def test_the_preview_is_hidden_until_asked_and_hides_again(qapp):
+    p = _page(qapp)
+    assert not p._popup.isVisible()
+    p.show_preview(p._rows[0])
+    assert p._popup.isVisible()
+    p.hide_preview()
+    assert not p._popup.isVisible()

@@ -14,10 +14,11 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QDoubleSpinBox, QFileDialog
                                QLabel, QLineEdit, QProgressBar, QPushButton, QSlider, QSpinBox,
                                QVBoxLayout, QWidget)
 
-from sim.dataset_gen import GENERATOR_PROFILES
+from sim.dataset_gen import GENERATOR_PROFILES, preview_sample
 from sim.dataset_mix import FAMILIES, MixEntry, quotas
 from sim.export_formats import FORMATS, estimate_bytes
 from sim.scenario_spec import _PRESET_N
+from sim.ui.scenario_preview import ScenarioPreviewPanel
 
 _K_CHOICES = [("10 Hz (nativa)", 1), ("5 Hz", 2), ("2 Hz", 5), ("1 Hz", 10)]
 
@@ -34,6 +35,8 @@ class _Row:
 
 
 class DatasetPage(QWidget):
+    PREVIEW_SEED = 0            # FIXED: the eye must show the same curve every time you hover the same source
+
     def __init__(self, params_gt):
         super().__init__()
         self._params_gt = params_gt
@@ -81,6 +84,14 @@ class DatasetPage(QWidget):
         self._size_lbl = QLabel()
         self._out_dir = QLineEdit()
         self._browse = QPushButton("Sfoglia…"); self._browse.clicked.connect(self._pick_dir)
+
+        self._popup = QFrame(self, Qt.ToolTip)          # a frameless floating panel
+        self._popup_title = QLabel()
+        self._popup_panel = ScenarioPreviewPanel()
+        self._popup_panel.setFixedSize(280, 130)
+        pl = QVBoxLayout(self._popup); pl.setContentsMargins(6, 6, 6, 6)
+        pl.addWidget(self._popup_title); pl.addWidget(self._popup_panel)
+        self._popup.hide()
 
         head = QHBoxLayout()
         for t in ("famiglia", "sorgente", "", "peso %", "→ traiettorie", ""):
@@ -154,6 +165,8 @@ class DatasetPage(QWidget):
         family = QComboBox(); family.addItems(FAMILIES)
         source = QComboBox()
         eye = QLabel("👁"); eye.setToolTip("anteprima di un campione di questa sorgente")
+        eye.setAttribute(Qt.WA_Hover, True)
+        eye.installEventFilter(self)
         weight = QDoubleSpinBox(); weight.setRange(0.0, 100.0); weight.setDecimals(1)
         quota = QLabel("0")
         kill = QPushButton("✕"); kill.setFixedWidth(28)
@@ -176,6 +189,35 @@ class DatasetPage(QWidget):
         self._rows.remove(row)
         row.frame.setParent(None)
         self._refresh()
+
+    # ---- the eye ----
+    def show_preview(self, row):
+        """Draw ONE sample of this source. For `generator` and for jittered `built` the scenario IS a
+        distribution -- so this is a representative sample at a FIXED seed, and the title says so. Only an
+        un-jittered preset's curve is exactly what will come out."""
+        fam, src = row.family.currentText(), row.source.currentText()
+        if not src:
+            return
+        v = preview_sample(fam, src, self.PREVIEW_SEED, self.strength(), self._specs, self._params_gt)
+        self._popup_panel.set_scenario(v)
+        self._popup_title.setText(f"{fam} · {src} — campione (seed {self.PREVIEW_SEED})")
+        self._popup.adjustSize()
+        self._popup.move(row.eye.mapToGlobal(row.eye.rect().bottomLeft()))
+        self._popup.show()
+
+    def hide_preview(self):
+        self._popup.hide()
+
+    def eventFilter(self, obj, ev):
+        from PySide6.QtCore import QEvent
+        for r in self._rows:
+            if obj is r.eye:
+                if ev.type() == QEvent.Enter:
+                    self.show_preview(r)
+                elif ev.type() == QEvent.Leave:
+                    self.hide_preview()
+                break
+        return super().eventFilter(obj, ev)
 
     # ---- getters (the app reads these; the Meso idiom) ----
     def mix(self):
