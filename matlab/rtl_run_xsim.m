@@ -1,8 +1,9 @@
-function res = rtl_run_xsim(od, hdlsrc, tag, K, HOLD)
-%RTL_RUN_XSIM  Invoca run_xsim_champion.sh e fa il parse di RTLRES. Helper condiviso da run_rtl_validate
-%  e sensitivity_A1. Ritorna struct {nMismatch, n, firstbad}.
-  cmd = sprintf('bash run_xsim_champion.sh "%s" %d %d stim_%s.mem gold_%s.mem', ...
-                strrep(hdlsrc,'\','/'), K, HOLD, tag, tag);
+function res = rtl_run_xsim(od, hdlsrc, tag, K, HOLD, script)
+%RTL_RUN_XSIM  Invoca il runner xsim (default run_xsim_champion.sh; Harness B passa run_xsim_acciidm_m.sh)
+%  e fa il parse di RTLRES. Helper condiviso. Ritorna struct {nMismatch, n, firstbad}.
+  if nargin < 6 || isempty(script), script = 'run_xsim_champion.sh'; end
+  cmd = sprintf('bash %s "%s" %d %d stim_%s.mem gold_%s.mem', ...
+                script, strrep(hdlsrc,'\','/'), K, HOLD, tag, tag);
   [~, out] = system(['cd /d "' od '" && ' cmd]);
   tok = regexp(out, 'RTLRES nMismatch=(\d+) n=(\d+) firstbad=(-?\d+)', 'tokens', 'once');
   assert(~isempty(tok), 'xsim non ha prodotto RTLRES. Output:\n%s', out);

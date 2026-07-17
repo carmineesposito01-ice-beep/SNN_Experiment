@@ -1,13 +1,17 @@
-function info = rtl_gen_dut(blockName, outdir)
-%RTL_GEN_DUT  Genera il VHDL di un blocco di snn_champions_lib verso `outdir` (persistente), scrive
-%  l'ordine di compilazione (pkg -> leaf -> top) e STAMPA la dichiarazione ENTITY grezza (nomi/larghezze
-%  delle porte, da usare nel TB — non assunte). makehdl non gira su un blocco di libreria: si avvolge in
-%  un subsystem nominato come il blocco (cosi' l'entita top ha quel nome). Ingressi driven da Constant
-%  fixdt(1,32,20): servono solo a rendere il modello compilabile, non diventano porte (le porte sono
-%  quelle del blocco). Modellato su run_block_hdl_gate (che genera VHDL con successo).
+function info = rtl_gen_dut(blockName, outdir, lang)
+%RTL_GEN_DUT  Genera l'RTL di un blocco di snn_champions_lib verso `outdir` (persistente), scrive
+%  l'ordine di compilazione (pkg -> leaf -> top) e (VHDL) STAMPA la dichiarazione ENTITY grezza.
+%  lang = 'VHDL' (default) | 'Verilog'. ⚠️ Il controllore ACC-IIDM_M va in **Verilog**: i registri VHDL
+%  partono `U` e il divisore combinatorio dell'IIDM manda un indice-LUT a -1 a time-0 in xsim (metavalue);
+%  Verilog inizializza i registri a 0 (`initial`) -> nessun U a time-0. La SNN (no divisore) va bene in VHDL.
+%  makehdl non gira su un blocco di libreria: si avvolge in un subsystem nominato come il blocco. Ingressi
+%  driven da Constant fixdt(1,32,20): rendono il modello compilabile, non diventano porte.
   here = fileparts(mfilename('fullpath'));
+  if nargin < 3 || isempty(lang), lang = 'VHDL'; end
+  ext = 'vhd'; if strcmpi(lang,'Verilog'), ext = 'v'; end
   if nargin < 2 || isempty(outdir)
-    outdir = fullfile(here, ['hdlsrc_' lower(regexprep(blockName,'\W','_'))]);
+    outdir = fullfile(here, ['hdlsrc_' lower(regexprep(blockName,'\W','_')) ...
+                             repmat('_v',1,strcmpi(lang,'Verilog'))]);
   end
   if exist(outdir,'dir'), rmdir(outdir,'s'); end
   bdclose('all');
@@ -31,33 +35,34 @@ function info = rtl_gen_dut(blockName, outdir)
   end
   set_param(mdl,'Solver','FixedStepDiscrete','FixedStep','1','StopTime','10');
   set_param(mdl,'SimulationCommand','update');           % compila: rivela errori nella chart
-  makehdl(sub, 'TargetLanguage','VHDL', 'TargetDirectory', outdir, 'GenerateHDLTestBench','off');
+  makehdl(sub, 'TargetLanguage', lang, 'TargetDirectory', outdir, 'GenerateHDLTestBench','off');
 
-  vhd = dir(fullfile(outdir,'**','*.vhd'));
-  assert(~isempty(vhd), 'nessun VHDL generato per %s', blockName);
-  assert(any(strcmp({vhd.name},'DualPortRAM_generic.vhd')), ...
+  src = dir(fullfile(outdir,'**',['*.' ext]));
+  assert(~isempty(src), 'nessun %s generato per %s', lang, blockName);
+  assert(any(strcmp({src.name},['DualPortRAM_generic.' ext])), ...
          'manca DualPortRAM -> non e'' l''architettura time-mux del deployato');
-  folder = vhd(1).folder;
-  topf   = fullfile(folder, [blockName '.vhd']);
-  assert(exist(topf,'file')>0, 'manca l''entita top %s.vhd. File generati: %s', ...
-         blockName, strjoin({vhd.name}, ', '));
+  folder = src(1).folder;
+  topf   = fullfile(folder, [blockName '.' ext]);
+  assert(exist(topf,'file')>0, 'manca il top %s.%s. File generati: %s', ...
+         blockName, ext, strjoin({src.name}, ', '));
 
-  % ordine di compilazione: package -> leaf (chart, DualPortRAM) -> top
-  names = {vhd.name};
-  isPkg = ~cellfun(@isempty, regexp(names, '_pkg\.vhd$', 'once'));
-  isTop = strcmp(names, [blockName '.vhd']);
+  % ordine di compilazione: package -> leaf (chart, DualPortRAM) -> top (per Verilog l'ordine e' innocuo)
+  names = {src.name};
+  isPkg = ~cellfun(@isempty, regexp(names, ['_pkg\.' ext '$'], 'once'));
+  isTop = strcmp(names, [blockName '.' ext]);
   order = [names(isPkg), names(~isPkg & ~isTop), names(isTop)];
   fid = fopen(fullfile(folder,'compile_order.txt'),'w'); fprintf(fid,'%s\n', order{:}); fclose(fid);
 
-  info = struct('outdir', folder, 'top', blockName, 'nIn', nIn, 'nOut', nOut, 'files', {order});
-  fprintf('\n=== VHDL generato: %s -> %s (%d file) ===\n', blockName, folder, numel(vhd));
+  info = struct('outdir', folder, 'top', blockName, 'lang', lang, 'nIn', nIn, 'nOut', nOut, 'files', {order});
+  fprintf('\n=== %s generato: %s -> %s (%d file) ===\n', lang, blockName, folder, numel(src));
   fprintf('compile order: %s\n', strjoin(order, ' '));
 
-  % stampa la dichiarazione ENTITY grezza (la leggo io: nomi + larghezze reali)
-  txt = fileread(topf);
-  si = regexpi(txt, ['ENTITY\s+' blockName '\s+IS'], 'start', 'once');
-  ei = regexpi(txt, ['END\s+' blockName '\s*;'], 'end', 'once');
-  fprintf('\n---- ENTITY %s (grezza) ----\n%s\n----------------------------\n', ...
-          blockName, strtrim(txt(si:ei)));
+  if strcmpi(lang,'VHDL')     % stampa l'ENTITY grezza (nomi + larghezze reali per il TB)
+    txt = fileread(topf);
+    si = regexpi(txt, ['ENTITY\s+' blockName '\s+IS'], 'start', 'once');
+    ei = regexpi(txt, ['END\s+' blockName '\s*;'], 'end', 'once');
+    fprintf('\n---- ENTITY %s (grezza) ----\n%s\n----------------------------\n', ...
+            blockName, strtrim(txt(si:ei)));
+  end
   close_system(mdl, 0);
 end

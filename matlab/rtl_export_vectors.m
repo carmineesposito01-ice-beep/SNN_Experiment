@@ -20,7 +20,7 @@ function rtl_export_vectors(harness, trajList, tag, outdir)
   if strcmp(harness,'snn')
     assert(~isempty(which('snn_traj_champion_mex')), 'MEX golden mancante: esegui build_champion_golden');
   else
-    assert(~isempty(which('collect_step_mex')), 'MEX mancante: build_acc_iidm_fsm_mex');
+    assert(~isempty(which('acciidm_m_traj_mex')), 'MEX golden mancante: esegui build_acciidm_m_golden');
   end
   fs = fopen(fullfile(outdir,['stim_' tag '.mem']),'w');
   fg = fopen(fullfile(outdir,['gold_' tag '.mem']),'w');
@@ -31,7 +31,8 @@ function rtl_export_vectors(harness, trajList, tag, outdir)
       clear snn_traj_champion_mex;                     % stato ricorrente da zero per ogni traiettoria
       P = snn_traj_champion_mex(tr{t}.val, HOLD_GOLD); % N x 5 params fedeli al blocco
     else
-      R = double(snn_traj_fixed_r16_mex(tr{t}.val, W)); clear collect_step_mex;
+      clear acciidm_m_traj_mex;                        % stato ricorrente (SNN+OU) da zero per traiettoria
+      A = acciidm_m_traj_mex(tr{t}.val, HOLD_GOLD);    % N x 1 accel fedele al blocco
     end
     for k = 1:size(val,2)
       for j = 1:4
@@ -43,9 +44,7 @@ function rtl_export_vectors(harness, trajList, tag, outdir)
           fprintf(fg, '%06X\n', bitand(typecast(int32(storedInteger(pf)),'uint32'), uint32(2^21-1)));
         end
       else
-        p  = snn_decode_lut(fi(R(k,:).',Tp), 64);
-        a  = collect_step_mex(double(val(1,k)),double(val(2,k)),double(val(3,k)),double(val(4,k)),double(p),k==1);
-        af = fi(a, 1, 13, 8);
+        af = fi(A(k), 1, 13, 8);
         fprintf(fg, '%04X\n', bitand(typecast(int32(storedInteger(af)),'uint32'), uint32(2^13-1)));
       end
       K = K + 1;

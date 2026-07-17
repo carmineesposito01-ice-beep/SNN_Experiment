@@ -22,3 +22,14 @@ axi/champion/compile_order.txt
 # Fase B2.0 — golden fedele al blocco (rigenerabile via build_champion_golden)
 snn_champion_algo.m
 snn_traj_champion_mex.*
+acciidm_m_algo.m
+acciidm_m_traj_mex.*
+axi/acciidm_m/xsim.dir/
+axi/acciidm_m/*.jou
+axi/acciidm_m/*.log
+axi/acciidm_m/*.pb
+axi/acciidm_m/*.wdb
+axi/acciidm_m/stim_*.mem
+axi/acciidm_m/gold_*.mem
+axi/acciidm_m/meta_*.mat
+axi/acciidm_m/tb_params.vh
