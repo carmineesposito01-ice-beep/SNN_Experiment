@@ -93,7 +93,8 @@ cambiati con la durata della scena. **Ancora aperte dall'utente (post-verifica 2
 - **generatore dataset** (item 7, il più grosso): **DECOMPOSTO in 7a + 7b** dopo il brainstorming del
   2026-07-17 (l'utente vuole il dataset usabile sia per analisi sia per training: due sottosistemi, non due
   opzioni). Spec: `…/specs/2026-07-17-dataset-generator-7a-design.md` (FINALE, `621120b8`) ·
-  `…/specs/2026-07-17-dataset-generator-7b-DRAFT.md` (il sink training, ancora draft).
+  `…/specs/2026-07-17-dataset-generator-7b-design.md` (**FINALE 2026-07-17**, approvata; la DRAFT è stata
+  **cancellata** — conteneva 3 fatti falsi, sta nella storia git).
   - **7a Piano A — il MOTORE: ✅ FATTO** *(2026-07-17)*, plan `…/plans/2026-07-17-dataset-generator-7a-engine.md`,
     TDD `f2c3567d`→`4bd20517`. **325 test verdi · invarianti intatte (diff vuoto, `data/generator.py`
     INCLUSO) · functional-verify headless** (dataset vero a 3 famiglie, k=2, 4 formati; stima-vs-byte 8%).
@@ -122,10 +123,13 @@ cambiati con la durata della scena. **Ancora aperte dall'utente (post-verifica 2
   pesa i **regimi di guidatore**, non gli scenari del simulatore (vocabolari diversi); i **preset non hanno
   knob** (verbatim, rng hardcoded) → si jitterano via `params_gt`; **DT=0.1 è il V2X 10 Hz** dentro 3
   invarianti → la frequenza è solo decimazione in export.
-**▶️ L'UNICO ITEM IN CODA È IL 7b — il sink training** (`…/specs/2026-07-17-dataset-generator-7b-DRAFT.md`,
-ancora DRAFT): come un `v_leader` costruito qui arriva alla fisica del training. Il suo **bivio ①** è una
-**decisione di rischio** (la strada più diretta toccherebbe `data/generator.py`, che è la provenienza dati dei
-champion) → **merita il suo brainstorming**, non va deciso di slancio. Dopo il 7b resta il **merge
+**▶️ L'UNICO ITEM IN CODA È IL 7b — il sink training**: spec **FINALE e approvata**
+(`…/specs/2026-07-17-dataset-generator-7b-design.md`), **brainstorming FATTO 2026-07-17**, prossimo passo =
+**writing-plans** (una spec, due piani: motore / UI). Il **bivio ① è deciso**: parametro additivo
+`v_leader=None` in `simulate_trajectory`, perché — **misurato** — `data/generator.py` NON è congelato (le 6
+copie in `Arch_Tested/` differiscono per le stesse 56 righe, tutte additive e default-off, tra cui
+`wide_params=False` che è la stessa identica mossa) e quelle estensioni **non hanno mosso la provenienza**:
+8/8 dataset byte-identici alla copia del champion, su entrambi i rami. Dopo il 7b resta il **merge
 `Simulator`→`main`** (da sequenziare con `Simulink_Importer`). Vedi §AZIONI PENDENTI. Tutto
 committato e pushato. Il dettaglio sta nelle sezioni sotto (§Architecture, §Phase history) e nella
 **mappa** `document/SIMULATOR_ARCHITECTURE.md`.
