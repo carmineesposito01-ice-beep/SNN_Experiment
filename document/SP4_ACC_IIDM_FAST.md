@@ -10,8 +10,8 @@
 > | **M-v1** — resource sharing (config) | chiusa | 9,5 MHz < 11,65 **e** area esplosa (LUT ×2,4, FF ×14) |
 > | **M-FSM #1** — FSM + blocco `Divide` HDL | **chiusa: strada MORTA** | bit-identità **provata** (G1/G2/G3/G4 verdi) ma **non genera VHDL**: il blocco accanto alla chart impone la conversione dataflow, che **vieta `tanh` fixed** → §Variante M-FSM |
 > | **#2a** — FSM che riusa **una `divide()`** (chart sola) + stadi | ✅ **FATTA, FUNZIONA, CHIUDE** | **8614 LUT · 2134 FF · Fmax 9,30 · WNS +17,4 · `dmax=0` · G5 verde**: eguaglia M-v1 (9,51) con **1/3 delle LUT e 1/10 dei FF**; vs SP3 Fmax ×4,6 e LUT −21% → §Variante M-FSM #2a |
-> | **#2b** — divisore **sequenziale a mano** | ⏸️ **RIMANDATA, non cassata** | oggi il collo è il **`tanh`** (207 liv > 172): #2b non darebbe nulla **adesso**. Ma se #2c abbassa il tanh, il collo diventa **proprio la divisione** (~172 liv ≈ 89 ns ≈ **~11,2 MHz** stimati) → #2b torna necessaria. Ordine: **#2c poi #2b** |
-> | **#2c** — `tanh` sequenziale (CORDIC) a mano | 🔎 in prova | l'unica via a `dmax=0` per togliere il collo attuale. Da sola stimata **~11,2 MHz**: NON basta per 11,65 |
+> | **#2b** — divisore **sequenziale a mano** | ❌ **esclusa dai dati** | la divisione **non compare in nessuno dei due path critici misurati**: né oggi (collo = `tanh`, 207 liv) né col tanh azzerato (collo = **SNN→decode**, 172 liv). Inutile in entrambi gli scenari |
+> | **#2c** — `tanh` sequenziale (CORDIC) a mano | ❌ **non perseguita (probe misurato)** | probe con tanh a **costo zero**: tetto **10,58 MHz**, collo che si sposta **fuori dall'IIDM** (SNN→decode = il deployato). #2c varrebbe **≤ +14%** (9,30→10,58) riscrivendo a mano l'aritmetica del tanh (rischio §2.1), **senza arrivare a 11,65** |
 >
 > Bersaglio invariato: **Fmax ≥ 11,65 MHz** con area ridotta, **`dmax = 0`** (mai approssimare).
 > **Stato: 9,30 MHz misurati a `dmax=0`, timing CHIUSO @8 MHz, area in discesa.** Collo finale: **il `tanh`
@@ -212,7 +212,25 @@ Il time-mux della FSM taglia l'area *davvero*, dove il config-based la gonfiava 
 **MISURATA 357 clk** (341 SNN + latch + decode + prep + 5×3), edge-triggered · **G5 PASSATO**
 (self-contained, `DualPortRAM` presente) · plant parity ALL PASS. Le funzioni-fase non sono state toccate.
 
-### Il collo finale: il `tanh` — e perché **#2b non serve più**
+### Il tetto, misurato: **11,65 non è raggiungibile per questa strada**
+**Probe #2c (2026-07-17)**: sostituito il `tanh` con il solo tipo (valore volutamente sbagliato, ripristinato
+subito) per misurare quanto varrebbe toglierlo del tutto:
+```
+RESULT probe_no_tanh  LUT=6643  FF=2119  WNS=+30.5  Fmax=10.58
+CRITPATH pR_idx_reg -> pv_3_reg   172 livelli        <- SNN readout -> decode LUT-64
+```
+Due conclusioni, entrambe sui dati:
+1. **Anche con un `tanh` a costo zero il tetto è 10,58 MHz**, non 11,65. Un CORDIC reale costerebbe di più →
+   **#2c vale al massimo +14%** (9,30 → 10,58), al prezzo di riscrivere a mano l'aritmetica del `tanh`
+   (rischio §2.1 in prima persona, e senza un blocco `HDLMathLib` da cui copiare: c'è `Sin`/`Cos`/`Sqrt`/
+   `Divide`/`Reciprocal`, **non `tanh`**). **Non perseguito.**
+2. **Il collo successivo esce dall'IIDM**: è `SNN readout → decode LUT-64`. Andare oltre richiederebbe di
+   toccare **la SNN e il decode, cioè il deployato** — fuori discussione in SP4.
+⚠️ Corregge anche una **stima sbagliata** fatta prima del probe ("il collo dopo il tanh sarà la divisione,
+~11,2 MHz"): i 172 livelli **non sono il divisore**, sono SNN→decode. Per questo **#2b è esclusa in entrambi
+gli scenari**, non solo rimandata: la divisione non compare in nessuno dei path critici misurati.
+
+### Il collo di #2a: il `tanh`
 ```
 CRITPATH: st_dd_12_reg -> thl_7_reg   207 livelli      <- e' lo stadio TANH stesso
 ```
