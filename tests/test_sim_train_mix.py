@@ -46,3 +46,19 @@ def test_the_7a_mix_is_untouched_by_the_families_parameter():
     from sim.dataset_mix import MixEntry, validate_mix
     with pytest.raises(ValueError, match="famiglia sconosciuta"):
         validate_mix([MixEntry("cut_in", "sinusoidal", 100.0)])
+
+
+def test_an_unknown_generator_source_is_refused_by_name():
+    """generator/cut_in sources are leader profiles; an unknown one (a typo) would otherwise reach
+    _leader_profile, which returns all-zeros SILENTLY -- a leader parked at 0 the network trains on as real.
+    built (KeyError) and preset (ValueError) already refuse a bad source loudly; these two must too."""
+    with pytest.raises(ValueError, match="sorgente sconosciuta"):
+        validate_train_mix([TrainMixEntry("generator", "sinusuidal", "highway", 100.0)])   # typo
+    with pytest.raises(ValueError, match="sorgente sconosciuta"):
+        validate_train_mix([TrainMixEntry("cut_in", "nope", "urban", 100.0)])
+
+
+def test_a_known_generator_source_passes():
+    from sim.dataset_gen import GENERATOR_PROFILES
+    for prof in GENERATOR_PROFILES:
+        validate_train_mix([TrainMixEntry("generator", prof, "highway", 100.0)])   # no raise

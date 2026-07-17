@@ -10,6 +10,7 @@ it keeps ONE injection site, which is what we want anyway -- a cut-in replaces t
 injecting a designed profile there would throw most of it away."""
 from dataclasses import dataclass
 
+from sim.dataset_gen import GENERATOR_PROFILES
 from sim.dataset_mix import quotas as _quotas
 from sim.dataset_mix import validate_mix as _validate_families
 
@@ -26,11 +27,15 @@ class TrainMixEntry:
 
 
 def validate_train_mix(mix):
-    """Family + weights via 7a's arithmetic; the regime is 7b's own axis."""
+    """Family + weights via 7a's arithmetic; the regime is 7b's own axis; and for generator/cut_in the source
+    must be a known leader profile -- otherwise a typo reaches _leader_profile, which returns all-zeros
+    SILENTLY (built/preset already fail loudly on a bad source; these two would not)."""
     _validate_families(mix, FAMILIES_TRAIN)
     for e in mix:
         if e.regime not in REGIMES:
             raise ValueError(f"regime sconosciuto: {e.regime!r} (validi: {REGIMES})")
+        if e.family in ("generator", "cut_in") and e.source not in GENERATOR_PROFILES:
+            raise ValueError(f"sorgente sconosciuta: {e.source!r} (profili validi: {GENERATOR_PROFILES})")
 
 
 def train_quotas(mix, count):
