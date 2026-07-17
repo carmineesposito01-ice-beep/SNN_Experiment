@@ -9,6 +9,8 @@ snn_traj_fixed_r8_mex.*
 
 # Fase B2.0 — VHDL generato per la validazione RTL (rigenerabile via rtl_gen_dut) + artefatti xsim
 hdlsrc_*/
+# Fase B2.0-2b — VHDL delle varianti di pipeline (rigenerabile via probe_pipe_tanh) + sintesi OOC
+hdl_pipe/
 axi/champion/xsim.dir/
 axi/champion/*.jou
 axi/champion/*.log
