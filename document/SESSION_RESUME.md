@@ -18,19 +18,31 @@ toccarli né stagearli**).
 *(Esistono altri track/worktree — es. `Simulator`, `main`/EventProp — con LORO SESSION_RESUME: questo file vale
 solo per `Simulink_Importer`.)*
 
-**Stato in una riga:** SP2/SP3 chiusi, **debito Fase B risolto** (bitstream escluso), **SP4-L scartata**, e
-**SP4-M make-or-break ESEGUITO**: il resource sharing config-based **non basta** (9,5 MHz < 11,65, area esplosa
-LUT ×2,4/FF ×14) → **FSM esplicita = prossimo piano**.
+**Stato in una riga:** SP2/SP3 chiusi, **debito Fase B risolto** (bitstream escluso); su **SP4 tre strade
+chiuse** — L (approssima) · M-v1 resource sharing (9,5 MHz + area esplosa) · **M-FSM #1 blocco Divide
+(bit-identità PROVATA G1/G2/G3/G4, ma NON genera VHDL: la conversione dataflow vieta `tanh` fixed)** →
+**resta l'approccio #2: divisore DENTRO la chart** (nuovo ciclo di design).
 
-**AZIONE PENDENTE (immediata):** **eseguire il piano FSM dell'ACC-IIDM dal Task 1 (make-or-break)** — piano
-`docs/superpowers/plans/2026-07-16-acc-iidm-fsm.md`, spec `docs/superpowers/specs/2026-07-16-acc-iidm-fsm-design.md`.
-Approccio (design approvato 2026-07-16): FSM che riusa **1 blocco `Divide` HDL pipelinato** (ShiftAdd, latency
-custom) per le 5 divisioni, **bit-identico a SP3** (`dmax=0`), **Fmax ≥ 11,65 con area ridotta**. **Task 1 =
-make-or-break**: il blocco `Divide` è bit-identico a `divide()`-SP3 su **300k coppie reali**? Se sì → prosegui
-(Task 2-5); se no → STOP, fallback #2 (divisore a mano) / #3 (ri-baselinare) = piano a sé. Esegui col ciclo
-`superpowers:executing-plans`. Il make-or-break **config-based** è chiuso (non bastava): diagnostico
-`matlab/probe_acciidm_sharing.m` (`6db20b0a`). MATLAB: `"C:\Program Files\MATLAB\R2026a\bin\matlab.exe" -batch`.
-Vivado: `C:\AMDDesignTools\2026.1`.
+**AZIONE PENDENTE (immediata):** **aprire il ciclo `brainstorming → spec → piano` per l'APPROCCIO #2** —
+divisore digit-recurrence **DENTRO la chart**, sequenziato dalla FSM. È l'**unico rimasto**: niente blocco
+esterno → niente convivenza chart+blocchi → **niente conversione dataflow** → `tanh` fixed torna nativa (come
+in SP3) e il core (`snn_types`: 37 file, **col deployato** `snn_hdl_*`) **non si tocca**. Prezzo: la
+bit-identità del divisore va **guadagnata** (era ciò che #1 comprava con G1) — ma l'infrastruttura per provarla
+è **già in piedi e committata**: `probe_divide_bitexact` (300k coppie reali in **44s**) e
+`run_acciidm_m_dataset` (60k control-step, ~12 min, MEXato).
+
+**LEGGI PRIMA — non ricostruire a memoria:**
+- `document/SP4_ACC_IIDM_FAST.md` **§Variante M-FSM** → cosa è stato PROVATO (G1/G2/G3/G4 verdi e sensibili),
+  cosa è MORTO e **perché** (catena: blocco `Divide` → convivenza → dataflow → **niente `tanh` fixed** →
+  aggirarla = approssimare = `dmax≠0`), e **cosa si riusa identico** (funzioni-fase, model, G2, G3/G4).
+- `document/HDL_PHASE.md` **§9** → i 4 vincoli della conversione MATLAB-to-dataflow e **quando scatta** (una
+  MATLAB Function che convive con blocchi Simulink). Vale per **qualunque** blocco bit-exact futuro, non solo SP4.
+- Spec/piano di #1 (`docs/superpowers/{specs,plans}/2026-07-16-acc-iidm-fsm*`) = **record decisionale**,
+  marcati 🗄️ in testa: **non ri-eseguirli**. Idem `probe_acciidm_sharing.m` (`6db20b0a`) per il config-based.
+
+⚠️ **Il verdetto OOC di M non è mai stato raggiunto**: ci si è fermati alla generazione VHDL, prima della
+sintesi. Fmax/area della strada FSM restano quindi **ignoti** — non dedurli dai numeri di M-v1 config.
+MATLAB: `"C:\Program Files\MATLAB\R2026a\bin\matlab.exe" -batch`. Vivado: `C:\AMDDesignTools\2026.1`.
 
 **MODI DI LAVORO (vincolanti — la sessione li ha pagati a caro prezzo):**
 - **Verifica sul DATASET, mai su un caso singolo** — riporta *quanti su quanti* (es. 0/240.000, 5/5).
@@ -158,13 +170,25 @@ Verifica empirica (`probe_acciidm_sharing.m` + 3 sintesi OOC su xc7z020 @8 MHz).
 **MA**: Fmax **9,5 MHz < 11,65** (collo = singola divisione digit-recurrence non pipelinata) **e area ESPLOSA**
 (LUT ×2,36, FF ×13,9 dal clock-rate pipelining) → **contro la visione "taglia le risorse"**. Tabella completa in
 `document/SP4_ACC_IIDM_FAST.md` §Variante M.
-- **DECISIONE (utente, 2026-07-16): FSM esplicita.** Design+piano **SCRITTI** (`docs/superpowers/{specs,plans}/2026-07-16-acc-iidm-fsm*`).
-  Approccio approvato: **NON** divisore a mano ma **1 blocco `Divide` HDL pipelinato** (ShiftAdd) riusato da una FSM
-  per le 5 divisioni, **bit-identico a SP3** (`dmax=0`), Fmax ≥ 11,65 con area ridotta. Bit-identità per
-  transitività (G1 `Divide`==`divide()`, G2 parità dataset, G3 blocco==model); ogni problema Donatello (cast §2.1,
-  buco copertura, start silenzioso, free-running) con il suo cancello dataset assertivo+sensibile. **PENDENTE =
-  ESEGUIRE dal Task 1 (make-or-break: blocco `Divide` bit-identico a `divide()`-SP3 su 300k coppie? se no → fallback
-  #2 divisore a mano / #3 ri-baselinare = piano a sé).**
+- **M-FSM #1 (FSM + blocco `Divide` HDL) — ESEGUITO 2026-07-17. ESITO: bit-identità PROVATA, ma STRADA MORTA.**
+  Verde tutto ciò che riguarda la correttezza: **G1** blocco `Divide` == `divide()`-SP3 **dmax=0 su 300.000
+  coppie reali** (sensibile: 'Nearest' → 1 LSB) · **G2** model FSM == `acc_iidm_open` **0/60000 control-step**
+  (sensibile: q2↔q3 → 1990/2000) · **G3/G4** blocco M == model == SP3 su **5/5 traiettorie**, latenza
+  **misurata 509 clk**, edge-triggered · plant parity ALL PASS. Il blocco `Donatello_ACC_IIDM_M` **esiste,
+  compila e simula bit-identico a SP3 con UN SOLO divisore**.
+  **MA non genera VHDL**, per una ragione strutturale: il blocco `Divide` deve stare accanto alla chart (in HDL
+  Coder il divisore pipelinato esiste solo come blocco) → quella convivenza impone la **conversione
+  MATLAB-to-dataflow** → che **vieta `tanh` in fixed-point** → ma `tanh` è nel cuore dell'IIDM → aggirarla =
+  LUT/float = **approssimare** = `dmax≠0` = ciò che M esiste per evitare. **Non è un bug da tappare.**
+  Prove (non inferenze): la stessa chart **da sola** genera VHDL con 0 errori; `Architecture` era già
+  `MATLAB Function` (verificato); `snn_types→fi(0)` risolveva l'"empty-typed" e faceva emergere subito `tanh`
+  → **core ripristinato, mai committato**. ⚠️ **Il verdetto OOC non è mai stato raggiunto** (fermi alla
+  generazione): Fmax/area della strada FSM restano **ignoti**.
+  Esito completo + cosa si riusa: `document/SP4_ACC_IIDM_FAST.md` §Variante M-FSM. Vincoli dataflow (validi
+  **oltre** SP4): `document/HDL_PHASE.md` §9. Commit: `e31c6b3d`, `a910934f`, `02813818`, `f430aad0`, `c32a9619`.
+- **RESTA l'approccio #2** (divisore **dentro** la chart) = l'unico rimasto → vedi AZIONE PENDENTE in cima.
+  Si riusano **identici**: funzioni-fase (`iidm_prep`/`iidm_nd`/`iidm_use`/`iidm_final`), model `acc_iidm_fsm`,
+  G2, G3/G4, e l'infrastruttura di verifica (`probe_divide_bitexact` 300k in 44s).
 - Spec/piano del config-based (superati come esecuzione, utili come record): `docs/superpowers/{specs,plans}/2026-07-16-acc-iidm-timemux*`.
 - **L insegna a M:** divisioni **sequenziate, non approssimate**; **M-v1 insegna alla FSM:** il config esplode
   l'area → la FSM deve sequenziare **1 divisore** a mano (area bassa), non delegare al clock-rate pipelining.

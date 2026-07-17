@@ -1,6 +1,30 @@
 # SP4-M-FSM — ACC-IIDM time-mux via FSM + blocco Divide pipelinato: recuperare l'Fmax — Design
 
-**Data:** 2026-07-16 · **Branch:** `Simulink_Importer` · **Stato:** approvato dall'utente
+**Data:** 2026-07-16 · **Branch:** `Simulink_Importer` · **Stato:** ~~approvato~~ → **🗄️ ESEGUITO 2026-07-17:
+strada MORTA. RECORD DECISIONALE, non più da eseguire.**
+
+> ## 🗄️ ESITO (2026-07-17)
+> **Ciò che questo design prometteva sulla bit-identità È STATO PROVATO:** G1 (blocco `Divide` == `divide()`-SP3,
+> **dmax=0 su 300.000 coppie reali**, sensibile) · G2 (model FSM == SP3, **0/60000 control-step**, sensibile) ·
+> G3/G4 (blocco M == model == SP3, **5/5 traiettorie**, latenza misurata **509 clk**, edge-triggered).
+> Il blocco `Donatello_ACC_IIDM_M` esiste, compila e simula bit-identico a SP3 **con un solo divisore**.
+>
+> **Ma NON genera VHDL, e il design è morto per una ragione strutturale:** il blocco `Divide` deve stare
+> *accanto* alla chart (in HDL Coder il divisore pipelinato esiste solo come blocco); quella convivenza impone
+> la **conversione MATLAB-to-dataflow**, che **vieta `tanh` in fixed-point** — e `tanh` è nel cuore dell'IIDM
+> (`a_blend = … + bf*tanh(dd)`). Aggirarla significherebbe LUT o float = **approssimare** = `dmax ≠ 0`: cioè
+> esattamente ciò che M esiste per non fare (ed è il motivo per cui la variante L fu scartata).
+>
+> **Prove, non inferenze:** la stessa chart **da sola** in un subsystem genera VHDL con 0 errori;
+> `Architecture` era già `MATLAB Function` (verificato) e la conversione avveniva lo stesso; `snn_types→fi(0)`
+> risolveva l'"empty-typed" e faceva emergere subito `tanh` (il core è stato **ripristinato**).
+>
+> **Resta l'approccio #2** — divisore digit-recurrence **dentro** la chart — che questo stesso design teneva
+> in fallback (§3). Le funzioni-fase, il model, G2, G3/G4 e l'infrastruttura di verifica **si riusano
+> identici**: cambia solo *chi* fa la divisione.
+>
+> Esito completo e cosa resta riusabile: `document/SP4_ACC_IIDM_FAST.md` §Variante M-FSM.
+> Vincoli della conversione dataflow (validi **oltre** SP4): `document/HDL_PHASE.md` §9.
 
 ## 1. Scopo
 Recuperare l'Fmax dell'ACC-IIDM in fixed a **≥ 11,65 MHz** (pari alla SNN dopo la correzione Fase B) **e** tagliare

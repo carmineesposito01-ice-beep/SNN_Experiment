@@ -122,6 +122,16 @@ function build_hdl_variants()
   chartM = sfroot().find('-isa', 'Stateflow.EMChart', 'Path', [subM '/IIDM_CTRL']);
   chartM.Script = acciidm_m_chart_code(NCHAMP, srcRom, srcTypes, srcFsm, srcLut, srcAccT, ...
                                        srcFDiv, srcPrep, srcNd, srcUse, srcFinal, nrm);
+  % ARCHITETTURA HDL della chart: 'MATLAB Function' e NON 'MATLAB Datapath'. Datapath = conversione
+  % MATLAB-to-dataflow, che HDL Coder sceglie per ottimizzare ATTRAVERSO il confine chart<->blocchi
+  % Simulink (M ha chart + Divide + Unit Delay nello stesso subsystem; SP3 ha solo la chart e resta su
+  % 'MATLAB Function', il default del fixed-point). Quel flusso impone vincoli molto piu' stretti: niente
+  % struct di prototipi 'empty-typed' (acc_types/snn_types usano fi([])), niente persistent in funzioni
+  % non-entry-point chiamate in un condizionale, niente divide() con argomenti variabili. Imponendola qui,
+  % quei vincoli non si applicano -> snn_types (37 file, INCLUSO il deployato snn_hdl_*) non si tocca.
+  % Costo: niente ottimizzazioni HDL Coder attraverso il confine -- che e' proprio cio' che NON vogliamo
+  % (SP4-M config-based le ha misurate: Fmax 9,5 MHz e area esplosa. Qui il time-mux lo fa la FSM).
+  hdlset_param([subM '/IIDM_CTRL'], 'Architecture', 'MATLAB Function');
   % Tipi delle porte di RITORNO dal Divide: una chart creata da script crea i dati come DOUBLE, ma dal
   % blocco arrivano `vout` (boolean) e `quot` (fixdt(1,19,8)) -> Simulink rifiuta con "boolean ... is
   % driving a signal of data type double". Vanno fissati esplicitamente (gli altri input ereditano).

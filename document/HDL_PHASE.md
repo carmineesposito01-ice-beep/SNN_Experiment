@@ -417,3 +417,24 @@ Config in `make_hdl.m`: `LoopOptimization='StreamLoops'`, `ConstantMultiplierOpt
 - **Verificare PRIMA di affermare com'è fatto il deployato (2026-07-14)**: un commento in un `.m` non è una prova.
   Le fonti che valgono: l'**entity del VHDL generato**, chi **consuma** le costanti, e il **generatore di stimoli**
   che alimenta l'HDL (§3.1). Affermare a memoria su questo ha già prodotto un errore.
+- **⚠️ Conversione MATLAB-to-dataflow: una MATLAB Function che CONVIVE con blocchi Simulink cambia le regole
+  (VERIFICATO 2026-07-17, SP4-M-FSM)**. Se nel *subsystem* c'è **solo** la chart (tutti i blocchi
+  `Donatello_*`, `Donatello_ACC_IIDM`), HDL Coder usa il flusso `MATLAB Function` e genera. Se la chart
+  **convive con altri blocchi** (SP4-M: chart + `HDLMathLib/Divide` + Unit Delay), HDL Coder applica la
+  **conversione MATLAB-to-dataflow** per ottimizzare attraverso il confine chart↔blocchi — e quel flusso ha
+  vincoli **molto più stretti**, che il flusso normale non ha:
+  | vincolo dataflow | messaggio | nel flusso normale |
+  |---|---|---|
+  | struct di prototipi con campi **vuoti** (`fi([])`, come `snn_types`/`acc_types`) | *"Struct in expression 'T' has an empty-typed field"* | OK (basta `fi(0,…)` per aggirarlo: equivalente, `cast 'like'` usa solo numerictype+fimath) |
+  | `persistent` in funzione **non-entry-point** chiamata >1 volta o in un condizionale | *"Non-top-level functions with persistent variables may be invoked only once"* | OK (lo stato può stare nella funzione) |
+  | `divide()` con argomenti **variabili** | *"not supported unless all of its input arguments are constant"* | OK (è ciò che usa SP3) |
+  | **`tanh` in fixed-point** | *"not supported for 'numerictype(1,19,8)' inputs. Provide a floating-point input"* | **OK — SP3 genera `tanh` fixed nativamente** |
+  **NON dipende dall'architettura del blocco**: `hdlget_param(chart,'Architecture')` dava già `MATLAB Function`
+  (il default del fixed-point) e la conversione avveniva lo stesso → non si disattiva da lì.
+  **Prova della causa** (non inferenza): la STESSA chart, messa **da sola** in un subsystem con soli
+  Inport/Outport, genera VHDL con **0 errori**; col `Divide` accanto, fallisce.
+  **Conseguenza di design**: un blocco che deve restare **bit-exact** e usa `tanh`/`divide` fixed **non può**
+  convivere con blocchi Simulink nello stesso subsystem. Se serve un'unità HDL esterna (es. un divisore
+  pipelinato), o si rinuncia alla bit-esattezza (LUT/float = approssimare) o si porta quell'unità **dentro**
+  la chart. È ciò che ha ucciso l'approccio "FSM + blocco Divide" di SP4-M
+  (`document/SP4_ACC_IIDM_FAST.md` §Variante M-FSM).

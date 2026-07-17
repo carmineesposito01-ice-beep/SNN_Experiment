@@ -1,5 +1,20 @@
 # SP4-M-FSM — ACC-IIDM time-mux via FSM + blocco Divide pipelinato — Implementation Plan
 
+> # 🗄️ PIANO ESEGUITO E CHIUSO (2026-07-17) — NON RI-ESEGUIRE
+> **Task 1-3: FATTI e VERDI.** T1/G1: blocco `Divide` == `divide()`-SP3, **dmax=0 su 300.000 coppie reali**
+> (sensibile: 'Nearest' → 1 LSB) · T2/G2: model FSM == SP3, **0/60000 control-step** (sensibile: q2↔q3 →
+> 1990/2000) · T3/G3-G4: blocco M == model == SP3 su **5/5 traiettorie**, latenza **misurata 509 clk**,
+> edge-triggered. Commit: `e31c6b3d`, `a910934f`, `02813818`, `f430aad0`, `c32a9619`.
+>
+> **Task 4 (G5/G6): BLOCCATO DEFINITIVAMENTE — il design è morto.** Il blocco M **non genera VHDL**: il blocco
+> `Divide` accanto alla chart impone la conversione MATLAB-to-dataflow, che **vieta `tanh` in fixed-point**,
+> e `tanh` è nel cuore dell'IIDM. Aggirarla = approssimare = `dmax≠0` = ciò che M esiste per evitare.
+> **Il verdetto OOC (Fmax ≥ 11,65?) non è mai stato raggiunto**: si è fermati prima, alla generazione.
+>
+> **Resta l'approccio #2** (divisore dentro la chart) → nuovo ciclo `brainstorming → spec → piano`.
+> Funzioni-fase, model, G2, G3/G4 e infrastruttura di verifica **si riusano identici**.
+> Dettaglio: `document/SP4_ACC_IIDM_FAST.md` §Variante M-FSM · gotcha: `document/HDL_PHASE.md` §9.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) o
 > superpowers:executing-plans, task-by-task. Steps in checkbox (`- [ ]`).
 

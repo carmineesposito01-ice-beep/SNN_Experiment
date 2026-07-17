@@ -1,8 +1,17 @@
 # SP4 — ACC-IIDM fast (recuperare l'Fmax)
 
 > Doc di processo. Spec: `docs/superpowers/specs/2026-07-16-acc-iidm-fast-design.md` · piano
-> `docs/superpowers/plans/2026-07-16-acc-iidm-fast.md`. Stato: **L chiusa; M-v1 (resource sharing) ESEGUITO → NON
-> basta** (9,5 MHz < 11,65, area esplosa LUT ×2,4/FF ×14) → **FSM esplicita = prossimo piano**.
+> `docs/superpowers/plans/2026-07-16-acc-iidm-fast.md`.
+>
+> **Stato (2026-07-17): tre strade chiuse, una rimasta.**
+> | strada | esito | perché |
+> |---|---|---|
+> | **L** — reciproci a LUT | chiusa | errore non convergente ~4 m/s²: **approssima** |
+> | **M-v1** — resource sharing (config) | chiusa | 9,5 MHz < 11,65 **e** area esplosa (LUT ×2,4, FF ×14) |
+> | **M-FSM #1** — FSM + blocco `Divide` HDL | **chiusa: strada MORTA** | bit-identità **provata** (G1/G2/G3/G4 verdi) ma **non genera VHDL**: il blocco accanto alla chart impone la conversione dataflow, che **vieta `tanh` fixed** → §Variante M-FSM |
+> | **#2** — divisore **dentro** la chart | **l'unica rimasta** | niente blocco esterno → niente dataflow → `tanh` nativa e core intatto. Bit-identità da guadagnare |
+>
+> Bersaglio invariato: **Fmax ≥ 11,65 MHz** con area ridotta, **`dmax = 0`** (mai approssimare).
 
 ## Problema (SP3, misurato)
 `Donatello_ACC_IIDM` in fixed sintetizza a **2,0 MHz** (WNS −373 ns @8 MHz, timing non chiude). Path critico
@@ -93,6 +102,73 @@ obiettivo. Scelta utente (2026-07-16): **FSM esplicita** — divisore sequenzial
 riusa sulle 5 divisioni, **bit-identica a SP3** (`dmax=0`), **Fmax alto CON area ridotta**. È un **piano a sé**
 (nuovo ciclo brainstorming→spec→piano), non improvvisato qui. Il diagnostico `probe_acciidm_sharing.m` resta
 committato e riusabile. Stato corrente sempre in `document/SESSION_RESUME.md` (blocco ▶).
+
+## Variante M-FSM — FSM + blocco Divide HDL: ESEGUITA (2026-07-17) → **strada MORTA** (`tanh` fixed)
+Spec `docs/superpowers/specs/2026-07-16-acc-iidm-fsm-design.md` · piano
+`docs/superpowers/plans/2026-07-16-acc-iidm-fsm.md`. Approccio **#1** approvato dall'utente: una FSM che riusa
+**1 solo blocco `HDLMathLib/Divide`** (ShiftAdd, pipelinato) per le 5 divisioni — invece di un divisore
+scritto a mano (#2) — per avere la bit-identità **by construction** anziché doverla guadagnare.
+
+### Cosa è stato PROVATO (tutto verde, tutto sul dataset, tutti i cancelli sensibili)
+| gate | esito | note |
+|---|---|---|
+| **G1** blocco `Divide` == `divide()`-SP3 | **dmax=0 su 300.000 coppie reali** | ShiftAdd + RndMeth 'Zero' + OutType Q10.8. Sensibile: 'Nearest' → dmax 1 LSB |
+| **G2** model FSM == `acc_iidm_open` | **dmax=0 su 60.000/60.000 control-step** | Sensibile: q2 al posto di q3 → dmax 3,13 su 1990/2000 |
+| **G3/G4** blocco M == model == SP3 | **dmax=0 su 5/5 traiettorie** | latenza **misurata** 509 clk (341 SNN + 5 divisioni); edge-triggered |
+| plant parity | ALL PASS | il riferimento double non si è mosso |
+
+`Donatello_ACC_IIDM_M` **esiste, compila e simula bit-identico a SP3 con UN SOLO divisore**. Ma **non genera
+VHDL** — e non per un bug da tappare.
+
+### Perché la strada è morta
+```
+serve un divisore pipelinato riusabile
+ -> in HDL Coder esiste SOLO come blocco (HDLMathLib/Divide), non come funzione chiamabile dalla chart
+ -> il blocco CONVIVE con la chart nello stesso subsystem
+ -> HDL Coder impone la conversione MATLAB-to-dataflow (ottimizza attraverso il confine chart<->blocchi)
+ -> quel flusso VIETA tanh in fixed-point ("Provide a floating-point input")
+ -> ma tanh e' nel cuore dell'IIDM:  a_blend = (1-COOL)*a_iidm + COOL*(a_cah + bf*tanh(dd))
+ -> aggirarla = LUT o float = APPROSSIMARE = dmax != 0
+ -> ma "non approssimare" E' la ragione per cui M esiste (ed e' il motivo per cui L fu scartata)
+```
+Il design #1 è **incompatibile con questa matematica**, punto.
+
+### Le prove (misurate, non inferite)
+- **La causa è la CONVIVENZA, non il core:** la STESSA chart, messa **da sola** in un subsystem (soli
+  Inport/Outport), genera VHDL con **0 errori**; col `Divide` accanto, fallisce. (Il primo tentativo di questo
+  test fallì per un errore del *mio harness* — tipi delle porte — e NON è stato scambiato per un verdetto.)
+- **Non è l'architettura del blocco:** `hdlget_param(chart,'Architecture')` = `MATLAB Function` (default del
+  fixed-point) **già applicato e verificato**, e la conversione avveniva lo stesso → non si disattiva da lì.
+- **`snn_types` non era il problema:** portarlo a `fi(0)` risolve l'errore "empty-typed" — e **subito dopo
+  emerge `tanh`**. Il core è stato **ripristinato**: non si tocca senza una ragione viva. (37 file lo usano,
+  inclusi i top HDL del **deployato**.)
+- I 4 vincoli dataflow incontrati (struct empty-typed · `persistent` in non-entry-point · `divide()` con
+  argomenti variabili · **`tanh` fixed**) e la regola generale sono in **`document/HDL_PHASE.md` §9**:
+  valgono **oltre** SP4, per qualunque blocco futuro che debba restare bit-exact.
+
+### Cosa RESTA VALIDO (nulla di sostanziale è perso)
+- **G1**: il blocco `Divide` **è** bit-esatto a `divide()` (300k coppie). Riusabile il giorno che servisse un
+  divisore pipelinato in un contesto **senza** chart bit-exact accanto.
+- **Le funzioni-fase** (`iidm_prep`/`iidm_nd`/`iidm_use`/`iidm_final`/`fsm_div`) = single-source della
+  matematica in forma FSM, **validate da G2 su 60.000 control-step**. La strada #2 le riusa **identiche**:
+  cambia solo *chi* fa la divisione.
+- **Model** `acc_iidm_fsm`, **G2**, **G3/G4** (`run_block_acciidm_m_test`), l'architettura FSM q1→q5,
+  l'handshake, la latenza misurata: tutto riusabile.
+- **L'infrastruttura di verifica**, che prova la bit-identità di **qualunque** divisore (anche quello a mano
+  di #2): `collect_div_pairs` + `probe_divide_bitexact` (300k coppie in **44s**) e `run_acciidm_m_dataset`
+  (60k control-step in ~12 min).
+- **Ottimizzazione dei cancelli** (senza ridurre il campione, regola del progetto): collect da **~47 min a
+  ~10 min** (MEX; i wrapper `collect_step`/`fsm_step` costruiscono `acc_types` dentro → il ramo
+  reciproco-LUT di L non viene compilato); probe da **~23 min a 44s** (ingresso **vettoriale** + Divide
+  combinatorio `latencyMode='Zero'`, bit-identico al pipelinato).
+- Modifiche collaterali **provate neutre e tenute**: `acc_types` con prototipi `fi(0)`; stato del filtro OU
+  nel top-level; divisione per la costante `DT` come `x*(1/DT)` (**G2 lo prova**: dmax=0).
+
+### Prossimo: approccio #2 (l'unico rimasto)
+**Divisore digit-recurrence DENTRO la chart**, sequenziato dalla FSM: niente blocco esterno → niente
+convivenza → niente conversione dataflow → `tanh` fixed torna nativa (come in SP3) e il core resta intatto.
+Prezzo: la bit-identità del divisore va **guadagnata** (era ciò che #1 comprava) — ma l'infrastruttura per
+provarla su 300k coppie reali è già in piedi. Richiede un nuovo ciclo `brainstorming → spec → piano`.
 
 ## File (variante L, committati — riusabili se L verrà ripresa)
 `acc_recip_lut.m` · `acc_sweep_kernel.m` · `build_acc_sweep_mex.m` · `run_acc_recip_sweep.m` · `acc_types.recipN`
