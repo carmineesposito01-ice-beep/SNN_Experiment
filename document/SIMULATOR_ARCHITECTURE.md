@@ -61,6 +61,7 @@ explicit user consent on evidence (`events.py` was unfrozen once, in cycle 3, fo
 | `sim/ui/duration_handles.py` | **Qt only** — the duration-drag unit (builder-UX) | `DurationHandles`: a row of x-draggable `pg.InfiniteLine`s, one per block's right edge. **Commit-on-finish** (`on_resize` fires on `sigPositionChangeFinished`, not continuously) so re-placing the lines never destroys the one under the cursor and no value↔handle loop forms; `setBounds` caps in place. Isolated + tested alone |
 | `sim/ui/scenario_preview.py` | **Qt only** — the cockpit's Scenario dock (item 1) | `ScenarioPreviewPanel`: the running scenario's whole `v_leader` as a static orange curve (`set_scenario`, drawn once) + a white dashed **tick marker** (`set_marker(tick)`, `None`=hidden). Own `InfiniteLine`, isolated + tested alone. **Driven by the current TICK from two app sites only** — `_paint` (live head `_last_result.t`) and `_render_at_cursor` (scrub `frames[idx].t`); deliberately NOT in `_ts_panels` (that group gets a buffer index) and NOT via `_redraw_series` (its paused-context callers would pin the marker to the head). **Y-view floored to `_MIN_Y_SPAN` (15 m/s)** so a narrow-band scenario (e.g. 'following' = v_set+N(0,0.3), a ~2 m/s band) reads as a near-flat cruise instead of the autorange zooming in and amplifying jitter; wider scenarios fit their own data (bottom clamped to ≥0). Shows the PLANNED leader — an injected brake overrides the leader live and does NOT appear here (it shows in Trajectory/Road) |
 | `sim/ui/scenario_page.py` | **Qt only** — the composer (cycles 4a/4b/builder-UX) | the WIDGETS own the composed block's params (no shadow dict); for `custom` the widget IS the row of handles (`_params_for` returns a TUPLE, the JSON canonical form). The PAD owns the block's point, distance-from-neutral IS the bias; it dies on preset AND custom; neither records a bias. The advisory is a red overlay (`#ff2d2d`, NaN + `connect="finite"`) — composer preview (all segments) + scenario curve (custom segments only, via `block_of_sample`); base curves orange. **Duration edges** (`DurationHandles`): `_composer_edge` (writes `_ticks`, the single owner) + `_boundaries` (one per block, resizes `_spec.blocks[i]`, syncs `_ticks` if that row is open). **Frozen autorange**: `_refresh_composer(refit=…)` — the node drag passes `refit=False` (no re-fit → no jump), every structural change re-fits via `_refit_composer` |
+| `sim/ui/dataset_page.py` | **Qt only** — the 5th mode, the Dataset builder (7a plan B) | The mix is **rows of real widgets** (`_Row`), not a `QTableWidget` — every cell is already an interactive control (two cascading combos, a spin, an eye, a ✕) and a table would mean a delegate per column to get back what a widget row gives for free. The family→source combo **cascades** (`built`→`_specs` from the app, `preset`→library names, `generator`→`GENERATOR_PROFILES`); `built` is **disabled with a tooltip saying where to go build one** when no spec exists. The quota column is LIVE (`quotas()` on every edit) and Generate is **gated on total==100%** — the gate does double duty: it enables the button AND it keeps `quotas()`, which validates and raises, from being called on an invalid mix mid-refresh. Format checkboxes are **rendered FROM `FORMATS`** (unavailable → disabled + `reason` in the tooltip), so the UI cannot drift from the registry. The eye's popup draws `preview_sample` at a **fixed `PREVIEW_SEED`** and the title says *"campione"* — for a jittered/generator family the source is a DISTRIBUTION and showing one curve as "the" scenario would lie. The page only **exposes getters** (`mix/count/seed/strength/k/formats/out_dir`); the APP owns the run — the same split as Meso (`app.py:174`) |
 
 ### The invariant — `utils/closed_loop_eval.py`
 
@@ -75,8 +76,14 @@ The false-red facts every advisory feature must respect (verified from these lin
 
 ### The periphery — not on the spine, one line each
 
-`app.py` (~760) wires the 4 modes + selector (+ its "⋯" export/delete menu, `_protected_count` guards the
-Meso-indexed library) + deep-scrub + champion loading; `panels.py` (~570) the live
+`app.py` (~800) wires the **5 modes** (Live · Meso/Macro · Post-run · Scenari · **Dataset**) + selector (+ its
+"⋯" export/delete menu, `_protected_count` guards the Meso-indexed library) + deep-scrub + champion loading.
+Two app-level facts the Dataset mode rests on: **`sigScenarioBuilt` carries `(scenario, spec)`** and the app
+keeps **`self._specs` PARALLEL to `self._scenarios`** (`None` for the library + the initial manual one, the
+recipe for anything built) — a materialised `v_leader` cannot be jittered back into a *sine that is still a
+sine*, so the recipe is what the `built` family needs; `_delete_scenario` pops **both** lists or they desync.
+`set_mode(4)` re-reads `_built_specs()` so a scenario built after entering the mode is not invisible.
+`panels.py` (~570) the live
 dock panels (the **Events** dock is GONE — hard-replaced by the Scenario preview in item 1; `EventInjector` +
 the Brake button stay, only the visual event log went); `topdown.py`/`loop.py`/`reconstruct.py` the road +
 ghost + scrub; `meso_*`/`postrun_page.py`
@@ -125,8 +132,8 @@ a segment `k` is eligible for red iff sample `k+1` is owned by a `custom` block.
 
 ## Tests + the runner gotcha
 
-**325 across 33 files** (32 `test_sim_*.py` + `tests/test_champion_io.py`); **325 green** at end of 7a plan A
-(the dataset engine). The pure units (`scenario_export`, `mat_writer`, `jitter`, `dataset_mix`,
+**345 across 34 files** (33 `test_sim_*.py` + `tests/test_champion_io.py`); **345 green** at end of 7a
+(plan A the dataset engine + plan B the Dataset mode). The pure units (`scenario_export`, `mat_writer`, `jitter`, `dataset_mix`,
 `export_formats`, `dataset_gen`) are tested without Qt. Two tests earn their keep by construction:
 `test_sim_scenario_export.py`'s causal `x_leader` == stepper-gap check, and `test_sim_dataset_gen.py`'s
 `test_the_generator_family_is_the_REAL_training_randomisation` — a plausible-looking constant profile passes
@@ -154,6 +161,11 @@ PATH="$ENV:$ENV/Library/bin:$ENV/Scripts:$PATH" "$ENV/python.exe" -m pytest test
 
 ⚠️ The full suite takes **~3–4 minutes** (many tests build `SimApp` with the champion). A 2-minute default
 timeout **looks like a hang and is not one** — give it ≥420 s or run it in the background.
+
+⚠️ **Do not run anything else while the suite runs.** `test_custom_composer_refresh_fits_in_a_frame` asserts a
+wall-clock PEAK (< 16.7 ms over 40 drags) — it measures the machine, not just the code. Running a render script
+in parallel with the suite reddened it once (7a plan B) on a diff that cannot touch the composer's drag path.
+A red budget test with an innocent diff means **re-measure quiet first**, then believe it.
 
 ⚠️ No LAPACK in `cf_sim` (`matrix_rank`/`polyfit`/`lstsq`/SVD → OMP #15 hard abort). Render-verify with
 `QT_QPA_PLATFORM=windows` (offscreen renders text as tofu).

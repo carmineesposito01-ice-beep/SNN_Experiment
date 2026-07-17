@@ -7,7 +7,7 @@
 > iniettata prima che tu legga qualsiasi doc**: se memoria e questo file divergono su stato o azioni,
 > **vince questo file**. La memoria è un supplemento, non una dipendenza — **questo file deve bastare da solo**.
 
-## 📍 DOVE SIAMO (verificato 2026-07-16)
+## 📍 DOVE SIAMO (verificato 2026-07-17)
 
 - **Repo**: `D:\Project_MBSE\1.Reti Neurali\Rete_SNN_Test\CF_FSNN` · **worktree**: `.worktrees/Simulator` ·
   **branch**: `Simulator`.
@@ -15,7 +15,7 @@
   lo scrive lo cambia). **Verificalo tu**: `git log --oneline -1` + `git status` + `git rev-list --count
   origin/Simulator..HEAD`. **Atteso: working tree pulito, 0 commit non pushati.** Se non è così, capisci
   perché prima di lavorare.
-- **Env/test**: conda `cf_sim`. **325 test verdi** (**32** file sim + `test_champion_io.py`; gli isolati
+- **Env/test**: conda `cf_sim`. **345 test verdi** (**33** file sim + `test_champion_io.py`; gli isolati
   sono `test_sim_drag_handles.py` (nodi, 4b), `test_sim_duration_handles.py` (durata, builder-UX) e
   `test_sim_scenario_preview.py` (dock Scenario, item 1)). ⚠️ **La suite è la glob SIM**
   (`pytest tests/test_sim_*.py tests/test_champion_io.py`), **NON `pytest tests/`**: la dir ha anche script
@@ -24,6 +24,11 @@
   ⚠️ La suite intera gira in **~3-4 minuti** (`test_sim_ui_smoke.py` da solo ~2.5: 81 test, molti
   costruiscono `SimApp` col champion). **Non è un blocco**: se lanci col timeout di default a 2 minuti
   sembra appesa. Dalle almeno 420 s, o mandala in background.
+  ⚠️ **Se la mandi in background, NON fare altro nel frattempo.**
+  `test_custom_composer_refresh_fits_in_a_frame` asserisce un **picco di wall-clock** (< 16.7 ms su 40 drag):
+  misura la macchina, non solo il codice. Nel 7a Piano B un render lanciato in parallelo l'ha fatto fallire su
+  una diff che il composer non lo tocca nemmeno. **Budget rosso + diff innocente ⇒ ri-misura a macchina
+  quieta PRIMA di crederci** (da solo passa in ~3.5 s).
 - **Altri track (NON confonderli con questo)**:
   - `main` → studio EventProp; ha il **suo** `document/SESSION_RESUME.md` (file diverso, altro track).
   - `Simulink_Importer` (`.worktrees/Simulink_Importer`) → FPGA/HDL, Fase B/C, B1.5 libreria champion +
@@ -97,23 +102,31 @@ cambiati con la durata della scena. **Ancora aperte dall'utente (post-verifica 2
     a mano**; parquet/hdf5 **registrati ma disabilitati** — sono compilate e l'env ha la fragilità OMP;
     bytes/tick MISURATI: 100.7/33.5/70.0/31.6) · `sim/dataset_gen.py` (sampler 3 famiglie, decimazione,
     batch+manifest).
-  - **▶️ PROSSIMO: 7a Piano B — la UI** (5° modo "Dataset"): tabella mix a righe-widget + 👁 hover-preview,
-    seed/count/slider jitter (⚠️ NON governa la famiglia generatore), combo frequenza 10/5/2/1 Hz + "?"
-    (10 Hz = canonico V2V), checkbox DAL registry, stima "≈ MB", Genera+progresso.
-    **Da fare per primo**: `sigScenarioBuilt` → `Signal(object, object)` che porta anche lo **spec** (senza
-    spec non ci sono blocchi da jitterare) + `self._specs` PARALLELA a `_scenarios` (pop su entrambe nel
-    delete). **Churn ENUMERATO = 9 siti**: `scenario_page.py:103` (decl), `:527` (emit), `app.py:184`
-    (connect), `:642` (firma slot); test `ui_smoke:653,1041` · `page_name:35,44` · `app_lifecycle:29`.
-    **Progresso senza freeze: riusare il pattern ESISTENTE** `app.py:385-408` (`_busy()` disabilita i
-    controlli di rientro → `processEvents()` può solo ridipingere → `finally: _done_busy()`), non inventare
-    thread.
+  - **7a Piano B — la UI: ✅ FATTO** *(2026-07-17)*, plan `…/plans/2026-07-17-dataset-generator-7a-ui.md`,
+    TDD `81445d20`→`af2b1bd5` (+ churn `06388776`). **345 test verdi · invarianti intatte (diff vuoto,
+    `data/generator.py` INCLUSO) · render-verificato** (`QT_QPA_PLATFORM=windows`, 5° modo con le 3 famiglie,
+    badge 100% ✓, parquet/hdf5 grigi, stima ≈ 8.1 MB).
+    **Cosa c'è ora**: 5° modo **"Dataset"** = tabella mix a righe-widget (famiglia→sorgente a cascata, 👁
+    hover-preview, peso + **quota viva**, ✕) · `built` disabilitata con tooltip se non hai costruito nulla ·
+    **Genera gated sul totale 100%** · seed/count/slider jitter col **caveat inline** (⚠️ NON governa la
+    famiglia generator) · combo frequenza 10/5/2/1 Hz + "?" (10 Hz = canonico V2V) · checkbox **DAL registry**
+    (disabilitate + `reason` nel tooltip) · stima "≈ MB" viva · Genera+progresso col pattern `_busy`.
+    **Spec retention fatta per prima** (era il vero abilitatore): `sigScenarioBuilt` → `Signal(object, object)`
+    porta `(scenario, spec)` + `self._specs` PARALLELA a `_scenarios` (pop su entrambe nel delete).
+    ⚠️ **Churn: 9 siti enumerati nel piano + 3 NON enumerati** (`ui_smoke:310,426,614` contavano 4 modi) —
+    la lezione è che avevo enumerato il churn del *segnale* e non quello del *conteggio modi*.
+    ⚠️ **Polish noto, non fatto**: l'icona 👁 rende come un pallino nel font di default di Windows (funziona,
+    ma non si legge come un occhio) → candidato a un glifo diverso.
   ⚠️ **Fatti che hanno ribaltato la draft originale** (verificati): `data/generator.py` è la **provenienza
   dati dei champion** (copia congelata nell'archivio) → si CHIAMA, non si tocca; il suo `parse_scenario_mix`
   pesa i **regimi di guidatore**, non gli scenari del simulatore (vocabolari diversi); i **preset non hanno
   knob** (verbatim, rng hardcoded) → si jitterano via `params_gt`; **DT=0.1 è il V2X 10 Hz** dentro 3
   invarianti → la frequenza è solo decimazione in export.
-L'ultima DRAFT rimasta (item 7, generatore dataset) cattura intento + bivi aperti, da finalizzare con brainstorming dedicato a tempo di implementazione. Prossimo item **tecnico** aperto: il
-**merge `Simulator`→`main`** (da sequenziare con `Simulink_Importer`). Vedi §AZIONI PENDENTI. Tutto
+**▶️ L'UNICO ITEM IN CODA È IL 7b — il sink training** (`…/specs/2026-07-17-dataset-generator-7b-DRAFT.md`,
+ancora DRAFT): come un `v_leader` costruito qui arriva alla fisica del training. Il suo **bivio ①** è una
+**decisione di rischio** (la strada più diretta toccherebbe `data/generator.py`, che è la provenienza dati dei
+champion) → **merita il suo brainstorming**, non va deciso di slancio. Dopo il 7b resta il **merge
+`Simulator`→`main`** (da sequenziare con `Simulink_Importer`). Vedi §AZIONI PENDENTI. Tutto
 committato e pushato. Il dettaglio sta nelle sezioni sotto (§Architecture, §Phase history) e nella
 **mappa** `document/SIMULATOR_ARCHITECTURE.md`.
 
