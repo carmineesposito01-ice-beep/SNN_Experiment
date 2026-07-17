@@ -15,7 +15,7 @@
   lo scrive lo cambia). **Verificalo tu**: `git log --oneline -1` + `git status` + `git rev-list --count
   origin/Simulator..HEAD`. **Atteso: working tree pulito, 0 commit non pushati.** Se non è così, capisci
   perché prima di lavorare.
-- **Env/test**: conda `cf_sim`. **305 test verdi** (**28** file sim + `test_champion_io.py`; gli isolati
+- **Env/test**: conda `cf_sim`. **325 test verdi** (**32** file sim + `test_champion_io.py`; gli isolati
   sono `test_sim_drag_handles.py` (nodi, 4b), `test_sim_duration_handles.py` (durata, builder-UX) e
   `test_sim_scenario_preview.py` (dock Scenario, item 1)). ⚠️ **La suite è la glob SIM**
   (`pytest tests/test_sim_*.py tests/test_champion_io.py`), **NON `pytest tests/`**: la dir ha anche script
@@ -85,13 +85,33 @@ cambiati con la durata della scena. **Ancora aperte dall'utente (post-verifica 2
   fisserebbero il marker all'head). `EventInjector` + bottone Brake + uso in reconstruct/replay **restano**
   (l'iniezione funziona, solo il log visivo è andato). ⚠️ L'anteprima mostra il leader PIANIFICATO: un brake
   iniettato NON compare qui (si vede in Trajectory/Road).
-- **generatore dataset** (item 7, il più grosso): randomizzazione seed + mix % → **DRAFT**
-  `…/specs/2026-07-16-dataset-generator-DRAFT.md` (⚠️ `data/generator.py` fa GIÀ la randomizzazione
-  type-preserving — riusarlo, ma verificare se è invariante).
-  **▶️ PROSSIMA SESSIONE PIANIFICATA (rinviata dall'utente, ~2026-07-17): brainstorming DETTAGLIATO
-  dell'item 7** → design → spec (promuovi la DRAFT, NON eseguirla com'è) → plan → TDD inline, esattamente
-  come item 1/2. Baseline attuale **305 verdi**. Suite = glob SIM (mai `pytest tests/`). Merge→main sempre
-  parcheggiato.
+- **generatore dataset** (item 7, il più grosso): **DECOMPOSTO in 7a + 7b** dopo il brainstorming del
+  2026-07-17 (l'utente vuole il dataset usabile sia per analisi sia per training: due sottosistemi, non due
+  opzioni). Spec: `…/specs/2026-07-17-dataset-generator-7a-design.md` (FINALE, `621120b8`) ·
+  `…/specs/2026-07-17-dataset-generator-7b-DRAFT.md` (il sink training, ancora draft).
+  - **7a Piano A — il MOTORE: ✅ FATTO** *(2026-07-17)*, plan `…/plans/2026-07-17-dataset-generator-7a-engine.md`,
+    TDD `f2c3567d`→`4bd20517`. **325 test verdi · invarianti intatte (diff vuoto, `data/generator.py`
+    INCLUSO) · functional-verify headless** (dataset vero a 3 famiglie, k=2, 4 formati; stima-vs-byte 8%).
+    4 moduli PURI: `sim/jitter.py` (jitter strutturale, strength=0=identità) · `sim/dataset_mix.py` (quote
+    ESATTE a resto maggiore) · `sim/export_formats.py` (registry = unica fonte di verità; csv/mat/json/**xlsx
+    a mano**; parquet/hdf5 **registrati ma disabilitati** — sono compilate e l'env ha la fragilità OMP;
+    bytes/tick MISURATI: 100.7/33.5/70.0/31.6) · `sim/dataset_gen.py` (sampler 3 famiglie, decimazione,
+    batch+manifest).
+  - **▶️ PROSSIMO: 7a Piano B — la UI** (5° modo "Dataset"): tabella mix a righe-widget + 👁 hover-preview,
+    seed/count/slider jitter (⚠️ NON governa la famiglia generatore), combo frequenza 10/5/2/1 Hz + "?"
+    (10 Hz = canonico V2V), checkbox DAL registry, stima "≈ MB", Genera+progresso.
+    **Da fare per primo**: `sigScenarioBuilt` → `Signal(object, object)` che porta anche lo **spec** (senza
+    spec non ci sono blocchi da jitterare) + `self._specs` PARALLELA a `_scenarios` (pop su entrambe nel
+    delete). **Churn ENUMERATO = 9 siti**: `scenario_page.py:103` (decl), `:527` (emit), `app.py:184`
+    (connect), `:642` (firma slot); test `ui_smoke:653,1041` · `page_name:35,44` · `app_lifecycle:29`.
+    **Progresso senza freeze: riusare il pattern ESISTENTE** `app.py:385-408` (`_busy()` disabilita i
+    controlli di rientro → `processEvents()` può solo ridipingere → `finally: _done_busy()`), non inventare
+    thread.
+  ⚠️ **Fatti che hanno ribaltato la draft originale** (verificati): `data/generator.py` è la **provenienza
+  dati dei champion** (copia congelata nell'archivio) → si CHIAMA, non si tocca; il suo `parse_scenario_mix`
+  pesa i **regimi di guidatore**, non gli scenari del simulatore (vocabolari diversi); i **preset non hanno
+  knob** (verbatim, rng hardcoded) → si jitterano via `params_gt`; **DT=0.1 è il V2X 10 Hz** dentro 3
+  invarianti → la frequenza è solo decimazione in export.
 L'ultima DRAFT rimasta (item 7, generatore dataset) cattura intento + bivi aperti, da finalizzare con brainstorming dedicato a tempo di implementazione. Prossimo item **tecnico** aperto: il
 **merge `Simulator`→`main`** (da sequenziare con `Simulink_Importer`). Vedi §AZIONI PENDENTI. Tutto
 committato e pushato. Il dettaglio sta nelle sezioni sotto (§Architecture, §Phase history) e nella
