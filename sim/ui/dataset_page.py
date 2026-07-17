@@ -9,11 +9,15 @@ batch, the busy-guard and the progress pump live in the app, where _busy_control
 re-entry path."""
 from dataclasses import dataclass
 
-from PySide6.QtWidgets import (QComboBox, QDoubleSpinBox, QFrame, QHBoxLayout, QLabel, QProgressBar,
-                               QPushButton, QSpinBox, QVBoxLayout, QWidget)
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import (QCheckBox, QComboBox, QDoubleSpinBox, QFileDialog, QFrame, QHBoxLayout,
+                               QLabel, QLineEdit, QProgressBar, QPushButton, QSlider, QSpinBox,
+                               QVBoxLayout, QWidget)
 
 from sim.dataset_gen import GENERATOR_PROFILES
 from sim.dataset_mix import FAMILIES, MixEntry, quotas
+from sim.export_formats import FORMATS, estimate_bytes
+from sim.scenario_spec import _PRESET_N
 
 _K_CHOICES = [("10 Hz (nativa)", 1), ("5 Hz", 2), ("2 Hz", 5), ("1 Hz", 10)]
 
@@ -48,6 +52,36 @@ class DatasetPage(QWidget):
         self._gen_btn.clicked.connect(lambda: self._on_generate() if self._on_generate else None)
         self._progress = QProgressBar(); self._progress.setRange(0, 100); self._progress.setValue(0)
 
+        self._jitter = QSlider(Qt.Horizontal); self._jitter.setRange(0, 100); self._jitter.setValue(25)
+        self._jitter.setFixedWidth(120)
+        self._jitter_lbl = QLabel("25%")
+        self._jitter.valueChanged.connect(lambda v: (self._jitter_lbl.setText(f"{v}%"), self._refresh()))
+        self._jitter_note = QLabel("⚠ non governa la famiglia «generator» (ha il jitter suo)")
+        self._jitter_note.setStyleSheet("color:#6e7681")
+
+        self._freq = QComboBox(); self._freq.addItems([t for t, _k in _K_CHOICES])
+        self._freq.currentIndexChanged.connect(self._refresh)
+        self._freq_help = QLabel("(?)"); self._freq_help.setStyleSheet("color:#6e7681")
+        self._freq_help.setToolTip(
+            "10 Hz è la frequenza CANONICA V2V (DT=0.1 s): la fisica gira sempre lì.\n"
+            "Le altre scelte DECIMANO l'export (un campione ogni k) e ricalcolano a_leader a dt_out:\n"
+            "l'accelerazione a 0.2 s NON è quella a 0.1 s.\n"
+            "Nessun upsampling: inventerebbe dati che la fisica non ha prodotto.")
+
+        self._fmt_boxes = {}
+        for name, spec in FORMATS.items():
+            b = QCheckBox(name)
+            b.setEnabled(spec.available)
+            if not spec.available:
+                b.setToolTip(spec.reason)
+            b.setChecked(name in ("csv", "mat"))
+            b.stateChanged.connect(self._refresh)
+            self._fmt_boxes[name] = b
+
+        self._size_lbl = QLabel()
+        self._out_dir = QLineEdit()
+        self._browse = QPushButton("Sfoglia…"); self._browse.clicked.connect(self._pick_dir)
+
         head = QHBoxLayout()
         for t in ("famiglia", "sorgente", "", "peso %", "→ traiettorie", ""):
             lbl = QLabel(t); lbl.setStyleSheet("color:#8b949e"); head.addWidget(lbl)
@@ -58,8 +92,25 @@ class DatasetPage(QWidget):
         bottom = QHBoxLayout(); bottom.addWidget(self._add_btn); bottom.addWidget(self._total_lbl)
         bottom.addStretch(1)
         root.addLayout(bottom)
+        ctl = QHBoxLayout()
+        for w in (QLabel("seed"), self._seed, QLabel("traiettorie"), self._count,
+                  QLabel("jitter"), self._jitter, self._jitter_lbl, self._jitter_note):
+            ctl.addWidget(w)
+        ctl.addStretch(1)
+        fmt_row = QHBoxLayout(); fmt_row.addWidget(QLabel("formato"))
+        for b in self._fmt_boxes.values():
+            fmt_row.addWidget(b)
+        fmt_row.addStretch(1)
+        freq = QHBoxLayout()
+        for w in (QLabel("frequenza"), self._freq, self._freq_help):
+            freq.addWidget(w)
+        freq.addStretch(1); freq.addWidget(self._size_lbl)
+        out = QHBoxLayout()
+        for w in (QLabel("cartella"), self._out_dir, self._browse):
+            out.addWidget(w)
         run = QHBoxLayout(); run.addWidget(self._gen_btn); run.addWidget(self._progress)
-        root.addLayout(run)
+        for lay in (ctl, fmt_row, freq, out, run):
+            root.addLayout(lay)
         root.addStretch(1)
         self.add_row()
 
@@ -137,6 +188,38 @@ class DatasetPage(QWidget):
     def seed(self):
         return int(self._seed.value())
 
+    def strength(self):
+        return self._jitter.value() / 100.0
+
+    def k(self):
+        return _K_CHOICES[self._freq.currentIndex()][1]
+
+    def formats(self):
+        return [n for n, b in self._fmt_boxes.items() if b.isChecked() and FORMATS[n].available]
+
+    def out_dir(self):
+        return self._out_dir.text().strip()
+
+    def _pick_dir(self):
+        d = QFileDialog.getExistingDirectory(self, "Cartella del dataset", self._out_dir.text())
+        if d:
+            self._out_dir.setText(d)
+
+    def _ticks_per_traj(self):
+        """The length each drawn trajectory will have, AFTER decimation. built = its blocks' sum;
+        preset/generator = the canonical 600 -- mirrors dataset_gen.draw_scenario."""
+        out, k = [], self.k()
+        for r, q in zip(self._rows, quotas(self.mix(), self.count())):
+            fam, src = r.family.currentText(), r.source.currentText()
+            n = (sum(int(b.ticks) for b in self._specs[src].blocks)
+                 if fam == "built" and src in self._specs else _PRESET_N)
+            out.extend([len(range(0, n, k))] * q)
+        return out
+
+    def estimated_bytes(self):
+        fmts = self.formats()
+        return estimate_bytes(self._ticks_per_traj(), fmts) if fmts else 0.0
+
     # ---- refresh ----
     def _refresh(self):
         total = sum(r.weight.value() for r in self._rows)
@@ -149,6 +232,8 @@ class DatasetPage(QWidget):
         if ok:
             for r, q in zip(self._rows, quotas(self.mix(), self.count())):
                 r.quota.setText(str(q))
+            self._size_lbl.setText(f"dimensione stimata  ≈ {self.estimated_bytes() / 1e6:.1f} MB")
         else:
             for r in self._rows:
                 r.quota.setText("—")
+            self._size_lbl.setText("dimensione stimata  —")
