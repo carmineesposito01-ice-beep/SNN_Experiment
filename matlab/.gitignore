@@ -33,3 +33,6 @@ axi/acciidm_m/stim_*.mem
 axi/acciidm_m/gold_*.mem
 axi/acciidm_m/meta_*.mat
 axi/acciidm_m/tb_params.vh
+axi/acciidm_m/cl_*.mem
+axi/acciidm_m/cl_dims.vh
+axi/acciidm_m/cl_meta.mat
