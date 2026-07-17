@@ -93,3 +93,31 @@ def test_a_scenario_too_short_to_yield_a_window_is_refused_loudly():
     with pytest.raises(ValueError, match="troppo corto"):
         draw_training_sample(TrainMixEntry("built", "mine", "highway", 100.0), seed=3, strength=0.0,
                              specs=_specs(ticks=250))
+
+
+def test_our_dict_is_digested_by_the_REAL_CFDataset():
+    """Do not trust a remembered contract: hand the dict to train.py's actual class and require windows out.
+    (`from train import CFDataset` imports cleanly in ~3.2 s, no side effects -- verified.)"""
+    from train import CFDataset
+    from sim.train_gen import draw_training_sample
+    d = draw_training_sample(TrainMixEntry("generator", "sinusoidal", "highway", 100.0), seed=5, strength=0.0,
+                             specs={})
+    ds = CFDataset([d], seq_len=100, stride=50)
+    assert len(ds) > 0
+    x, y, mask, params_gt = ds[0]
+    assert tuple(x.shape) == (100, 4) and tuple(y.shape) == (100, 2) and tuple(mask.shape) == (100,)
+    # CFDataset extracts [v0, s0, a, b] from item['params'] (train.py:144-149)
+    assert np.allclose(params_gt.numpy(),
+                       [d["params"]["v0"], d["params"]["s0"], d["params"]["a"], d["params"]["b"]])
+
+
+@pytest.mark.parametrize("n_ticks,stride,expected", [(1000, 50, 19), (1000, 100, 10), (400, 50, 7), (99, 50, 0)])
+def test_windows_per_traj_agrees_with_the_real_CFDataset(n_ticks, stride, expected):
+    """The count comes from train.py's loop, not from our arithmetic -- so the UI's honesty column cannot drift
+    from what training actually sees."""
+    from train import CFDataset
+    from sim.train_gen import windows_per_traj
+    fake = {"x": np.zeros((n_ticks, 4), dtype=np.float32), "y": np.zeros((n_ticks, 2), dtype=np.float32),
+            "mask": np.ones(n_ticks, dtype=np.float32), "params": dict(IDM_HWY)}
+    assert len(CFDataset([fake], seq_len=100, stride=stride)) == expected
+    assert windows_per_traj(n_ticks, seq_len=100, stride=stride) == expected

@@ -86,3 +86,17 @@ def draw_training_sample(entry, seed, strength, specs):
         "leader_family": entry.family,  # ours, additive: CFDataset ignores keys it does not know
         "leader_source": entry.source,
     }
+
+
+def windows_per_traj(n_ticks, seq_len=SEQ_LEN, stride=None):
+    """How many windows CFDataset cuts from a trajectory of n_ticks.
+
+    This mirrors train.py's loop (`while start + seq_len <= N`, :150-159), and a test pins it against the real
+    class. It matters because the user weights TRAJECTORIES while training eats WINDOWS: a 600-tick built
+    scenario gives 7 where a 1200-tick generator one gives 19, so "30% built" is 13.6% of what the network sees.
+    The share also depends on the stride, and the two batches do not share it (train seq_len//2, val seq_len --
+    train.py:1467-1468)."""
+    stride = seq_len // 2 if stride is None else stride
+    if n_ticks < seq_len:
+        return 0
+    return (n_ticks - seq_len) // stride + 1
