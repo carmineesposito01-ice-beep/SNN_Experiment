@@ -10,7 +10,8 @@
 > | **M-v1** — resource sharing (config) | chiusa | 9,5 MHz < 11,65 **e** area esplosa (LUT ×2,4, FF ×14) |
 > | **M-FSM #1** — FSM + blocco `Divide` HDL | **chiusa: strada MORTA** | bit-identità **provata** (G1/G2/G3/G4 verdi) ma **non genera VHDL**: il blocco accanto alla chart impone la conversione dataflow, che **vieta `tanh` fixed** → §Variante M-FSM |
 > | **#2a** — FSM che riusa **una `divide()`** (chart sola) + stadi | ✅ **FATTA, FUNZIONA, CHIUDE** | **8614 LUT · 2134 FF · Fmax 9,30 · WNS +17,4 · `dmax=0` · G5 verde**: eguaglia M-v1 (9,51) con **1/3 delle LUT e 1/10 dei FF**; vs SP3 Fmax ×4,6 e LUT −21% → §Variante M-FSM #2a |
-> | **#2b** — divisore **sequenziale a mano** | ❌ **CASSATA sui dati** | il collo NON è più la divisione ma il **`tanh`** (207 liv > 172): #2b non alzerebbe l'Fmax di un MHz |
+> | **#2b** — divisore **sequenziale a mano** | ⏸️ **RIMANDATA, non cassata** | oggi il collo è il **`tanh`** (207 liv > 172): #2b non darebbe nulla **adesso**. Ma se #2c abbassa il tanh, il collo diventa **proprio la divisione** (~172 liv ≈ 89 ns ≈ **~11,2 MHz** stimati) → #2b torna necessaria. Ordine: **#2c poi #2b** |
+> | **#2c** — `tanh` sequenziale (CORDIC) a mano | 🔎 in prova | l'unica via a `dmax=0` per togliere il collo attuale. Da sola stimata **~11,2 MHz**: NON basta per 11,65 |
 >
 > Bersaglio invariato: **Fmax ≥ 11,65 MHz** con area ridotta, **`dmax = 0`** (mai approssimare).
 > **Stato: 9,30 MHz misurati a `dmax=0`, timing CHIUSO @8 MHz, area in discesa.** Collo finale: **il `tanh`
@@ -218,9 +219,17 @@ CRITPATH: st_dd_12_reg -> thl_7_reg   207 livelli      <- e' lo stadio TANH stes
 Dopo aver isolato il `tanh` in uno stadio suo, il path critico **è il `tanh` in sé** (207 livelli): non
 `iidm_final`, e **non la divisione** (~172). Conseguenza diretta e importante:
 
-> **#2b (divisore sequenziale a mano) NON alzerebbe l'Fmax di un MHz**: serviva ad accorciare la divisione, che
-> **non è più il collo**. Sarebbe lavoro e rischio (aritmetica riscritta a mano, cioè il rischio-§2.1 che #1
-> comprava con G1) per **zero guadagno**. Cassata sui dati, come L.
+> **#2b (divisore sequenziale a mano) non darebbe nulla ADESSO**: serviva ad accorciare la divisione, che
+> **oggi non è il collo** (172 < 207). Ma **NON è cassata**: è **rimandata**. Se #2c abbassa il `tanh`, il collo
+> diventa **proprio la divisione**, e #2b torna necessaria.
+> **Stima della scala** (dal path misurato: 207 liv = 107,5 ns → ~0,52 ns/livello):
+> | scenario | collo | delay stimato | Fmax stimata |
+> |---|---|---|---|
+> | oggi | `tanh` 207 liv | 107,5 ns | **9,30** (misurato) |
+> | dopo #2c | divisione ~172 liv | ~89 ns | **~11,2** |
+> | dopo #2c + #2b | il prossimo (ignoto) | — | > 11,65? |
+> ⚠️ Quindi **#2c da sola non basta** per 11,65: servono **#2c poi #2b**. (Stima grezza: i livelli logici non
+> sono omogenei — vale come ordine di grandezza, non come predizione.)
 
 Per superare i **9,30 MHz** bisognerebbe attaccare il `tanh`, e le strade sono tutte chiuse o costose:
 | strada per il tanh | esito |
