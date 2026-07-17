@@ -3,6 +3,5 @@ function accel = fsm_step(s, v, dv, v_l, p, rst) %#codegen
 %  (coder.const), gemello di collect_step per acc_iidm_open. Serve a far girare G2 sul dataset intero in
 %  minuti invece che in ore: acc_iidm_fsm in fi INTERPRETATO costa ~47 min su 60 traj (il muro di
 %  Donatello: "core fi interpretato = ore -> obbligo MEX").
-  T = acc_types('fixed');
-  accel = acc_iidm_fsm(s, v, dv, v_l, p, rst, T);
+  accel = acc_iidm_fsm(s, v, dv, v_l, p, rst);   % fixed-only: le fasi costruiscono acc_types dentro
 end

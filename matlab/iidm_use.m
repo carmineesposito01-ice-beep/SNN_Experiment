@@ -1,4 +1,4 @@
-function st = iidm_use(k, q, st, T) %#codegen
+function st = iidm_use(k, q, st) %#codegen
 %IIDM_USE  [SP4-M-FSM] Consuma il quoziente q della divisione k e aggiorna lo stato `st`. UNICA
 %  implementazione: la chiamano sia il model (acc_iidm_fsm) sia la chart del blocco M (che passa il
 %  `quot` arrivato dal blocco Divide quando validOut e' alto).
@@ -6,6 +6,7 @@ function st = iidm_use(k, q, st, T) %#codegen
 %  Espressioni VERBATIM da acc_iidm_open (righe 56, 58, 59-66, 68-69, 70). Aggiornamenti con
 %  `st.campo(:) = ...`: mantengono il TIPO dichiarato in iidm_prep (§9 -- una variabile non puo'
 %  cambiare tipo/fimath; e mai stringere un valore prima di usarlo: e' il meccanismo del bug §2.1).
+  T = acc_types('fixed');                     % costruito DENTRO (vedi iidm_prep)
   if k == 1                                   % q1 -> s_star
     st.s_star(:) = st.s0f + max(st.vq*st.Tf_ + q, 0);
 

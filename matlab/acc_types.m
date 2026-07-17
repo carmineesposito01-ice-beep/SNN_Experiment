@@ -53,11 +53,17 @@ function T = acc_types(dt, nfrac, recipN)
                   'ProductWordLength', 11 + f, 'ProductFractionLength', f, ...
                   'SumMode', 'SpecifyPrecision', ...
                   'SumWordLength', 11 + f, 'SumFractionLength', f);
+      % Prototipi con valore 0 e NON `fi([])`: un campo VUOTO e' "empty-typed" e HDL Coder lo rifiuta
+      % quando lo struct dei tipi attraversa piu' funzioni -- "Struct in expression 'acc_types(''fixed'')'
+      % has an empty-typed field. This is not supported for MATLAB-to-dataflow conversion" (SP4-M-FSM:
+      % le funzioni-fase iidm_prep/nd/use/final). Come PROTOTIPO e' equivalente: `cast(x,'like',T.*)` usa
+      % solo numerictype+fimath, che qui sono identici -> nessun cambiamento numerico (lo provano
+      % run_plant_parity, run_block_acciidm_test e G2, tutti ri-eseguiti dopo questa modifica).
       T = struct( ...
-        'st',  fi([], true, 11 + f, f, FM), ...   % Q10.f
-        'par', fi([], true,  7 + f, f, FM), ...   % Q6.f
-        'acc', fi([], true, 11 + f, f, FM), ...   % Q10.f
-        'out', fi([], true,  5 + f, f, FM));      % Q4.f
+        'st',  fi(0, true, 11 + f, f, FM), ...   % Q10.f
+        'par', fi(0, true,  7 + f, f, FM), ...   % Q6.f
+        'acc', fi(0, true, 11 + f, f, FM), ...   % Q10.f
+        'out', fi(0, true,  5 + f, f, FM));      % Q4.f
       T.recipN = recipN;
     otherwise
       error('acc_types:dt', 'dt deve essere ''double'' o ''fixed''');

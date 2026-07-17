@@ -1,4 +1,4 @@
-function [num, den] = iidm_nd(k, st, T) %#codegen
+function [num, den] = iidm_nd(k, st) %#codegen
 %IIDM_ND  [SP4-M-FSM] (num,den) della divisione k, presi dallo stato `st`. UNICA implementazione: la
 %  chiamano sia il model (acc_iidm_fsm) sia la chart del blocco M (che li manda al blocco Divide).
 %
@@ -10,6 +10,7 @@ function [num, den] = iidm_nd(k, st, T) %#codegen
 %  frazionari). Serve perche' (a) una variabile non puo' cambiare tipo fra i rami (§9) e (b) il blocco
 %  Divide ha porte di tipo fisso. G1 ha provato la bit-identita' proprio su coppie in T.acc; G2 ri-verifica
 %  end-to-end che il cast non muova un bit.
+  T = acc_types('fixed');           % costruito DENTRO (vedi iidm_prep): HDL Coder rifiuta lo struct come arg
   num = cast(0, 'like', T.acc);
   den = cast(1, 'like', T.acc);
   if k == 1                                   % q1 = vq*dq / (2*sab)            -> s_star
