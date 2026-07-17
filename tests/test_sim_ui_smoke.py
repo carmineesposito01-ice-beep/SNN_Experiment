@@ -650,7 +650,7 @@ def test_scenario_page_emits_the_built_scenario(qapp):
     from sim.ui.scenario_page import ScenarioPage
     page = ScenarioPage(params_gt=np.array([30.0, 1.5, 2.0, 1.5, 1.5]), N=600)
     got = []
-    page.sigScenarioBuilt.connect(got.append)
+    page.sigScenarioBuilt.connect(lambda sc, sp: got.append(sc))
     page.set_spec(ScenarioSpec(name="mio", blocks=(Block("const", 600, {"v": 15.0}),),
                                style=LeaderStyle(2.0, 4.0), s_init=33.5, v_init=21.0))
     page._name_edit.setText("mio")   # the name now comes from the builder's field (item 2), not the spec
@@ -1038,7 +1038,7 @@ def test_the_builder_length_is_the_sum_of_the_blocks(qapp):
     page.set_spec(_spec3([Block("const", 600, {"v": 21.0})]))
     page._kind.setCurrentText("sine"); page._value.setValue(6.0); page._on_add()
     got = []
-    page.sigScenarioBuilt.connect(got.append)
+    page.sigScenarioBuilt.connect(lambda sc, sp: got.append(sc))
     page._on_use()
     vl = got[0].v_leader
     assert vl.shape[0] == 750                       # 600 + 150, not clipped to 600

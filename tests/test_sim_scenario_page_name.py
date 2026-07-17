@@ -32,7 +32,7 @@ def _page_with_a_block(qapp):
 def test_name_field_sets_the_emitted_scenario_name(qapp):
     page = _page_with_a_block(qapp)
     got = []
-    page.sigScenarioBuilt.connect(lambda sc: got.append(sc))
+    page.sigScenarioBuilt.connect(lambda sc, sp: got.append(sc))
     page._name_edit.setText("myrun")
     page._on_use()
     assert got and got[-1].name == "myrun"
@@ -41,7 +41,7 @@ def test_name_field_sets_the_emitted_scenario_name(qapp):
 def test_empty_name_autogenerates_a_unique_name(qapp):
     page = _page_with_a_block(qapp)
     got = []
-    page.sigScenarioBuilt.connect(lambda sc: got.append(sc))
+    page.sigScenarioBuilt.connect(lambda sc, sp: got.append(sc))
     page._name_edit.setText("")
     page._on_use()
     page._on_use()

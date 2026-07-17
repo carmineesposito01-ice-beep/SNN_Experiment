@@ -70,6 +70,8 @@ class SimApp(QMainWindow):
                                             rng=np.random.default_rng(0), include_tail=True)
         self._scenarios.append(self._manual(_PARAMS_GT))
         self._protected_count = len(self._scenarios)   # library presets + initial manual: Meso indexes these
+        self._specs = [None] * len(self._scenarios)    # PARALLEL to _scenarios: the built ones' recipes.
+        # A parallel list (not a dict keyed by index) is what survives _delete_scenario: both pop together.
         self._current_idx = 0
         self._speed = 1
         self._last_result = None
@@ -487,6 +489,7 @@ class SimApp(QMainWindow):
         if idx < self._protected_count:
             return                                         # library + initial manual: Meso selects these by index
         self._scenarios.pop(idx)
+        self._specs.pop(idx)                               # both, always: the two lists are parallel
         self._selector.blockSignals(True)
         self._selector.removeItem(idx)
         self._selector.blockSignals(False)
@@ -639,11 +642,16 @@ class SimApp(QMainWindow):
     def _on_speed(self, v: int):
         self._speed = int(v)
 
-    def _on_scenario_built(self, scenario):
+    def _on_scenario_built(self, scenario, spec=None):
         """A built scenario joins the library and is selected. materialise already produced a real
         Scenario via manual_scenario, so the cockpit, the Meso page and the post-run never learn it
-        was built rather than picked."""
+        was built rather than picked.
+
+        The RECIPE (`spec`) rides along and is kept in `_specs`, parallel to `_scenarios`: without it the
+        dataset generator's `built` family would have no blocks to jitter. `None` = no recipe (a synthetic
+        append), which is exactly what the library and the initial manual carry."""
         self._scenarios.append(scenario)
+        self._specs.append(spec)
         self._selector.blockSignals(True)
         self._selector.addItem(scenario.name)
         self._selector.setCurrentIndex(len(self._scenarios) - 1)

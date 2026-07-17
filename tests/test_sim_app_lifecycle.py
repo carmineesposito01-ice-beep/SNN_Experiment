@@ -26,7 +26,7 @@ def qapp():
 
 def _append_user_scenario(win, name="mine"):
     sc = win._scenarios[0]
-    win._on_scenario_built(manual_scenario(sc.params_gt, sc.v_leader, sc.s_init, sc.v_init, name=name))
+    win._on_scenario_built(manual_scenario(sc.params_gt, sc.v_leader, sc.s_init, sc.v_init, name=name), None)
 
 
 def test_delete_removes_a_user_built_scenario_and_keeps_the_library(qapp):
@@ -57,3 +57,31 @@ def test_delete_action_is_disabled_on_a_protected_index(qapp):
     _append_user_scenario(win, "mine")                     # selects the user-built one
     win._sync_scn_menu()
     assert win._act_delete.isEnabled()
+
+
+# --- 7a plan B: the built scenario's recipe must survive the signal ---
+def _a_spec(name="mine"):
+    from sim.scenario_spec import Block, LeaderStyle, ScenarioSpec
+    return ScenarioSpec(name=name, blocks=(Block("const", 120, {"v": 15.0}),),
+                        style=LeaderStyle(2.0, 4.0), s_init=33.5, v_init=21.0)
+
+
+def test_the_app_retains_the_spec_of_a_built_scenario(qapp):
+    win = SimApp(CHAMP)
+    protected = win._protected_count
+    assert len(win._specs) == len(win._scenarios)            # parallel from the start
+    assert all(s is None for s in win._specs[:protected])    # library + initial manual have no recipe
+    win._scenario_page.set_spec(_a_spec())
+    win._scenario_page._name_edit.setText("mine")
+    win._scenario_page._on_use()                             # the real path: build -> emit -> append
+    assert len(win._specs) == len(win._scenarios)
+    assert win._specs[-1] is not None and win._specs[-1].blocks[0].kind == "const"
+
+
+def test_delete_keeps_specs_aligned_with_scenarios(qapp):
+    win = SimApp(CHAMP)
+    win._scenario_page.set_spec(_a_spec())
+    win._scenario_page._on_use()
+    n = len(win._scenarios)
+    win._delete_scenario()                                   # the built one is selected
+    assert len(win._specs) == len(win._scenarios) == n - 1   # both popped -> still aligned

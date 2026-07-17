@@ -100,7 +100,7 @@ class StylePad(pg.PlotWidget):
 
 
 class ScenarioPage(QWidget):
-    sigScenarioBuilt = Signal(object)          # emits a sim.scenario.Scenario
+    sigScenarioBuilt = Signal(object, object)  # emits (sim.scenario.Scenario, its ScenarioSpec = the recipe)
 
     def __init__(self, params_gt, N=600):
         super().__init__()
@@ -524,4 +524,4 @@ class ScenarioPage(QWidget):
         self._built_count += 1
         name = self._name_edit.text().strip() or f"scenario_{self._built_count}"
         spec = replace(self._spec, name=name)
-        self.sigScenarioBuilt.emit(materialise(spec, self._params_gt, self._total_ticks()))
+        self.sigScenarioBuilt.emit(materialise(spec, self._params_gt, self._total_ticks()), spec)
