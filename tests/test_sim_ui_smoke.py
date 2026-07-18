@@ -591,6 +591,16 @@ def test_app_switching_off_fixed_point_restores_the_oracle(qapp):
     assert win.loop.ghost.backend is None                       # rebuilt back to the ideal oracle
     assert win._nfrac_slider.isEnabled() is False               # slider greys off again
 
+def test_app_ghost_label_names_what_the_ghost_is(qapp):
+    """The road ghost label must not lie: 'fixed-point (nfrac=X)' (tracking the slider) in
+    Fixed-point mode, 'oracolo' for the ideal oracle."""
+    win = SimApp(CHAMP)
+    win._ghost_mode.setCurrentText("Fixed-point")
+    win._nfrac_slider.setValue(8)
+    assert win._topdown._ghost_label.toPlainText() == "fixed-point (nfrac=8)"
+    win._ghost_mode.setCurrentText("Oracolo (ideale)")
+    assert win._topdown._ghost_label.toPlainText() == "oracolo"
+
 
 # --- checkpoint identity: file browser + honest header ---
 def test_app_header_states_the_real_identity_not_a_guess(qapp):

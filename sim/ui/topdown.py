@@ -126,6 +126,10 @@ class TopDownView(QGraphicsView):
     def set_ghost_visible(self, on):
         self._set_ghost_visible_items(on)
 
+    def set_ghost_label(self, text):
+        """The road ghost is 'oracolo' or 'fixed-point (nfrac=X)' -- it must name what it IS."""
+        self._ghost_label.setPlainText(text)
+
     def ghost_x_m(self):
         return self._ghost_x
 

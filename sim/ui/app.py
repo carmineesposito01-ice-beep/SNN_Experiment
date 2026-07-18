@@ -737,6 +737,11 @@ class SimApp(QMainWindow):
     def _ghost_visible(self):
         return self._ghost_mode.currentText() != "nessuno"
 
+    def _ghost_label_text(self):
+        if self._ghost_mode.currentText() == "Fixed-point":
+            return f"fixed-point (nfrac={self._nfrac_slider.value()})"
+        return "oracolo"
+
     def _on_ghost_mode_changed(self, _idx=None):
         if getattr(self, "loop", None) is None:               # fired during __init__, before the loop exists
             return
@@ -746,6 +751,7 @@ class SimApp(QMainWindow):
         if want_fixed != have_fixed:                          # backend TYPE changed -> rebuild (restarts at t=0)
             self.select_scenario(self._current_idx)
         self._topdown.set_ghost_visible(self._ghost_visible())
+        self._topdown.set_ghost_label(self._ghost_label_text())   # name what the ghost IS
         self._redraw_series(self._src_probe, self._src_traj, self._src_ghost_traj)
         if self._ghost_visible() and self._cursor is not None:
             self._topdown.render_ghost_at(self._src_ghost_traj, self._cursor)
@@ -755,6 +761,7 @@ class SimApp(QMainWindow):
         gb = getattr(self, "loop", None) and self.loop.ghost.backend
         if isinstance(gb, FixedPointBackend):
             gb.nfrac = value                                  # live: evolves forward, no rebuild
+            self._topdown.set_ghost_label(self._ghost_label_text())   # road label tracks nfrac
         if getattr(self, "loop", None) is not None:
             self._redraw_series(self._src_probe, self._src_traj, self._src_ghost_traj)
 
