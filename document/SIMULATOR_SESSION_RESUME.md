@@ -28,9 +28,17 @@
   del track FPGA (`test_fpga_io.py` fa `sys.exit()` all'import) che abortiscono la collection.
   Core SNN bit-identico **tranne `sim/events.py`** (scongelato nel ciclo 3) **e `data/generator.py`**
   (7b: +4 righe additive default-off; il suo cancello è `test_sim_provenance.py`, non il diff — vedi §DOVE SIAMO).
-  ⚠️ La suite intera gira in **~3-4 minuti** (`test_sim_ui_smoke.py` da solo ~2.5: 81 test, molti
+  ⚠️ La suite intera gira in **~3-4 minuti** (`test_sim_ui_smoke.py` da solo ~2.5: **99 test**, molti
   costruiscono `SimApp` col champion). **Non è un blocco**: se lanci col timeout di default a 2 minuti
   sembra appesa. Dalle almeno 420 s, o mandala in background.
+  ⚠️⚠️ **FLAKY (verificato 2026-07-18, NON ancora diagnosticato): `test_sim_ui_smoke.py` a volte SI IMPIANTA
+  /CRASHA a metà** — access violation nativa in pyqtgraph, nei test composer (`drag_handles.set_speeds`/
+  `duration_handles.set_edges`): sembra un problema di **object-lifetime Qt** sotto costruzione ripetuta di
+  widget. Osservato **~4 hang/crash su ~7 run consecutive**; le altre volte passa pulito (**415 verdi quando
+  completa**). Il singolo test rieseguito **da solo passa** → è **cumulativo/intermittente, non un fallimento
+  logico**. Se ti serve la suite verde: **rilancia** (spesso basta) o spezza `ui_smoke` in batch. È **pre-Azione-7**
+  (composer, cicli 3/4b), non tocca il fixed-point. **Candidato per un ciclo di bonifica** (fixture `qapp`/teardown
+  Qt, `deleteLater`, scope dei widget).
   ⚠️ **Se la mandi in background, NON fare altro nel frattempo.**
   `test_custom_composer_refresh_fits_in_a_frame` asserisce un **picco di wall-clock** (< 16.7 ms su 40 drag):
   misura la macchina, non solo il codice. Nel 7a Piano B un render lanciato in parallelo l'ha fatto fallire su

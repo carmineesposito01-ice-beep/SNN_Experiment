@@ -150,8 +150,10 @@ a segment `k` is eligible for red iff sample `k+1` is owned by a `custom` block.
 
 ## Tests + the runner gotcha
 
-**399 across 39 files** (38 `test_sim_*.py` + `tests/test_champion_io.py`); **399 green** at end of 7b UI B2
-(the Training destination). `test_sim_mix_table.py` and `test_sim_training_panel.py` are the isolated units for
+**415 across 40 files** (39 `test_sim_*.py` + `tests/test_champion_io.py`); **415 green** after Action 7 (the
+fixed-point twin; +`test_sim_fixed_backend.py`). ⚠️ **The full `test_sim_ui_smoke.py` run is FLAKY** — it
+intermittently hangs/crashes mid-run (pyqtgraph Qt object-lifetime in the composer tests); rerun or batch it
+(details + a bonifica candidate in `SIMULATOR_SESSION_RESUME.md` §DOVE SIAMO). `test_sim_mix_table.py` and `test_sim_training_panel.py` are the isolated units for
 the extracted table and the training panel. The pure units (`scenario_export`, `mat_writer`, `jitter`, `dataset_mix`,
 `export_formats`, `dataset_gen`) are tested without Qt. Two tests earn their keep by construction:
 `test_sim_scenario_export.py`'s causal `x_leader` == stepper-gap check, and `test_sim_dataset_gen.py`'s
