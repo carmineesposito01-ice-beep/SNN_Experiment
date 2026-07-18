@@ -5,7 +5,7 @@
 
 ---
 
-## ▶ RIPRESA A FREDDO — LEGGERE QUESTO BLOCCO PER PRIMO (2026-07-17)
+## ▶ RIPRESA A FREDDO — LEGGERE QUESTO BLOCCO PER PRIMO (agg. 2026-07-18)
 
 > **Ruolo di questo file:** punto d'ingresso + **STATO** del track `Simulink_Importer`. NON è la procedura
 > generale (quella è la skill `session-reprise`). È un **guida ai documenti**: quando dice «leggi X», leggi X —
@@ -56,8 +56,26 @@ scrive il report. La **Fase C** (test sull'FPGA *fisica*) resta separata e in at
     (`acciidm_m_traj`, algoritmo estratto). ⚠️ **DUT in VERILOG** (il divisore combinatorio IIDM manda un
     indice-LUT a -1 a time-0 in xsim col VHDL, registri U; Verilog init a 0). Plan `docs/…/2026-07-18-…-m2-harness-b.md`.
     Resta (piccolo): caratterizzare l'impatto della deriva blocco-vs-deployato (local_normalize) sul car-following.
-  - **2b (ottimizzazione timing `tanh`)** → **2c (validazione COMPLETA full-dataset 60k + gate-level, entrambi
-    gli harness sulla versione ottimizzata)**: **PROSSIMO**. La 2c riusa gli harness A+B con `mode` full.
+  - **2b (ottimizzazione timing `tanh`)** — **F1 (probe pipelining AUTOMATICO) = FAIL, provato in modo esaustivo
+    (2026-07-18).** Il `tanh` fixed è un **monolite combinatorio** (path `st_dd_12 → thl_7`, **201-207 liv**,
+    `IIDM_CTRL.vhd` = 984 KB tutto combinatorio): HDL Coder `DistributedPipelining`/`ClockRatePipelining` mettono i
+    registri **all'uscita** (barriera *"delays not moved across due to non-zero/unknown initial value"* della
+    chart-FSM) → **0%** (9,30); il retiming di **Vivado** (`synth_design -retiming`, op4/80ns **e** op8/40ns =
+    **identici**) rialloca il solo registro `thl` di 6 liv → **+2,4% (9,52 MHz), tetto** (gli altri registri sono
+    bloccati dietro lo stato `acc`). **Non è il periodo di clock** (il path ~107 ns è logica reale). Infra probe:
+    `matlab/probe_pipe_tanh.m` (commit `983c4c33`); sintesi OOC via `scripts/synth_acc_iidm.tcl` da **work-dir
+    SENZA spazi** `D:/zbd_pipe` (⚠️ la tcl con `glob` su path con spazi fallisce — copiare il VHDL lì e sintetizzare);
+    `D:/zbd_pipe/retime_test.tcl` per il retiming; numeri in `matlab/hdl_pipe/RESULTS.txt` (gitignored). Dettaglio +
+    tabella in `SP4_ACC_IIDM_FAST.md` §Studio 2b. Spec/plan `docs/…/2026-07-18-b2.0-2b-timing-*`.
+    **→ DOMANI (2026-07-19), 2 ESPERIMENTI (decisi dall'utente):** (1) **reimplementare il `tanh` a mano** (§2.1,
+    tetto fronte-tanh **10,58**; per **11,65** serve *anche* il fronte SNN→decode — 10,58 non è il tetto assoluto,
+    è il tetto del solo tanh); (2) **inserire registri A MANO nel netlist HDL generato** (pipeline manuale della
+    nuvola `tanh` ai cut-point, verificata **bit-exact** con B-1) — **sfumatura di regola concordata:** "VHDL mai a
+    mano" protegge il *flusso di generazione*; sui **blocchi generati DEFINITIVI** l'editing manuale è **ammesso se
+    il comportamento è preservato** (dmax=0). Non-regressione pronta: A-1/B-1/PLANT-PAR/B-LOOP (assorbono latenza <
+    HOLD=500) + `run_b2_parity_dataset` (core).
+  - **2c (validazione COMPLETA full-dataset 60k + gate-level, entrambi gli harness sulla versione ottimizzata)**:
+    dopo 2b. Riusa gli harness A+B con `mode` full.
 - **Fase 3 — `create-report`:** grounded sulla Fase 2 (tecniche: time-mux, FSM a stadi, registro-fra-stadi; drawback).
 
 **Backlog (studi a sé, DOPO B2.0):** 1) **Timing study** (spingere lo slack → max Fmax); 2) **Quantization study**

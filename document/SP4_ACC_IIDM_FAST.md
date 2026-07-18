@@ -42,6 +42,51 @@
 > 11,65 richiederebbero di approssimare il tanh (LUT) o un CORDIC sequenziale a mano (#2c). Nota: 11,65 era
 > simmetria con la SNN, non un requisito: il blocco usa **358 clock** su **800.000** per control-step.
 
+## Studio 2b — timing oltre 9,30: F1 (probe pipelining AUTOMATICO) = FAIL provato (2026-07-18)
+
+> Deciso dall'utente in B2.0: spingere l'Fmax oltre 9,30 **bit-exact**, verso il tetto (fronte `tanh` **10,58**;
+> con *anche* SNN→decode **~11,65** = limite SNN — 10,58 è il tetto del solo tanh, non l'assoluto). Approccio
+> **probe-first**: prima misurare se HDL Coder pipelina il `tanh` *automaticamente* (bit-exact per costruzione,
+> senza toccare il sorgente), poi decidere. Spec/plan: `docs/superpowers/specs/2026-07-18-b2.0-2b-timing-design.md`
+> · `docs/superpowers/plans/2026-07-18-b2.0-2b-timing-optimization.md`.
+
+**Esito F1: il `tanh` nativo fixed NON è pipelinabile da alcuno strumento automatico, bit-exact.** Misurato OOC
+(xc7z020, clk 8 MHz) sul blocco `Donatello_ACC_IIDM_M`. Il collo è il path `st_dd_12 → thl_7` (**201-207 livelli**),
+la nuvola combinatoria del `tanh` (`IIDM_CTRL.vhd` = 984 KB, tutto combinatorio fra quei due registri;
+`st_dd_12` sfix19_En8 → `thl_7` sfix19_**En17**, i bit frazionari in più = il "non castare" nativo).
+
+| leva | meccanismo (misurato) | Fmax |
+|---|---|---|
+| baseline (nessuna pipeline) | collo = tanh, 207 liv | **9,30** |
+| HDL Coder `OutputPipeline`+`DistributedPipelining` (N=2,4,8) | i registri finiscono **all'uscita** (`out_0_pipe_reg`, shift-reg *dopo* `IIDM_CTRL`); la barriera **"delays not moved across due to non-zero/unknown initial value"** blocca l'ingresso nella chart-FSM | **9,30** (0%) |
+| HDL Coder `ClockRatePipelining` (op4_crp) | idem | **9,30** |
+| **Vivado** retiming (`synth_design -retiming`, op4 / 80 ns) | rialloca il *solo* registro `thl` di 6 liv nel bordo del tanh (`thl_7_reg_bret`, 207→201 liv) | **9,52** (+2,4%) |
+| **Vivado** retiming (op8 / 40 ns, max pressione) | **identico** a op4: gli 8 registri d'uscita sono bloccati dietro il registro di stato `acc`, irraggiungibili | **9,52** (+2,4%) |
+
+**Perché:** il retiming *sposta* registri, non ne *inserisce*; sul path del tanh c'è un solo registro (`thl`), e la
+logica di stato attorno (`acc`, FSM, init non-zero) impedisce di portarne altri dentro — op4 e op8 danno il medesimo
+risultato, prova che i registri d'uscita non raggiungono mai il tanh. **Non è un problema di periodo di clock:** il
+ritardo del path (~107 ns) è logica reale (201-207 livelli di porte), il periodo decide solo se il timing *passa*.
+
+**Infrastruttura (riusabile):** `matlab/probe_pipe_tanh.m` (genera le varianti VHDL in modelli scratch, commit
+`983c4c33`); sintesi OOC via `scripts/synth_acc_iidm.tcl` **da work-dir senza spazi** `D:/zbd_pipe` (⚠️ la tcl con
+`glob` su path contenente spazi fallisce — Tcl mangia i separatori backslash; copiare il VHDL in `D:/zbd_pipe/<tag>`
+e sintetizzare da lì); `D:/zbd_pipe/retime_test.tcl` per il retiming; numeri grezzi in `matlab/hdl_pipe/RESULTS.txt`
+(gitignored). Il baseline attraverso questo flusso riproduce **esatto** il numero SP4 (8614 LUT · 9,297 MHz ·
+critpath `st_dd→thl` 207 liv) → flusso fedele.
+
+**→ Esperimenti MANUALI queued (2026-07-19, decisi dall'utente):**
+1. **Reimplementare il `tanh` a mano** (§2.1: CORDIC/polinomio/LUT staged in FSM). Rischio §2.1 (cast prematuro,
+   costò 82,4% dei control-step su snn_b2_fsm); tetto **fronte-tanh 10,58**; per **11,65** serve *anche* pipelinare
+   SNN→decode (secondo fronte, nel core).
+2. **Inserire registri a mano nel netlist HDL generato** (pipeline manuale della nuvola `tanh` ai cut-point,
+   verificata **bit-exact** con B-1 — è ciò che gli automatismi non riescono a fare ma un umano sì). **Sfumatura di
+   regola concordata:** "VHDL mai a mano" protegge il *flusso di generazione*; sui **blocchi generati DEFINITIVI**
+   (forma finale del progetto) l'editing manuale è **ammesso se il comportamento è preservato** (dmax=0).
+
+Non-regressione pronta per entrambi: A-1/B-1/PLANT-PAR/B-LOOP (assorbono latenza < HOLD=500, il TB campiona a fine
+finestra) + `run_b2_parity_dataset` per il fronte core.
+
 ## Problema (SP3, misurato)
 `Donatello_ACC_IIDM` in fixed sintetizza a **2,0 MHz** (WNS −373 ns @8 MHz, timing non chiude). Path critico
 `pR_idx_reg → acc_3_reg`, **1077 livelli logici**, di cui **CARRY4 = 820 (76%)** dai divisori digit-recurrence
