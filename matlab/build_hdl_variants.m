@@ -17,6 +17,7 @@ function build_hdl_variants()
 %  params si aggiornano ogni ~341 passi. E' l'architettura (il 5,5x di area risparmiata), non un difetto.
   here = fileparts(mfilename('fullpath'));
   gen_b2_rom('Donatello');                       % ROM attiva = Donatello -> b2_rom_active.m
+  gen_tanh_lut();                                % [B2.0-2b] genera tanh_lut_full.m (LUT tanh bit-exact)
 
   % --- sorgenti VERI da inlinare (single-source: letti, non copiati) ---
   srcRom   = fileread(fullfile(here, 'b2_rom_active.m'));
@@ -34,6 +35,7 @@ function build_hdl_variants()
   srcNd    = fileread(fullfile(here, 'iidm_nd.m'));
   srcUse   = fileread(fullfile(here, 'iidm_use.m'));
   srcTanh  = fileread(fullfile(here, 'iidm_tanh.m'));
+  srcTanhLut = fileread(fullfile(here, 'tanh_lut_full.m'));  % [B2.0-2b] LUT bit-exact, chiamata da iidm_tanh
   srcFinal = fileread(fullfile(here, 'iidm_final.m'));
 
   d = load(fullfile(here, 'champions_export.mat')); champs = d.champions;
@@ -122,7 +124,7 @@ function build_hdl_variants()
   add_block('simulink/User-Defined Functions/MATLAB Function', [subM '/IIDM_CTRL']);
   chartM = sfroot().find('-isa', 'Stateflow.EMChart', 'Path', [subM '/IIDM_CTRL']);
   chartM.Script = acciidm_m_chart_code(NCHAMP, srcRom, srcTypes, srcFsm, srcLut, srcAccT, ...
-                                       srcFDiv, srcPrep, srcNd, srcUse, srcTanh, srcFinal, nrm);
+                                       srcFDiv, srcPrep, srcNd, srcUse, srcTanh, srcTanhLut, srcFinal, nrm);
   % SOLA CHART nel subsystem (4 ingressi, 1 uscita: identico a SP3). Niente blocco `Divide`, niente Unit
   % Delay, niente handshake, niente feedback: erano l'impalcatura di #1, morta il 2026-07-17 perche' un
   % blocco ACCANTO alla chart impone la conversione MATLAB-to-dataflow, che VIETA `tanh` fixed -- e `tanh`
@@ -366,7 +368,7 @@ function d = acciidm_description(N)
 end
 
 
-function code = acciidm_m_chart_code(N, srcRom, srcTypes, srcFsm, srcLut, srcAccT, srcFDiv, srcPrep, srcNd, srcUse, srcTanh, srcFinal, nrm)
+function code = acciidm_m_chart_code(N, srcRom, srcTypes, srcFsm, srcLut, srcAccT, srcFDiv, srcPrep, srcNd, srcUse, srcTanh, srcTanhLut, srcFinal, nrm)
 %ACCIIDM_M_CHART_CODE  SP4-M-FSM: chart del blocco M. Macro-FSM:
 %    IDLE -(edge-trigger)-> SNN (time-mux ~341 clk) -(valid)-> decode + iidm_prep
 %      -> per k=1..5 { iidm_nd(k) -> emetti (num,den,vin) -> attendi vout -> iidm_use(k,quot) }
@@ -453,7 +455,7 @@ function code = acciidm_m_chart_code(N, srcRom, srcTypes, srcFsm, srcLut, srcAcc
   code = [code newline newline srcRom newline newline srcTypes newline newline srcFsm ...
           newline newline srcLut newline newline srcAccT newline newline srcFDiv ...
           newline newline srcPrep newline newline srcNd newline newline srcUse ...
-          newline newline srcTanh newline newline srcFinal];
+          newline newline srcTanh newline newline srcTanhLut newline newline srcFinal];
 end
 
 
