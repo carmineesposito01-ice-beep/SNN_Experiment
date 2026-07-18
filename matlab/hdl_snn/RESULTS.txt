@@ -36,6 +36,9 @@ SNNFWD  R2  Fmax=29.745  LUT=2971 FF=1712 DSP=22 BRAM=1  critpath pR_idx->pC_fat
 SNNFWD  R3  Fmax=47.943  LUT=2955 FF=1808 DSP=22 BRAM=1  critpath pR_idx->pC1_reci (35 liv, 20.9ns)  [+61% su R2]
 #   R3 = split stadio-C in C1(Ii,reci,Vread,fat) -> pC1 -> C2(Vi,soglia,nC_V,nC_fat,accum). parity 0/60000.
 #   Collo ora in C1 (index -> reci DSP mult -> reci-tree -> pC1_reci). +96 FF (registri pipeline), LUT piatta.
+SNNFWD  R4  Fmax=52.151  LUT=2992 FF=1980 DSP=22 BRAM=1  critpath pR_idx->pCa_Ii  (29 liv, 19.2ns)  [+8.8% su R3]
+#   R4 = split albero reci a meta' (Ca: L1-L2 -> pCa 4 parziali; C1: L3-L4). parity 0/60000. +172 FF.
+#   Collo SALTA su Ii (MAC 4-termini RIPPLE, mai tree-ificato) + mux xbuf variabile. -> R5 = attaccare Ii.
 #
 # --- record grezzi (RESULT/CRITPATH dalla sintesi OOC) ---
 RESULT l2final LUT=7249 FF=2121 DSP=69 BRAM=1 WNS=30.480 Fmax=10.579771476936099

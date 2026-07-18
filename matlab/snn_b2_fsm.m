@@ -9,7 +9,8 @@ function [raw, valid] = snn_b2_fsm(xn, start) %#codegen
 
   persistent Vram fatram xbuf xnreg t_lr t_lr_nxt V_LI wacc ...
              tickc rc written phase ...
-             pR_valid pR_idx pC1_valid pC1_idx pC1_Ii pC1_reci pC1_Vread pC1_fat ...
+             pR_valid pR_idx pCa_valid pCa_idx pCa_reci pCa_Ii pCa_Vread pCa_fat ...
+             pC1_valid pC1_idx pC1_Ii pC1_reci pC1_Vread pC1_fat ...
              pC_valid pC_idx pC_V pC_fat rawreg inited
   if isempty(inited)
     Vram   = hdl.RAM('RAMType', 'Dual port');
@@ -22,6 +23,10 @@ function [raw, valid] = snn_b2_fsm(xn, start) %#codegen
     wacc = cast(zeros(out, 1), 'like', T.raw);
     tickc = uint8(0); rc = uint8(0); written = uint8(0); phase = uint8(0);
     pR_valid = false; pR_idx = uint8(0);
+    pCa_valid = false; pCa_idx = uint8(0);
+    pCa_reci = cast(zeros(rnk/4, 1), 'like', T.accw);   % rnk/4 somme parziali (dopo 2 livelli d'albero)
+    pCa_Ii = cast(0, 'like', T.accw);
+    pCa_Vread = cast(0, 'like', T.V); pCa_fat = cast(0, 'like', T.fatigue);
     pC1_valid = false; pC1_idx = uint8(0);
     pC1_Ii = cast(0, 'like', T.accw); pC1_reci = cast(0, 'like', T.accw);
     pC1_Vread = cast(0, 'like', T.V); pC1_fat = cast(0, 'like', T.fatigue);
@@ -64,14 +69,15 @@ function [raw, valid] = snn_b2_fsm(xn, start) %#codegen
     written = written + uint8(1);
   end
 
-  % --- STADIO C1 (produce Vi, eth): dal neurone pR ---
-  % [2d R3] spezzo lo stadio-C in C1 (Vi/eth) -> registro pC1 -> C2 (soglia+update): il compute del
-  % neurone gira su 2 cicli (latenza +1, GRATIS nel time-mux) -> dimezza la profondita' combinatoria.
-  % Bit-exact: STESSA aritmetica, solo registrata a meta'. La lettura RAM (pR/rdAddr) e' INTATTA; la
-  % scrittura (via pC) slitta di 1 ciclo -> nessun hazard entro il tick (ogni neurone letto/scritto 1 volta).
-  nC1_valid = false; nC1_idx = uint8(0);
-  nC1_Ii = cast(0, 'like', T.accw); nC1_reci = cast(0, 'like', T.accw);
-  nC1_Vread = cast(0, 'like', T.V); nC1_fat = cast(0, 'like', T.fatigue);
+  % --- STADIO Ca (MAC + PRIMA meta' dell'albero reci): dal neurone pR ---
+  % [2d R4] spezzo la catena reci: Ca fa i prodotti + i primi 2 livelli d'albero (16->4), C1 finisce
+  % l'albero (4->1). Registro le rnk/4 somme parziali -> dimezza il path di C1(R3). Bit-exact: le
+  % parziali dopo 2 livelli sono identiche, cambia solo DOVE le registro (a meta' albero).
+  kmid = coder.const(rnk / 4);                    % rnk=16 -> 4 parziali dopo 2 livelli
+  nCa_valid = false; nCa_idx = uint8(0);
+  nCa_reci = cast(zeros(kmid, 1), 'like', T.accw);
+  nCa_Ii = cast(0, 'like', T.accw);
+  nCa_Vread = cast(0, 'like', T.V); nCa_fat = cast(0, 'like', T.fatigue);
   if pR_valid
     i = double(pR_idx) + 1;
     Ii = cast(0, 'like', T.accw);
@@ -79,28 +85,37 @@ function [raw, valid] = snn_b2_fsm(xn, start) %#codegen
       col = double(W.delays(i, j)) + 1;
       Ii(:) = Ii + cast(cast(W.fc(i, j), 'like', T.w) * xbuf(j, col), 'like', T.accw);
     end
-    % [2d R2] accumulo reci ad ALBERO bilanciato (profondita' rnk->log2(rnk)) invece del ripple
-    % sequenziale: taglia il path critico. Bit-exact SE gli intermedi non saturano T.accw (verificato
-    % dal parity 0/60000; il ripple originale non satura sul dataset -> ribilanciare l'ordine e' esatto).
-    % Loop a bound FISSO (lvsz coder.const) -> HDL Coder li srotola come i for gia' presenti; rnk in {8,16}.
+    % [2d R2] prodotti reci + ALBERO bilanciato (bit-exact se accw non satura, verificato dal parity).
     reci_p = cast(zeros(rnk, 1), 'like', T.accw);
     for r = 1:rnk
       reci_p(r) = cast(cast(W.U(i, r), 'like', T.w) * t_lr(r), 'like', T.accw);
     end
-    lvsz = coder.const(round(rnk ./ 2 .^ (1:log2(rnk))));   % rnk=16 -> [8 4 2 1]
-    for lev = 1:numel(lvsz)
-      for q = 1:lvsz(lev)
+    lvsz_a = coder.const(round(rnk ./ 2 .^ (1:2)));   % primi 2 livelli: rnk=16 -> [8 4]
+    for lev = 1:2
+      for q = 1:lvsz_a(lev)
         reci_p(q) = cast(reci_p(2*q - 1) + reci_p(2*q), 'like', T.accw);
       end
     end
-    reci = reci_p(1);
-    % Registra i DUE accumuli (Ii, reci: entrambi T.accw grazie a Ii(:)= e al cast dell'albero) +
-    % Vread/fatread: C2 fa Vi=leaky(Vread)+(Ii+reci) e la soglia. Cosi' i tipi registrati sono NOTI
-    % (T.accw/T.V/T.fatigue); registrare Vi/eth darebbe conflitto di tipo (l'addizione fixed li allarga).
-    nC1_Ii = Ii; nC1_reci = reci;
-    nC1_Vread = Vread;                    % porta Vread (T.V) a C2 (leaky)
-    nC1_fat = fatread;                    % porta fatread (T.fatigue) a C2 (eth + nC_fat)
-    nC1_valid = true; nC1_idx = pR_idx;
+    nCa_reci = reci_p(1:kmid);            % rnk/4 somme parziali (T.accw)
+    nCa_Ii = Ii; nCa_Vread = Vread; nCa_fat = fatread;
+    nCa_valid = true; nCa_idx = pR_idx;
+  end
+
+  % --- STADIO C1 (SECONDA meta' dell'albero reci): dal registro pCa ---
+  nC1_valid = false; nC1_idx = uint8(0);
+  nC1_Ii = cast(0, 'like', T.accw); nC1_reci = cast(0, 'like', T.accw);
+  nC1_Vread = cast(0, 'like', T.V); nC1_fat = cast(0, 'like', T.fatigue);
+  if pCa_valid
+    reci_p2 = pCa_reci;                  % kmid parziali
+    lvsz_b = coder.const(round(kmid ./ 2 .^ (1:log2(kmid))));   % kmid=4 -> [2 1]
+    for lev = 1:numel(lvsz_b)
+      for q = 1:lvsz_b(lev)
+        reci_p2(q) = cast(reci_p2(2*q - 1) + reci_p2(2*q), 'like', T.accw);
+      end
+    end
+    nC1_reci = reci_p2(1);
+    nC1_Ii = pCa_Ii; nC1_Vread = pCa_Vread; nC1_fat = pCa_fat;   % Vi/soglia -> C2 (tipi larghi restano locali)
+    nC1_valid = true; nC1_idx = pCa_idx;
   end
 
   % --- STADIO C2 (soglia + update): dal registro pC1 (neurone del ciclo PRECEDENTE) ---
@@ -134,8 +149,9 @@ function [raw, valid] = snn_b2_fsm(xn, start) %#codegen
     rc = rc + uint8(1);
   end
 
-  % avanza i registri pipeline (R -> C1 -> C2 -> write)
+  % avanza i registri pipeline (R -> Ca -> C1 -> C2 -> write)
   pR_valid = nR_valid; pR_idx = nR_idx;
+  pCa_valid = nCa_valid; pCa_idx = nCa_idx; pCa_reci = nCa_reci; pCa_Ii = nCa_Ii; pCa_Vread = nCa_Vread; pCa_fat = nCa_fat;
   pC1_valid = nC1_valid; pC1_idx = nC1_idx; pC1_Ii = nC1_Ii; pC1_reci = nC1_reci; pC1_Vread = nC1_Vread; pC1_fat = nC1_fat;
   pC_valid = nC_valid; pC_idx = nC_idx; pC_V = nC_V; pC_fat = nC_fat;
 
@@ -146,7 +162,7 @@ function [raw, valid] = snn_b2_fsm(xn, start) %#codegen
     t_lr = t_lr_nxt;
     t_lr_nxt = cast(zeros(rnk, 1), 'like', T.acc);
     written = uint8(0); rc = uint8(0);
-    pR_valid = false; pC1_valid = false; pC_valid = false;
+    pR_valid = false; pCa_valid = false; pC1_valid = false; pC_valid = false;
     if tickc >= uint8(nt - 1)
       rawreg = V_LI; raw = V_LI; valid = true;
       phase = uint8(0); tickc = uint8(0);
