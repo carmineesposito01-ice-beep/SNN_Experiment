@@ -3,8 +3,9 @@ codegen/
 slprj/
 # ROM del champion attivo — generata da gen_b2_rom(<name>)
 b2_rom_active.m
-# LUT tanh piena (4096 entry) — generata da gen_tanh_lut() (bit-exact); inlinata in iidm_tanh al deploy
+# LUT tanh — generate da gen_tanh_lut() (piena bit-exact + interp); la piena si inlina in iidm_tanh al deploy
 tanh_lut_full.m
+tanh_lut_interp.m
 # MEX compilati — rigenerabili con build_traj_mex
 snn_traj_fixed_r16_mex.*
 snn_traj_fixed_r8_mex.*
