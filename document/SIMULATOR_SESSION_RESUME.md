@@ -174,11 +174,19 @@ cambiati con la durata della scena. **Ancora aperte dall'utente (post-verifica 2
 §AZIONI PENDENTI. Tutto committato e pushato. Il dettaglio sta nelle sezioni sotto (§Architecture, §Phase
 history) e nella **mappa** `document/SIMULATOR_ARCHITECTURE.md`.
 
-## ▶️ AZIONI PENDENTI (puntatori, non dump — le azioni 1-3 SUPERANO il "next = merge" della milestone)
+## ▶️ AZIONI PENDENTI (puntatori, non dump)
 
-> **Scope definito dall'utente il 2026-07-15** (4 richieste) e **decomposto in 3 cicli indipendenti**,
-> ognuno con la sua spec+plan. I punti 3+4 dell'utente sono **una cosa sola** (ciclo 2): senza file
-> browser l'adattività della vista è YAGNI, col file browser è obbligatoria.
+> ⭐ **AZIONE IMMEDIATA (aggiornata 2026-07-18)**: le azioni **1-5 e la 7 sono ✅ FATTE** (l'**Azione 7 = il
+> gemello fixed-point live** ha chiuso lo studio A/B float-vs-fixed — vedi punto 7). **Non c'è un task già
+> deciso in coda.** L'immediata è **AGGIUNGERE/GENERALIZZARE una funzionalità del simulatore, con lo scope che
+> TE LO DIRÀ L'UTENTE** — poi brainstorming → spec → plan → TDD (non indovinare, non iniziare a progettare da
+> solo). Candidati **in riserva** (NON pre-decisi, sceglie l'utente): l'**Approccio B** del gemello fixed-point
+> (datapath Qm.n completo con accumulatore Q8.17, bit-exact all'FPGA — punto 7), oppure il **backlog Phase 5**
+> (punto 8). Il **merge `Simulator`→`main` (punto 6) resta parcheggiato DIETRO** a questo.
+>
+> **Storico** (scope definito dall'utente il 2026-07-15, 4 richieste → 3 cicli indipendenti, tutti chiusi; i
+> punti 3+4 dell'utente erano **una cosa sola** = ciclo 2: senza file browser l'adattività della vista è YAGNI,
+> col file browser è obbligatoria). I punti numerati sotto restano come **record di cosa c'è e perché**.
 
 1. **✅ FATTO — ciclo 1/3: oracolo (ghost) nel Live** *(2026-07-15)*. brainstorming → spec
    (`docs/superpowers/specs/2026-07-15-oracle-ghost-live-design.md`, `ea77edc`) → plan
@@ -388,10 +396,12 @@ history) e nella **mappa** `document/SIMULATOR_ARCHITECTURE.md`.
   → TDD (RED→GREEN→commit). Niente codice prima del design su richieste non banali.
 - **Niente workaround**: se qualcosa non va, **si trova la causa radice** (systematic-debugging), non si
   mette una pezza. Un test che non fallisce senza il fix non è un test di regressione.
-- **Core congelato bit-identico**: `sim/{state,stepper,backend,events,probe,eventprop_stepper}.py`. Solo
+- **Core congelato bit-identico**: `sim/{state,stepper,backend,probe,eventprop_stepper}.py` (⚠️ **`sim/events.py`
+  è scongelato dal ciclo 3** per il fix della rampa — vedi punto 3 in §AZIONI PENDENTI; **`data/generator.py`
+  NON è frozen**, 7b lo tocca additivo, cancello = `test_sim_provenance.py`). Solo
   accessor additivi read-only. Dopo qualunque tocco: ri-eseguire tutta la suite.
-- **Test**: i **20 `test_sim_*.py` elencati esplicitamente** in `cf_sim` (i test non-sim falliscono in
-  quell'env). Runner affidabile in §How to work (⚠️ `conda run … pytest` crasha a intermittenza).
+- **Test**: la **glob SIM** (`test_sim_*.py` + `test_champion_io.py`, **415 verdi** al 2026-07-18) in `cf_sim`
+  (i test non-sim falliscono in quell'env). Runner affidabile in §How to work (⚠️ `conda run … pytest` crasha a intermittenza).
 - **Render-verify**: le modifiche visive si verificano rendendo un PNG con `QT_QPA_PLATFORM=windows` e
   **guardandolo** (`offscreen` rende il testo come tofu — non è un difetto della UI).
 - **Doc di processo sempre aggiornati** (questo file + i doc citati), non solo alla fine.
@@ -544,7 +554,9 @@ Questa sezione non duplica più l'elenco per non farlo divergere.
 
 ## 🧱 Architecture (file map)
 
-- **FROZEN CORE** (golden bit-identical): `sim/{state,stepper,backend,events,probe,eventprop_stepper}.py`.
+- **FROZEN CORE** (golden bit-identical): `sim/{state,stepper,backend,probe,eventprop_stepper}.py` (⚠️
+  `sim/events.py` was **unfrozen once in cycle 3** for the ramp fix — see §AZIONI PENDENTI item 3; `data/generator.py`
+  is **not** frozen, 7b touches it additively, gate = `test_sim_provenance.py`).
   Only additive READ-ONLY accessors were added (`read_weights["rank"]`, probe version-memo,
   `AttributeProbe.from_frames`, `TrajectoryBuffer.results/from_results`). `record()`/`step()`/`infer()`
   bodies untouched.
@@ -581,7 +593,7 @@ Questa sezione non duplica più l'elenco per non farlo divergere.
   > etichettarlo "ASIC-like") è un candidato naturale per l'azione 1.
 - **Docs**: roadmap `docs/superpowers/2026-07-07-simulator-extension-study.md`; QA/perf report
   `docs/superpowers/2026-07-09-phase3-qa-perf-report.md`; spec+plan per fase in `specs/`+`plans/` (⚠️ **non
-  è 1:1**: 11 spec vs 20 plan — alcune fasi hanno solo il plan, es. `plans/2026-07-10-postrun-dashboard.md`
+  è 1:1**: ~22 spec vs ~34 plan (al 2026-07-18) — alcune fasi hanno solo il plan, es. `plans/2026-07-10-postrun-dashboard.md`
   non ha spec).
 - **⚠️ TRAPPOLA DI NOMI**: `document/SIMULATOR_FINDINGS.md` **NON riguarda questo simulatore** — è del
   2026-06-01, branch `Visualizer_Building`, e parla del **vecchio simulatore a notebook** (`utils/simulator/`,
@@ -630,9 +642,11 @@ non chiedendolo a me e non ricostruendolo a memoria.
   apri i documenti che indica (roadmap, spec/plan, gotcha, file map) per il dettaglio che ti serve.
   ATTENZIONE: non confonderlo con document/SESSION_RESUME.md, che è un ALTRO track (EventProp su main).
 
-Da quel file ricostruisci: stato attuale, AZIONI PENDENTI (la n.1 è quella immediata), modi di lavoro e tono.
+Da quel file ricostruisci: stato attuale, AZIONI PENDENTI (l'immediata è la ⭐ in cima alla sezione; quasi
+tutte le altre sono già ✅ FATTE), modi di lavoro e tono.
 In breve, così sai cosa aspettarti: design-before-code (brainstorming -> spec -> plan -> TDD); core SNN
-congelato bit-identico; test = i 20 test_sim_*.py elencati esplicitamente nell'env conda cf_sim; render-verify
+congelato bit-identico; test = la glob SIM (test_sim_*.py + test_champion_io.py) nell'env conda cf_sim
+(conteggio esatto + gotcha nel §DOVE SIAMO); render-verify
 con QT_QPA_PLATFORM=windows (offscreen rende il testo come tofu); niente workaround, si cerca la causa radice;
 commit conventional SENZA Co-Authored-By; doc di processo sempre aggiornati.
 Tono: italiano con me, diretto e collega-a-collega; onesto (dì quando una cosa NON è verificata, non vendere
