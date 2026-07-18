@@ -7,7 +7,7 @@
 > iniettata prima che tu legga qualsiasi doc**: se memoria e questo file divergono su stato o azioni,
 > **vince questo file**. La memoria è un supplemento, non una dipendenza — **questo file deve bastare da solo**.
 
-## 📍 DOVE SIAMO (verificato 2026-07-17)
+## 📍 DOVE SIAMO (verificato 2026-07-18)
 
 - **Repo**: `D:\Project_MBSE\1.Reti Neurali\Rete_SNN_Test\CF_FSNN` · **worktree**: `.worktrees/Simulator` ·
   **branch**: `Simulator`.
@@ -15,9 +15,10 @@
   lo scrive lo cambia). **Verificalo tu**: `git log --oneline -1` + `git status` + `git rev-list --count
   origin/Simulator..HEAD`. **Atteso: working tree pulito, 0 commit non pushati.** Se non è così, capisci
   perché prima di lavorare.
-- **Env/test**: conda `cf_sim`. **399 test verdi** (**38** file sim + `test_champion_io.py`; gli isolati
+- **Env/test**: conda `cf_sim`. **415 test verdi** (**39** file sim + `test_champion_io.py`; gli isolati
   sono `test_sim_drag_handles.py` (nodi, 4b), `test_sim_duration_handles.py` (durata, builder-UX),
-  `test_sim_scenario_preview.py` (dock Scenario, item 1) e `test_sim_provenance.py` (il guardiano 7b)).
+  `test_sim_scenario_preview.py` (dock Scenario, item 1), `test_sim_provenance.py` (il guardiano 7b) e
+  `test_sim_fixed_backend.py` (il gemello fixed-point, Azione 7)).
   ⚠️ **La suite è la glob SIM**
   (`pytest tests/test_sim_*.py tests/test_champion_io.py`), **NON `pytest tests/`**: la dir ha anche script
   del track FPGA (`test_fpga_io.py` fa `sys.exit()` all'import) che abortiscono la collection.
@@ -358,10 +359,23 @@ history) e nella **mappa** `document/SIMULATOR_ARCHITECTURE.md`.
    causale sbagliata, corretti misurando) in memoria `a-test-must-know-the-causal-path`.
 6. **RINVIATA — merge `Simulator`→`main`** (coordinare col track `Simulink_Importer`: entrambi rinviano il
    merge, vanno sequenziati per far atterrare in `main` uno stato coerente).
-7. **STUDIO POST-MILESTONE — A/B float-vs-fixed** (unica idea di Fase 4 mai fatta). ⚠️ richiede un **forward
-   fixed-point Qm.n SW** che nel simulatore **non esiste** — va scopato prima (candidato: portare la logica
-   fixed-point dal track `Simulink_Importer`/HDL, che l'ha già fatta per l'FPGA). Design-before-code.
-   Non blocca nulla.
+7. ✅ **FATTO (2026-07-18) — Azione 7: il GEMELLO FIXED-POINT LIVE** (l'A/B float-vs-fixed, *ampliata*
+   dall'utente in forma viva). La STESSA rete quantizzata Qm.n gira come **ghost** accanto alla float, con
+   **`nfrac` su slider** (5→13, def 13): la divergenza è visibile in tempo reale sui pannelli/strada.
+   `sim/fixed_backend.py` (NUOVO): primitiva `q(x,m,n)` torch (round-half-to-even + saturazione);
+   `FixedPointBackend` family-aware — **baseline** (deepcopy + Q5.n/Q3.n stato + Q7.n readout; `_safe_deepcopy`
+   tollera lo stato **non-leaf** lasciato da un forward un-guarded, che fa crashare `copy.deepcopy` nudo) e
+   **EventProp** (`FixedPointEventPropStepper`: il forward frozen dello stepper + `q()` ai tre punti **per-tick**,
+   stato indipendente, nessuna copia). UI (`sim/ui/app.py`): `QCheckBox("Oracolo")` → selettore 3 stati
+   `[nessuno|Oracolo (ideale)|Fixed-point]` + slider nfrac (attivo SOLO in Fixed-point); l'etichetta del ghost
+   sulla strada **nomina cosa È** (`fixed-point (nfrac=X)` vs `oracolo`). spec
+   `…/specs/2026-07-18-fixed-point-twin-design.md` → plan `…/plans/2026-07-18-fixed-point-twin.md` → **TDD
+   subagent-driven** (`deeeca1d`→`7edb6659`, 6 commit). **415 test verdi · core bit-identico (diff frozen VUOTO)
+   · render-verificato (tema scuro vero).** ⚠️ **Scoperta chiave**: le Q2.n sui pesi po2 sono un **no-op per
+   nfrac≥4** (`po2_quantize` clampa l'esponente a [-4,1]) → l'effetto dello slider vive nello **STATO**, ed è lì
+   che la monotonicità morde (div(nfrac=5)≈0.064 ≫ div(13)≈3e-5, ~2000×). **Rappresentativo, NON bit-exact
+   all'FPGA** (manca l'accumulatore Q8.17 + il path po2-shift esatto) → quello è l'**Approccio B** (datapath
+   Qm.n completo), tenuto in **riserva** su richiesta dell'utente (proporlo solo se A convince). Non blocca nulla.
 8. 📋 **Backlog residuo** (non pre-deciso, l'utente sceglie): roadmap §6 "Phase 5"
    (`docs/superpowers/2026-07-07-simulator-extension-study.md`) — slider GT / UKF live (si sposa col ciclo 1),
    video/GIF, ellisse a–b, worker QThread. Più: **riconciliare/etichettare il dock energia** (caveat

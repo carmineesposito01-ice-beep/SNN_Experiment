@@ -45,6 +45,20 @@ explicit user consent on evidence (`events.py` was unfrozen once, in cycle 3, fo
 | `events.py` | the live-event injector | `brake_leader` ramps the leader from its **current effective** speed (the `:42` fix); `tick(t,base_vl)` is idempotent, which is why the ghost can share it |
 | `eventprop_stepper.py` | stateful per-tick forward for the EventProp family | replicates the batch `_manual_forward` O(1)/step; golden vs `forward_sequence` |
 
+**The fixed-point twin — `sim/fixed_backend.py` (NOT frozen; Action 7, 2026-07-18).** A `FixedPointBackend`
+on the same `NetworkBackend` seam, run **as the ghost** (`app.py:519` picks it when the 3-state ghost selector
+`[nessuno|Oracolo|Fixed-point]` is on "Fixed-point"; `nfrac` is a live slider 5→13). It quantizes the *same*
+forward to **Qm.n** (approach A): weights Q2.n, ALIF state V→Q5.n / fatigue→Q3.n **per tick**, readout Q7.n.
+Family-aware: **baseline** deep-copies the model — `_safe_deepcopy` survives the non-leaf state a live
+un-guarded `forward_step` leaves behind (plain `copy.deepcopy` raises on it) — and quantizes
+`cell.potential`/`cell.fatigue` after each step; **EventProp** subclasses `EventPropStepper`
+(`FixedPointEventPropStepper`) adding `q()` at the three points, its state its own (no copy). It reuses
+`core.hardware.po2_quantize` and the stepper's structure **without editing the frozen core** (diff stays empty).
+⚠️ Q2.n on po2 weights is a **no-op for nfrac≥4** (`po2_quantize` clamps the exponent to `[-4,1]`) → the
+slider's visible effect lives in the **state** (monotone: `div(nfrac=5)≈0.064 ≫ div(13)≈3e-5`).
+**Representative, NOT bit-exact to the FPGA** (no Q8.17 accumulator, no exact po2-shift path); the
+datapath-faithful version is **Approach B**, held in reserve.
+
 ### The scenario stack — where the builder lives
 
 | file | responsibility | key facts |
