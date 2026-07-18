@@ -87,6 +87,50 @@ critpath `st_dd→thl` 207 liv) → flusso fedele.
 Non-regressione pronta per entrambi: A-1/B-1/PLANT-PAR/B-LOOP (assorbono latenza < HOLD=500, il TB campiona a fine
 finestra) + `run_b2_parity_dataset` per il fronte core.
 
+## Studio 2b — Esp. A: reimplementazione del `tanh` (✅ A1 LUT INTEGRATA, 2026-07-18)
+
+> Dopo F1 (pipelining automatico = FAIL), l'utente ha scelto di **reimplementare il `tanh` nel sorgente**.
+> Studio comparativo a **5 vie** (spec `docs/…/2026-07-18-b2.0-2b-tanh-reimpl-study-design.md`, piano
+> `…-tanh-reimpl-study.md`), a due livelli: **L1** = `tanh` da solo (Fmax intrinseco), **L2** = controllore intero.
+
+**Mappa (L1, xc7z020 @8MHz):**
+
+| variante | dmax_accel | Fmax L1 | liv. | LUT | DSP | note |
+|---|---|---|---|---|---|---|
+| native (baseline) | 0 | 9,42 | 198 | 2190 | 2 | `tanh` HDL Coder nativo |
+| **A1 — LUT piena** | **0** | **136,4** | **8** | **545** | **0** | **bit-exact → DEPLOYATA** |
+| A2a — LUT256+interp | 0,0039 | 54,7 | 16 | 187 | 1 | approx; area minima |
+| A2b — polinomio g9 | 0,0625 | 10,1 | 88 | 473 | 17 | approx; 17 DSP, lento |
+| A2c — CORDIC | 0,0117 | — | — | — | — | approx; HDL non isolabile* |
+
+*CORDIC: richiede una **divisione** (sinh/cosh); il RoundingMethod `'Zero'` obbligatorio per l'HDL rompe il
+parse della chart Stateflow → non isolabile come tanh standalone. Architetturalmente il tool sbagliato qui
+(reintroduce la divisione che SP4 aveva eliminato). Accuratezza tanh-level misurata (0,0018). (dmax approssimate
+su campione 1:3.)
+
+**Verdetto:** **A1 (LUT piena) vince su ogni asse** — unica **bit-exact** (`dmax=0` su 20000 control-step,
+`probe_tanh_dmax`), la più veloce (136 MHz, ~14× il nativo → 198→8 livelli), **0 DSP**, e **~4× più piccola**
+del nativo (545 vs 2190 LUT). La LUT memoizza il `tanh` fixed nativo su `dd∈[-8,8)` (4096 entry) + 2 costanti di
+saturazione; indirizzo = `storedInteger(dd)`, `reinterpretcast` (niente arrotondamento) → bit-identica per
+costruzione. Le approssimate non offrono vantaggi. Generatore: `gen_tanh_lut()`.
+
+**✅ A1 integrata** in `Donatello_ACC_IIDM_M` (`iidm_tanh` chiama `tanh_lut_full`, inlinata nel chart da
+`build_hdl_variants`; commit `2398d5d6`). **L2 realizzato:**
+
+> **Controllore: 9,30 → 10,58 MHz (+14%), bit-exact, area 8614 → 7249 LUT (−16%), DSP 71 → 69.**
+> `RESULT l2final Fmax=10,58 · CRITPATH pR_idx→pv_3, 172 liv = **SNN→decode**` — il `tanh` **non è più il collo**.
+
+Cioè: **il muro del `tanh` è rotto bit-exact, e con meno area.** Il nuovo collo è **SNN→decode** (172 liv), che è
+esattamente il tetto ~10,58 previsto dal probe #2c. **→ il prossimo fronte verso 11,65 è la rete (SNN→decode),
+nel core.**
+
+**Validazione:** `dmax=0` (20000 accel) + **B-1 ridotto 0/3000** (RTL bit-exact) + HDL gen 0 errori + L2 misurato.
+Il **gate esaustivo** (B-1 full 0/60000 · A-1 · PLANT-PAR · B-LOOP · `run_b2_parity_dataset` 0/240000) è
+**rinviato** (da eseguire prima del deploy finale / dopo il fronte SNN→decode) — deciso dall'utente perché
+l'ottimizzazione non è finita. ⚠️ **Gotcha ambiente:** `bash` risolveva su **WSL** (rotto dopo sospensione) →
+gli harness xsim vanno lanciati con **Git Bash in testa al PATH** (`C:\Program Files\Git\bin`); lo script `.sh`
+usa già path assoluti ai tool Vivado.
+
 ## Problema (SP3, misurato)
 `Donatello_ACC_IIDM` in fixed sintetizza a **2,0 MHz** (WNS −373 ns @8 MHz, timing non chiude). Path critico
 `pR_idx_reg → acc_3_reg`, **1077 livelli logici**, di cui **CARRY4 = 820 (76%)** dai divisori digit-recurrence

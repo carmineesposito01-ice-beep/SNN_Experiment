@@ -67,15 +67,20 @@ scrive il report. La **Fase C** (test sull'FPGA *fisica*) resta separata e in at
     SENZA spazi** `D:/zbd_pipe` (⚠️ la tcl con `glob` su path con spazi fallisce — copiare il VHDL lì e sintetizzare);
     `D:/zbd_pipe/retime_test.tcl` per il retiming; numeri in `matlab/hdl_pipe/RESULTS.txt` (gitignored). Dettaglio +
     tabella in `SP4_ACC_IIDM_FAST.md` §Studio 2b. Spec/plan `docs/…/2026-07-18-b2.0-2b-timing-*`.
-    **→ DOMANI (2026-07-19), 2 ESPERIMENTI (decisi dall'utente):** (1) **reimplementare il `tanh` a mano** (§2.1,
-    tetto fronte-tanh **10,58**; per **11,65** serve *anche* il fronte SNN→decode — 10,58 non è il tetto assoluto,
-    è il tetto del solo tanh); (2) **inserire registri A MANO nel netlist HDL generato** (pipeline manuale della
-    nuvola `tanh` ai cut-point, verificata **bit-exact** con B-1) — **sfumatura di regola concordata:** "VHDL mai a
-    mano" protegge il *flusso di generazione*; sui **blocchi generati DEFINITIVI** l'editing manuale è **ammesso se
-    il comportamento è preservato** (dmax=0). Non-regressione pronta: A-1/B-1/PLANT-PAR/B-LOOP (assorbono latenza <
-    HOLD=500) + `run_b2_parity_dataset` (core).
-  - **2c (validazione COMPLETA full-dataset 60k + gate-level, entrambi gli harness sulla versione ottimizzata)**:
-    dopo 2b. Riusa gli harness A+B con `mode` full.
+    **Esp. A — reimplementazione `tanh` = ✅ CHIUSO (2026-07-18):** studio comparativo a 5 vie (native/LUT-piena/
+    LUT-interp/poly/CORDIC), 2 livelli (L1 tanh-solo, L2 controllore). **Vince A1 = LUT PIENA bit-exact**
+    (memoizza il `tanh` nativo, `gen_tanh_lut`): dmax=0 su 20000, L1 136 MHz / 8 liv / 0 DSP, più piccola del
+    nativo. **A1 INTEGRATA** in `Donatello_ACC_IIDM_M` (`iidm_tanh`→`tanh_lut_full`, inlinata da
+    `build_hdl_variants`; commit `2398d5d6`). **L2: controllore 9,30 → 10,58 MHz (+14%), bit-exact, area
+    8614→7249 LUT (−16%), DSP 71→69; nuovo collo = `pR_idx→pv_3`, 172 liv = SNN→decode** (il `tanh` non è più il
+    collo). Dettaglio+tabella: `SP4_ACC_IIDM_FAST.md §Studio 2b`; numeri in `matlab/hdl_tanh/RESULTS.txt`.
+    Validazione fatta: dmax=0 + **B-1 ridotto 0/3000** + HDL 0 errori + L2. ⚠️ **Gate esaustivo RINVIATO**
+    (B-1 full 0/60000 · A-1 · PLANT-PAR · B-LOOP · parity 0/240000): da eseguire prima del deploy finale.
+    ⚠️ **Gotcha ambiente:** `bash`→WSL rotto (sospensione) → lanciare gli harness xsim con **Git Bash in testa al
+    PATH** (`C:\Program Files\Git\bin`). (L'Esp. B "registri a mano nel netlist" non è stato fatto: A1 già risolve.)
+    **→ PROSSIMO FRONTE verso 11,65 = SNN→decode** (172 liv, nel core) — l'ottimizzazione continua sulla rete.
+  - **2c (validazione COMPLETA full-dataset 60k + gate-level)**: dopo il fronte SNN→decode / prima del deploy.
+    Riusa gli harness A+B con `mode` full + il gate esaustivo rinviato sopra.
 - **Fase 3 — `create-report`:** grounded sulla Fase 2 (tecniche: time-mux, FSM a stadi, registro-fra-stadi; drawback).
 
 **Backlog (studi a sé, DOPO B2.0):** 1) **Timing study** (spingere lo slack → max Fmax); 2) **Quantization study**
