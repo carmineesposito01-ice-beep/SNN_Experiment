@@ -94,11 +94,16 @@ Applied at **three points**, with the spec's formats (integer bits fixed, `nfrac
 | readout (the 5 params) | Q7.**n** | at `infer`'s output |
 
 The weights are **already** po2 in the float forward (`core.hardware.po2_quantize`, used by both families) — the
-fixed-point adds the Qm.n *fractional* clip on top: `q(po2_quantize(w), 2, nfrac)`. Why `nfrac` shows something:
-a po2 weight `2⁻⁶` needs 6 fractional bits, so at `nfrac=5` it rounds to `2⁻⁵` or **0** — lowering `nfrac`
-progressively kills the small po2 weights and coarsens the state, so the drive degrades **visibly**. The `m`
-integer bits stay fixed (they bound the range, as on the FPGA); only `nfrac` moves, exactly like the MATLAB
-sweep.
+fixed-point adds the Qm.n *fractional* clip on top: `q(po2_quantize(w), 2, nfrac)`. **Where the `nfrac` effect
+actually comes from (verified against `core/hardware.py:46-59`):** `po2_quantize` clamps the exponent to
+`[-4, 1]` and masks weights `≤ 2⁻⁵` to zero, so the smallest nonzero po2 weight is `2⁻⁴` — representable in 4
+fractional bits, hence **exactly representable at every `nfrac ∈ [5,13]`**. So the *weight* Q2.`n` clip is
+effectively a no-op in the slider range; the visible degradation as `nfrac` drops comes from quantizing the
+**state** (membrane `V` → Q5.`n`, `fatigue` → Q3.`n`) and the **readout** (Q7.`n`), whose steps coarsen from
+`2⁻¹³` to `2⁻⁵` — shifting spikes and thus the params. We still quantize the weights (faithful to the FPGA's
+Q2.13 store, and correct if `nfrac<4` were ever allowed), but the **monotonicity test's effect lives in the
+state**. The `m` integer bits stay fixed (they bound the range, as on the FPGA); only `nfrac` moves, exactly like
+the MATLAB sweep.
 
 **What it does NOT capture (honest):** it quantizes *weights + state + output* at the Qm.n grid, **not** the
 datapath — no wide Q8.17 accumulator, no exact po2-shift path. It shows how weight and state precision degrade
