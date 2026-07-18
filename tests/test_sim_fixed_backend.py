@@ -1,3 +1,4 @@
+import math
 import os
 import sys
 
@@ -8,7 +9,12 @@ REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if REPO not in sys.path:
     sys.path.insert(0, REPO)
 
-from sim.fixed_backend import q                                  # noqa: E402
+from utils.champion_io import load_champion               # noqa: E402
+from sim.backend import SoftwareBackend                    # noqa: E402
+from sim.fixed_backend import q, FixedPointBackend          # noqa: E402
+
+CHAMP_BASELINE = os.path.join(REPO, "champions", "R33_C2_A1_T12_fix", "best_model.pt")
+CHAMP_EVENTPROP = os.path.join(REPO, "champions", "PE_t05_gp0002", "best_model.pt")
 
 
 # ------------------------------- q primitive -------------------------------
@@ -27,3 +33,63 @@ def test_q_saturates_at_qmn_extremes():
 def test_q_kills_small_po2_at_low_nfrac():
     assert float(q(torch.tensor(0.0625), 2, 3)) == 0.0        # Q2.3 step 1/8: 0.5 -> half-to-even -> 0
     assert float(q(torch.tensor(0.0625), 2, 4)) == 0.0625     # survives at n=4
+
+
+# ------------------------------- helpers -------------------------------
+def _obs_sequence(n=60):
+    """Deterministic, varied normalized (1,4) inputs (same scale as test_sim_backend.py:24)."""
+    seq = []
+    for k in range(n):
+        a = 0.30 + 0.25 * math.sin(k / 5.0)
+        b = 0.30 + 0.25 * math.sin(k / 7.0 + 1.0)
+        c = 0.50 - 0.20 * math.cos(k / 6.0)
+        seq.append(torch.tensor([[a, c, a - b, b]], dtype=torch.float32))
+    return seq
+
+def _param_divergence(model, nfrac, obs_seq):
+    """Mean |fixed params - float params| over the sequence (both reset, independent state)."""
+    fb = FixedPointBackend(model, nfrac=nfrac); fb.reset()
+    sb = SoftwareBackend(model); sb.reset()
+    tot = 0.0
+    for obs in obs_seq:
+        pf = fb.infer(obs).view(-1)
+        ps = sb.infer(obs).view(-1)
+        tot += float(torch.abs(pf - ps).mean())
+    return tot / len(obs_seq)
+
+
+# --------------------------- baseline contract ---------------------------
+def test_backend_contract_baseline():
+    be = FixedPointBackend(load_champion(CHAMP_BASELINE).model, nfrac=13)
+    be.reset()
+    out = be.infer(torch.tensor([[0.4, 0.3, 0.5, 0.3]], dtype=torch.float32))
+    assert tuple(out.shape) == (1, 5)
+    assert be.read_weights()["rank"] == 8                      # same topology exposure as SoftwareBackend
+    assert be.read_probe()["v_mem"].shape == (32,)
+
+def test_baseline_twin_does_not_corrupt_the_live_network():
+    """State isolation: the twin deep-copies the model, so stepping it never moves the live cell."""
+    model = load_champion(CHAMP_BASELINE).model
+    sb = SoftwareBackend(model); sb.reset()                    # the LIVE float net (original model)
+    fb = FixedPointBackend(model, nfrac=5); fb.reset()         # deep-copies model inside
+    pot_before = model.layer_hidden.cell.potential.clone()
+    obs = torch.tensor([[0.4, 0.3, 0.5, 0.3]], dtype=torch.float32)
+    for _ in range(5):
+        fb.infer(obs)                                          # step ONLY the twin
+    assert torch.equal(model.layer_hidden.cell.potential, pot_before)   # fails if the deepcopy is missing
+
+def test_lower_nfrac_diverges_more_from_float_baseline():     # the central proof (state-driven)
+    model = load_champion(CHAMP_BASELINE).model
+    seq = _obs_sequence(60)
+    d13 = _param_divergence(model, 13, seq)
+    d5 = _param_divergence(model, 5, seq)
+    assert d5 > d13, f"coarser quant must diverge more: d5={d5} d13={d13}"
+
+def test_nfrac_change_moves_the_output_baseline():
+    model = load_champion(CHAMP_BASELINE).model
+    obs = torch.tensor([[0.4, 0.3, 0.5, 0.3]], dtype=torch.float32)
+    be = FixedPointBackend(model, nfrac=13); be.reset()
+    p13 = be.infer(obs).clone()
+    be2 = FixedPointBackend(model, nfrac=5); be2.reset()
+    p5 = be2.infer(obs).clone()
+    assert not torch.equal(p13, p5)                            # the knob is observable at infer's output

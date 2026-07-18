@@ -34,3 +34,102 @@ def q(x, m, n):
     lo = -(2.0 ** m)
     hi = 2.0 ** m - step
     return torch.clamp(torch.round(x / step) * step, lo, hi)
+
+
+def _safe_deepcopy(model):
+    """copy.deepcopy(model), tolerant of non-leaf state tensors left behind by a live,
+    un-guarded forward_step on this SAME model object (e.g. a SoftwareBackend stepping it
+    in lockstep elsewhere, before the ghost is toggled on).
+
+    ALIFCell.potential/fatigue/prev_spike and LICell.potential (core/neurons.py) are plain
+    instance attributes reassigned by arithmetic every tick -- not nn.Parameter, not a
+    registered buffer. After one un-guarded step they carry a grad_fn (e.g. potential's last
+    op is a subtraction -> SubBackward0), and torch.Tensor.__deepcopy__ refuses any non-leaf
+    tensor outright ("Only Tensors created explicitly by the user ... support the deepcopy
+    protocol"). Detaching would be safe either way (nothing here ever calls .backward()), but
+    to guarantee zero footprint on the caller's model, swap in value-identical detached clones,
+    deepcopy, then restore the caller's exact original tensor objects.
+    """
+    swapped = []  # (module, attr_name, original_tensor)
+    for module in model.modules():
+        for name, value in vars(module).items():
+            if isinstance(value, torch.Tensor) and not value.is_leaf:
+                setattr(module, name, value.detach().clone())
+                swapped.append((module, name, value))
+    try:
+        return copy.deepcopy(model)
+    finally:
+        for module, name, original in swapped:
+            setattr(module, name, original)
+
+
+class _FixedBaseline:
+    """Baseline family (Raffaello, Leonardo). forward_step mutates the shared cell in place,
+    so wrap a DEEP-COPIED model and quantize cell.potential (Q5.n) / cell.fatigue (Q3.n) after
+    each step. Weights: forward_step re-applies po2 each call, and Q2.n on po2 is a no-op for
+    nfrac>=4, so there is no separate weight hook."""
+
+    def __init__(self, model, nfrac, device="cpu"):
+        self.model = _safe_deepcopy(model)    # protect the live float net from in-place state quant
+        self.device = device
+        self.nfrac = int(nfrac)
+
+    def reset(self):
+        self.model.eval()
+        self.model.reset_state(1, self.device)
+
+    def step(self, obs_norm):
+        p = self.model.forward_step(obs_norm.to(self.device))
+        cell = self.model.layer_hidden.cell
+        with torch.no_grad():
+            cell.potential.copy_(q(cell.potential, _M_VMEM, self.nfrac))
+            cell.fatigue.copy_(q(cell.fatigue, _M_FATIGUE, self.nfrac))
+        return p
+
+    def read_probe(self):
+        cell = self.model.layer_hidden.cell
+        v_mem = cell.potential.detach().cpu().numpy().reshape(-1)
+        spikes = cell.prev_spike.detach().cpu().numpy().reshape(-1)
+        v_th = (cell.base_threshold + cell.fatigue.clamp(min=0)).detach().cpu().numpy().reshape(-1)
+        return {"spikes": spikes, "v_mem": v_mem, "v_th_eff": v_th, "input": None}
+
+    def read_weights(self):
+        lh = self.model.layer_hidden
+        return {"w_in": lh.fc_weight.detach().cpu().numpy(),
+                "w_rec": (lh.rec_U @ lh.rec_V).detach().cpu().numpy(),
+                "w_out": self.model.layer_out.fc_weight.detach().cpu().numpy(),
+                "rank": int(lh.rec_V.shape[0])}
+
+
+class FixedPointBackend:
+    """NetworkBackend: a live Qm.n twin. Family-aware; nfrac is a mutable knob. The readout
+    Q7.n is applied uniformly at infer's output; weights + state quant live in the engine."""
+
+    def __init__(self, model, nfrac=13, device="cpu"):
+        self._nfrac = int(nfrac)
+        self._eventprop = isinstance(model, CF_FSNN_Net_EventProp_Full)
+        if self._eventprop:
+            raise NotImplementedError("EventProp path lands in T3")   # replaced in Task 3
+        self._engine = _FixedBaseline(model, nfrac, device)
+
+    @property
+    def nfrac(self):
+        return self._nfrac
+
+    @nfrac.setter
+    def nfrac(self, value):
+        self._nfrac = int(value)
+        self._engine.nfrac = int(value)      # baseline: plain knob; eventprop (T3): re-quantizes weights
+
+    def reset(self):
+        self._engine.reset()
+
+    def infer(self, obs_norm):
+        p = self._engine.step(obs_norm)
+        return q(p, _M_READOUT, self._nfrac)  # readout Q7.n at infer's output (family-uniform)
+
+    def read_probe(self):
+        return self._engine.read_probe()
+
+    def read_weights(self):
+        return self._engine.read_weights()
