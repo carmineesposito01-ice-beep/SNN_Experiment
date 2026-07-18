@@ -39,6 +39,9 @@ SNNFWD  R3  Fmax=47.943  LUT=2955 FF=1808 DSP=22 BRAM=1  critpath pR_idx->pC1_re
 SNNFWD  R4  Fmax=52.151  LUT=2992 FF=1980 DSP=22 BRAM=1  critpath pR_idx->pCa_Ii  (29 liv, 19.2ns)  [+8.8% su R3]
 #   R4 = split albero reci a meta' (Ca: L1-L2 -> pCa 4 parziali; C1: L3-L4). parity 0/60000. +172 FF.
 #   Collo SALTA su Ii (MAC 4-termini RIPPLE, mai tree-ificato) + mux xbuf variabile. -> R5 = attaccare Ii.
+SNNFWD  R5  Fmax=62.162  LUT=3010 FF=1982 DSP=22 BRAM=1  critpath pR_idx->pCa_Ii  (21 liv, 16.1ns)  [+19.2% su R4]
+#   R5 = Ii ad albero (4->2->1). parity 0/60000. Collo ANCORA Ii ma corto: ora DOMINA il DSP mult (4.6ns)
+#   + mux xbuf + tree. -> i DSP mult (~4ns) sono il nuovo pavimento su ogni path. R6 = isolare i MAC nei registri DSP.
 #
 # --- record grezzi (RESULT/CRITPATH dalla sintesi OOC) ---
 RESULT l2final LUT=7249 FF=2121 DSP=69 BRAM=1 WNS=30.480 Fmax=10.579771476936099

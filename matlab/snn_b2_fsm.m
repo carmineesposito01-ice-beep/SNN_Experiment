@@ -80,11 +80,16 @@ function [raw, valid] = snn_b2_fsm(xn, start) %#codegen
   nCa_Vread = cast(0, 'like', T.V); nCa_fat = cast(0, 'like', T.fatigue);
   if pR_valid
     i = double(pR_idx) + 1;
-    Ii = cast(0, 'like', T.accw);
+    % [2d R5] Ii ad ALBERO (4->2->1) invece del ripple sequenziale: era il collo dopo R4 (~10ns di
+    % CARRY4). Stessa somma, ordine ribilanciato -> bit-exact se accw non satura (verificato dal parity).
+    Ii_p = cast(zeros(4, 1), 'like', T.accw);
     for j = 1:4
       col = double(W.delays(i, j)) + 1;
-      Ii(:) = Ii + cast(cast(W.fc(i, j), 'like', T.w) * xbuf(j, col), 'like', T.accw);
+      Ii_p(j) = cast(cast(W.fc(i, j), 'like', T.w) * xbuf(j, col), 'like', T.accw);
     end
+    Ii_p(1) = cast(Ii_p(1) + Ii_p(2), 'like', T.accw);
+    Ii_p(2) = cast(Ii_p(3) + Ii_p(4), 'like', T.accw);
+    Ii = cast(Ii_p(1) + Ii_p(2), 'like', T.accw);
     % [2d R2] prodotti reci + ALBERO bilanciato (bit-exact se accw non satura, verificato dal parity).
     reci_p = cast(zeros(rnk, 1), 'like', T.accw);
     for r = 1:rnk
