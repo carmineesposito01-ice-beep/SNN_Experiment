@@ -29,6 +29,20 @@ gate isolato `run_block_hdl_gate` PASSATO (4 VHDL, DualPortRAM presente, 0 error
 gate reso sensibile anche alle dipendenze di M (commit `ab232fc8`). ⚠️ Questi numeri sono **OOC + livello
 Simulink**: la prova RTL (testbench HDL) è la Fase B2.0 qui sotto.
 
+**✅ 2d CHIUSO (2026-07-18) — timing SNN→decode + pipelining del core SNN.** Dentro B2.0: **R1-R2** hanno
+portato il controllore **10,58 → 15,84 MHz** (split readout↔decode + reci adder-tree) → il collo LASCIA la
+SNN e diventa il **divisore IIDM**. Il **probe** ha misurato il tetto SNN (~29 pre-pipeline) e provato che il
+controllore è cappato dalla LEGGE IIDM (divisore 15,84 + sqrt 17,30), NON dalla rete. Decisione utente:
+esaurire prima la SNN → **R3-R9 hanno pipelinato il core SNN forward a 99,16 MHz (3,33×)** — 8 stadi
+(`R→Cx→Cm→Ca→C1→C2i→C2a→C2b`), **bit-exact** (`run_b2_parity_dataset` 0/60000 OGNI round), **BANCATO** per
+dopo l'IIDM. Convergenza a 99 (ogni stadio è già 1 op larga ~7-10ns = pavimento aritmetico; ~130 possibile
+ma senza payoff: SNN già 6,3× il cap IIDM). **Controllore validato** con l'SNN 8-stadi: parity 0/60000 +
+**B-1 0/3000**, Fmax **15,67** (invariata, IIDM-capped; −1% da +1069 FF). Dettaglio: **SP4 §Studio 2d** +
+`matlab/hdl_snn/RESULTS.txt`. Harness: `run_2d_round.m`, `probe_snn_fwd.m`, `probe_snn_ceiling.m`. Core
+8-stadi in `matlab/snn_b2_fsm.m`. **→ PROSSIMO FRONTE per alzare DAVVERO il controllore = pipeline
+dell'IIDM (divisore + s_star/sqrt), fixed-point** — la SNN non è più il collo. (2c gate esaustivo full-60k
+resta prima del deploy.)
+
 **AZIONE PENDENTE — 🟢 FASE B2.0 APERTA (2026-07-17): validazione RTL della versione FPGA + report.**
 Decisa dall'utente. SP4 ha *ottimizzato* il blocco; **B2.0 prova che l'RTL generato funziona davvero** e ne
 scrive il report. La **Fase C** (test sull'FPGA *fisica*) resta separata e in attesa.
@@ -78,7 +92,8 @@ scrive il report. La **Fase C** (test sull'FPGA *fisica*) resta separata e in at
     (B-1 full 0/60000 · A-1 · PLANT-PAR · B-LOOP · parity 0/240000): da eseguire prima del deploy finale.
     ⚠️ **Gotcha ambiente:** `bash`→WSL rotto (sospensione) → lanciare gli harness xsim con **Git Bash in testa al
     PATH** (`C:\Program Files\Git\bin`). (L'Esp. B "registri a mano nel netlist" non è stato fatto: A1 già risolve.)
-    **→ PROSSIMO FRONTE verso 11,65 = SNN→decode** (172 liv, nel core) — l'ottimizzazione continua sulla rete.
+    **→ [SUPERATO] il fronte SNN→decode = Studio 2d, ✅ CHIUSO 2026-07-18** (R1-R9): SNN forward pipelinato a
+    99,16 MHz bit-exact; controllore 15,84→15,67 (cappato dal divisore IIDM). Vedi il box «2d CHIUSO» in cima.
   - **2c (validazione COMPLETA full-dataset 60k + gate-level)**: dopo il fronte SNN→decode / prima del deploy.
     Riusa gli harness A+B con `mode` full + il gate esaustivo rinviato sopra.
 - **Fase 3 — `create-report`:** grounded sulla Fase 2 (tecniche: time-mux, FSM a stadi, registro-fra-stadi; drawback).

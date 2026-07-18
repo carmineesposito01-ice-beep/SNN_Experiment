@@ -131,6 +131,61 @@ l'ottimizzazione non è finita. ⚠️ **Gotcha ambiente:** `bash` risolveva su 
 gli harness xsim vanno lanciati con **Git Bash in testa al PATH** (`C:\Program Files\Git\bin`); lo script `.sh`
 usa già path assoluti ai tool Vivado.
 
+## Studio 2d — timing SNN→decode e pipelining del core SNN (✅ CHIUSO, 2026-07-18)
+
+> **Contesto.** Dopo 2b (A1 tanh-LUT integrata) il controllore era a **10,58 MHz**, collo `pR_idx→pv`
+> (readout SNN + decode FUSI, 172 liv). 2d attacca prima il path SNN→decode a livello controllore
+> (R1-R2), poi — con margine enorme scoperto dal probe — **pipeline il core SNN** (R3-R9). Tutto
+> **bit-exact** (`run_b2_parity_dataset` = **0/60000** ad ogni round; core = mirror di `snn_core`).
+
+**R1-R2 (controllore).** R1 = disaccoppia readout↔decode (il latch `rawl` messo DOPO la catena fasi →
+`rawl` diventa un vero registro, decode al ciclo dopo): 10,58 → **14,99 MHz** (+42%). R2 = `reci` (16
+prodotti `W.U·t_lr`) da ripple ad **adder-tree** (16→4 profondità): 14,99 → **15,84 MHz**. Bit-exact
+(parity 0/60000 · B-1 0/3000). **Il collo LASCIA la SNN** → diventa il **divisore IIDM** (`ql_7`, 170
+CARRY4).
+
+**Probe «tetto SNN».** Sintesi standalone `Donatello_Champion` (SNN+decode, NIENTE legge IIDM) +
+spettro path del controllore R2 (top-40 per endpoint): il **tetto SNN vero ≈ 29 MHz** (stage-C
+`pC_fat/pC_V`), il decode è veloce (fuori dai 40 peggiori), il controllore è cappato **dalla LEGGE
+IIDM** — divisore (15,84) + `s_star`/sqrt `st_sab` (17,30). *Headroom 15,84→~29 = tutto nell'IIDM.*
+Decisione utente: **esaurire prima la SNN** (verso i 136 MHz provati dal tanh-L1 in 2b), poi l'IIDM.
+
+**R3-R9 (pipelining del core SNN, misurato con un meter forward-only `probe_snn_fwd` = `snn_b2_fsm`→raw
+standalone, il cui WNS È il tetto SNN).** Ogni round pipeline un pezzo del compute per-neurone (latenza
++1 ciclo/stadio, **GRATIS nel time-mux**; bit-exact per costruzione = stessa aritmetica, solo
+registrata):
+
+| round | leva | Fmax forward | Δ |
+|---|---|---|---|
+| R2 | (stadio-C in 1 ciclo) | 29,75 | — |
+| R3 | split C1(MAC/accumuli) ‖ C2(soglia/update) | 47,94 | +61% |
+| R4 | reci-tree a metà (Ca L1-L2 / C1 L3-L4) | 52,15 | +8,8% |
+| R5 | `Ii` ad albero (4→2→1) | 62,16 | +19% |
+| R6 | stadio MAC (Cm): prodotti reci+Ii registrati | 71,94 | +16% |
+| R7 | split C2 (mis-target, staccato il pezzo corto) | 72,91 | +1,3% |
+| R8 | split C2a a `Vi` (registro tipo-largo via prototipo) | 91,85 | +26% |
+| R9 | split mux `xbuf` ↔ DSP mult (Cx/Cm) | **99,16** | +8% |
+
+Pipeline finale **8 stadi**: `R→Cx→Cm→Ca→C1→C2i→C2a→C2b`. **SNN forward 29,75 → 99,16 MHz (3,33×)**,
+tutti bit-exact 0/60000, +1068 FF, DSP/BRAM piatti.
+
+**Il pavimento.** A R9 ogni stadio è **una singola op larga** (add/sub 28-bit o DSP mult, ~7-10ns): il
+collo è il sub `nC_V = Vi − sib·eth` (28-bit). Il tanh-L1 fece **136** perché era **1 sola LUT** (niente
+aritmetica larga); la SNN è cappata più in basso dai suoi add/mult larghi. **~130 sarebbe raggiungibile**
+con 2-3 round di split di singole op (carry-select / precompute-and-register), **ma senza payoff
+pratico**: la SNN è già **6,3× il cap IIDM** del controllore, e ogni tetto IIDM futuro (~50-80) sta ben
+sotto 99. Decisione utente: **convergere a 99**.
+
+**Chiusura / validazione controllore.** L'SNN 8-stadi è validato NEL blocco deployato
+`Donatello_ACC_IIDM_M`: **parity 0/60000** + **B-1 0/3000** (RTL fresco == blocco). Fmax controllore
+**15,67 MHz** (INVARIATA: cappata dal divisore IIDM `ql_7`, 63,8ns; −1% vs 15,84 R2 da congestione dei
++1069 FF). Risorse controllore: LUT 7384→8230, FF 2114→3183, DSP 69, BRAM 1 — sta comodo su xc7z020.
+
+**Verdetto 2d.** Il forward SNN è pipelinato a **99 MHz bit-exact e BANCATO**: quando si ottimizzerà
+l'IIDM (divisore+sqrt), la rete non sarà più il collo. Curva/dettaglio round in
+`matlab/hdl_snn/RESULTS.txt`. Harness: `matlab/run_2d_round.m` (controllore), `matlab/probe_snn_fwd.m`
+(meter forward), `matlab/probe_snn_ceiling.m` (Champion). Core: `matlab/snn_b2_fsm.m` (8 stadi).
+
 ## Problema (SP3, misurato)
 `Donatello_ACC_IIDM` in fixed sintetizza a **2,0 MHz** (WNS −373 ns @8 MHz, timing non chiude). Path critico
 `pR_idx_reg → acc_3_reg`, **1077 livelli logici**, di cui **CARRY4 = 820 (76%)** dai divisori digit-recurrence
