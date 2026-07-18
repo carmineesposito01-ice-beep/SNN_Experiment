@@ -1,0 +1,18 @@
+# B2.0-2d - Ottimizzazione timing SNN->decode (Donatello_ACC_IIDM_M, xc7z020 OOC @ 8 MHz)
+# Ciclo probe-and-pipeline: ogni round legge il critpath, applica una leva bit-exact, ri-sintetizza.
+# Bit-exact ad ogni round: parity 0/60000 (guardiano DURO del core) + G3 + B-1 RTL 0/3000.
+# Baseline R0 = post-A1 (tanh-LUT integrata, fine 2b). Latenza R0/R1 = 359 clock (<< 800k/control-step).
+#
+# round | leva                                     | Fmax(MHz) | d(R0) | LUT  | FF   | DSP | BRAM | liv | critpath                                | delay(ns)
+# ------|------------------------------------------|-----------|-------|------|------|-----|------|-----|-----------------------------------------|----------
+  R0    | (post-A1: readout+decode FUSI)           | 10.58     |  --   | 7249 | 2121 | 69  | 1    | 172 | pR_idx -> pv_3 (readout+decode fusi)    | 94.513
+  R1    | split readout<->decode (rawl -> registro)| 14.99     | +42%  | 7335 | 2119 | 68  | 1    | 139 | pR_idx -> pC_fat (stage-C reci ripple)  | 66.713
+  R2    | reci adder-tree (16->4 profondita')      | 15.84     | +50%  | 7384 | 2114 | 69  | 1    | 202 | started_not_empty_2 -> ql_7 (control)   | 63.119
+#        (R2: +5,7% su R1; bit-exact 0/60000; area piatta. Il collo LASCIA reci -> ora un path di CONTROLLO
+#         started_not_empty_2 -> ql_7, 202 liv ma 63 ns: LUT-largo/fanout, non aritmetica profonda.)
+#
+# --- record grezzi (RESULT/CRITPATH dalla sintesi OOC) ---
+RESULT l2final LUT=7249 FF=2121 DSP=69 BRAM=1 WNS=30.480 Fmax=10.579771476936099
+CRITPATH l2final from=u_IIDM_CTRL/pR_idx_reg[2]_rep/C to=u_IIDM_CTRL/pv_3_reg[3][19]/D  logic_levels=172 delay=94.513
+RESULT r1 LUT=7335 FF=2119 DSP=68 BRAM=1 WNS=58.280 Fmax=14.98800959232614
+CRITPATH r1 from=u_IIDM_CTRL/pR_idx_reg[2]/C to=u_IIDM_CTRL/pC_fat_reg[15]/D  logic_levels=139 delay=66.713

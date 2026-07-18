@@ -70,10 +70,21 @@ function [raw, valid] = snn_b2_fsm(xn, start) %#codegen
       col = double(W.delays(i, j)) + 1;
       Ii(:) = Ii + cast(cast(W.fc(i, j), 'like', T.w) * xbuf(j, col), 'like', T.accw);
     end
-    reci = cast(0, 'like', T.accw);
+    % [2d R2] accumulo reci ad ALBERO bilanciato (profondita' rnk->log2(rnk)) invece del ripple
+    % sequenziale: taglia il path critico. Bit-exact SE gli intermedi non saturano T.accw (verificato
+    % dal parity 0/60000; il ripple originale non satura sul dataset -> ribilanciare l'ordine e' esatto).
+    % Loop a bound FISSO (lvsz coder.const) -> HDL Coder li srotola come i for gia' presenti; rnk in {8,16}.
+    reci_p = cast(zeros(rnk, 1), 'like', T.accw);
     for r = 1:rnk
-      reci(:) = reci + cast(cast(W.U(i, r), 'like', T.w) * t_lr(r), 'like', T.accw);
+      reci_p(r) = cast(cast(W.U(i, r), 'like', T.w) * t_lr(r), 'like', T.accw);
     end
+    lvsz = coder.const(round(rnk ./ 2 .^ (1:log2(rnk))));   % rnk=16 -> [8 4 2 1]
+    for lev = 1:numel(lvsz)
+      for q = 1:lvsz(lev)
+        reci_p(q) = cast(reci_p(2*q - 1) + reci_p(2*q), 'like', T.accw);
+      end
+    end
+    reci = reci_p(1);
     % (Ii+reci) RESTA in T.accw (Q8.17): il cast a T.V (Q5.13) buttava i 4 bit frazionari extra
     % di accw PRIMA del confronto di soglia -> spike decisi diversamente da snn_core quando Vi cade
     % entro ~2^-14 da eth (misurato: 82,4% dei control-step del dataset divergenti). Vedi HDL_PHASE §2.1.
