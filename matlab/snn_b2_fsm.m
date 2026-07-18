@@ -9,7 +9,8 @@ function [raw, valid] = snn_b2_fsm(xn, start) %#codegen
 
   persistent Vram fatram xbuf xnreg t_lr t_lr_nxt V_LI wacc ...
              tickc rc written phase ...
-             pR_valid pR_idx pCa_valid pCa_idx pCa_reci pCa_Ii pCa_Vread pCa_fat ...
+             pR_valid pR_idx pCm_valid pCm_idx pCm_Iip pCm_recip pCm_Vread pCm_fat ...
+             pCa_valid pCa_idx pCa_reci pCa_Ii pCa_Vread pCa_fat ...
              pC1_valid pC1_idx pC1_Ii pC1_reci pC1_Vread pC1_fat ...
              pC_valid pC_idx pC_V pC_fat rawreg inited
   if isempty(inited)
@@ -23,6 +24,9 @@ function [raw, valid] = snn_b2_fsm(xn, start) %#codegen
     wacc = cast(zeros(out, 1), 'like', T.raw);
     tickc = uint8(0); rc = uint8(0); written = uint8(0); phase = uint8(0);
     pR_valid = false; pR_idx = uint8(0);
+    pCm_valid = false; pCm_idx = uint8(0);
+    pCm_Iip = cast(zeros(4, 1), 'like', T.accw); pCm_recip = cast(zeros(rnk, 1), 'like', T.accw);
+    pCm_Vread = cast(0, 'like', T.V); pCm_fat = cast(0, 'like', T.fatigue);
     pCa_valid = false; pCa_idx = uint8(0);
     pCa_reci = cast(zeros(rnk/4, 1), 'like', T.accw);   % rnk/4 somme parziali (dopo 2 livelli d'albero)
     pCa_Ii = cast(0, 'like', T.accw);
@@ -69,41 +73,50 @@ function [raw, valid] = snn_b2_fsm(xn, start) %#codegen
     written = written + uint8(1);
   end
 
-  % --- STADIO Ca (MAC + PRIMA meta' dell'albero reci): dal neurone pR ---
-  % [2d R4] spezzo la catena reci: Ca fa i prodotti + i primi 2 livelli d'albero (16->4), C1 finisce
-  % l'albero (4->1). Registro le rnk/4 somme parziali -> dimezza il path di C1(R3). Bit-exact: le
-  % parziali dopo 2 livelli sono identiche, cambia solo DOVE le registro (a meta' albero).
+  % --- STADIO Cm (MAC: 16 prodotti reci + 4 prodotti Ii, REGISTRATI): dal neurone pR ---
+  % [2d R6] isolo i moltiplicatori: Cm calcola e REGISTRA i prodotti (uscite DSP), Ca fa gli alberi dai
+  % prodotti registrati -> il DSP mult (~4,6ns) esce dal path degli alberi (mappato sul registro P del DSP48).
+  % Bit-exact: stessi prodotti, solo registrati.
+  nCm_valid = false; nCm_idx = uint8(0);
+  nCm_Iip = cast(zeros(4, 1), 'like', T.accw);
+  nCm_recip = cast(zeros(rnk, 1), 'like', T.accw);
+  nCm_Vread = cast(0, 'like', T.V); nCm_fat = cast(0, 'like', T.fatigue);
+  if pR_valid
+    i = double(pR_idx) + 1;
+    for j = 1:4
+      col = double(W.delays(i, j)) + 1;
+      nCm_Iip(j) = cast(cast(W.fc(i, j), 'like', T.w) * xbuf(j, col), 'like', T.accw);
+    end
+    for r = 1:rnk
+      nCm_recip(r) = cast(cast(W.U(i, r), 'like', T.w) * t_lr(r), 'like', T.accw);
+    end
+    nCm_Vread = Vread; nCm_fat = fatread;
+    nCm_valid = true; nCm_idx = pR_idx;
+  end
+
+  % --- STADIO Ca (alberi: Ii 4->1, reci L1-L2 16->4): dai prodotti registrati pCm ---
   kmid = coder.const(rnk / 4);                    % rnk=16 -> 4 parziali dopo 2 livelli
   nCa_valid = false; nCa_idx = uint8(0);
   nCa_reci = cast(zeros(kmid, 1), 'like', T.accw);
   nCa_Ii = cast(0, 'like', T.accw);
   nCa_Vread = cast(0, 'like', T.V); nCa_fat = cast(0, 'like', T.fatigue);
-  if pR_valid
-    i = double(pR_idx) + 1;
-    % [2d R5] Ii ad ALBERO (4->2->1) invece del ripple sequenziale: era il collo dopo R4 (~10ns di
-    % CARRY4). Stessa somma, ordine ribilanciato -> bit-exact se accw non satura (verificato dal parity).
-    Ii_p = cast(zeros(4, 1), 'like', T.accw);
-    for j = 1:4
-      col = double(W.delays(i, j)) + 1;
-      Ii_p(j) = cast(cast(W.fc(i, j), 'like', T.w) * xbuf(j, col), 'like', T.accw);
-    end
+  if pCm_valid
+    % Ii ad albero (4->2->1) dai prodotti registrati
+    Ii_p = pCm_Iip;
     Ii_p(1) = cast(Ii_p(1) + Ii_p(2), 'like', T.accw);
     Ii_p(2) = cast(Ii_p(3) + Ii_p(4), 'like', T.accw);
-    Ii = cast(Ii_p(1) + Ii_p(2), 'like', T.accw);
-    % [2d R2] prodotti reci + ALBERO bilanciato (bit-exact se accw non satura, verificato dal parity).
-    reci_p = cast(zeros(rnk, 1), 'like', T.accw);
-    for r = 1:rnk
-      reci_p(r) = cast(cast(W.U(i, r), 'like', T.w) * t_lr(r), 'like', T.accw);
-    end
-    lvsz_a = coder.const(round(rnk ./ 2 .^ (1:2)));   % primi 2 livelli: rnk=16 -> [8 4]
+    nCa_Ii  = cast(Ii_p(1) + Ii_p(2), 'like', T.accw);
+    % reci: primi 2 livelli d'albero (16->4) dai prodotti registrati
+    reci_p = pCm_recip;
+    lvsz_a = coder.const(round(rnk ./ 2 .^ (1:2)));   % rnk=16 -> [8 4]
     for lev = 1:2
       for q = 1:lvsz_a(lev)
         reci_p(q) = cast(reci_p(2*q - 1) + reci_p(2*q), 'like', T.accw);
       end
     end
     nCa_reci = reci_p(1:kmid);            % rnk/4 somme parziali (T.accw)
-    nCa_Ii = Ii; nCa_Vread = Vread; nCa_fat = fatread;
-    nCa_valid = true; nCa_idx = pR_idx;
+    nCa_Vread = pCm_Vread; nCa_fat = pCm_fat;
+    nCa_valid = true; nCa_idx = pCm_idx;
   end
 
   % --- STADIO C1 (SECONDA meta' dell'albero reci): dal registro pCa ---
@@ -154,8 +167,9 @@ function [raw, valid] = snn_b2_fsm(xn, start) %#codegen
     rc = rc + uint8(1);
   end
 
-  % avanza i registri pipeline (R -> Ca -> C1 -> C2 -> write)
+  % avanza i registri pipeline (R -> Cm -> Ca -> C1 -> C2 -> write)
   pR_valid = nR_valid; pR_idx = nR_idx;
+  pCm_valid = nCm_valid; pCm_idx = nCm_idx; pCm_Iip = nCm_Iip; pCm_recip = nCm_recip; pCm_Vread = nCm_Vread; pCm_fat = nCm_fat;
   pCa_valid = nCa_valid; pCa_idx = nCa_idx; pCa_reci = nCa_reci; pCa_Ii = nCa_Ii; pCa_Vread = nCa_Vread; pCa_fat = nCa_fat;
   pC1_valid = nC1_valid; pC1_idx = nC1_idx; pC1_Ii = nC1_Ii; pC1_reci = nC1_reci; pC1_Vread = nC1_Vread; pC1_fat = nC1_fat;
   pC_valid = nC_valid; pC_idx = nC_idx; pC_V = nC_V; pC_fat = nC_fat;
@@ -167,7 +181,7 @@ function [raw, valid] = snn_b2_fsm(xn, start) %#codegen
     t_lr = t_lr_nxt;
     t_lr_nxt = cast(zeros(rnk, 1), 'like', T.acc);
     written = uint8(0); rc = uint8(0);
-    pR_valid = false; pCa_valid = false; pC1_valid = false; pC_valid = false;
+    pR_valid = false; pCm_valid = false; pCa_valid = false; pC1_valid = false; pC_valid = false;
     if tickc >= uint8(nt - 1)
       rawreg = V_LI; raw = V_LI; valid = true;
       phase = uint8(0); tickc = uint8(0);

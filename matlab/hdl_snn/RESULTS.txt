@@ -42,6 +42,9 @@ SNNFWD  R4  Fmax=52.151  LUT=2992 FF=1980 DSP=22 BRAM=1  critpath pR_idx->pCa_Ii
 SNNFWD  R5  Fmax=62.162  LUT=3010 FF=1982 DSP=22 BRAM=1  critpath pR_idx->pCa_Ii  (21 liv, 16.1ns)  [+19.2% su R4]
 #   R5 = Ii ad albero (4->2->1). parity 0/60000. Collo ANCORA Ii ma corto: ora DOMINA il DSP mult (4.6ns)
 #   + mux xbuf + tree. -> i DSP mult (~4ns) sono il nuovo pavimento su ogni path. R6 = isolare i MAC nei registri DSP.
+SNNFWD  R6  Fmax=71.942  LUT=3078 FF=2551 DSP=22 BRAM=1  critpath pC1_Vread->pC_fat (21 liv, 13.9ns)  [+15.7% su R5]
+#   R6 = stadio MAC (Cm): 16 prod reci + 4 prod Ii REGISTRATI (fabric, +569 FF). Pipeline R->Cm->Ca->C1->C2.
+#   parity 0/60000. Collo -> C2 (Vi + soglia + nC_fat DSP mult). -> R7 = split C2 a nC_V (tipi noti).
 #
 # --- record grezzi (RESULT/CRITPATH dalla sintesi OOC) ---
 RESULT l2final LUT=7249 FF=2121 DSP=69 BRAM=1 WNS=30.480 Fmax=10.579771476936099
