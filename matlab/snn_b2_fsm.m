@@ -12,6 +12,7 @@ function [raw, valid] = snn_b2_fsm(xn, start) %#codegen
              pR_valid pR_idx pCm_valid pCm_idx pCm_Iip pCm_recip pCm_Vread pCm_fat ...
              pCa_valid pCa_idx pCa_reci pCa_Ii pCa_Vread pCa_fat ...
              pC1_valid pC1_idx pC1_Ii pC1_reci pC1_Vread pC1_fat ...
+             pC2i_valid pC2i_idx pC2i_Vi pC2i_eth pC2i_fat ...
              pC2a_valid pC2a_idx pC2a_nCV pC2a_sib pC2a_fat ...
              pC_valid pC_idx pC_V pC_fat rawreg inited
   if isempty(inited)
@@ -35,6 +36,14 @@ function [raw, valid] = snn_b2_fsm(xn, start) %#codegen
     pC1_valid = false; pC1_idx = uint8(0);
     pC1_Ii = cast(0, 'like', T.accw); pC1_reci = cast(0, 'like', T.accw);
     pC1_Vread = cast(0, 'like', T.V); pC1_fat = cast(0, 'like', T.fatigue);
+    % [2d R8] prototipi dei tipi LARGHI di Vi/eth (l'addizione fixed li allarga oltre T.V): servono per
+    % registrarli fra C2i (Vi/eth) e C2a (soglia/nC_V) senza conflitto di tipo in codegen.
+    zV = cast(0, 'like', T.V); zA = cast(0, 'like', T.accw); zF = cast(0, 'like', T.fatigue);
+    Vi0  = cast(zV - bitsra(zV, sh), 'like', T.V) + (zA + zA);
+    eth0 = cast(zV, 'like', T.V) + cast(max(zF, zF), 'like', T.V);
+    pC2i_valid = false; pC2i_idx = uint8(0);
+    pC2i_Vi = cast(0, 'like', Vi0); pC2i_eth = cast(0, 'like', eth0);
+    pC2i_fat = cast(0, 'like', T.fatigue);
     pC2a_valid = false; pC2a_idx = uint8(0);
     pC2a_nCV = cast(0, 'like', T.V); pC2a_sib = cast(0, 'like', T.V);
     pC2a_fat = cast(0, 'like', T.fatigue);
@@ -140,21 +149,31 @@ function [raw, valid] = snn_b2_fsm(xn, start) %#codegen
     nC1_valid = true; nC1_idx = pCa_idx;
   end
 
-  % --- STADIO C2a (Vi + soglia + nC_V + accumulo readout): dal registro pC1 ---
-  % [2d R7] spezzo C2: C2a fa Vi/eth/si/nC_V (+ accumuli wacc/t_lr), C2b il nC_fat (col DSP mult sib*tj).
-  % Registro nC_V (T.V), sib (T.V), fat (T.fatigue): tipi NOTI -> Vi/eth larghi restano locali in C2a.
+  % --- STADIO C2i (calcola Vi ed eth, tipi larghi 28-bit): dal registro pC1 ---
+  % [2d R8] separo Vi/eth (catena di add 28-bit, era il collo in C2a-R7) dalla soglia/nC_V: C2i li produce
+  % e REGISTRA (tipi larghi via prototipo Vi0/eth0 in init; init nel corpo via 'like' pC2i_*). Bit-exact.
+  nC2i_valid = false; nC2i_idx = uint8(0);
+  nC2i_Vi = cast(0, 'like', pC2i_Vi); nC2i_eth = cast(0, 'like', pC2i_eth);
+  nC2i_fat = cast(0, 'like', T.fatigue);
+  if pC1_valid
+    i2 = double(pC1_idx) + 1;
+    nC2i_Vi  = cast(pC1_Vread - bitsra(pC1_Vread, sh), 'like', T.V) + (pC1_Ii + pC1_reci);
+    nC2i_eth = cast(W.bth(i2), 'like', T.V) + cast(max(pC1_fat, cast(0,'like',T.fatigue)), 'like', T.V);
+    nC2i_fat = pC1_fat;
+    nC2i_valid = true; nC2i_idx = pC1_idx;
+  end
+
+  % --- STADIO C2a (soglia + nC_V + accumulo readout): dal registro pC2i ---
   nC2a_valid = false; nC2a_idx = uint8(0);
   nC2a_nCV = cast(0, 'like', T.V); nC2a_sib = cast(0, 'like', T.V);
   nC2a_fat = cast(0, 'like', T.fatigue);
-  if pC1_valid
-    i2  = double(pC1_idx) + 1;
-    Vi  = cast(pC1_Vread - bitsra(pC1_Vread, sh), 'like', T.V) + (pC1_Ii + pC1_reci);
-    eth = cast(W.bth(i2), 'like', T.V) + cast(max(pC1_fat, cast(0,'like',T.fatigue)), 'like', T.V);
-    si  = Vi >= eth;
+  if pC2i_valid
+    i2  = double(pC2i_idx) + 1;
+    si  = pC2i_Vi >= pC2i_eth;
     sib = cast(si, 'like', T.V);
-    nC2a_nCV = cast(Vi - sib * eth, 'like', T.V);
-    nC2a_sib = sib; nC2a_fat = pC1_fat;
-    nC2a_valid = true; nC2a_idx = pC1_idx;
+    nC2a_nCV = cast(pC2i_Vi - sib * pC2i_eth, 'like', T.V);
+    nC2a_sib = sib; nC2a_fat = pC2i_fat;
+    nC2a_valid = true; nC2a_idx = pC2i_idx;
     if si
       for o = 1:out
         wacc(o) = cast(wacc(o) + W.Wout(o, i2), 'like', T.raw);
@@ -187,6 +206,7 @@ function [raw, valid] = snn_b2_fsm(xn, start) %#codegen
   pCm_valid = nCm_valid; pCm_idx = nCm_idx; pCm_Iip = nCm_Iip; pCm_recip = nCm_recip; pCm_Vread = nCm_Vread; pCm_fat = nCm_fat;
   pCa_valid = nCa_valid; pCa_idx = nCa_idx; pCa_reci = nCa_reci; pCa_Ii = nCa_Ii; pCa_Vread = nCa_Vread; pCa_fat = nCa_fat;
   pC1_valid = nC1_valid; pC1_idx = nC1_idx; pC1_Ii = nC1_Ii; pC1_reci = nC1_reci; pC1_Vread = nC1_Vread; pC1_fat = nC1_fat;
+  pC2i_valid = nC2i_valid; pC2i_idx = nC2i_idx; pC2i_Vi = nC2i_Vi; pC2i_eth = nC2i_eth; pC2i_fat = nC2i_fat;
   pC2a_valid = nC2a_valid; pC2a_idx = nC2a_idx; pC2a_nCV = nC2a_nCV; pC2a_sib = nC2a_sib; pC2a_fat = nC2a_fat;
   pC_valid = nC_valid; pC_idx = nC_idx; pC_V = nC_V; pC_fat = nC_fat;
 
@@ -197,7 +217,7 @@ function [raw, valid] = snn_b2_fsm(xn, start) %#codegen
     t_lr = t_lr_nxt;
     t_lr_nxt = cast(zeros(rnk, 1), 'like', T.acc);
     written = uint8(0); rc = uint8(0);
-    pR_valid = false; pCm_valid = false; pCa_valid = false; pC1_valid = false; pC2a_valid = false; pC_valid = false;
+    pR_valid = false; pCm_valid = false; pCa_valid = false; pC1_valid = false; pC2i_valid = false; pC2a_valid = false; pC_valid = false;
     if tickc >= uint8(nt - 1)
       rawreg = V_LI; raw = V_LI; valid = true;
       phase = uint8(0); tickc = uint8(0);
