@@ -11,6 +11,8 @@ snn_traj_fixed_r8_mex.*
 hdlsrc_*/
 # Fase B2.0-2b — VHDL delle varianti di pipeline (rigenerabile via probe_pipe_tanh) + sintesi OOC
 hdl_pipe/
+# Fase B2.0-2b — VHDL del DUT tanh L1 (rigenerabile via build_tanhdut) + sintesi OOC
+hdl_tanh/
 axi/champion/xsim.dir/
 axi/champion/*.jou
 axi/champion/*.log
