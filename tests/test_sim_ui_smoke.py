@@ -580,6 +580,17 @@ def test_app_nfrac_slider_disabled_unless_fixed_point(qapp):
     win._ghost_mode.setCurrentText("Fixed-point")
     assert win._nfrac_slider.isEnabled() is True
 
+def test_app_switching_off_fixed_point_restores_the_oracle(qapp):
+    """The symmetric branch: leaving Fixed-point rebuilds the ghost back to the ideal oracle
+    (backend=None) and re-greys the slider. Fails if _on_ghost_mode_changed only rebuilds one way."""
+    from sim.fixed_backend import FixedPointBackend
+    win = SimApp(CHAMP)
+    win._ghost_mode.setCurrentText("Fixed-point")
+    assert isinstance(win.loop.ghost.backend, FixedPointBackend)
+    win._ghost_mode.setCurrentText("Oracolo (ideale)")
+    assert win.loop.ghost.backend is None                       # rebuilt back to the ideal oracle
+    assert win._nfrac_slider.isEnabled() is False               # slider greys off again
+
 
 # --- checkpoint identity: file browser + honest header ---
 def test_app_header_states_the_real_identity_not_a_guess(qapp):
