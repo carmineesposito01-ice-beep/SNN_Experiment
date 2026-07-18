@@ -45,6 +45,9 @@ SNNFWD  R5  Fmax=62.162  LUT=3010 FF=1982 DSP=22 BRAM=1  critpath pR_idx->pCa_Ii
 SNNFWD  R6  Fmax=71.942  LUT=3078 FF=2551 DSP=22 BRAM=1  critpath pC1_Vread->pC_fat (21 liv, 13.9ns)  [+15.7% su R5]
 #   R6 = stadio MAC (Cm): 16 prod reci + 4 prod Ii REGISTRATI (fabric, +569 FF). Pipeline R->Cm->Ca->C1->C2.
 #   parity 0/60000. Collo -> C2 (Vi + soglia + nC_fat DSP mult). -> R7 = split C2 a nC_V (tipi noti).
+SNNFWD  R7  Fmax=72.913  LUT=3101 FF=2594 DSP=22 BRAM=1  critpath pC1_Vread->pC2a_nCV (21 liv, 13.7ns)  [+1.3% su R6]
+#   R7 = split C2 in C2a(Vi/soglia/nC_V) + C2b(nC_fat DSP). parity 0/60000. MA quasi nullo: ho staccato il
+#   pezzo CORTO (nC_fat); il collo e' la catena Vi-add+soglia+nC_V (28-bit) in C2a. -> R8 = split C2a a Vi.
 #
 # --- record grezzi (RESULT/CRITPATH dalla sintesi OOC) ---
 RESULT l2final LUT=7249 FF=2121 DSP=69 BRAM=1 WNS=30.480 Fmax=10.579771476936099
