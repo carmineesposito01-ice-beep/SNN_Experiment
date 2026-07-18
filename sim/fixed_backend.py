@@ -101,6 +101,64 @@ class _FixedBaseline:
                 "rank": int(lh.rec_V.shape[0])}
 
 
+class FixedPointEventPropStepper(EventPropStepper):
+    """EventProp path (Donatello, Michelangelo -- the FPGA-deployed family). Reuses the
+    stepper's explicit forward and adds Qm.n at the three points: weights Q2.n (re-quantized
+    on nfrac change), ALIF state V->Q5.n / fatigue->Q3.n per internal tick, readout Q7.n
+    applied by FixedPointBackend at infer's output. Its state is its own (separate instance),
+    so no model copy is needed -- it reads the model weights read-only, exactly as the live
+    EventPropStepper(model) already does.
+
+    The n_ticks loop is copied (not super().step) on purpose: the faithful model quantizes the
+    V/fatigue REGISTERS every tick, and sim/eventprop_stepper.py is frozen (no per-tick hook to
+    add). Keep this loop in lockstep with EventPropStepper.step if the frozen original changes.
+    """
+
+    def __init__(self, model, nfrac):
+        super().__init__(model)              # sets po2 weights + resets state
+        self._nfrac = int(nfrac)
+        self._requantize_weights()
+
+    def _requantize_weights(self):
+        n = self._nfrac
+        h = self.model.layer_hidden
+        with torch.no_grad():
+            w_po2 = po2_quantize(h.fc_weight)
+            self._w_masked = [q(w_po2 * h.delay_masks[d], _M_WEIGHT, n)
+                              for d in range(self.max_delay)]
+            self._rec_full = q(po2_quantize(h.rec_U) @ po2_quantize(h.rec_V), _M_WEIGHT, n)
+            self._w_out = q(po2_quantize(self.model.layer_out.weight), _M_WEIGHT, n)
+
+    @property
+    def nfrac(self):
+        return self._nfrac
+
+    @nfrac.setter
+    def nfrac(self, value):
+        self._nfrac = int(value)
+        self._requantize_weights()           # live: no rebuild, picks up going forward
+
+    @torch.no_grad()
+    def step(self, x_norm):
+        n = self._nfrac
+        self._last_x = x_norm.detach().cpu().numpy().reshape(-1)
+        for _ in range(self.n_ticks):
+            self._x_hist.append(x_norm)
+            I = torch.zeros(self._B, self.out_dim, device=self._device)
+            for d in range(self.max_delay):
+                I = I + F.linear(self._x_hist[-1 - d], self._w_masked[d])
+            drive = I + F.linear(self._s_prev, self._rec_full)
+            V_pre = self.alpha_m * self._V + drive
+            V_th = self._base_th + self._fatigue.clamp(min=0)
+            fired = (V_pre > V_th).float()
+            self._V = q(V_pre - fired * V_th, _M_VMEM, n)                                    # Q5.n
+            self._fatigue = q(self.alpha_f * self._fatigue + fired * self._thresh_jump.clamp(min=0),
+                              _M_FATIGUE, n)                                                 # Q3.n
+            self._s_prev = fired
+            self._V_out = self._alpha_out * self._V_out + F.linear(fired, self._w_out)
+        return self.model._decode_params(self._V_out)
+
+
 class FixedPointBackend:
     """NetworkBackend: a live Qm.n twin. Family-aware; nfrac is a mutable knob. The readout
     Q7.n is applied uniformly at infer's output; weights + state quant live in the engine."""
@@ -109,8 +167,9 @@ class FixedPointBackend:
         self._nfrac = int(nfrac)
         self._eventprop = isinstance(model, CF_FSNN_Net_EventProp_Full)
         if self._eventprop:
-            raise NotImplementedError("EventProp path lands in T3")   # replaced in Task 3
-        self._engine = _FixedBaseline(model, nfrac, device)
+            self._engine = FixedPointEventPropStepper(model, nfrac)   # own state, reads weights read-only
+        else:
+            self._engine = _FixedBaseline(model, nfrac, device)
 
     @property
     def nfrac(self):

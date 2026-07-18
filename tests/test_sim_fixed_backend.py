@@ -12,6 +12,7 @@ if REPO not in sys.path:
 from utils.champion_io import load_champion               # noqa: E402
 from sim.backend import SoftwareBackend                    # noqa: E402
 from sim.fixed_backend import q, FixedPointBackend          # noqa: E402
+from sim.eventprop_stepper import EventPropStepper          # noqa: E402
 
 CHAMP_BASELINE = os.path.join(REPO, "champions", "R33_C2_A1_T12_fix", "best_model.pt")
 CHAMP_EVENTPROP = os.path.join(REPO, "champions", "PE_t05_gp0002", "best_model.pt")
@@ -108,3 +109,40 @@ def test_nfrac_change_moves_the_output_baseline():
     be2 = FixedPointBackend(model, nfrac=5); be2.reset()
     p5 = be2.infer(obs).clone()
     assert not torch.equal(p13, p5)                            # the knob is observable at infer's output
+
+
+# --------------------------- EventProp path ---------------------------
+def _skip_if_no_eventprop():
+    if not os.path.exists(CHAMP_EVENTPROP):
+        pytest.skip("eventprop champion not present")
+
+def test_backend_contract_eventprop():
+    _skip_if_no_eventprop()
+    be = FixedPointBackend(load_champion(CHAMP_EVENTPROP).model, nfrac=13)
+    be.reset()
+    out = be.infer(torch.tensor([[0.4, 0.3, 0.5, 0.3]], dtype=torch.float32))
+    assert tuple(out.shape) == (1, 5)
+    assert be.read_weights()["rank"] > 0
+
+def test_eventprop_twin_has_independent_state():
+    """Stepping the fixed twin never moves a separate live EventPropStepper's state."""
+    _skip_if_no_eventprop()
+    model = load_champion(CHAMP_EVENTPROP).model
+    live = EventPropStepper(model); live.reset()
+    be = FixedPointBackend(model, nfrac=5); be.reset()
+    v_live_before = live._V.clone()
+    obs = torch.tensor([[0.4, 0.3, 0.5, 0.3]], dtype=torch.float32)
+    for _ in range(5):
+        be.infer(obs)                                          # step ONLY the twin
+    assert torch.equal(live._V, v_live_before)                # the live stepper's state is untouched
+
+def test_eventprop_nfrac_requantizes_weights():
+    """Mutating nfrac re-quantizes the weights. Observable BELOW the no-op floor (nfrac<4):
+    at Q2.3 the 2^-4 po2 weights round to 0."""
+    _skip_if_no_eventprop()
+    model = load_champion(CHAMP_EVENTPROP).model
+    be = FixedPointBackend(model, nfrac=13)
+    w13 = be._engine._w_out.clone()
+    be.nfrac = 3
+    w3 = be._engine._w_out.clone()
+    assert not torch.equal(w13, w3)                            # weights really re-quantized
