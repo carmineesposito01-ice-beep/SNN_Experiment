@@ -6,6 +6,10 @@
 > `cf-fsnn-parallel-tracks.md` copre le stesse tracce in più dettaglio, **ma può essere STALE e viene
 > iniettata prima che tu legga qualsiasi doc**: se memoria e questo file divergono su stato o azioni,
 > **vince questo file**. La memoria è un supplemento, non una dipendenza — **questo file deve bastare da solo**.
+> **⚠️ Precedenza INTERNA**: se sezioni diverse di questo file divergono, **vince quella in cima** (§DOVE SIAMO
+> + §AZIONI PENDENTI, datate/verificate). Le sezioni più in basso (Design phase, Cosa fare adesso, How to work,
+> le voci numerate) sono **snapshot storici al loro momento** e portano numeri/stati datati: NON sono lo stato
+> corrente, e i loro numeri "diversi" sono istantanee, non regressioni.
 
 ## 📍 DOVE SIAMO (verificato 2026-07-18)
 
@@ -378,7 +382,7 @@ history) e nella **mappa** `document/SIMULATOR_ARCHITECTURE.md`.
    `[nessuno|Oracolo (ideale)|Fixed-point]` + slider nfrac (attivo SOLO in Fixed-point); l'etichetta del ghost
    sulla strada **nomina cosa È** (`fixed-point (nfrac=X)` vs `oracolo`). spec
    `…/specs/2026-07-18-fixed-point-twin-design.md` → plan `…/plans/2026-07-18-fixed-point-twin.md` → **TDD
-   subagent-driven** (`deeeca1d`→`7edb6659`, 6 commit). **415 test verdi · core bit-identico (diff frozen VUOTO)
+   subagent-driven** (`deeeca1d`→`7edb6659`, 8 commit; + `a26bbf57`/`791e0902` doc). **415 test verdi · core bit-identico (diff frozen VUOTO)
    · render-verificato (tema scuro vero).** ⚠️ **Scoperta chiave**: le Q2.n sui pesi po2 sono un **no-op per
    nfrac≥4** (`po2_quantize` clampa l'esponente a [-4,1]) → l'effetto dello slider vive nello **STATO**, ed è lì
    che la monotonicità morde (div(nfrac=5)≈0.064 ≫ div(13)≈3e-5, ~2000×). **Rappresentativo, NON bit-exact
@@ -430,7 +434,7 @@ Then a **QA + optimization session**: fixed 2 real bugs (top-down speed>1 drift,
 perf via a 5-agent workflow — per-paint −30% (NetState freeze/LUT), redraw throttled to ~15fps
 (physics/Road stay 30fps), probe getter memo, reconstruct **7.7s→0.74s** (~10×).
 
-**Design phase (current)**:
+**Design phase** (⚠️ **storico — snapshot al loro momento; per lo stato VIVO vedi §AZIONI PENDENTI in cima**):
 - ① **Champion selector** — ✅ DONE (`5cd074f`): live-swap the 4 champions; rebuilds backend +
   topology + per-family energy (BPTT rank-8 / EventProp rank-16).
 - ② **Meso/Macro analysis mode** — ✅ **DONE** (T1–T5 + **page v2**). Toggle Live↔Meso/Macro; the page =
@@ -457,8 +461,9 @@ perf via a 5-agent workflow — per-paint −30% (NetState freeze/LUT), redraw t
   bold bar/gauge plot that fills the card + the '?'-tooltipped values; ρ gauge on a `[0,max(2,ρ·1.15)]`
   scale with the ρ=1 boundary line (render-verified on both champions: green sliver 0.057 vs red 2.99
   crossing the line). Replaces the bland white columnar card. `set_summary` signature unchanged.
-  **REMAINS: float-vs-fixed A/B** (⚠️ needs a fixed-point Qm.n SW forward that does NOT exist yet — maybe
-  port from the Simulink_Importer/HDL track).
+  **float-vs-fixed A/B: ✅ FATTO (2026-07-18)** come **gemello fixed-point live** (Azione 7,
+  `sim/fixed_backend.py` — il forward Qm.n SW che "non esisteva" ora esiste). Dettaglio in §AZIONI PENDENTI
+  item 7; l'**Approccio B** (datapath bit-exact all'FPGA) è in **riserva**.
 - **Distribution** ✅ (`48b0333`): **conda `environment.yml` + `run_simulator.bat`** (creates `cf_sim`,
   applies the OMP #15 libomp rename, launches) — the proven plug&play path; `README_SIM.md`;
   `requirements-sim.txt` reclassified as a pip **fallback** (conda-forge PySide6 bundles the MSVC runtime,
@@ -499,8 +504,9 @@ perf via a 5-agent workflow — per-paint −30% (NetState freeze/LUT), redraw t
 
 ## ▶️ Cosa fare adesso
 
-→ **Vedi §AZIONI PENDENTI in cima a questo file** (unica fonte). In una riga: **ciclo 1/3 = oracolo ghost,
-spec approvata, tocca al plan**; i cicli 2 e 3 sono da brainstormare; merge e A/B restano rinviati.
+→ **Vedi §AZIONI PENDENTI in cima a questo file** (unica fonte). In una riga (al 2026-07-18): **cicli 1-5 e
+l'Azione 7 (gemello fixed-point live) TUTTI ✅ FATTI**; l'immediata è **aggiungere/generalizzare una
+funzionalità, scope dall'utente** (poi brainstorming → spec → plan → TDD); Approccio B e merge in riserva/rinviati.
 Questa sezione non duplica più l'elenco per non farlo divergere.
 
 **Meso page map** (reference): `sim/ui/meso_page.py` (scenario selector + road strip + 2×2 grid) ·
@@ -512,17 +518,17 @@ Questa sezione non duplica più l'elenco per non farlo divergere.
 
 ## 🛠️ How to work (setup + discipline)
 
-- **Env**: `cf_sim` (conda). Tests/GUI: `conda run -n cf_sim python ...`.
-- **Tests**: run the 20 `test_sim_*.py` files **explicitly** (non-sim tests fail in cf_sim): `state
-  backend stepper scenario events probe replay loop eventprop input_capture trajectory layout panels
-  ui_smoke reconstruct platoon meso_panels meso_road episode postrun` **+ `scenario_spec` (21°, dal ciclo 3)**.
-  ⚠️ **dal ciclo 2 aggiungere anche `tests/test_champion_io.py`**: `champion_io` è `utils/`, non `sim/`, e **gira
-  verde in `cf_sim`** (l'avvertenza generica "i test non-sim falliscono" NON vale per lui).
-  **224 verdi (2026-07-15: 148 pre-ghost + 19 ghost + 32 identità + 25 costruttore).**
+- **Env**: `cf_sim` (conda). Tests/GUI: **il python dell'env DIRETTO sul PATH** (⚠️ `conda run … pytest` crasha
+  a intermittenza — runner affidabile nel §DOVE SIAMO in cima).
+- **Tests**: la **glob SIM** — `pytest tests/test_sim_*.py tests/test_champion_io.py` (**NON** `pytest tests/`:
+  gli script del track FPGA in `tests/`, es. `test_fpga_io.py`, fanno `sys.exit()` all'import e abortiscono la
+  collection). **Non enumerare i file a mano** — deriva (erano ~20, oggi sono **39**). `champion_io` è `utils/`,
+  non `sim/`, ma **gira verde in `cf_sim`**. **415 verdi al 2026-07-18** (conteggio autorevole in §DOVE SIAMO).
   ⚠️ **Numeri "diversi" che troverai in giro = istantanee datate, NON regressioni** (erano veri al loro
   commit): test **135**, **142** (roadmap ~righe 201/205, era Fase 3–4), **148** (roadmap riga ~212 + spec/plan
   dell'oracolo = baseline pre-ghost), **167/176** (spec/plan del ciclo 2 = baseline pre-identità) e **199**
-  (spec/plan del ciclo 3 = baseline pre-costruttore) → **il numero buono è 224**. Dock **14** (roadmap §Fase 3, `phase3-qa-perf-report.md`) = era
+  (spec/plan del ciclo 3 = baseline pre-costruttore), e **224/244/272/289/305/325/399** (milestone datate DOPO
+  il ghost: identità, costruttore, builder-UX, lifecycle, dataset 7a/7b) → **il numero buono è 415** (2026-07-18). Dock **14** (roadmap §Fase 3, `phase3-qa-perf-report.md`) = era
   quando il 14° dock era **`v_mem`** (poi rimosso **senza sostituto**; il dock Input nacque dopo, come rename
   di v_mem, e fu a sua volta revertito) → **il numero buono è 13**. I plan datati citano anche **9** e **11**
   dock: idem, storici. **Non trattarli come discrepanze da investigare.**
@@ -637,7 +643,8 @@ Riprendi il track Simulator del progetto CF_FSNN. Non hai contesto: ricostruisci
 non chiedendolo a me e non ricostruendolo a memoria.
 
 - Repo: D:\Project_MBSE\1.Reti Neurali\Rete_SNN_Test\CF_FSNN
-- Worktree/branch: .worktrees/Simulator sul branch Simulator (è un repo git a sé).
+- Worktree/branch: .worktrees/Simulator sul branch Simulator (git worktree separato: stato e commit
+  indipendenti; condivide l'object DB del repo, quindi puoi leggere gli altri branch da qui).
 - Punto d'ingresso UNICO: document/SIMULATOR_SESSION_RESUME.md in quel worktree. Leggilo per intero, poi
   apri i documenti che indica (roadmap, spec/plan, gotcha, file map) per il dettaglio che ti serve.
   ATTENZIONE: non confonderlo con document/SESSION_RESUME.md, che è un ALTRO track (EventProp su main).
