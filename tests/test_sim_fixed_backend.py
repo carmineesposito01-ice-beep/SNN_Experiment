@@ -51,10 +51,11 @@ def _param_divergence(model, nfrac, obs_seq):
     fb = FixedPointBackend(model, nfrac=nfrac); fb.reset()
     sb = SoftwareBackend(model); sb.reset()
     tot = 0.0
-    for obs in obs_seq:
-        pf = fb.infer(obs).view(-1)
-        ps = sb.infer(obs).view(-1)
-        tot += float(torch.abs(pf - ps).mean())
+    with torch.no_grad():                                      # inference only; also silences the grad-scalar warning
+        for obs in obs_seq:
+            pf = fb.infer(obs).view(-1)
+            ps = sb.infer(obs).view(-1)
+            tot += float(torch.abs(pf - ps).mean())
     return tot / len(obs_seq)
 
 
@@ -77,6 +78,20 @@ def test_baseline_twin_does_not_corrupt_the_live_network():
     for _ in range(5):
         fb.infer(obs)                                          # step ONLY the twin
     assert torch.equal(model.layer_hidden.cell.potential, pot_before)   # fails if the deepcopy is missing
+
+def test_twin_builds_after_the_live_net_has_stepped():
+    """Pins _safe_deepcopy explicitly: once the live net has run un-guarded, cell.potential is a
+    NON-leaf tensor, and a plain copy.deepcopy(model) raises RuntimeError ('Only Tensors created
+    explicitly by the user ... support the deepcopy protocol'). Constructing the twin here must
+    NOT raise. A regression to plain copy.deepcopy fails this test instead of only crashing live."""
+    model = load_champion(CHAMP_BASELINE).model
+    sb = SoftwareBackend(model); sb.reset()
+    obs = torch.tensor([[0.4, 0.3, 0.5, 0.3]], dtype=torch.float32)
+    for _ in range(3):
+        sb.infer(obs)                                          # un-guarded forward -> state goes non-leaf
+    assert not model.layer_hidden.cell.potential.is_leaf       # precondition: the state IS non-leaf now
+    be = FixedPointBackend(model, nfrac=13); be.reset()        # plain copy.deepcopy would RuntimeError here
+    assert tuple(be.infer(obs).shape) == (1, 5)
 
 def test_lower_nfrac_diverges_more_from_float_baseline():     # the central proof (state-driven)
     model = load_champion(CHAMP_BASELINE).model
