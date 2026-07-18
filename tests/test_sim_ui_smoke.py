@@ -515,18 +515,18 @@ def test_app_builds_a_ghost_and_toggle_is_off_by_default(qapp):
     win = SimApp(CHAMP)
     assert win.loop.ghost is not None
     assert win.loop.ghost.backend is None            # it IS the oracle, not a second net
-    assert win._ghost_toggle.isChecked() is False
+    assert win._ghost_mode.currentText() == "nessuno"          # ghost off by default
     assert win._topdown._ghost.isVisible() is False
 
 
 def test_app_toggle_shows_ghost_on_road_and_panels(qapp):
     win = SimApp(CHAMP)
     win._advance(1.0)
-    win._ghost_toggle.setChecked(True)
+    win._ghost_mode.setCurrentText("Oracolo (ideale)")
     assert win._topdown._ghost.isVisible() is True
     assert len(win._trajectory._g_s.getOriginalDataset()[1]) > 0
     assert len(win._safety._g_ttc.getOriginalDataset()[1]) > 0
-    win._ghost_toggle.setChecked(False)
+    win._ghost_mode.setCurrentText("nessuno")
     assert win._topdown._ghost.isVisible() is False
     d = win._trajectory._g_s.getOriginalDataset()[1]
     assert d is None or len(d) == 0
@@ -543,7 +543,7 @@ def test_app_ghost_scrub_source_swaps_with_the_others(qapp):
     """TEETH: if _src_ghost_traj is not swapped together with _src_probe/_src_traj, a deep scrub
     renders the oracle from the live tail against a past net state -- a plausible-looking lie."""
     win = SimApp(CHAMP)
-    win._ghost_toggle.setChecked(True)
+    win._ghost_mode.setCurrentText("Oracolo (ideale)")
     win._advance(70.0)                               # > 500 ticks -> the ring buffer wraps
     win._run_btn.setChecked(True)
     win._run_btn.setChecked(False)                   # manual pause -> deep reconstruct
@@ -554,12 +554,31 @@ def test_app_ghost_scrub_source_swaps_with_the_others(qapp):
 
 def test_app_reset_blanks_the_ghost(qapp):
     win = SimApp(CHAMP)
-    win._ghost_toggle.setChecked(True)
+    win._ghost_mode.setCurrentText("Oracolo (ideale)")
     win._advance(1.0)
     win.reset_run()
     d = win._trajectory._g_s.getOriginalDataset()[1]
     assert d is None or len(d) == 0
     assert win._topdown.ghost_x_m() == 0.0
+
+
+def test_app_fixed_point_mode_builds_a_fixed_backend(qapp):
+    from sim.fixed_backend import FixedPointBackend
+    win = SimApp(CHAMP)
+    win._ghost_mode.setCurrentText("Fixed-point")
+    assert isinstance(win.loop.ghost.backend, FixedPointBackend)
+    assert win._nfrac_slider.isEnabled() is True               # the knob is live
+    win._nfrac_slider.setValue(7)
+    assert win.loop.ghost.backend.nfrac == 7                   # dragging it re-quantizes forward
+
+
+def test_app_nfrac_slider_disabled_unless_fixed_point(qapp):
+    win = SimApp(CHAMP)
+    assert win._nfrac_slider.isEnabled() is False              # nessuno -> greyed
+    win._ghost_mode.setCurrentText("Oracolo (ideale)")
+    assert win._nfrac_slider.isEnabled() is False              # oracle -> still greyed (a dead input is a lie)
+    win._ghost_mode.setCurrentText("Fixed-point")
+    assert win._nfrac_slider.isEnabled() is True
 
 
 # --- checkpoint identity: file browser + honest header ---

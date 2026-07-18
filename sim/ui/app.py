@@ -8,7 +8,7 @@ import os
 import numpy as np
 from PySide6.QtCore import QElapsedTimer, QEvent, Qt, QTimer
 from PySide6.QtGui import QAction
-from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QFileDialog, QHBoxLayout, QLabel,
+from PySide6.QtWidgets import (QApplication, QComboBox, QFileDialog, QHBoxLayout, QLabel,
                                QMainWindow, QMenu, QMessageBox, QPushButton, QSlider, QStackedWidget,
                                QToolButton, QVBoxLayout, QWidget)
 from pyqtgraph.dockarea import Dock, DockArea
@@ -16,6 +16,7 @@ from pyqtgraph.dockarea import Dock, DockArea
 from config import DT
 from sim.backend import SoftwareBackend
 from sim.events import EventInjector
+from sim.fixed_backend import FixedPointBackend
 from sim.replay import ReplayLog
 from sim.probe import AttributeProbe
 from sim.dataset_gen import generate_dataset
@@ -138,12 +139,20 @@ class SimApp(QMainWindow):
         self._step_btn = QPushButton("Step"); self._step_btn.clicked.connect(self.step_once)
         self._reset_btn = QPushButton("Reset"); self._reset_btn.clicked.connect(self.reset_run)
         self._brake_btn = QPushButton("Brake leader"); self._brake_btn.clicked.connect(self.inject_brake)
-        self._ghost_toggle = QCheckBox("Oracolo")
-        self._ghost_toggle.setToolTip(
-            "Guidatore di riferimento (ACC-IIDM) con i parametri veri — 'Master Splinter'.\n"
-            "Parte dallo stesso stato e DIVERGE per costruzione: è un rollout indipendente,\n"
-            "non l'errore istantaneo della rete. Sovrapposto = la rete guida come il guidatore vero.")
-        self._ghost_toggle.toggled.connect(self._on_ghost_toggled)
+        self._ghost_mode = QComboBox()
+        self._ghost_mode.addItems(["nessuno", "Oracolo (ideale)", "Fixed-point"])
+        self._ghost_mode.setToolTip(
+            "Ghost sovrapposto al veicolo vero:\n"
+            " nessuno -- niente ghost;\n"
+            " Oracolo (ideale) -- guidatore di riferimento ACC-IIDM coi parametri veri (diverge per costruzione);\n"
+            " Fixed-point -- la STESSA rete quantizzata Qm.n: la divergenza mostra l'effetto della precisione.")
+        self._nfrac_lbl = QLabel("nfrac=13")
+        self._nfrac_slider = QSlider(Qt.Horizontal); self._nfrac_slider.setRange(5, 13)
+        self._nfrac_slider.setValue(13); self._nfrac_slider.setFixedWidth(90)
+        self._nfrac_slider.setEnabled(False)                # a dead input is a lie: on only for Fixed-point
+        self._nfrac_slider.setToolTip("bit frazionari Qm.n del gemello fixed-point (5..13, 13 = punto operativo)")
+        self._ghost_mode.currentIndexChanged.connect(self._on_ghost_mode_changed)
+        self._nfrac_slider.valueChanged.connect(self._on_nfrac_changed)
         self._speed_slider = QSlider(Qt.Horizontal); self._speed_slider.setRange(1, 8)
         self._speed_slider.setValue(1); self._speed_slider.setFixedWidth(90)
         self._speed_slider.valueChanged.connect(self._on_speed)
@@ -163,7 +172,8 @@ class SimApp(QMainWindow):
         controls = QHBoxLayout()
         for w in (QLabel("champion"), self._champ_selector, self._selector, self._scn_menu_btn,
                   self._run_btn, self._step_btn, self._reset_btn,
-                  self._brake_btn, self._ghost_toggle, QLabel("speed"), self._speed_slider,
+                  self._brake_btn, QLabel("ghost"), self._ghost_mode, self._nfrac_lbl,
+                  self._nfrac_slider, QLabel("speed"), self._speed_slider,
                   QLabel("t"), self._cursor_slider, self._cursor_readout):
             controls.addWidget(w)
 
@@ -516,7 +526,9 @@ class SimApp(QMainWindow):
                                        model=self._champ.model)
         backend = SoftwareBackend(self._champ.model)
         stepper = SimStepper.from_scenario(backend, sc, injector=self._injector)
-        ghost = SimStepper.from_scenario(None, sc, injector=self._injector)   # SAME injector: same leader
+        ghost_backend = (FixedPointBackend(self._champ.model, self._nfrac_slider.value())
+                         if self._ghost_mode.currentText() == "Fixed-point" else None)
+        ghost = SimStepper.from_scenario(ghost_backend, sc, injector=self._injector)   # SAME injector: same leader
         self.loop = SimLoop(stepper, self._probe, dt_fixed=DT,
                             ghost=ghost, ghost_traj=self._ghost_traj)
         self._last_result = None
@@ -631,7 +643,7 @@ class SimApp(QMainWindow):
                 p.update_frame(probe)
         if self._dock_on("SpikeRate"): self._spikerate.update_frame(probe)
         if self._dock_on("SynOps"): self._synops.update_frame(probe)
-        show_ghost = self._ghost_toggle.isChecked()      # off -> not drawn AND not computed
+        show_ghost = self._ghost_visible()      # off -> not drawn AND not computed
         if self._dock_on("Trajectory"):
             self._trajectory.update_frame(traj)
             self._trajectory.set_ghost(ghost_traj if show_ghost else None)
@@ -722,11 +734,29 @@ class SimApp(QMainWindow):
         self.select_scenario(len(self._scenarios) - 1)
         self.set_mode(0)                                  # back to the cockpit to watch it run
 
-    def _on_ghost_toggled(self, on: bool):
-        self._topdown.set_ghost_visible(on)
+    def _ghost_visible(self):
+        return self._ghost_mode.currentText() != "nessuno"
+
+    def _on_ghost_mode_changed(self, _idx=None):
+        if getattr(self, "loop", None) is None:               # fired during __init__, before the loop exists
+            return
+        want_fixed = self._ghost_mode.currentText() == "Fixed-point"
+        have_fixed = isinstance(self.loop.ghost.backend, FixedPointBackend)
+        self._nfrac_slider.setEnabled(want_fixed)
+        if want_fixed != have_fixed:                          # backend TYPE changed -> rebuild (restarts at t=0)
+            self.select_scenario(self._current_idx)
+        self._topdown.set_ghost_visible(self._ghost_visible())
         self._redraw_series(self._src_probe, self._src_traj, self._src_ghost_traj)
-        if on and self._cursor is not None:            # toggled while paused on a scrub cursor
+        if self._ghost_visible() and self._cursor is not None:
             self._topdown.render_ghost_at(self._src_ghost_traj, self._cursor)
+
+    def _on_nfrac_changed(self, value):
+        self._nfrac_lbl.setText(f"nfrac={value}")
+        gb = getattr(self, "loop", None) and self.loop.ghost.backend
+        if isinstance(gb, FixedPointBackend):
+            gb.nfrac = value                                  # live: evolves forward, no rebuild
+        if getattr(self, "loop", None) is not None:
+            self._redraw_series(self._src_probe, self._src_traj, self._src_ghost_traj)
 
     def _on_run_toggled(self, running: bool):
         if running:                                       # live: hide cursors, disable slider
@@ -771,7 +801,7 @@ class SimApp(QMainWindow):
             p.set_cursor(idx)
         self._netstate.update_frame(self._src_probe, idx)
         self._topdown.render_at(self._src_traj, idx)
-        if self._ghost_toggle.isChecked():
+        if self._ghost_visible():
             self._topdown.render_ghost_at(self._src_ghost_traj, idx)
         self._cursor_readout.setText(f"t={frames[idx].t} ({frames[idx].t * DT:.1f}s)")
         self._preview.set_marker(frames[idx].t)   # scrub: marker follows the cursor's absolute tick
