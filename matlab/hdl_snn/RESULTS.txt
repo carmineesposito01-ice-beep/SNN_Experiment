@@ -51,6 +51,10 @@ SNNFWD  R7  Fmax=72.913  LUT=3101 FF=2594 DSP=22 BRAM=1  critpath pC1_Vread->pC2
 SNNFWD  R8  Fmax=91.853  LUT=3111 FF=2662 DSP=22 BRAM=1  critpath pR_idx->pCm_Iip (12 liv, 10.9ns)  [+26% su R7]
 #   R8 = split C2a a Vi (C2i produce Vi/eth larghi -> registro via prototipo; C2a fa soglia/nC_V). parity 0/60000.
 #   Collo -> Cm MAC (index + mux xbuf + Ii DSP mult, 10.9ns). -> R9 = split il mux xbuf dal DSP mult.
+SNNFWD  R9  Fmax=99.157  LUT=3132 FF=2780 DSP=22 BRAM=1  critpath pC2i_eth->pC2a_nCV (10 liv, 10.1ns)  [+8% su R8]
+#   R9 = split mux xbuf (Cx) dal DSP mult (Cm). parity 0/60000. Pipeline 8 stadi: R->Cx->Cm->Ca->C1->C2i->C2a->C2b.
+#   Collo -> nC_V = Vi - sib*eth (sub 28-bit) in C2a. Ora ogni stadio e' ~1 op larga (~7-10ns) = PAVIMENTO
+#   aritmetico. Il tanh-L1 fece 136 perche' era 1 sola LUT (niente mult/add larghi). SNN: 29.75->99.16 (3.33x).
 #
 # --- record grezzi (RESULT/CRITPATH dalla sintesi OOC) ---
 RESULT l2final LUT=7249 FF=2121 DSP=69 BRAM=1 WNS=30.480 Fmax=10.579771476936099
