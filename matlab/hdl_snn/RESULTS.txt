@@ -11,6 +11,32 @@
 #        (R2: +5,7% su R1; bit-exact 0/60000; area piatta. Il collo LASCIA reci -> ora un path di CONTROLLO
 #         started_not_empty_2 -> ql_7, 202 liv ma 63 ns: LUT-largo/fanout, non aritmetica profonda.)
 #
+# === PROBE tetto SNN (dopo R2): dove va il collo se si togliesse il divisore IIDM? ===
+# Champion = SNN+decode standalone, NESSUNA legge IIDM (4 in s,v,dv,v_l -> 5 out v0,T,s0,a,b).
+#   16.12 MHz, collo pR_idx->pv (88 liv) MA FUSO: il Champion NON ha lo split R1 (rawl) -> readout+decode
+#   in un ciclo -> SOTTO-STIMA il tetto SNN. Nel controllore M (split) la SNN arriva a ~29 (sotto).
+RESULT snn_champ LUT=3890 FF=1705 DSP=52 BRAM=1 WNS=62.966 Fmax=16.120
+CRITPATH snn_champ from=u_SNN/pR_idx_reg[3]/C to=u_SNN/pv_2_reg[3][19]/D  logic_levels=88 delay=62.027
+#
+# Spettro path del CONTROLLORE R2 (top-40, 1 per endpoint) -> cosa viene DOPO il divisore:
+#   PATH 1-19  divisore IIDM (ql_7)         Fmax 15.84   <- collo attuale
+#   PATH 20-22 IIDM s_star/sqrt (st_sab)    Fmax 17.30 -> 24.58   <- 2a struttura IIDM
+#   PATH 23-40 SNN stage-C (pC_fat/pC_V)    Fmax ~29.3            <- tetto SNN vero (split)
+#   Il decode (rawl->pv) NON e' nei 40 peggiori: e' veloce (A1 LUT ok).
+# CONCLUSIONE: la SNN+decode (split) ha tetto ~29 MHz e NON e' piu' il collo. Il controllore e' cappato
+#   dalla LEGGE IIDM: divisore (15.84) + s_star/sqrt (17.30). Headroom 15.84->~29 = TUTTO nell'IIDM,
+#   fuori dallo scope 2d (SNN->decode). Crackare solo il divisore -> 17.30 (la sqrt-prep e' subito dietro).
+#
+# === TETTO SNN forward-only (snn_b2_fsm -> raw, no decode/IIDM): il meter per le round SNN verso 136 ===
+# Il tanh-L1 (2b) ha provato che il time-mux consente ~136 MHz (pipeline gratis in latenza). La SNN e'
+# a 29.75 (stadio-C in UN ciclo). Round SNN = pipelinare lo stadio-C (bit-exact via parity 0/60000).
+# Decomposizione critpath R2 (33.6ns): index 2.4 | reci DSP mult 5.4 | ACCUMULO fuso 18 (reci-tree+Ii+
+#   leaky+Vi+nC_V, 26-bit accw) | si (fanout 560) | nC_fat DSP mult 4 | pC_fat 3.  -> il muro e' l'accumulo.
+SNNFWD  R2  Fmax=29.745  LUT=2971 FF=1712 DSP=22 BRAM=1  critpath pR_idx->pC_fat  (52 liv, 33.6ns)
+SNNFWD  R3  Fmax=47.943  LUT=2955 FF=1808 DSP=22 BRAM=1  critpath pR_idx->pC1_reci (35 liv, 20.9ns)  [+61% su R2]
+#   R3 = split stadio-C in C1(Ii,reci,Vread,fat) -> pC1 -> C2(Vi,soglia,nC_V,nC_fat,accum). parity 0/60000.
+#   Collo ora in C1 (index -> reci DSP mult -> reci-tree -> pC1_reci). +96 FF (registri pipeline), LUT piatta.
+#
 # --- record grezzi (RESULT/CRITPATH dalla sintesi OOC) ---
 RESULT l2final LUT=7249 FF=2121 DSP=69 BRAM=1 WNS=30.480 Fmax=10.579771476936099
 CRITPATH l2final from=u_IIDM_CTRL/pR_idx_reg[2]_rep/C to=u_IIDM_CTRL/pv_3_reg[3][19]/D  logic_levels=172 delay=94.513

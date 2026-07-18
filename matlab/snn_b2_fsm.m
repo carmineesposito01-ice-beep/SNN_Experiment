@@ -9,7 +9,8 @@ function [raw, valid] = snn_b2_fsm(xn, start) %#codegen
 
   persistent Vram fatram xbuf xnreg t_lr t_lr_nxt V_LI wacc ...
              tickc rc written phase ...
-             pR_valid pR_idx pC_valid pC_idx pC_V pC_fat rawreg inited
+             pR_valid pR_idx pC1_valid pC1_idx pC1_Ii pC1_reci pC1_Vread pC1_fat ...
+             pC_valid pC_idx pC_V pC_fat rawreg inited
   if isempty(inited)
     Vram   = hdl.RAM('RAMType', 'Dual port');
     fatram = hdl.RAM('RAMType', 'Dual port');
@@ -21,6 +22,9 @@ function [raw, valid] = snn_b2_fsm(xn, start) %#codegen
     wacc = cast(zeros(out, 1), 'like', T.raw);
     tickc = uint8(0); rc = uint8(0); written = uint8(0); phase = uint8(0);
     pR_valid = false; pR_idx = uint8(0);
+    pC1_valid = false; pC1_idx = uint8(0);
+    pC1_Ii = cast(0, 'like', T.accw); pC1_reci = cast(0, 'like', T.accw);
+    pC1_Vread = cast(0, 'like', T.V); pC1_fat = cast(0, 'like', T.fatigue);
     pC_valid = false; pC_idx = uint8(0);
     pC_V = cast(0, 'like', T.V); pC_fat = cast(0, 'like', T.fatigue);
     rawreg = cast(zeros(out, 1), 'like', T.raw);
@@ -60,9 +64,14 @@ function [raw, valid] = snn_b2_fsm(xn, start) %#codegen
     written = written + uint8(1);
   end
 
-  % --- STADIO C (compute): calcola il neurone i cui dati arrivano ORA (pR) ---
-  nC_valid = false; nC_idx = uint8(0);
-  nC_V = cast(0, 'like', T.V); nC_fat = cast(0, 'like', T.fatigue);
+  % --- STADIO C1 (produce Vi, eth): dal neurone pR ---
+  % [2d R3] spezzo lo stadio-C in C1 (Vi/eth) -> registro pC1 -> C2 (soglia+update): il compute del
+  % neurone gira su 2 cicli (latenza +1, GRATIS nel time-mux) -> dimezza la profondita' combinatoria.
+  % Bit-exact: STESSA aritmetica, solo registrata a meta'. La lettura RAM (pR/rdAddr) e' INTATTA; la
+  % scrittura (via pC) slitta di 1 ciclo -> nessun hazard entro il tick (ogni neurone letto/scritto 1 volta).
+  nC1_valid = false; nC1_idx = uint8(0);
+  nC1_Ii = cast(0, 'like', T.accw); nC1_reci = cast(0, 'like', T.accw);
+  nC1_Vread = cast(0, 'like', T.V); nC1_fat = cast(0, 'like', T.fatigue);
   if pR_valid
     i = double(pR_idx) + 1;
     Ii = cast(0, 'like', T.accw);
@@ -85,23 +94,35 @@ function [raw, valid] = snn_b2_fsm(xn, start) %#codegen
       end
     end
     reci = reci_p(1);
-    % (Ii+reci) RESTA in T.accw (Q8.17): il cast a T.V (Q5.13) buttava i 4 bit frazionari extra
-    % di accw PRIMA del confronto di soglia -> spike decisi diversamente da snn_core quando Vi cade
-    % entro ~2^-14 da eth (misurato: 82,4% dei control-step del dataset divergenti). Vedi HDL_PHASE §2.1.
-    % Come snn_core.m:64  ->  Vi = leaky(V(i), sh) + (Ii + reci);
-    Vi  = cast(Vread - bitsra(Vread, sh), 'like', T.V) + (Ii + reci);
-    eth = cast(W.bth(i), 'like', T.V) + cast(max(fatread, cast(0,'like',T.fatigue)), 'like', T.V);
+    % Registra i DUE accumuli (Ii, reci: entrambi T.accw grazie a Ii(:)= e al cast dell'albero) +
+    % Vread/fatread: C2 fa Vi=leaky(Vread)+(Ii+reci) e la soglia. Cosi' i tipi registrati sono NOTI
+    % (T.accw/T.V/T.fatigue); registrare Vi/eth darebbe conflitto di tipo (l'addizione fixed li allarga).
+    nC1_Ii = Ii; nC1_reci = reci;
+    nC1_Vread = Vread;                    % porta Vread (T.V) a C2 (leaky)
+    nC1_fat = fatread;                    % porta fatread (T.fatigue) a C2 (eth + nC_fat)
+    nC1_valid = true; nC1_idx = pR_idx;
+  end
+
+  % --- STADIO C2 (soglia + update): dal registro pC1 (neurone del ciclo PRECEDENTE) ---
+  nC_valid = false; nC_idx = uint8(0);
+  nC_V = cast(0, 'like', T.V); nC_fat = cast(0, 'like', T.fatigue);
+  if pC1_valid
+    i2  = double(pC1_idx) + 1;
+    % Vi/eth calcolati QUI da (Ii,reci,Vread,fatread) registrati -> stessi valori dell'originale (bit-exact),
+    % ma i tipi larghi (Vi, eth) restano LOCALI (non registrati) -> nessun conflitto di tipo in codegen.
+    Vi  = cast(pC1_Vread - bitsra(pC1_Vread, sh), 'like', T.V) + (pC1_Ii + pC1_reci);
+    eth = cast(W.bth(i2), 'like', T.V) + cast(max(pC1_fat, cast(0,'like',T.fatigue)), 'like', T.V);
     si  = Vi >= eth;
     sib = cast(si, 'like', T.V);
-    nC_fat   = cast(cast(fatread - bitsra(fatread, sh), 'like', T.fatigue) + sib * cast(W.tj(i), 'like', T.V), 'like', T.fatigue);
+    nC_fat   = cast(cast(pC1_fat - bitsra(pC1_fat, sh), 'like', T.fatigue) + sib * cast(W.tj(i2), 'like', T.V), 'like', T.fatigue);
     nC_V     = cast(Vi - sib * eth, 'like', T.V);
-    nC_valid = true; nC_idx = pR_idx;
+    nC_valid = true; nC_idx = pC1_idx;
     if si
       for o = 1:out
-        wacc(o) = cast(wacc(o) + W.Wout(o, i), 'like', T.raw);
+        wacc(o) = cast(wacc(o) + W.Wout(o, i2), 'like', T.raw);
       end
       for r = 1:rnk
-        t_lr_nxt(r) = cast(t_lr_nxt(r) + cast(W.Vr(r, i), 'like', T.acc), 'like', T.acc);
+        t_lr_nxt(r) = cast(t_lr_nxt(r) + cast(W.Vr(r, i2), 'like', T.acc), 'like', T.acc);
       end
     end
   end
@@ -113,8 +134,9 @@ function [raw, valid] = snn_b2_fsm(xn, start) %#codegen
     rc = rc + uint8(1);
   end
 
-  % avanza i registri pipeline
+  % avanza i registri pipeline (R -> C1 -> C2 -> write)
   pR_valid = nR_valid; pR_idx = nR_idx;
+  pC1_valid = nC1_valid; pC1_idx = nC1_idx; pC1_Ii = nC1_Ii; pC1_reci = nC1_reci; pC1_Vread = nC1_Vread; pC1_fat = nC1_fat;
   pC_valid = nC_valid; pC_idx = nC_idx; pC_V = nC_V; pC_fat = nC_fat;
 
   % --- fine tick: tutti i 32 neuroni scritti ---
@@ -124,7 +146,7 @@ function [raw, valid] = snn_b2_fsm(xn, start) %#codegen
     t_lr = t_lr_nxt;
     t_lr_nxt = cast(zeros(rnk, 1), 'like', T.acc);
     written = uint8(0); rc = uint8(0);
-    pR_valid = false; pC_valid = false;
+    pR_valid = false; pC1_valid = false; pC_valid = false;
     if tickc >= uint8(nt - 1)
       rawreg = V_LI; raw = V_LI; valid = true;
       phase = uint8(0); tickc = uint8(0);
