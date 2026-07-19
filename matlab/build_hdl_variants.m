@@ -145,7 +145,7 @@ function build_hdl_variants()
   end
   add_block('built-in/Outport', [subM '/accel'], 'Port', '1');
   add_line(subM, 'IIDM_CTRL/1', 'accel/1');
-  fprintf('  costruito Donatello_ACC_IIDM_M (SP4-M-FSM #2a: 5 divisioni su 1 divide() condivisa)\n');
+  fprintf('  costruito Donatello_ACC_IIDM_M (IIDM #2: 5 divisioni su UN divisore SEQUENZIALE in-chart)\n');
 
   set_param(lib, 'EnableLBRepository', 'on');
   save_system(lib, libfile);
