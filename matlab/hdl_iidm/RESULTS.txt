@@ -21,6 +21,31 @@
 #   300.000 coppie REALI (probe_div_seq), con sensibilita' provata (60719/300000 sulla variante rotta).
 # COLLO ORA: st_sab = s_star / sqrt(a*b) -- previsto dallo spettro dei path (17,30) e confermato a 17,495.
 #   -> R2 = attaccare la sqrt (digit-recurrence sequenziale o CORDIC iperbolico, fpga-expert ch09).
+#
+# === R2 - ANALISI DEL COLLO FATTA (2026-07-19), esecuzione DA FARE ===
+# Decomposizione del critpath R1 (pv_3 -> st_sab_3, 87 liv, 57.15ns):
+#   CARRY4=57 (66%) | LUT=28 | DSP48E1=2 ;  logic 32.3ns (57%) + route 24.8ns (43%)
+#   segnali dominanti: st_sab (146 occorrenze), **ytempSquare** (8), st_af, c_mul_temp
+#   -> `ytempSquare` e' la firma della SQRT digit-recurrence COMBINATORIA (quadrato di prova):
+#      e' il GEMELLO ESATTO del divisore di R1. Stessa cura: sequenzializzarla (1 bit/ciclo).
+#
+# DOVE VIVE: iidm_prep.m:48  ->  sab = cast(max(sqrt(af*bf), 1e-6), 'like', T.par)
+#   af,bf = cast(a,b,'like',T.par) ; T.par = Q6.f (fi(0,true,7+f,f,FM))
+#
+# ⚠️ DIFFERENZA DI PORTATA vs R1 (da tenere presente prima di iniziare):
+#   R1: il divisore era GIA' isolato in un suo stadio (fsm_div) -> bastava sostituire la chiamata.
+#   R2: la sqrt e' ANNIDATA in iidm_prep, che gira in UN ciclo. Per renderla multi-ciclo va ESTRATTA
+#       e passata come argomento -> cambia la firma di iidm_prep, che e' SINGLE-SOURCE COL MODEL
+#       (acc_iidm_fsm) -> va aggiornato anche il model, o il single-source si rompe (buco §2.1).
+#
+# PIANO R2 (stesso metodo di R1, che ha funzionato):
+#   1) sqrt_seq_setup/step/fin: ricorrenza restoring con quadrato di prova, in fixed-point.
+#   2) PROVA ESAUSTIVA (non campionata!): a,b hanno dominio piccolo (~[0.5,3]) -> si enumerano TUTTI
+#      i valori rappresentabili di af*bf nel range reale e si confrontano con sqrt() nativa. Piu' forte
+#      delle 300k coppie campionate del divisore. + prova di SENSIBILITA' (variante rotta deve divergere).
+#   3) estrarre la sqrt da iidm_prep (sab come ARGOMENTO) e allineare acc_iidm_fsm: single-source.
+#   4) stadi SQRT-INIT / SQRT-STEP x n / SQRT-FIN nella chart, come DIV-INIT/STEP/FIN.
+#   5) cancelli (G3/G4 + parity + B-1 + **G2**, che qui serve davvero perche' il model cambia) + OOC.
 RESULT iidm_r1 LUT=7873 FF=3276 DSP=68 BRAM=1 WNS=67.841 Fmax=17.495
 CRITPATH iidm_r1 from=u_IIDM_CTRL/pv_3_reg[3][5]/C to=u_IIDM_CTRL/st_sab_3_reg[4]/D  logic_levels=87 delay=57.152
 #
