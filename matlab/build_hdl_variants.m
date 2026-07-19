@@ -31,6 +31,12 @@ function build_hdl_variants()
   % valida a dmax=0 su 60000 control-step). La chart di Donatello_ACC_IIDM_M le inlina e le chiama negli
   % stati, sostituendo la sola fsm_div con l'handshake verso il blocco Divide HDL (G1: bit-identici).
   srcFDiv  = fileread(fullfile(here, 'fsm_div.m'));
+  % [IIDM #2] divisore SEQUENZIALE: le tre funzioni provate bit-exact su 300k coppie reali
+  % (probe_div_seq). La chart le chiama negli stadi DIV-INIT / DIV-STEP x nb / DIV-FIN: single source.
+  srcDivNb = fileread(fullfile(here, 'div_seq_nb.m'));
+  srcDivSu = fileread(fullfile(here, 'div_seq_setup.m'));
+  srcDivSt = fileread(fullfile(here, 'div_seq_step.m'));
+  srcDivFi = fileread(fullfile(here, 'div_seq_fin.m'));
   srcPrep  = fileread(fullfile(here, 'iidm_prep.m'));
   srcNd    = fileread(fullfile(here, 'iidm_nd.m'));
   srcUse   = fileread(fullfile(here, 'iidm_use.m'));
@@ -124,7 +130,8 @@ function build_hdl_variants()
   add_block('simulink/User-Defined Functions/MATLAB Function', [subM '/IIDM_CTRL']);
   chartM = sfroot().find('-isa', 'Stateflow.EMChart', 'Path', [subM '/IIDM_CTRL']);
   chartM.Script = acciidm_m_chart_code(NCHAMP, srcRom, srcTypes, srcFsm, srcLut, srcAccT, ...
-                                       srcFDiv, srcPrep, srcNd, srcUse, srcTanh, srcTanhLut, srcFinal, nrm);
+                                       srcFDiv, srcPrep, srcNd, srcUse, srcTanh, srcTanhLut, srcFinal, ...
+                                       srcDivNb, srcDivSu, srcDivSt, srcDivFi, nrm);
   % SOLA CHART nel subsystem (4 ingressi, 1 uscita: identico a SP3). Niente blocco `Divide`, niente Unit
   % Delay, niente handshake, niente feedback: erano l'impalcatura di #1, morta il 2026-07-17 perche' un
   % blocco ACCANTO alla chart impone la conversione MATLAB-to-dataflow, che VIETA `tanh` fixed -- e `tanh`
@@ -368,7 +375,7 @@ function d = acciidm_description(N)
 end
 
 
-function code = acciidm_m_chart_code(N, srcRom, srcTypes, srcFsm, srcLut, srcAccT, srcFDiv, srcPrep, srcNd, srcUse, srcTanh, srcTanhLut, srcFinal, nrm)
+function code = acciidm_m_chart_code(N, srcRom, srcTypes, srcFsm, srcLut, srcAccT, srcFDiv, srcPrep, srcNd, srcUse, srcTanh, srcTanhLut, srcFinal, srcDivNb, srcDivSu, srcDivSt, srcDivFi, nrm)
 %ACCIIDM_M_CHART_CODE  SP4-M-FSM: chart del blocco M. Macro-FSM:
 %    IDLE -(edge-trigger)-> SNN (time-mux ~341 clk) -(valid)-> decode + iidm_prep
 %      -> per k=1..5 { iidm_nd(k) -> emetti (num,den,vin) -> attendi vout -> iidm_use(k,quot) }
@@ -396,7 +403,7 @@ function code = acciidm_m_chart_code(N, srcRom, srcTypes, srcFsm, srcLut, srcAcc
     '  xn = local_normalize(s, v, dv, v_l, Tt);'
     '  % alf/vlp (stato del filtro OU) vivono QUI, nel top-level: HDL Coder vieta i persistent in una'
     '  % funzione non-entry-point chiamata in un condizionale, e iidm_prep e'' chiamata in due rami.'
-    '  persistent pv xprev started acc phase kdiv st alf vlp rawl numl denl ql thl'
+    '  persistent pv xprev started acc phase kdiv st alf vlp rawl numl denl ql thl dA dR dQ dB dsq dkbit dns'
     '  if isempty(started)'
     '    pv = fi(zeros(5,1), 1, 21, 13);'
     '    xprev = xn; started = true;'
@@ -408,6 +415,11 @@ function code = acciidm_m_chart_code(N, srcRom, srcTypes, srcFsm, srcLut, srcAcc
     '    [st, alf, vlp] = iidm_prep(s, v, dv, v_l, pv(:), true, alf, vlp);'
     '    rawl = fi(zeros(5,1), 1, 21, 13);   % latch del readout SNN: spezza il path SNN -> decode'
     '    numl = cast(0, ''like'', Ta.acc); denl = cast(1, ''like'', Ta.acc); ql = cast(0, ''like'', Ta.acc);'
+    '    % [IIDM #2] stato della ricorrenza: A dividendo residuo, R resto, Q quoziente, B divisore,'
+    '    % dsq segno, dkbit contatore di bit (STATO: un for verrebbe srotolato -> 27 divisori).'
+    '    dA = fi(0, 0, div_seq_nb(), 0); dQ = fi(0, 0, div_seq_nb(), 0);'
+    '    dR = fi(0, 0, 20, 0); dB = fi(0, 0, 20, 0);'
+    '    dsq = false; dkbit = uint8(0); dns = int8(0);'
     '    % thl col TIPO NATIVO di tanh (NON cast a Ta.acc: butterebbe i bit frazionari del tanh prima'
     '    % del prodotto con bf -> bug §2.1). Il tipo lo da'' tanh stesso su un argomento di tipo Ta.acc.'
     '    thl = tanh(cast(0, ''like'', Ta.acc));'
@@ -426,8 +438,24 @@ function code = acciidm_m_chart_code(N, srcRom, srcTypes, srcFsm, srcLut, srcAcc
     '  elseif phase == 3                    % ND: SOLO gli operandi della divisione k'
     '    [numl, denl] = iidm_nd(kdiv, st);'
     '    phase = uint8(4);'
-    '  elseif phase == 4                    % DIV: SOLO la divisione'
-    '    ql = fsm_div(numl, denl);          % <== UNICA chiamata nel sorgente: UN divisore in HDL'
+    '  elseif phase == 4                    % DIV-INIT: magnitudini + segno (div_seq_setup)'
+    '    [dA, dB, dsq] = div_seq_setup(numl, denl);'
+    '    dR(:) = 0; dQ(:) = 0; dkbit = uint8(div_seq_nb());'
+    '    dns = int8(0);'
+    '    if numl > 0'
+    '      dns = int8(1);'
+    '    elseif numl < 0'
+    '      dns = int8(-1);'
+    '    end'
+    '    phase = uint8(8);'
+    '  elseif phase == 8                    % DIV-STEP: UN bit di quoziente per ciclo'
+    '    [dA, dR, dQ] = div_seq_step(dA, dR, dQ, dB);'
+    '    dkbit = dkbit - uint8(1);'
+    '    if dkbit == uint8(0)'
+    '      phase = uint8(9);'
+    '    end'
+    '  elseif phase == 9                    % DIV-FIN: segno + saturazione -> ql'
+    '    ql(:) = div_seq_fin(dQ, dsq, dB == 0, dns);'
     '    phase = uint8(5);'
     '  elseif phase == 5                    % USE: SOLO il consumo del quoziente'
     '    st = iidm_use(kdiv, ql, st);'
@@ -455,7 +483,9 @@ function code = acciidm_m_chart_code(N, srcRom, srcTypes, srcFsm, srcLut, srcAcc
   code = [code newline newline srcRom newline newline srcTypes newline newline srcFsm ...
           newline newline srcLut newline newline srcAccT newline newline srcFDiv ...
           newline newline srcPrep newline newline srcNd newline newline srcUse ...
-          newline newline srcTanh newline newline srcTanhLut newline newline srcFinal];
+          newline newline srcTanh newline newline srcTanhLut newline newline srcFinal ...
+          newline newline srcDivNb newline newline srcDivSu ...
+          newline newline srcDivSt newline newline srcDivFi];
 end
 
 
