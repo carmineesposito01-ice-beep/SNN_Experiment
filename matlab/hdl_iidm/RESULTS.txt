@@ -1,0 +1,29 @@
+# Studio IIDM - divisore PIPELINATO (rianimazione SP4 #1). OOC xc7z020 @8 MHz, top DUT.
+# Spec:  docs/superpowers/specs/2026-07-19-iidm-pipelined-divider-design.md
+# Piano: docs/superpowers/plans/2026-07-19-iidm-pipelined-divider.md
+#
+# Bit-exact ad ogni round: G3/G4 (blocco==model==SP3) + parity 0/60000 (SNN) + B-1 0/3000 (RTL==blocco).
+# G2 (model==SP3 su 60k) una tantum: in questo studio il model e le funzioni-fase NON cambiano -
+# cambia solo CHI fa la divisione.
+#
+# round | leva                                     | Fmax(MHz) | LUT  | FF   | DSP | collo
+# ------|------------------------------------------|-----------|------|------|-----|-----------------------------
+  R0    | baseline (divide() combinatoria in-chart)| 15.673    | 8230 | 3183 | 69  | divisore IIDM ql_7 (204 liv)
+#
+# === TASK 1 - misure di baseline (2026-07-19) ===
+# LATENZA = 419 clock  (misurata da G4 col blocco attuale: SNN 8-stadi + divide() combinatoria).
+#   -> hold=500 PASSA, ma con margine di soli 81 clock. Il divisore PIPELINATO aggiungera' latenza
+#      (5 divisioni x latenza-Divide + 2 Unit Delay per giro) -> attendersi > 500 e usare hold=900.
+#   -> NB: SP4 aveva misurato 509 clock, ma e' un dato PRE-2d. Ri-misurato, non assunto.
+# G3/G4 baseline: dmax = 0 vs model E vs SP3 su 12/12 control-step (hold=500).
+#
+# G1 (make-or-break della strada): il blocco HDLMathLib/Divide e' bit-identico a divide()-SP3?
+#   config = ShiftAdd / RndMeth 'Zero' / OutDataType fixdt(1,19,8) (Q10.8)
+#   probe_divide_bitexact: N=300000 lat=Zero rnd=Zero    -> dmax = 0            <- PASSA
+#   SENSIBILITA':          N=300000 lat=Zero rnd=Nearest -> dmax = 0.00390625   <- DIVERGE (= 1 LSB di Q10.8)
+#   -> il cancello discrimina il rounding: non e' un cancello che non puo' fallire.
+#   -> lat='Zero' e' bit-identico al pipelinato ('Max'): la pipeline sposta i bit nel TEMPO, non li cambia.
+#
+# --- record grezzi (RESULT/CRITPATH dalla sintesi OOC) ---
+RESULT r9ctrl LUT=8230 FF=3183 DSP=69 BRAM=1 WNS=61.197 Fmax=15.673
+CRITPATH r9ctrl from=u_IIDM_CTRL/started_not_empty_2_reg_rep__15/C to=u_IIDM_CTRL/ql_7_reg[0]/D  logic_levels=204 delay=63.796
