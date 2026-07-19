@@ -39,15 +39,47 @@ dell'IIDM; aggirarlo significava approssimare (`dmax ≠ 0`), cioè rinunciare a
 **Cosa è cambiato:** lo Studio 2b (**A1**) ha sostituito quel `tanh` con una **LUT bit-exact** (memoizza i
 valori esatti, `dmax = 0`). Il divieto del dataflow non ha più oggetto.
 
-**Verificato, non assunto** (probe `probe_iidm_divblock`, 2026-07-18/19):
+> ## ⛔ SMENTITO DAI FATTI (2026-07-19) — #1 RESTA MORTA. Leggere questo prima del resto.
+>
+> Il probe `probe_iidm_divblock` diede **VERDE, ma era un FALSO VERDE**, e l'integrazione reale l'ha
+> smentito. Cronaca onesta, perché l'errore è metodologico e vale oltre questo studio:
+>
+> **Il probe misurava la cosa sbagliata.** Ci avevo cablato il blocco `Divide` su *inport separati*
+> (per semplicità): chart e blocco **coesistevano** ma non si scambiavano dati. La conversione
+> MATLAB-to-dataflow scatta sulla **RELAZIONE DI DATO**, non sulla presenza del blocco → nel probe non
+> scattava affatto, e il VHDL usciva pulito. Il probe era **strutturalmente incapace** di riprodurre il
+> fallimento di SP4: la sua luce verde non conteneva informazione.
+>
+> **Cosa dice l'integrazione VERA** (handshake reale, `rtl_gen_dut`): **24 errori** di HDL check, sia in
+> **Verilog sia in VHDL** (isolato apposta → la causa è la CONNESSIONE, non il linguaggio):
+> ```
+> Struct in expression 'Tt' / 'T' has an empty-typed field   [snn_types / acc_types]
+> The persistent variable 'st' has the type 'struct'          [stato IIDM]
+> Persistent 'xprev' / 'vlp' initialized with non-constant value
+> ```
+> **A1 aveva rimosso UNO dei blocchi (il `tanh`); gli altri quattro sono ARCHITETTURALI** — i prototipi
+> `fi([],…)` di `snn_types`/`acc_types` (usati da ~37 file, **incluso il deployato**) e lo struct di stato
+> persistente. Rimuoverli = toccare il sistema di tipi del progetto per compiacere un vincolo del tool.
+>
+> **Nota importante:** i cancelli funzionali erano VERDI (G3/G4 `dmax=0`, parity 0/60000): la matematica
+> dell'handshake è corretta. Fallisce **solo** la generazione HDL. Nessun cancello *funzionale* poteva
+> vederlo: l'unico gate competente è la generazione stessa.
+>
+> **Stato del repo:** integrazione #1 **revertita** e ripristino **verificato** (HDL check 0 errori,
+> Verilog 3 file, latenza 419, G3/G4 `dmax=0`).
+>
+> **→ Vale la conclusione ORIGINALE di SP4: l'unica strada è #2**, il divisore digit-recurrence scritto
+> **a mano dentro la chart** (niente blocco esterno ⇒ niente dataflow). Il beneficio è identico (un
+> divisore sequenziale ha path combinatorio corto); cambia che la **bit-identità va GUADAGNATA** invece
+> che comprata da G1 — con l'infrastruttura che però esiste già (`collect_div_pairs` + probe su 300k coppie).
 
-| domanda | esito |
-|---|---|
-| il dataflow genera VHDL con blocco `Divide` accanto alla chart attuale? | ✅ sì (0 errori, 6 VHDL) |
-| …col blocco **PIPELINATO** (`latencyMode='Max'`), che è la leva vera? | ✅ sì |
-| i tanti `persistent` della SNN 8-stadi (2d) bloccano il dataflow? | ✅ no |
+~~**Verificato, non assunto** (probe `probe_iidm_divblock`, 2026-07-18/19):~~ *(sezione superata dal box sopra)*
 
-→ **#1 è rianimabile**: divisore **pipelinato e bit-exact**, senza scrivere a mano un digit-recurrence.
+| domanda | esito del probe (FALSO VERDE) | realtà misurata |
+|---|---|---|
+| il dataflow genera VHDL con blocco `Divide` accanto alla chart? | ✅ sì (0 errori, 6 VHDL) | ❌ **24 errori** con handshake reale |
+| …col blocco **PIPELINATO** (`latencyMode='Max'`)? | ✅ sì | ❌ idem (e anche in VHDL) |
+| i `persistent` della SNN 8-stadi bloccano il dataflow? | ✅ no | ⚠️ non erano loro: sono `st`/`xprev`/`vlp` + gli struct empty-typed |
 
 > **Perché NON la strada approssimata.** La Variante L (reciproco-LUT) è già stata **scartata sui dati**:
 > l'errore non converge con N (p99 ~0,59 al minimo, max **piatto a ~4 m/s²**) → errore *strutturale*, non di
