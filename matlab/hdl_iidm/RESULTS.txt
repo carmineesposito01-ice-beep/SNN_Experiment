@@ -9,6 +9,20 @@
 # round | leva                                     | Fmax(MHz) | LUT  | FF   | DSP | collo
 # ------|------------------------------------------|-----------|------|------|-----|-----------------------------
   R0    | baseline (divide() combinatoria in-chart)| 15.673    | 8230 | 3183 | 69  | divisore IIDM ql_7 (204 liv)
+  R1    | divisore SEQUENZIALE in-chart (1 bit/ciclo)| 17.495   | 7873 | 3276 | 68  | st_sab (s_star/sqrt, 87 liv)
+#
+# === ROUND 1 (2026-07-19) - divisore digit-recurrence a mano, dentro la chart ===
+# Fmax +11.6% (15.673 -> 17.495) e AREA IN CALO (-357 LUT, -4.3%): un divisore a 1 bit/ciclo e'
+#   hardware PIU' PICCOLO di quello combinatorio srotolato (~170 CARRY4 per fare tutti i bit insieme).
+#   Il time-mux qui paga due volte -- Fmax e area concordi, non in conflitto.
+# Latenza 419 -> 559 clock (+140 = 5 divisioni x 28 cicli). Gratis: 800k clock/control-step.
+# Bit-exact: G3/G4 dmax=0 (vs model E vs SP3) + parity 0/60000 + B-1 0/3000 (RTL fresco in xsim).
+#   L'algoritmo era gia' certificato a monte: div_seq_setup/step/fin bit-identici a divide() su
+#   300.000 coppie REALI (probe_div_seq), con sensibilita' provata (60719/300000 sulla variante rotta).
+# COLLO ORA: st_sab = s_star / sqrt(a*b) -- previsto dallo spettro dei path (17,30) e confermato a 17,495.
+#   -> R2 = attaccare la sqrt (digit-recurrence sequenziale o CORDIC iperbolico, fpga-expert ch09).
+RESULT iidm_r1 LUT=7873 FF=3276 DSP=68 BRAM=1 WNS=67.841 Fmax=17.495
+CRITPATH iidm_r1 from=u_IIDM_CTRL/pv_3_reg[3][5]/C to=u_IIDM_CTRL/st_sab_3_reg[4]/D  logic_levels=87 delay=57.152
 #
 # === TASK 1 - misure di baseline (2026-07-19) ===
 # LATENZA = 419 clock  (misurata da G4 col blocco attuale: SNN 8-stadi + divide() combinatoria).
