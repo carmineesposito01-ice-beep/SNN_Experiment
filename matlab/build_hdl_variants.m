@@ -125,47 +125,20 @@ function build_hdl_variants()
   chartM = sfroot().find('-isa', 'Stateflow.EMChart', 'Path', [subM '/IIDM_CTRL']);
   chartM.Script = acciidm_m_chart_code(NCHAMP, srcRom, srcTypes, srcFsm, srcLut, srcAccT, ...
                                        srcFDiv, srcPrep, srcNd, srcUse, srcTanh, srcTanhLut, srcFinal, nrm);
-  % Tipi delle porte di RITORNO dal Divide: una chart creata da script crea i dati come DOUBLE, ma dal
-  % blocco arrivano `vout` (boolean) e `quot` (fixdt) -> Simulink rifiuta con "boolean ... is driving a
-  % signal of data type double". Vanno fissati esplicitamente (gli altri input ereditano). [SP4 f430aad0]
-  dVout = chartM.find('-isa', 'Stateflow.Data', '-and', 'Name', 'vout');
-  if ~isempty(dVout), dVout.DataType = 'boolean'; end
-  dQuot = chartM.find('-isa', 'Stateflow.Data', '-and', 'Name', 'quot');
-  if ~isempty(dQuot), dQuot.DataType = 'Inherit: Same as Simulink'; end
-  % [IIDM R1, 2026-07-19] CHART + BLOCCO `Divide` nello stesso subsystem (6 ingressi, 4 uscite): e' la
-  % RIANIMAZIONE di #1. Fino al 2026-07-18 questa configurazione era MORTA: il blocco accanto alla chart
-  % impone la conversione MATLAB-to-dataflow, che VIETAVA `tanh` fixed -- e `tanh` era nel cuore dell'IIDM.
-  % Cos'e' cambiato: lo Studio 2b (A1) ha sostituito quel `tanh` con una LUT BIT-EXACT -> il divieto non ha
-  % piu' oggetto. VERIFICATO, non assunto (probe_iidm_divblock): makehdl genera VHDL con la chart attuale
-  % (LUT tanh + SNN 8-stadi) accanto al blocco, anche col blocco PIPELINATO. I `persistent` della SNN
-  % 8-stadi non bloccano il dataflow. Percio' la divisione non e' piu' in-chart (`fsm_div`), ma la fa il
-  % blocco esterno via handshake -> il divisore diventa PIPELINABILE, che e' la leva sull'Fmax.
-  % (HDL_PHASE §9 · SP4_ACC_IIDM_FAST.md §Variante M-FSM e §Studio IIDM.)
-  % [IIDM R1] L'UNICO divisore, condiviso dalle 5 divisioni, ora ESTERNO e PIPELINATO.
-  % latencyMode 'Max' = pipelinato: e' cio' che deve alzare l'Fmax, ed e' anche cio' che ROMPE il loop
-  % algebrico del feedback (con 'Zero' sarebbe combinatorio -> loop algebrico + nessun guadagno).
-  % RndMeth 'Zero' + OutDataType fixdt(1,19,8) = ESATTAMENTE la config che G1 ha provato bit-identica a
-  % divide()-SP3 su 300k coppie reali (T1: dmax=0; sensibilita' rnd=Nearest -> 0.0039). [SP4 f430aad0]
-  add_block('HDLMathLib/Divide', [subM '/DIV']);
-  set_param([subM '/DIV'], 'latencyMode','Max', 'RndMeth','Zero', 'OutDataTypeStr','fixdt(1,19,8)');
+  % SOLA CHART nel subsystem (4 ingressi, 1 uscita: identico a SP3). Niente blocco `Divide`, niente Unit
+  % Delay, niente handshake, niente feedback: erano l'impalcatura di #1, morta il 2026-07-17 perche' un
+  % blocco ACCANTO alla chart impone la conversione MATLAB-to-dataflow, che VIETA `tanh` fixed -- e `tanh`
+  % e' nel cuore dell'IIDM (HDL_PHASE §9 · SP4_ACC_IIDM_FAST.md §Variante M-FSM).
+  % Il time-mux lo fa la FSM dentro la chart: UNA sola chiamata a `fsm_div` nel sorgente => HDL Coder
+  % genera UN divisore, riusato in 5 cicli. (Assunto da MISURARE in OOC, non da credere: se le LUT
+  % restassero ~10846 come SP3, il tool non avrebbe condiviso e #2a non avrebbe senso.)
   for j = 1:4
     add_block('built-in/Inport', [subM '/' in_names{j}], 'Port', num2str(j));
     add_line(subM, [in_names{j} '/1'], ['IIDM_CTRL/' num2str(j)]);
   end
-  % Unit Delay sul RITORNO: senza, chart -> Divide -> chart e' un LOOP ALGEBRICO. Simulink assume che gli
-  % output di una MATLAB Function dipendano dagli input nello stesso passo; qui NON e' vero (num/den
-  % vengono dallo STATO st/phase, non da quot/vout), ma il tool non puo' dedurlo. Il ritardo e' assorbito
-  % dalla FSM, che attende comunque `vout`. [SP4 f430aad0]
-  add_block('simulink/Discrete/Unit Delay', [subM '/z_q'], 'InitialCondition','0');
-  add_block('simulink/Discrete/Unit Delay', [subM '/z_v'], 'InitialCondition','0');
-  add_line(subM, 'DIV/1', 'z_q/1');  add_line(subM, 'z_q/1', 'IIDM_CTRL/5');   % quot -> z -> chart
-  add_line(subM, 'DIV/2', 'z_v/1');  add_line(subM, 'z_v/1', 'IIDM_CTRL/6');   % vout -> z -> chart
-  add_line(subM, 'IIDM_CTRL/2', 'DIV/1');     % num -> Divide
-  add_line(subM, 'IIDM_CTRL/3', 'DIV/2');     % den -> Divide
-  add_line(subM, 'IIDM_CTRL/4', 'DIV/3');     % vin -> Divide
   add_block('built-in/Outport', [subM '/accel'], 'Port', '1');
   add_line(subM, 'IIDM_CTRL/1', 'accel/1');
-  fprintf('  costruito Donatello_ACC_IIDM_M (IIDM R1: 5 divisioni su UN blocco Divide PIPELINATO)\n');
+  fprintf('  costruito Donatello_ACC_IIDM_M (SP4-M-FSM #2a: 5 divisioni su 1 divide() condivisa)\n');
 
   set_param(lib, 'EnableLBRepository', 'on');
   save_system(lib, libfile);
@@ -403,15 +376,14 @@ function code = acciidm_m_chart_code(N, srcRom, srcTypes, srcFsm, srcLut, srcAcc
 %  Le funzioni-fase sono INLINATE dai sorgenti VERI (single source col model acc_iidm_fsm, che G2 valida
 %  a dmax=0 su 60000 control-step): la chart NON ricalcola la matematica -> non puo' divergere (§2.1).
   Lmain = {
-    'function [accel, num, den, vin] = IIDM_CTRL(s, v, dv, v_l, quot, vout)'
+    'function accel = IIDM_CTRL(s, v, dv, v_l)'
     '%#codegen'
-    '% IIDM R1 - Donatello + ACC-IIDM con le 5 divisioni sequenziate su UN blocco Divide ESTERNO e'
-    '%  PIPELINATO (rianimazione di #1). La chart non divide: emette (num,den,vin) e ATTENDE (quot,vout).'
-    '%  `kdiv` e'' STATO, non indice di loop: un `for k=1:5` verrebbe SROTOLATO dal codegen -> 5 divisori'
-    '%  (giusto nel model acc_iidm_fsm, LETALE qui).'
-    '%  Il blocco accanto alla chart impone la conversione MATLAB-to-dataflow, che VIETAVA `tanh` fixed:'
-    '%  e'' cio'' che uccise #1 nel 2026-07-17. Ora il `tanh` e'' una LUT bit-exact (2b/A1) -> il divieto'
-    '%  non ha piu'' oggetto, e il VHDL si genera (verificato: probe_iidm_divblock). HDL_PHASE §9.'
+    '% SP4-M-FSM #2a - Donatello + ACC-IIDM con le 5 divisioni sequenziate su UNA divide() condivisa.'
+    '%  UNA sola chiamata a fsm_div in tutto il sorgente, dentro uno stato della FSM -> HDL Coder genera'
+    '%  UN divisore, riusato in 5 cicli. `kdiv` e'' STATO, non indice di loop: un `for k=1:5` verrebbe'
+    '%  SROTOLATO dal codegen -> 5 divisori (giusto nel model acc_iidm_fsm, LETALE qui).'
+    '%  Nessun blocco accanto alla chart -> niente conversione MATLAB-to-dataflow -> tanh fixed NATIVA:'
+    '%  e'' cio'' che ha ucciso #1 (blocco Divide esterno) -- HDL_PHASE §9.'
     '%  La matematica NON e'' qui: sta in iidm_prep/iidm_nd/iidm_use/iidm_final, le STESSE del model'
     '%  acc_iidm_fsm (G2: dmax=0 su 60000 control-step). Qui c''e'' solo l''orchestrazione.'
     '%'
@@ -444,9 +416,6 @@ function code = acciidm_m_chart_code(N, srcRom, srcTypes, srcFsm, srcLut, srcAcc
     '    go = any(xn ~= xprev);             % edge-triggered: 1 campione = 1 inferenza (§3.1.4)'
     '  end'
     '  xprev = xn;'
-    '  % Handshake verso il blocco Divide esterno: default ad OGNI ciclo. vin=false => il Divide non'
-    '  % campiona; den=1 (non 0) per non propagare una divisione per zero nei cicli in cui non si divide.'
-    '  num = cast(0, ''like'', Ta.acc); den = cast(1, ''like'', Ta.acc); vin = false;'
     '  [raw, valid] = snn_b2_fsm(xn, go);'
     '  if phase == 1                        % DECODE (un ciclo a se'')'
     ['    pv = snn_decode_lut(rawl, ' num2str(N) ');']
@@ -457,16 +426,9 @@ function code = acciidm_m_chart_code(N, srcRom, srcTypes, srcFsm, srcLut, srcAcc
     '  elseif phase == 3                    % ND: SOLO gli operandi della divisione k'
     '    [numl, denl] = iidm_nd(kdiv, st);'
     '    phase = uint8(4);'
-    '  elseif phase == 4                    % DIV-ISSUE: emette gli operandi al blocco Divide ESTERNO'
-    '    num = numl; den = denl; vin = true;'
-    '    phase = uint8(8);'
-    '  elseif phase == 8                    % DIV-WAIT: il quoziente torna dopo la latenza del Divide'
-    '    if vout                            % la FSM ATTENDE il valid: nessun conteggio a mano della latenza'
-    '      % cast ''like'' Ta.acc: il segnale di ritorno ha il numerictype giusto ma NON la fimath di'
-    '      % acc_types, e la fimath e'' parte del tipo (SP3 §2). Il VALORE non cambia.'
-    '      ql(:) = cast(quot, ''like'', Ta.acc);'
-    '      phase = uint8(5);'
-    '    end'
+    '  elseif phase == 4                    % DIV: SOLO la divisione'
+    '    ql = fsm_div(numl, denl);          % <== UNICA chiamata nel sorgente: UN divisore in HDL'
+    '    phase = uint8(5);'
     '  elseif phase == 5                    % USE: SOLO il consumo del quoziente'
     '    st = iidm_use(kdiv, ql, st);'
     '    if kdiv >= 5'
