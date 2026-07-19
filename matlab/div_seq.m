@@ -1,59 +1,45 @@
 function q = div_seq(num, den) %#codegen
-%DIV_SEQ  [IIDM #2] Divisione DIGIT-RECURRENCE (restoring) bit-identica a `fsm_div`, cioe' a
-%  `divide(numerictype(T.acc), num, den)` con la fimath di acc_types (RoundingMethod 'Zero').
+%DIV_SEQ  [IIDM #2] Wrapper FUNZIONALE della ricorrenza restoring: setup -> nb passi -> finalizzazione.
+%  Bit-identico a `fsm_div`, cioe' a `divide(numerictype(T.acc), num, den)` con RoundingMethod 'Zero'.
 %
-%  FORMA FUNZIONALE (tutta in una chiamata): serve a PROVARE l'ALGORITMO prima di trasformarlo in stato
-%  della FSM. I due rischi -- "l'algoritmo e' bit-exact?" e "lo staging e' corretto?" -- sono separati
-%  apposta: qui si risponde al primo, con zero chirurgia sulla chart.
+%  ⚠️ SINGLE SOURCE: i passi li fa `div_seq_step`, la STESSA funzione che la chart chiama una volta per
+%  ciclo nello stadio DIV. Qui e' iterata nb volte per poterla PROVARE su 300k coppie reali
+%  (probe_div_seq) -> cio' che e' provato e' cio' che gira in hardware, negli STESSI tipi fixed-point.
 %
-%  SEMANTICA REPLICATA (spec §5):
-%    T.acc = fixdt(1,19,8) = Q10.8. num = N*2^-8, den = D*2^-8 (N,D interi memorizzati a 19 bit)
-%    => q_stored = trunc_verso_zero( (N << 8) / D )   -- i 2^-8 si elidono, restano 8 bit sul dividendo.
-%  Dividere le MAGNITUDINI e applicare il segno alla fine E' il troncamento verso zero: non e'
-%  un'approssimazione della semantica di 'Zero', e' la semantica.
-%
-%  Gli interi in gioco stanno esattamente in double (dividendo <= 2^26 << 2^53): l'aritmetica qui e'
-%  ESATTA, quindi il confronto col riferimento misura l'ALGORITMO, non l'aritmetica dell'host.
+%  Semantica (spec §5): dividere le MAGNITUDINI e applicare il segno alla fine E' il troncamento verso
+%  zero -- non una sua approssimazione.
   T  = acc_types('fixed');
   nt = numerictype(T.acc);
-  WL = nt.WordLength;                 % 19
-  FL = nt.FractionLength;             % 8
+  WL = nt.WordLength;                  % 19
+  FL = nt.FractionLength;              % 8
+  NB = div_seq_nb();                   % 27 bit di quoziente
+  NR = 20;                             % resto: R<<1|bit < 2*B <= 2^19 -> 20 bit con margine
 
-  N = double(storedInteger(num));
-  D = double(storedInteger(den));
+  Ni = double(storedInteger(num));
+  Di = double(storedInteger(den));
+  lo = -2^(WL-1);  hi = 2^(WL-1) - 1;
 
-  lo = -2^(WL-1);  hi = 2^(WL-1) - 1;   % range degli interi memorizzati di T.acc
-
-  if D == 0
-    % Divisione per zero: satura al segno del dividendo (0/0 -> 0). Il cancello su coppie REALI dira'
-    % se il riferimento fa lo stesso; non e' un caso che il controllore produca (i denominatori sono
-    % guardati a monte da iidm_prep), ma la funzione non deve comunque esplodere.
-    if N > 0
+  if Di == 0                           % guardia: den=0 non lo produce il controllore (iidm_prep guarda
+    if Ni > 0                          % i denominatori), ma la funzione non deve esplodere.
       qs = hi;
-    elseif N < 0
+    elseif Ni < 0
       qs = lo;
     else
       qs = 0;
     end
   else
-    sq = (N < 0) ~= (D < 0);            % segno del quoziente
-    A  = abs(N) * 2^FL;                 % dividendo scalato: |N| << FL   (<= 2^18 * 2^8 = 2^26)
-    B  = abs(D);                        % divisore magnitudine
-    nb = WL + FL;                       % 27 bit di quoziente: copre A/B con B>=1 (A <= 2^26)
-
-    R = 0; Q = 0;
-    for i = nb-1:-1:0                   % 1 BIT DI QUOZIENTE PER ITERAZIONE (= per ciclo, in HW)
-      abit = mod(floor(A / 2^i), 2);    % bit i-esimo di A
-      R = R * 2 + abit;                 % R = (R << 1) | abit
-      if R >= B                         % restoring: sottrai solo se ci sta
-        R = R - B;
-        Q = Q + 2^i;
-      end
+    sq = (Ni < 0) ~= (Di < 0);
+    A = fi(abs(Ni) * 2^FL, 0, NB, 0);  % dividendo scalato, consumato dal MSB
+    B = fi(abs(Di),        0, NR, 0);
+    R = fi(0, 0, NR, 0);
+    Q = fi(0, 0, NB, 0);
+    for k = 1:NB                       % in HW: UN passo per ciclo (kbit e' STATO, non indice srotolato)
+      [A, R, Q] = div_seq_step(A, R, Q, B);
     end
-
-    if sq, qs = -Q; else, qs = Q; end
-    if qs > hi, qs = hi; elseif qs < lo, qs = lo; end   % saturazione al range di T.acc
+    qs = double(Q);
+    if sq, qs = -qs; end
+    if qs > hi, qs = hi; elseif qs < lo, qs = lo; end
   end
 
-  q = reinterpretcast(fi(qs, 1, WL, 0), nt);            % ricostruisci il fi dall'intero memorizzato
+  q = reinterpretcast(fi(qs, 1, WL, 0), nt);
 end

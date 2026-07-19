@@ -20,11 +20,17 @@ function dmax = probe_div_seq(P, sabotage)
   qref = divide(A, num, den);                 % RIFERIMENTO: la divide() di SP3 (= fsm_div)
   n    = numel(qref);
   qseq = zeros(n, 1);
+  % La ricorrenza fixed-point fa n x 27 passi di `fi`: interpretata sarebbe inutilizzabile su 300k.
+  % Si usa il MEX (regola del progetto: se e' lento -> MEX, NON ridurre il campione).
+  useMex = isempty(sabotage) && exist('div_seq_mex', 'file') == 3;
+  if useMex, fprintf('  (uso div_seq_mex)\n'); end
   for k = 1:n
-    if isempty(sabotage)
-      q = div_seq(num(k), den(k));
+    if ~isempty(sabotage)
+      q = div_seq_sabotaged(num(k), den(k));  % variante rotta apposta (double: gia' veloce)
+    elseif useMex
+      q = div_seq_mex(num(k), den(k));
     else
-      q = div_seq_sabotaged(num(k), den(k));  % variante rotta apposta
+      q = div_seq(num(k), den(k));
     end
     qseq(k) = double(q);
   end
