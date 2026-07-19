@@ -1,8 +1,8 @@
-# Studio IIDM — divisore PIPELINATO (rianimare SP4 #1) + pipelining della legge di controllo (design)
+# Studio IIDM — divisore SEQUENZIALE digit-recurrence in-chart (SP4 #2) + pipelining della legge di controllo (design)
 
 **Data:** 2026-07-19
 **Branch/worktree:** `Simulink_Importer`
-**Stato:** design — da tradurre in piano (`writing-plans`)
+**Stato:** design REVISIONATO 2026-07-19 dopo la smentita di #1 (box sotto) — strada = **#2**
 **Contesto:** chiuso lo Studio 2d (SNN forward pipelinata a **99,16 MHz** bit-exact, *bancata*), il controllore
 `Donatello_ACC_IIDM_M` resta a **15,67 MHz** perché cappato dalla **LEGGE IIDM**, non più dalla rete.
 
@@ -88,39 +88,58 @@ valori esatti, `dmax = 0`). Il divieto del dataflow non ha più oggetto.
 > di quoziente per ciclo **con resto esatto** → bit-exact; i metodi *moltiplicativi* (Newton-Raphson,
 > Goldschmidt) convergono con moltiplicazioni ma **non danno resto** → approssimati. Solo digit-recurrence.
 
-## 4. Approccio
+## 4. Approccio — #2, con i DUE RISCHI SEPARATI
 
-**Round 1 — rianimare #1 (il salto strutturale).** Sostituire, dentro la chart, la chiamata `fsm_div` con
-l'**handshake verso un `HDLMathLib/Divide` PIPELINATO** esterno: la fase DIV della FSM emette
-`(num, den, vin)`, **attende `vout`**, consuma `quot`. La latenza è **gratis**: 5 divisioni × N cicli su un
-budget di **800.000 clock** per control-step (oggi ne servono ~509).
+Il divisore sequenziale porta due rischi indipendenti. Affrontarli insieme è ciò che ha reso costoso
+l'errore di #1, quindi si separano e ognuno ha il suo cancello:
 
-**Config del blocco — quella provata da G1, non una a scelta:**
-`ShiftAdd` · `latencyMode = 'Max'` · `RndMeth = 'Zero'` · `OutDataTypeStr = fixdt(1,19,8)` (**Q10.8**).
-Cambiare uno di questi **invalida il trasferimento della prova G1** e va ri-provato con
-`probe_divide_bitexact` (300k coppie, 44 s).
+**Round 1a — l'ALGORITMO (make-or-break, ZERO chirurgia sulla chart).** Scrivere la ricorrenza come
+**funzione MATLAB pura** (`div_seq.m`) e provarla **bit-identica** a `divide(numerictype(T.acc),num,den)`
+su **300.000 coppie reali** (`collect_div_pairs`) + prova di **sensibilità**. Se l'algoritmo non è
+bit-exact, la strada muore qui — senza aver toccato una riga della chart.
+
+**Round 1b — lo STAGING (solo se 1a è verde).** Trasformare la funzione in **stato della FSM**: lo stadio
+DIV diventa multi-ciclo (1 bit di quoziente per ciclo), esattamente la forma di lavoro dei round 2d
+(R3-R9). Cancelli: G3/G4 + parity + B-1. La latenza cresce (~1 ciclo/bit × 5 divisioni) ed è **gratis**
+(800.000 clock/control-step), ma va **misurata** e propagata nell'`hold`.
 
 **Round 2+ — probe-first iterativo (identico a 2d).** Ri-sintesi → si legge il **nuovo** collo dal
-`critpath.rpt` → si applica la leva che calza → si ri-misura. Atteso che il collo salti su **`st_sab`
-(s_star/sqrt, 17,30)**; leve candidate lì: sqrt sequenziale digit-recurrence, CORDIC iperbolico
-(shift-add, ~1 bit/iterazione), o staging FSM come in 2d. **Non si decide a tavolino: si misura.**
+`critpath.rpt` → leva che calza → ri-misura. Atteso che salti su **`st_sab`** (s_star/sqrt, 17,30); leve
+candidate lì: sqrt sequenziale digit-recurrence, **CORDIC iperbolico** (shift-add, ~1 bit/iterazione,
+fpga-expert ch09), o staging FSM. **Non si decide a tavolino: si misura.**
 
-## 5. Il cablaggio #1 — recuperato, non reinventato
+## 5. Il divisore — semantica da replicare e algoritmo
 
-Da `git f430aad0` (SP4), con i **due gotcha già pagati** e da riportare identici:
+**Il bersaglio, esatto.** `fsm_div` è `divide(numerictype(T.acc), num, den)` con la fimath di `acc_types`:
+`T.acc` = **`fixdt(1,19,8)`** (Q10.8: 1 segno + 10 interi + 8 frazionari), **`RoundingMethod = 'Zero'`**
+(troncamento **verso lo zero**, l'unica che HDL Coder genera per signed — SP3 §2).
 
-1. **Tipi delle porte di ritorno.** Una chart creata da script crea i dati **`double`** → dal blocco arrivano
-   `vout` (boolean) e `quot` (fixdt) → Simulink rifiuta: *"boolean … is driving a signal of data type
-   double"*. Vanno **fissati esplicitamente**: `vout = boolean`, `quot = Inherit`
-   (`chartM.find('-isa','Stateflow.Data','-and','Name',…)`).
-2. **Loop algebrico** chart → `Divide` → chart. Simulink assume che gli output di una MATLAB Function
-   dipendano dagli input nello stesso passo; **qui è falso** (`num`/`den` vengono dallo *stato* `st`/`phase`,
-   non da `quot`). Rimedio: **Unit Delay `z_q`** (`InitialCondition = 0`) sul ritorno → il feedback diventa
-   esplicito invece che affidato a un'inferenza del tool. La FSM **attende comunque `vout`**.
+**Scalatura.** Con `num = N·2⁻⁸` e `den = D·2⁻⁸` (N, D = interi memorizzati a 19 bit), il quoziente in
+Q10.8 vale `q_stored = trunc₀((N ≪ 8) / D)`: i `2⁻⁸` si elidono e restano 8 bit di scalatura sul
+dividendo → **dividendo a 27 bit**, divisore a 19.
 
-La **matematica non si tocca**: la chart continua a chiamare le funzioni-fase condivise col model
-(`iidm_prep` / `iidm_nd` / `iidm_use` / `iidm_final`) — *single source*, che è ciò che chiude per costruzione
-il buco §2.1 (due implementazioni divergenti). Cambia **solo chi fa la divisione**.
+**Algoritmo: restoring digit-recurrence sulle MAGNITUDINI, segno applicato alla fine.**
+```
+sq = sign(N) XOR sign(D)
+A  = |N| << 8        (27 bit)      B = |D|      (19 bit)
+R  = 0 ; Q = 0
+per i = MSB..0:                    # 1 bit di quoziente per ciclo
+    R = (R << 1) | bit_i(A)
+    se R >= B:  R = R - B ;  Q |= (1 << i)
+q = sq ? -Q : +Q                   # poi saturazione al range di T.acc
+```
+Perché è **esattamente** `RoundingMethod='Zero'`: dividere le magnitudini e applicare il segno alla fine
+**tronca verso lo zero per costruzione** — non è un'approssimazione della semantica, è la semantica.
+
+**⚠️ Dove i divisori scritti a mano rompono la bit-exactness: i SEGNI** (e i casi limite: `den` negativo,
+`num` = minimo rappresentabile, overflow del quoziente → saturazione). Non i positivi. Il cancello è
+costruito apposta per vederlo: le 300k coppie sono **reali**, prese dal dataset, quindi contengono i segni
+e i valori estremi che il controllore produce davvero.
+
+**Staging.** `kdiv` è già STATO nella FSM (non indice di loop: un `for` verrebbe srotolato → 5 divisori).
+Si aggiunge un **contatore di bit**: lo stadio DIV itera la ricorrenza un bit per ciclo e avanza a USE
+quando il contatore è esaurito. Nessun blocco esterno ⇒ **nessuna conversione dataflow** ⇒ `snn_types`,
+`acc_types` e lo struct `st` restano **intatti** (è il punto per cui #2 esiste).
 
 ## 6. Cancelli (bit-exact, ad ogni round) — tutti già esistenti
 
