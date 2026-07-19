@@ -1,4 +1,7 @@
-function probe_iidm_divblock()
+function probe_iidm_divblock(latMode)
+%  latMode (opz.): 'Zero' (combinatorio, default = il make-or-break di ieri sera) oppure una modalita'
+%  PIPELINATA (es. 'Automatic'/'Custom'): serve a provare che anche il divisore CON LATENZA genera VHDL,
+%  perche' e' quello il vero motore dell'Fmax. Le opzioni valide sono stampate qui sotto.
 %PROBE_IIDM_DIVBLOCK  [IIDM #1 make-or-break] La conversione MATLAB-to-dataflow (imposta da un blocco
 %  HDLMathLib/Divide ACCANTO alla chart) GENERA VHDL ora che il tanh e' una LUT bit-exact (A1, 2b)?
 %  SP4 #1 mori' proprio qui ("Provide a floating-point input": dataflow vieta tanh fixed). Con A1 il tanh
@@ -32,7 +35,13 @@ function probe_iidm_divblock()
   add_block('simulink/Signal Attributes/Data Type Conversion', [dut '/cvr'], 'OutDataTypeStr', dts);
   add_block('simulink/Sources/Constant', [dut '/vld'], 'Value', 'true', 'OutDataTypeStr', 'boolean', 'SampleTime', '-1');
   add_block('HDLMathLib/Divide', [dut '/DIV']);
-  set_param([dut '/DIV'], 'latencyMode', 'Zero', 'RndMeth', 'Zero', 'OutDataTypeStr', dts);
+  if nargin < 1 || isempty(latMode), latMode = 'Zero'; end
+  try
+    pd = get_param([dut '/DIV'], 'DialogParameters');  % opzioni valide dell'enum (NON set_param a 2 arg)
+    fprintf('latencyMode valide: %s\n', strjoin(cellstr(pd.latencyMode.Enum), ' | '));
+  catch, end
+  set_param([dut '/DIV'], 'latencyMode', latMode, 'RndMeth', 'Zero', 'OutDataTypeStr', dts);
+  fprintf('DIV: latencyMode=%s RndMeth=Zero Out=%s\n', latMode, dts);
   add_block('built-in/Outport', [dut '/qout'], 'Port', '2');
   add_line(dut, 'dvd/1', 'cvd/1'); add_line(dut, 'dvr/1', 'cvr/1');
   add_line(dut, 'cvd/1', 'DIV/1'); add_line(dut, 'cvr/1', 'DIV/2'); add_line(dut, 'vld/1', 'DIV/3');
