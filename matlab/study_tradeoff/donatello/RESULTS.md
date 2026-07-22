@@ -483,3 +483,34 @@ x1.00 (4548, 91 MHz): tanto vale tenere x1.00. Per SLOW il divario x1.00→floor
 conviene se serve chip per il V2I.
 
 Dati grezzi: `points_split_curve.tsv`. Log/artefatti: `D:/zbd_tradeoff/donatello_split_sweep/` (rigenerabili).
+
+---
+
+## 14. Ottimizzazione MIRATA di Vivado (directive + phys_opt) — 2026-07-22
+
+La curva §13 e' a flusso DEFAULT. Qui si misura di quanto la spostano le directive mirate sui due
+endpoint (driver `sweep_directives.sh`, stesso pinning determinismo):
+- **AREA** @125 ns: `synth_design -directive AreaOptimized_high` + `opt_design -directive ExploreArea`.
+- **PERF** @x0.90: `synth_design -directive PerformanceOptimized` + `opt/place/route -directive Explore`
+  + `phys_opt_design` (post-place e post-route).
+
+| tier | AREA: LUT (vs floor default) | PERF: Fmax (vs max-Fmax default) | area PERF (vs x0.90) |
+|---|---|---|---|
+| SLOW | 3256 (−42, **−1,3%**) | 30,351 (+0,41, **+1,4%**) | 3864 (+146) |
+| BAL | 3762 (−85, **−2,2%**) | 59,776 (+1,79, **+3,1%**) | 4128 (+56) |
+| **FAST** | 4417 (−92, **−2,0%**) | **99,197** (+4,23, **+4,5%**) | 4708 (+69) |
+
+### Lettura
+1. **Il flusso default era gia' quasi ottimale:** le directive spostano gli endpoint dell'**1–4,5%**.
+   Atteso per un design piccolo (~7,5% del chip): le directive pagano su design grandi/congestionati.
+2. **AREA:** −1,3…−2,2% sul floor. Reale ma marginale; leggermente maggiore su BAL/FAST.
+3. **PERF:** il guadagno **cresce con la profondita' di pipeline** (SLOW +1,4% → BAL +3,1% → FAST +4,5%):
+   piu' stadi = piu' materiale per retiming/bilanciamento di `phys_opt_design`. **FAST tocca 99,2 MHz**
+   (da 95,0) per soli **+69 LUT** — l'unico caso in cui l'ottimizzazione mirata paga davvero.
+4. Determinismo/pinning identici a §13; WHS>0 ovunque; DSP 52 / BRAM 1 invariati; FF cambia di poco
+   (retiming di phys_opt). Nessuna anomalia post-ibernazione (numeri sani, direzione attesa).
+5. `report_qor_assessment`/`suggestions` NON provati: richiedono licenza > BASIC (annotato in `impl_point.tcl`).
+
+**Conclusione ottimizzazione:** Blocco A caratterizzato anche a flusso mirato. Guadagno massimo utile =
+FAST-perf (~+4,5%, quasi 100 MHz, +69 LUT); altrove il default e' la scelta pragmatica. Dati:
+`points_directives.tsv`.

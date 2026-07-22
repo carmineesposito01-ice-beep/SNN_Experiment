@@ -1,0 +1,7 @@
+tag	exp	P_ns	synth_dir	impl_prof	WNS	WHS	delay_ns	Fmax_MHz	LUT	FF	DSP	BRAM
+sp_slow	area	125.000	AreaOptimized_high	area	72.256	0.100	52.744	18.960	3256	1807	52	1
+sp_slow	perf	29.465	PerformanceOptimized	perf	-3.483	0.111	32.948	30.351	3864	1865	52	1
+sp_balanced	area	125.000	AreaOptimized_high	area	102.634	0.129	22.366	44.711	3762	2172	52	1
+sp_balanced	perf	15.946	PerformanceOptimized	perf	-0.783	0.104	16.729	59.776	4128	2202	52	1
+sp_fast	area	125.000	AreaOptimized_high	area	109.289	0.100	15.711	63.650	4417	3286	52	1
+sp_fast	perf	9.686	PerformanceOptimized	perf	-0.395	0.109	10.081	99.197	4708	3326	52	1
