@@ -40,6 +40,7 @@ set dcp    [lindex $argv 0]
 set PER    [lindex $argv 1]
 set outdir [lindex $argv 2]
 set PROF   [lindex $argv 3]   ;# opzionale: "" (default storico) | "area" (ExploreArea) | "perf" (Explore + phys_opt)
+set IODELAY [lindex $argv 4]  ;# opzionale: "io" -> set_input/output_delay 0 (tima anche i path DA/VERSO le porte)
 if {$dcp eq "" || $PER eq "" || $outdir eq ""} {
   error "uso: -tclargs <dcp> <periodo_ns> <outdir>"
 }
@@ -56,6 +57,13 @@ create_clock -name c -period $PER $cp
 # il periodo in vigore si RILEGGE, non si assume: altrimenti si misura un'altra cosa senza accorgersene
 set perEff [get_property PERIOD [get_clocks c]]
 if {abs($perEff - $PER) > 0.001} { error "clock non ridefinito: in vigore $perEff, atteso $PER" }
+if {$IODELAY ne ""} {
+  # tima i percorsi DA/VERSO le porte (input->reg, reg->output): in OOC senza questo le porte NON sono
+  # timate e il percorso ingresso->normalize->go resta INVISIBILE. 0 ns = ingresso stabile al bordo del clock.
+  set_input_delay  -clock c 0.000 [all_inputs]
+  set_output_delay -clock c 0.000 [all_outputs]
+  puts "IMPL-IODELAY: set_input/output_delay 0 su tutte le porte (percorsi I/O timati)"
+}
 puts "IMPL: dcp=$dcp vincolo=$perEff ns ([format %.2f [expr {1000.0/$perEff}]] MHz)"
 
 # PROFILO opzionale: "" = default storico (invariato); "area" = opt ExploreArea; "perf" = Explore + phys_opt.
