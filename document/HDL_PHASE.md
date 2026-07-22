@@ -271,8 +271,10 @@ Un blocco di libreria che contiene l'FSM time-mux deve decidere **quando** inizi
 | **edge-triggered sul cambio d'ingresso** | **1 campione = 1 inferenza** | ✅ funziona con **qualunque** hold ≥ latenza — verificato hold = 341/400/500/777/1000 → **dmax = 0** |
 
 **Regola: 1 campione = 1 inferenza.** Il vincolo residuo (hold ≥ ~341 clock) è **fisica del time-mux**, non una
-convenzione: sull'FPGA reale un control-step da 0.1 s dura **800.000 clock** e l'inferenza ne usa **341 (0,04 %)** →
-soddisfatto con enorme margine da qualsiasi modello sensato. **Il rapporto col `FixedStep` non va più conosciuto.**
+convenzione. Il control-step FISICO dura **0,1 s** (loop a 10 Hz): la latenza (341 clock) deve starci dentro →
+serve un clock ≥ **~4 kHz**, soddisfatto con enorme margine da qualsiasi modello sensato. (A 8 MHz — il clock del
+1° bitstream B2, `matlab/axi/README.md`, un RISULTATO non un requisito — 0,1 s = 800.000 clock e l'inferenza ne
+usa **341 = 0,04 %**.) **Il rapporto col `FixedStep` non va più conosciuto.**
 > **Limite noto dell'edge-trigger**: se due campioni consecutivi hanno tutti e 4 gli ingressi **bit-identici**, il blocco
 > non vede il campione nuovo e salta un'inferenza (il sistema reale invece pulsa `start` a ogni control-step comunque).
 > Con traiettorie reali a Q?.20 non accade; in uno scenario a ingresso **rigorosamente costante** sì. Se serve

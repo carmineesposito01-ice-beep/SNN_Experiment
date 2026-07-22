@@ -341,9 +341,14 @@ reciproco. Il delay ha DUE facce (misurate, non dedotte — `measure_split_tiers
 | **FAST** | **p5+R9** | **0** | 10,762 | **10,95** | 91,3 MHz | **11,41×** | 405 | 50,6 µs | 0,051% |
 
 - **delay = critical-path** = 1/Fmax (periodo del clock). OOC da `points_split.tsv`; route = 1/Fmax_route.
-- **margine @8 MHz** = 125 ns (periodo di deployment) ÷ delay route: quanto la Fmax e' sopra il bisogno.
-- **latenza** = N clock d'inferenza (`run_block_traj_test`, edge-triggered); a 8 MHz → ×125 ns = tempo REALE.
-- **% budget** = latenza ÷ 800.000 clock/control-step (loop a 10 Hz).
+- **margine @8 MHz** = 125 ns ÷ delay route. ⚠️ **8 MHz NON e' un requisito ne' una convenzione**: e' il clock
+  del PRIMO bitstream B2 (lane SNN ~118 ns → Fmax ~8,5 MHz, clockato a 8 MHz tondo — `matlab/axi/README.md`).
+  Un RISULTATO storico, per giunta legato al tetto Fmax di un design vecchio (questi tier fanno 29–91 MHz).
+- **latenza** = N clock d'inferenza (`run_block_traj_test`, edge-triggered); ×125 ns = tempo reale **solo SE**
+  clockato a 8 MHz.
+- **requisito FISICO** = **solo il control-step da 0,1 s** (loop a 10 Hz): la latenza deve starci dentro →
+  clock minimo ~4 kHz (SLOW 341 clk/0,1 s = 3,41 kHz; FAST 405 clk = 4,05 kHz). A 8 MHz e' lo 0,043–0,051%
+  del budget (colonna "% budget 800k" = latenza ÷ 800.000 = 8 MHz × 0,1 s): gia' ~2000× sopra il bisogno.
 
 **Risorse** (post-route, xc7z020):
 
