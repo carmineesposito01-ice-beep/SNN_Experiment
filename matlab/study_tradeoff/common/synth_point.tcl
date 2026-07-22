@@ -17,6 +17,7 @@ set outdir [lindex $argv 1]
 set label  [lindex $argv 2]
 set PER    [lindex $argv 3]     ;# opzionale: vuoto = sintesi libera (comportamento storico)
 set TOP    [lindex $argv 4]     ;# opzionale: default DUT
+set SDIR   [lindex $argv 5]     ;# opzionale: -directive di synth_design (vuoto = default, comportamento storico)
 if {$srcdir eq "" || $outdir eq "" || $label eq ""} {
   error "uso: -tclargs <srcdir> <outdir> <label> \[periodo_ns\] \[top\]"
 }
@@ -48,7 +49,12 @@ if {$PER ne ""} {
   puts "SYNTH: sintesi LIBERA (nessun vincolo) - comportamento storico"
 }
 
-synth_design -top $TOP -part xc7z020clg400-1 -mode out_of_context
+if {$SDIR ne ""} {
+  puts "SYNTH: -directive $SDIR"
+  synth_design -top $TOP -part xc7z020clg400-1 -mode out_of_context -directive $SDIR
+} else {
+  synth_design -top $TOP -part xc7z020clg400-1 -mode out_of_context
+}
 
 # se la sintesi era libera il clock si crea ora, per poter riportare il timing
 if {[llength [get_clocks -quiet c]] == 0} {

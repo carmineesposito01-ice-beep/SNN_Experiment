@@ -39,6 +39,7 @@
 set dcp    [lindex $argv 0]
 set PER    [lindex $argv 1]
 set outdir [lindex $argv 2]
+set PROF   [lindex $argv 3]   ;# opzionale: "" (default storico) | "area" (ExploreArea) | "perf" (Explore + phys_opt)
 if {$dcp eq "" || $PER eq "" || $outdir eq ""} {
   error "uso: -tclargs <dcp> <periodo_ns> <outdir>"
 }
@@ -57,9 +58,24 @@ set perEff [get_property PERIOD [get_clocks c]]
 if {abs($perEff - $PER) > 0.001} { error "clock non ridefinito: in vigore $perEff, atteso $PER" }
 puts "IMPL: dcp=$dcp vincolo=$perEff ns ([format %.2f [expr {1000.0/$perEff}]] MHz)"
 
-set t1 [clock seconds] ; opt_design   ; set t_opt   [expr {[clock seconds]-$t1}]
-set t1 [clock seconds] ; place_design ; set t_place [expr {[clock seconds]-$t1}]
-set t1 [clock seconds] ; route_design ; set t_route [expr {[clock seconds]-$t1}]
+# PROFILO opzionale: "" = default storico (invariato); "area" = opt ExploreArea; "perf" = Explore + phys_opt.
+if {$PROF eq "area"} {
+  set t1 [clock seconds] ; opt_design -directive ExploreArea ; set t_opt   [expr {[clock seconds]-$t1}]
+  set t1 [clock seconds] ; place_design                      ; set t_place [expr {[clock seconds]-$t1}]
+  set t1 [clock seconds] ; route_design                      ; set t_route [expr {[clock seconds]-$t1}]
+  puts "IMPL-PROFILO: area (opt_design -directive ExploreArea)"
+} elseif {$PROF eq "perf"} {
+  set t1 [clock seconds] ; opt_design   -directive Explore   ; set t_opt   [expr {[clock seconds]-$t1}]
+  set t1 [clock seconds] ; place_design -directive Explore   ; set t_place [expr {[clock seconds]-$t1}]
+  phys_opt_design
+  set t1 [clock seconds] ; route_design -directive Explore   ; set t_route [expr {[clock seconds]-$t1}]
+  phys_opt_design
+  puts "IMPL-PROFILO: perf (Explore + phys_opt_design post-place e post-route)"
+} else {
+  set t1 [clock seconds] ; opt_design   ; set t_opt   [expr {[clock seconds]-$t1}]
+  set t1 [clock seconds] ; place_design ; set t_place [expr {[clock seconds]-$t1}]
+  set t1 [clock seconds] ; route_design ; set t_route [expr {[clock seconds]-$t1}]
+}
 puts "IMPL-TEMPI opt=$t_opt place=$t_place route=$t_route s"
 
 set ps [lindex [get_timing_paths -delay_type max -max_paths 1] 0]
