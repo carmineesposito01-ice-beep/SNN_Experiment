@@ -54,8 +54,8 @@ function build_hdl_variants(decVariant, snnSrc, initStyle, archStyle, decInit)
   assert(any(strcmp(initStyle, {'shared','perVar'})), ...
          'initStyle = shared | perVar (dato: %s)', initStyle);
   if nargin < 4 || isempty(archStyle), archStyle = 'chart'; end
-  assert(any(strcmp(archStyle, {'chart','split','split3'})), ...
-         'archStyle = chart | split | split3 (dato: %s)', archStyle);
+  assert(any(strcmp(archStyle, {'chart','split','split3','splitpipe'})), ...
+         'archStyle = chart | split | split3 | splitpipe (dato: %s)', archStyle);
   if nargin < 5 || isempty(decInit), decInit = 'shared'; end
   assert(any(strcmp(decInit, {'shared','pvSplit'})), ...
          'decInit = shared | pvSplit (dato: %s)', decInit);
@@ -175,6 +175,10 @@ function build_hdl_variants(decVariant, snnSrc, initStyle, archStyle, decInit)
     elseif strcmp(archStyle, 'split')
       mount_split(sub, in_names, out_names, ...
         snn_chart_code(srcRom, srcTypes, srcFsm, nrm), ...
+        dec_chart_code(decs{i}, decVariant, Nlist(i), decInit));
+    elseif strcmp(archStyle, 'splitpipe')   % [#34] split + REGISTRO su xn: pipeline del normalize
+      mount_split(sub, in_names, out_names, ...
+        snn_chart_code(srcRom, srcTypes, srcFsm, nrm, true), ...
         dec_chart_code(decs{i}, decVariant, Nlist(i), decInit));
     else   % split3: NORM | SNN | DEC, tre entita' [Leva3]
       mount_split3(sub, in_names, out_names, ...
@@ -408,9 +412,34 @@ function code = snn_chart_code_xn(srcRom, srcTypes, srcFsm)
 end
 
 
-function code = snn_chart_code(srcRom, srcTypes, srcFsm, nrm)
+function code = snn_chart_code(srcRom, srcTypes, srcFsm, nrm, pipe)
 %SNN_CHART_CODE  [SPLIT] La MF "SNN": normalize + snn_b2_fsm, uscita raw(5) + valid. NIENTE decode.
 %  Stessa logica di edge-trigger e stessi persistent di controllo di chart_code, ma si FERMA a raw.
+%  pipe=true [SPLITPIPE]: REGISTRO su xn -> rompe il percorso combinatorio ingresso->normalize->go
+%  (il muro reale io-timed). Fuori dal core snn_b2_fsm congelato. +1 clock di latenza, bit-exact.
+  if nargin < 5 || isempty(pipe), pipe = false; end
+  if pipe
+    Lmain = {
+      'function [raw, valid] = SNN(s, v, dv, v_l)'
+      '%#codegen'
+      '% [SPLITPIPE] normalize + REGISTRO su xn + snn_b2_fsm. Il registro spezza ingresso->normalize->go.'
+      '  Tt = snn_types(''fixed'', 13);'
+      '  xn = local_normalize(s, v, dv, v_l, Tt);'
+      '  persistent xn_reg xprev started prime'
+      '  if isempty(started)'
+      '    xn_reg = xn; xprev = xn; started = true; prime = true;'
+      '    go = false;'
+      '  elseif prime'
+      '    prime = false;'
+      '    go = true;'
+      '  else'
+      '    go = any(xn_reg ~= xprev);'
+      '  end'
+      '  xprev = xn_reg;'
+      '  [raw, valid] = snn_b2_fsm(xn_reg, go);'
+      '  xn_reg = xn;'
+      'end'};
+  else
   Lmain = {
     'function [raw, valid] = SNN(s, v, dv, v_l)'
     '%#codegen'
@@ -427,6 +456,7 @@ function code = snn_chart_code(srcRom, srcTypes, srcFsm, nrm)
     '  xprev = xn;'
     '  [raw, valid] = snn_b2_fsm(xn, go);'
     'end'};
+  end
   L = [Lmain(:); {''}; normalize_code(nrm); {''}; inlined_header()];
   code = strjoin(L, newline);
   code = [code newline newline srcRom newline newline srcTypes newline newline srcFsm];
