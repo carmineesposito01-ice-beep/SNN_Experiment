@@ -422,22 +422,28 @@ function code = snn_chart_code(srcRom, srcTypes, srcFsm, nrm, pipe)
     Lmain = {
       'function [raw, valid] = SNN(s, v, dv, v_l)'
       '%#codegen'
-      '% [SPLITPIPE] normalize + REGISTRO su xn + snn_b2_fsm. Il registro spezza ingresso->normalize->go.'
+      '% [SPLITPIPE] REGISTRO sugli OPERANDI del normalize (fra clamp e moltiplicazione): la'
+      '% moltiplicazione a 34 bit finisce in uno stadio suo -> rompe ingresso->normalize->go. La'
+      '% moltiplicazione e'' a valle di op_reg; l''edge-trigger confronta gli OPERANDI registrati (equivale'
+      '% a confrontare xn, dato che mul e'' deterministica). +1 clock di latenza. Fuori dal core.'
       '  Tt = snn_types(''fixed'', 13);'
-      '  xn = local_normalize(s, v, dv, v_l, Tt);'
-      '  persistent xn_reg xprev started prime'
+      '  op = local_normalize_ops(s, v, dv, v_l);'
+      '  persistent op_reg op_prev started prime'
       '  if isempty(started)'
-      '    xn_reg = xn; xprev = xn; started = true; prime = true;'
+      '    op_reg = cast(zeros(4,1), ''like'', op);  % init COSTANTE (non =op: eviterebbe il registro'
+      '    op_prev = op_reg;                        %  con un bypass combinatorio ingresso->mul->xbuf)'
+      '    started = true; prime = true;'
       '    go = false;'
       '  elseif prime'
       '    prime = false;'
       '    go = true;'
       '  else'
-      '    go = any(xn_reg ~= xprev);'
+      '    go = any(op_reg ~= op_prev);'
       '  end'
-      '  xprev = xn_reg;'
-      '  [raw, valid] = snn_b2_fsm(xn_reg, go);'
-      '  xn_reg = xn;'
+      '  op_prev = op_reg;'
+      '  xn = local_normalize_mul(op_reg, Tt);'
+      '  [raw, valid] = snn_b2_fsm(xn, go);'
+      '  op_reg = op;'
       'end'};
   else
   Lmain = {
@@ -699,27 +705,41 @@ function L = normalize_code(nrm)
 %  UNICA fonte, condivisa da chart_code (blocchi HDL-ready) e da acciidm_chart_code (SP2):
 %  duplicarla farebbe divergere i blocchi in silenzio alla prima modifica dei reciproci.
   M = @(x) sprintf('%.17g', x);
+  % SPLIT in ops (clamp -> operandi) + mul (operandi -> xn): local_normalize resta la COMPOSIZIONE,
+  % bit-identica per i chiamanti condivisi (chart_code, acciidm). Lo split serve a splitpipe per
+  % registrare gli OPERANDI fra clamp e moltiplicazione (rompe il percorso ingresso->normalize->go).
   L = {
     'function xn = local_normalize(s, v, dv, v_l, T)'
-    '%LOCAL_NORMALIZE  fisico -> xn (fixed). Nel deployato la normalize gira in SW float e all''HDL'
-    '%  arriva gia'' xn (HDL_PHASE §3.1); qui sta nel blocco per avere I/O fisico.'
-    '%  RECIPROCI a Q?.30 (NON Q?.20): verificato che con Q?.20 l''arrotondamento di xn devia di 1 LSB'
-    '%  dal path float ~1 volta su 25 step -> uno spike flippa -> i params divergono. Con Q?.30 e'
-    '%  ingressi con >=20 bit frazionari, xn e'' IDENTICO al riferimento float (0 diff).'
+    '%LOCAL_NORMALIZE  fisico -> xn (fixed) = composizione ops+mul (bit-identica all''originale).'
+    '%  Nel deployato la normalize gira in SW float e all''HDL arriva gia'' xn (HDL_PHASE §3.1).'
+    '  op = local_normalize_ops(s, v, dv, v_l);'
+    '  xn = local_normalize_mul(op, T);'
+    'end'
+    ''
+    'function op = local_normalize_ops(s, v, dv, v_l)'
+    '%LOCAL_NORMALIZE_OPS  clamp del dv -> operandi [s; v; d_clamped; v_l] (pre-moltiplicazione).'
+    ['  DVc = fi(' M(nrm(3)) ', 1, 24, 13);   % 24-13-1 = 10 bit interi: DV=' M(nrm(3)) ' ci sta']
+    '                                   % (con Q5.13/18bit saturerebbe a ~16 -> clamp sbagliato)'
+    '  d = dv;                          % clamp a +-DV. NB: d(:) = ... per NON cambiare il tipo di d'
+    '  if d >  DVc, d(:) =  DVc; end    %     (codegen: una variabile non puo'' cambiare tipo, HDL_PHASE §9)'
+    '  if d < -DVc, d(:) = -DVc; end'
+    '  op = [s; v; d; v_l];'
+    'end'
+    ''
+    'function xn = local_normalize_mul(op, T)'
+    '%LOCAL_NORMALIZE_MUL  operandi -> xn. RECIPROCI a Q?.30 (NON Q?.20): con Q?.20 xn devia di 1 LSB'
+    '%  ~1 volta su 25 step -> uno spike flippa -> params divergono. Con Q?.30 e ingressi >=20 bit'
+    '%  frazionari, xn e'' IDENTICO al riferimento float (0 diff).'
     ['  invS   = fi(' M(1/nrm(1))      ', 1, 34, 30);']
     ['  invV   = fi(' M(1/nrm(2))      ', 1, 34, 30);']
     ['  inv2DV = fi(' M(1/(2*nrm(3)))  ', 1, 34, 30);']
     ['  invVL  = fi(' M(1/nrm(4))      ', 1, 34, 30);']
-    ['  DVc    = fi(' M(nrm(3)) ', 1, 24, 13);   % 24-13-1 = 10 bit interi: DV=' M(nrm(3)) ' ci sta']
-    '                                     % (con Q5.13/18bit saturerebbe a ~16 -> clamp sbagliato)'
-    '  d = dv;                            % clamp a +-DV. NB: d(:) = ... per NON cambiare il tipo di d'
-    '  if d >  DVc, d(:) =  DVc; end      %     (codegen: una variabile non puo'' cambiare tipo, HDL_PHASE §9)'
-    '  if d < -DVc, d(:) = -DVc; end'
+    ['  DVc    = fi(' M(nrm(3)) ', 1, 24, 13);']
     '  xn = cast(zeros(4,1), ''like'', T.V);'
-    '  xn(1) = cast(s * invS, ''like'', T.V);'
-    '  xn(2) = cast(v * invV, ''like'', T.V);'
-    '  xn(3) = cast((d + DVc) * inv2DV, ''like'', T.V);'
-    '  xn(4) = cast(v_l * invVL, ''like'', T.V);'
+    '  xn(1) = cast(op(1) * invS, ''like'', T.V);'
+    '  xn(2) = cast(op(2) * invV, ''like'', T.V);'
+    '  xn(3) = cast((op(3) + DVc) * inv2DV, ''like'', T.V);'
+    '  xn(4) = cast(op(4) * invVL, ''like'', T.V);'
     'end'
   };
   L = L(:);
