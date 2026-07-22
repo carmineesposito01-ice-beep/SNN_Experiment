@@ -411,3 +411,75 @@ N≥1000) NON si applica. Si applichera' invece al confronto **SNN-FPGA vs MPC-s
 - **baseline difendibile**: MPC-SW compilato -O3 + flag target dichiarati, NON -O0 (errore metodologico noto).
 - **jitter del control-loop**: e' l'argomento piu' forte per l'HW dedicato — va MISURATO (p99−mediana) e
   confrontato col jitter-margin del loop, non asserito.
+
+---
+
+## 13. CURVA area-vs-clock — sweep vincolato esaustivo (2026-07-22)
+
+Per chiudere il trade-off headroom↔area: per ogni tier, synth TIMING-DRIVEN + impl a una **griglia** di
+vincoli {0.90, 1.00, 1.40, 2.00, 3.00}×delay_OOC + 125 ns. Driver `sweep_clock_curve.sh` (Vivado 2026.1,
+`maxThreads=4` fisso, seed 0; `pin_determinism.tcl`). **Max-Fmax = ritardo raggiunto MINIMO** (estremo
+stretto); **min-area = deploy-ref** (estremo lasco). FF/DSP/BRAM sono **costanti col vincolo** (li fissa la
+pipeline del tier, non la sintesi): SLOW 1817 FF · BAL 2173 · FAST 3288 · DSP 52 · BRAM 1 · **WHS>0 ovunque**.
+
+> ⚠️ METODO: NON si converge a WNS≈0. Misurato (SLOW) che **allentando il vincolo il router ottimizza meno
+> il path critico → il ritardo PEGGIORA** (verso monotòno, sotto). Il max-Fmax sta all'estremo STRETTO, non
+> al crossover WNS=0. La prima stesura del driver convergeva a WNS=0 e dava un'Fmax peggiore del punto
+> stretto — bug corretto, beccato dall'isolation test prima della campagna.
+
+**SLOW (fused+R2)** — FF 1817:
+
+| vincolo | P (ns) | WNS | delay (ns) | Fmax (MHz) | LUT | validità |
+|---|---|---|---|---|---|---|
+| x0.90 | 29,465 | −3,929 | 33,394 | **29,945** | **3718** | achievable |
+| x1.00 | 32,739 | −1,023 | 33,762 | 29,619 | 3645 | achievable (= §12) |
+| x1.40 | 45,835 | +7,366 | 38,469 | 25,995 | 3299 | lim-inf |
+| x2.00 | 65,478 | +20,488 | 44,990 | 22,227 | 3299 | lim-inf |
+| x3.00 | 98,217 | +50,537 | 47,680 | 20,973 | 3300 | lim-inf |
+| deploy | 125,0 | +77,091 | 47,909 | 20,873 | **3298** | lim-inf |
+
+**BALANCED (p3+R5)** — FF 2173:
+
+| vincolo | P (ns) | WNS | delay (ns) | Fmax (MHz) | LUT | validità |
+|---|---|---|---|---|---|---|
+| x0.90 | 15,946 | −1,298 | 17,244 | **57,991** | **4072** | achievable |
+| x1.00 | 17,718 | −0,061 | 17,779 | 56,246 | 3891 | achievable (= §12) |
+| x1.40 | 24,805 | +4,145 | 20,660 | 48,403 | 3846 | lim-inf |
+| x2.00 | 35,436 | +13,899 | 21,537 | 46,432 | 3846 | lim-inf |
+| x3.00 | 53,154 | +29,260 | 23,894 | 41,852 | 3847 | lim-inf |
+| deploy | 125,0 | +101,520 | 23,480 | 42,589 | **3847** | lim-inf |
+
+**FAST (p5+R9)** — FF 3288:
+
+| vincolo | P (ns) | WNS | delay (ns) | Fmax (MHz) | LUT | validità |
+|---|---|---|---|---|---|---|
+| x0.90 | 9,686 | −0,844 | 10,530 | **94,967** | **4639** | achievable |
+| x1.00 | 10,762 | −0,192 | 10,954 | 91,291 | 4548 | achievable (= §12) |
+| x1.40 | 15,067 | +1,862 | 13,205 | 75,729 | 4508 | lim-inf |
+| x2.00 | 21,524 | +6,955 | 14,569 | 68,639 | 4509 | lim-inf |
+| x3.00 | 32,286 | +15,770 | 16,516 | 60,547 | 4509 | lim-inf |
+| deploy | 125,0 | +108,937 | 16,063 | 62,255 | **4509** | lim-inf |
+
+### Lettura
+1. **Validazione:** x1.00 (vincolo = delay_OOC) **riproduce ESATTAMENTE** i post-route di §12 (29,619 /
+   56,246 / 91,291) → dati vecchi confermati; e x1.00 e' identico a `maxThreads` 2 vs 4 → determinismo provato.
+2. **Trade-off reale e monotòno:** stringendo, Fmax↑ e area↑; allentando, entrambi↓ fino al **floor d'area**.
+3. **Tassa headroom** (area per il max-Fmax vs floor): SLOW **+420 LUT (11%)**, BAL +226 (5,5%), FAST +131
+   (2,8%). **Si restringe con la profondita' di pipeline** (fused→p5): piu' registri = meno logica
+   combinatoria comprimibile.
+4. **Il floor d'area si raggiunge gia' a ~1,4×** e non cala oltre (SLOW 3299→3298, BAL 3846→3847, FAST
+   4508→4509). NON serve un clock lentissimo per l'area minima: basta rilassare a ~1,4× il delay_OOC (Fmax
+   ancora 26/48/76 MHz).
+5. **Il floor lo fissa il TIER, non il vincolo:** SLOW 3298 < BAL 3846 < FAST 4508 LUT. La scelta di
+   pipeline mette un pavimento che rilassare il clock non abbassa (Δ SLOW→FAST al floor = **+1210 LUT**).
+6. **Max-Fmax = LIMITE INFERIORE:** cade sul punto piu' stretto (x0.90) col ritardo ancora in calo → il
+   tetto vero e' oltre 0,90×, ma per +0,3–4% di Fmax si paga la tassa-area, ed e' ~10× oltre il bisogno di
+   deployment. Non inseguito (immateriale).
+
+### Implicazione per il deployment (budget reale kHz–MHz)
+Ogni punto ha Fmax ≫ del bisogno → si sceglie per **AREA**: il **floor** (~1,4×) da' SLOW 3298 / BAL 3846 /
+FAST 4508 LUT con Fmax 26/48/76 MHz (margine enorme). Per FAST il floor (4508) costa solo **−40 LUT** vs
+x1.00 (4548, 91 MHz): tanto vale tenere x1.00. Per SLOW il divario x1.00→floor e' +347 LUT: li' rilassare
+conviene se serve chip per il V2I.
+
+Dati grezzi: `points_split_curve.tsv`. Log/artefatti: `D:/zbd_tradeoff/donatello_split_sweep/` (rigenerabili).
