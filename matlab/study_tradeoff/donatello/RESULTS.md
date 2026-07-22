@@ -331,16 +331,40 @@ ha portato il blocco da 25,3 (don_a1) a 91,3 MHz reali = **×3,6**, con area con
 
 Ogni metrica verificata sull'artefatto, non ereditata. Snapshot SNN congelati, cache azzerata.
 
-| tier | config | dmax | Fmax OOC | Fmax post-route | LUT OOC→route | FF | DSP | BRAM(tile/RAMB18) | WHS | entity |
-|---|---|---|---|---|---|---|---|---|---|---|
-| SLOW | fused+R2 | **0** | 30,545 | **29,619** | 3681→3645 | 1817 | 52 | 1 / 2 | +0,121 | 2 (SNN,DEC) |
-| BALANCED | p3+R5 | **0** | 56,440 | **56,246** | 4282→3891 | 2173 | 52 | 1 / 2 | +0,098 | 2 (SNN,DEC) |
-| **FAST** | **p5+R9** | **0** | 92,920 | **91,291** | 4883→4548 | 3288 | 52 | 1 / 2 | +0,098 | 2 (SNN,DEC) |
+**Timing & DELAY** — la Fmax non si legge da sola: il delay e' la grandezza fisica, la Fmax e' il suo
+reciproco. Il delay ha DUE facce (misurate, non dedotte — `measure_split_tiers.sh`):
 
-Note: `dmax=0` su traiettoria reale per la coppia SPECIFICA di ogni tier (gate_split_tiers, non ereditato
-dal preflight). Il vincolo di sintesi riduce ANCHE l'area (LUT OOC→route in calo su tutti). BRAM 1 tile /
-2 RAMB18 invariata OOC→post-route. Latenze: SLOW 341 (fused, no fasi decode), FAST 405 (p5, 5 fasi).
-split3 (leva 3) su SLOW: -348 LUT ulteriori a Fmax invariata.
+| tier | config | dmax | delay OOC (ns) | delay route (ns) | Fmax route | margine @8 MHz | latenza (clk) | latenza @8 MHz | % budget 800k |
+|---|---|---|---|---|---|---|---|---|---|
+| SLOW | fused+R2 | **0** | 32,739 | **33,76** | 29,6 MHz | **3,70×** | 341 | 42,6 µs | 0,043% |
+| BALANCED | p3+R5 | **0** | 17,718 | **17,78** | 56,2 MHz | **7,03×** | 363 | 45,4 µs | 0,045% |
+| **FAST** | **p5+R9** | **0** | 10,762 | **10,95** | 91,3 MHz | **11,41×** | 405 | 50,6 µs | 0,051% |
+
+- **delay = critical-path** = 1/Fmax (periodo del clock). OOC da `points_split.tsv`; route = 1/Fmax_route.
+- **margine @8 MHz** = 125 ns (periodo di deployment) ÷ delay route: quanto la Fmax e' sopra il bisogno.
+- **latenza** = N clock d'inferenza (`run_block_traj_test`, edge-triggered); a 8 MHz → ×125 ns = tempo REALE.
+- **% budget** = latenza ÷ 800.000 clock/control-step (loop a 10 Hz).
+
+**Risorse** (post-route, xc7z020):
+
+| tier | LUT OOC→route | FF | DSP | BRAM (tile/RAMB18) | WHS | entity |
+|---|---|---|---|---|---|---|
+| SLOW | 3681→3645 | 1817 | 52 | 1 / 2 | +0,121 | 2 (SNN,DEC) |
+| BALANCED | 4282→3891 | 2173 | 52 | 1 / 2 | +0,098 | 2 (SNN,DEC) |
+| **FAST** | 4883→4548 | 3288 | 52 | 1 / 2 | +0,098 | 2 (SNN,DEC) |
+
+> **Il delay pesa la Fmax — e le due facce tirano in versi OPPOSTI.** Il critical-path premia FAST
+> (10,95 ns, **11,4× di margine** sui 125 ns); la latenza end-to-end **penalizza** FAST (405 clk vs 341:
+> piu' stadi di pipeline = piu' clock, e a 8 MHz ogni clock costa gli stessi 125 ns → FAST e' il PIU' LENTO
+> in wall-clock, 50,6 vs 42,6 µs). Senza la colonna latenza si crederebbe FAST "piu' veloce": non lo e' —
+> ha piu' MARGINE ma piu' latenza. **Chi vince**: a 8 MHz la latenza e' lo 0,043–0,051% del budget
+> (control-step 100 ms), quindi gli +64 clock di FAST (+8 µs) sono immateriali; domina il margine di
+> critical-path (robustezza: chiusura timing facile, testa per alzare il clock, PVT). Se il budget di
+> latenza fosse stretto la lettura si ribalterebbe — ecco perche' il delay va nel record accanto alla Fmax.
+
+Note: `dmax=0` su traiettoria reale per la coppia SPECIFICA di ogni tier (`measure_split_tiers.sh`, non
+ereditato dal preflight). Il vincolo di sintesi riduce ANCHE l'area (LUT OOC→route in calo su tutti). BRAM
+1 tile / 2 RAMB18 invariata OOC→post-route. split3 (leva 3) su SLOW: -348 LUT ulteriori a Fmax invariata.
 
 ### ✅ Blocco A: COMPLETO. Deployabile raccomandato = FAST (p5+R9 split) a ~91 MHz reali.
 Da 25,3 (don_a1 fused+R9 chart) a 91,3 post-route = **×3,6**, area confrontabile, hold positivo.
