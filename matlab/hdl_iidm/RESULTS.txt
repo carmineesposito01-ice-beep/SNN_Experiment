@@ -10,6 +10,21 @@
 # ------|------------------------------------------|-----------|------|------|-----|-----------------------------
   R0    | baseline (divide() combinatoria in-chart)| 15.673    | 8230 | 3183 | 69  | divisore IIDM ql_7 (204 liv)
   R1    | divisore SEQUENZIALE in-chart (1 bit/ciclo)| 17.495   | 7873 | 3276 | 68  | st_sab (s_star/sqrt, 87 liv)
+  R2    | radice SEQUENZIALE in-chart (2 bit/ciclo)  | 29.344   | 7670 | 3331 | 68  | st_a_iidm (38 liv, 34.1ns)
+  R4    | decode spezzato (decode_a / decode_b)      | 30.971   | 7881 | 3514 | 68  | st_a_iidm (36 liv)
+  R5    | iidm_use spezzata (quadrati / prodotti)    | 33.904   | 7945 | 3588 | 68  | acc_3 (35 liv)
+  R6    | iidm_final spezzata (a_cah+bf*th / blend)  | 42.569   | 7740 | 3581 | 68  | st_v_free (25 liv)
+  R7    | terza fase USE: uu^2 isolato               | 42.834   | 7689 | 3621 | 67  | st_a_l_bar (27 liv)
+  R8    | iidm_prep spezzata (filtro OU / struct)    | 46.292   | 7872 | 3563 | 67  | alf_7 (21 liv)
+  R9    | filtro OU spezzato (diff.finita / esponenz.)| 48.506  | 7846 | 3606 | 67  | pv_4 (21 liv)
+  R10   | terza fase decode (interp / scalatura)     | 52.290   | 7948 | 3727 | 67  | acc_3 (24 liv)
+  R11   | terza fase finale (blend / cast+clamp)     | 57.478   | 7893 | 3749 | 67  | dfrv_9 (18 liv)
+  R12   | decode_a spezzata (normalizz. / scala)     | 61.061   | 8054 | 3818 | 67  | st_a_iidm (21 liv)
+  R13   | (1-zz) isolato nella fase di mezzo         | 65.304   | 8164 | 3860 | 68  | sX_10 (21 liv)
+  R14   | prodotto af*bf in fase propria             | 70.353   | 8240 | 3874 | 68  | st_s_star (19 liv)
+  R15   | vq*Tf_ isolato (non dipende da q)          | 72.865   | 8133 | 3910 | 68  | st_uu (16 liv)
+  R16   | USE riorganizzata su 4 fasi (1 op/fase)    | 77.592   | 8222 | 3937 | 68  | dsv_5 (14 liv)
+  R17   | decode_b spezzata (tabella / interp)       | 77.936   | 8387 | 4069 | 68  | st_a_iidm (14 liv)
 #
 # === ROUND 1 (2026-07-19) - divisore digit-recurrence a mano, dentro la chart ===
 # Fmax +11.6% (15.673 -> 17.495) e AREA IN CALO (-357 LUT, -4.3%): un divisore a 1 bit/ciclo e'
@@ -38,6 +53,31 @@
 #       e passata come argomento -> cambia la firma di iidm_prep, che e' SINGLE-SOURCE COL MODEL
 #       (acc_iidm_fsm) -> va aggiornato anche il model, o il single-source si rompe (buco §2.1).
 #
+# === R2 - TASK 1 CHIUSO (2026-07-19): l'algoritmo della radice e' certificato ===
+# sqrt_seq_setup/step/fin: restoring digit-recurrence a 2 bit per passo (NB=10 passi).
+#   PROVA ESAUSTIVA, non campionata: TUTTI i 262144 valori rappresentabili del dominio (x in Q10.8
+#   da 0 a 1023.996) -> divergenti 0/262144, dmax=0 vs sqrt() nativa.
+#   SENSIBILITA' provata su DUE guasti iniettati (un cancello che non puo' fallire non e' un cancello):
+#     A) arrotondamento nearest invece di zero -> 130816/262144 divergenti, dmax=0.0625 (1 LSB Q6.4)
+#     B) off-by-one nella ricorrenza (`>` invece di `>=`) -> 119992/262144, dmax=6.8125
+#
+# ⚠️ LEZIONE DEL BANCO DI PROVA (costata un falso rosso): il primo smoke dava 2/8 divergenti, ma
+#   l'errore era NEL PROBE. Gli ingressi erano costruiti con fi(val, ntx) -- SENZA fimath -> default
+#   Round=Nearest, mentre nel codice vero af/bf sono cast 'like' T.par e portano Round=Zero.
+#   Il "riferimento" arrotondava, sqrt_seq troncava: divergenza apparente su codice GIUSTO.
+#   -> la fimath e' parte del tipo anche nel BANCO DI PROVA, non solo nel prototipo HDL.
+#
+# === R2 - QUANTO VALE IL PREMIO (misurato PRIMA di spendere il refactor, 2026-07-19) ===
+# Il refactor R2 e' invasivo (iidm_prep e' single-source col model -> 3 punti da toccare + G2 sui 60k):
+# non si parte senza sapere quanto compra. L'Fmax dopo un'ottimizzazione non e' infinito, e' il SECONDO
+# path. Metodo: sintesi OOC di R1 salvando il DCP, poi `set_false_path -to <registri del collo>` e si
+# rilegge il peggiore che resta. (scripts/spectrum_iidm.tcl + D:/zbd_pipe/ceiling.tcl)
+#   spettro grezzo: TUTTI i 400 path peggiori finiscono su st_sab -> il cono della radice DOMINA.
+#   spenti i 558 registri st_sab -> TETTO-DOPO-R2 = 29.605 MHz  (ep st_a_iidm_18, 38 liv, 33.771 ns)
+# PREMIO = 17.495 -> 29.605 = +69%.  VERDETTO: si procede.
+# NB: 29.6 coincide col tetto SNN misurato in 2d (~29.3, spettro del controllore R2): dopo R2 i due
+#   blocchi tornano in EQUILIBRIO -- da li' in poi salire richiede di lavorare su entrambi.
+#
 # PIANO R2 (stesso metodo di R1, che ha funzionato):
 #   1) sqrt_seq_setup/step/fin: ricorrenza restoring con quadrato di prova, in fixed-point.
 #   2) PROVA ESAUSTIVA (non campionata!): a,b hanno dominio piccolo (~[0.5,3]) -> si enumerano TUTTI
@@ -46,6 +86,224 @@
 #   3) estrarre la sqrt da iidm_prep (sab come ARGOMENTO) e allineare acc_iidm_fsm: single-source.
 #   4) stadi SQRT-INIT / SQRT-STEP x n / SQRT-FIN nella chart, come DIV-INIT/STEP/FIN.
 #   5) cancelli (G3/G4 + parity + B-1 + **G2**, che qui serve davvero perche' il model cambia) + OOC.
+# ============================================================================================
+# === R5 / R6: LA SCALA E' VALIDATA MULTI-PASSO. Fmax 15.673 -> 42.569 (+172%) ===
+#
+#  R5 = iidm_use spezzata in _a (SOLO i quadrati: k2 q^2, k3 z e z^2) / _b (prodotti e selezioni).
+#       Campi `uu`/`zz` a LARGHEZZA PIENA in iidm_prep (prototipo sq0 = T.acc*T.acc): stringerli
+#       avrebbe cambiato la matematica (§2.1). Il raggruppamento q^4 -> (q^2)^2 e' bit-neutro perche'
+#       i prodotti sono a precisione piena -- PROVATO da G2, non assunto.
+#       -> 33.904 MHz, collo acc_3 (35 liv, 29.488 ns).   LUT 7945  FF 3588   latenza 576
+#  R6 = iidm_final spezzata in _a (a_cah + bf*th) / _b (blend + clamp). Il parziale `blv` NON ha un
+#       tipo dichiarato: lo si lascia dedurre dall'espressione e la chart lo cattura inizializzando lo
+#       stato con la stessa funzione -> impossibile sbagliare la larghezza.
+#       -> 42.569 MHz, collo st_v_free (25 liv, 23.484 ns). LUT 7740 (-205!) FF 3581  latenza 577
+#
+# ✅ LA SCALA E' VALIDATA A CINQUE PASSI (e la ritrattazione qui sotto era SBAGLIATA):
+#    R5 e' atterrato ESATTAMENTE sul gradino 5 della scala: previsto acc_3 33.90 MHz 35 liv 29.492 ns,
+#    misurato acc_3 33.904 MHz 35 liv 29.488 ns. Tutto: frequenza, collo, livelli, ritardo.
+#    R6 ha SALTATO i gradini 6-7 (pv_3, 37.4/38.0) perche' erano gia' stati rimossi dal decode in R4,
+#    atterrando al livello del gradino 8 (42.8). Coerente.
+#    -> L'errore di R4 non era il metodo: era che il gradino 0 (st_a_iidm) NON era stato risolto in
+#       quella build (DIST=off, e il tool non lo rompeva piu' su R4). Una previsione CONDIZIONATA va
+#       verificata risolvendo TUTTI i colli che la condizionano, in ordine.
+#
+#  R7 = terza fase USE (iidm_use_m) per isolare uu^2 = q^4 dietro un registro. Campo `uu2` col tipo
+#       PIENO (~104 bit, prototipo sq1 = sq0*sq0): costa REGISTRI, non moltiplicatori -- il prodotto
+#       largo esisteva gia', si e' solo messo un registro dopo.
+#       -> 42.834 MHz, collo st_a_l_bar (27 liv, 23.339 ns). LUT 7689 FF 3621 DSP 67  latenza 582
+#       Guadagno minimo (+0.6%) ma ha spostato il collo, che era lo scopo.
+#
+# ✅ TERZA CONFERMA ESATTA DELLA SCALA: gradino 8 previsto st_a_l_bar 42.83 MHz 27 liv 23.343 ns,
+#    misurato st_a_l_bar 42.834 MHz 27 liv 23.339 ns. (Le altre due: R5 sul gradino 5, R6 sul livello 8.)
+#
+#  R8 = iidm_prep spezzata in _a (SOLO il filtro OU) / _b (cast + struct). Copre i gradini 8 E 9:
+#       st_a_l_bar e alf sono lo stesso calcolo. -> 46.292 MHz, collo alf_7 (21 liv, 21.595 ns).
+#       LUT 7872 FF 3563 DSP 67  latenza 583.
+#
+# ✅ QUARTA CONFERMA DELLA SCALA: gradino 9 previsto alf 46.53 MHz 21.486 ns, misurato alf_7 46.292 MHz
+#    21.595 ns (scarto 0.5%).  Conferme: R5 (gradino 5), R6 (livello 8), R7 (gradino 8), R8 (gradino 9).
+#
+#  R9  = filtro OU spezzato in iidm_prep_a (differenza finita d=(lq-vlp)*INV_DT, larghezza PIENA e
+#        tipo DEDOTTO) / iidm_prep_a2 (passo esponenziale). ⚠️ ordine obbligato: `d` usa il vlp VECCHIO,
+#        vlp si aggiorna DOPO -- invertirli darebbe un filtro sul campione sbagliato, che compila.
+#        -> 48.506 MHz, collo pv_4 (21 liv). LUT 7846 FF 3606. latenza 584.
+#  R10 = terza fase del decode: decode_b (interpolazione -> s) / decode_c (lo + hilo*s).
+#        `sv` porta il tipo Ts GIA' DICHIARATO nell'originale -> nessun rischio §2.1 qui.
+#        G2 non serve (il decode NON e' nel model: acc_iidm_fsm riceve p). Cancello competente = parity.
+#        -> 52.290 MHz, collo acc_3 (24 liv, 19.117 ns). LUT 7948 FF 3727. latenza 585.
+#
+# ============================================================================================
+# === STUDIO IIDM CHIUSO A R17 = 77.936 MHz (+397%). Il rendimento e' collassato. ===
+#   R17 ha comprato +0.4% (77.592 -> 77.936) costando 165 LUT e 132 FF: primo round a rendimento nullo.
+#   Scala misurata su R17 (spec_r17 + stair17.tcl) -- ~20 colli fra 78 e 99 MHz, quasi tutti a <2%
+#   l'uno dall'altro:
+#     0    77.94  st_a_iidm (14 liv) | 1-3  78.4->80.2 | 4  84.09 blv | 5-8  85.5->88.3
+#     9-10 92.8->93.9 | 11-14  97.83 dadj (7 liv!) | 19  99.31 acc
+#     24-39  105.5->106.9  pCm_recip / pCm_Iip  <-- PLATEAU SNN (terza conferma indipendente)
+#   -> TETTO IIDM ~99 MHz, ma servirebbero ~20 round da ~1% ciascuno.
+#
+# ⛔ E CONTINUARE SAREBBE TECNICAMENTE SBAGLIATO, non solo poco redditizio:
+#   al gradino 11 il path ha 7 LIVELLI LOGICI e 10.2 ns = 1.46 ns/livello, contro gli 0.92 ns/livello
+#   del collo attuale (14 liv / 12.8 ns). Il ritardo NON e' piu' profondita' logica: e' ROUTING e FANOUT.
+#   Spezzare la logica in fasi non tocca quel problema. Conferma: i path partono da
+#   `started_not_empty_2_reg_rep__N` -- il suffisso `_rep__N` e' Vivado che REPLICA il registro per
+#   gestire il fanout, cioe' la tecnica giusta per l'instradamento, che il tool applica gia' da solo.
+#   -> Le leve rimaste (duplicazione registri, floorplanning, riduzione fanout) sono di natura DIVERSA
+#      da quelle usate finora e vanno oltre lo scopo di questo studio.
+# ============================================================================================
+#
+# === STATO AL 2026-07-20: 15.673 -> 77.936 MHz = +397%, 17 round, tutti bit-exact ===
+#   LUT 8230 -> 8222 (praticamente invariate) | FF 3183 -> 3937 (+754) | DSP 69 -> 68 | BRAM 1
+#   latenza 419 -> 593 clock su 800.000 per control-step (0,07%)
+#   R12..R16: il regime e' cambiato -- le leve "win-win" (aritmetica srotolata) sono esaurite, ora si
+#   paga in FF. Ma l'area totale resta al livello di partenza dopo aver quintuplicato la frequenza.
+#   R16 e' il round piu' invasivo: RIORGANIZZAZIONE delle fasi USE (non un'aggiunta in coda) verso
+#   "un'operazione per fase", 4 fasi per entrambe le catene lunghe (k=2: min/^2/^2/*af ; k=3: min/^2/1-x/*).
+#   ⚠️ Rischio specifico di quel round: sbagliare l'ORDINE (usare un campo prima che sia scritto) NON
+#   da' errore -- si legge il valore del control-step precedente. Solo G2 sui 60k lo vede.
+#
+# === (storico) STATO AL 2026-07-19: 15.673 -> 52.290 MHz = +234%, 10 round ===
+#   LUT 8230 -> 7948 (-282, SOTTO la partenza) | FF 3183 -> 3727 (+544) | DSP 69 -> 67 | BRAM 1
+#   latenza 419 -> 585 clock su 800.000 per control-step (0,07%: irrilevante)
+#   Cancelli verdi ad ogni round: G2 0/60000 (quando il model cambia), G3/G4 dmax=0 vs model E vs SP3,
+#   parity SNN 0/60000, B-1 0/3000 su RTL rigenerato in xsim.
+#
+#  R11 = terza fase della finale: iidm_final_b (blend (1-COOL)*a_iidm + COOL*bl, larghezza PIENA e tipo
+#        DEDOTTO) / iidm_final_c (cast a T.acc + selezione ACC + clamp -> accel).
+#        -> 57.478 MHz, collo dfrv_9 (18 liv, 17.391 ns) = l'uscita di decode_a. LUT 7893 FF 3749.
+#
+# ⚠️ DUE TRAPPOLE DI SOSTITUZIONE TESTUALE, incontrate qui (costano un tentativo a vuoto ciascuna):
+#    (a) il nome scelto per il nuovo persistente era `abv`, che e' SOTTOSTRINGA di `sabv` (la radice):
+#        6 falsi riscontri. Rinominato `acbl`. Scegliere nomi che non siano sottostringa di altri.
+#    (b) l'ancora `blv = iidm_final_a(st, thl);` compare DUE volte (init e fase 7): count!=1.
+#        Ancorare al commento che esiste solo nell'init.
+#    Lo script ha `assert` prima di ogni replace e scrive SOLO alla fine -> il file e' rimasto integro
+#    e la causa e' emersa subito. Un replace silenzioso avrebbe lasciato uno stato incoerente.
+#
+#  PROSSIMO COLLO (superato da R11): acc_3 (24 liv, 19.117 ns) -- di nuovo la fase FINAL/uscita. Gia' spezzata in R6
+#    (iidm_final_a/_b): servirebbe una terza fase, o spezzare il clamp finale.
+#  Dopo, la scala prevede il gradino 12 = numl (iidm_nd) a 84 MHz, poi il plateau SNN ~107.
+#
+#  --- vecchio testo, superato ---
+#  (PROSSIMO COLLO: alf_7 (21 liv) = il filtro OU IN SE', ancora tutto in un clock:
+#    alf = ALPHA*alf + (1-ALPHA)*((lq-vlp)*INV_DT).  Leva: spezzarlo in due --
+#    fase 1: d = (lq - vlp) * INV_DT   |   fase 2: alf = ALPHA*alf + (1-ALPHA)*d
+#    (il parziale `d` va registrato a LARGHEZZA PIENA: farlo dedurre dall'espressione, come blv in R6.)
+#    Dopo, la scala prevede il gradino 12 = numl (iidm_nd) a 84.12 MHz, poi il plateau SNN ~107.
+#  (vecchio testo: gradino 9 = alf_5 (46.53 MHz). st_a_l_bar E alf sono ENTRAMBI il filtro OU dentro
+#    iidm_prep: alf = ALPHA*alf + (1-ALPHA)*((lq-vlp)*INV_DT), poi a_l_bar = min(alf, af).
+#    Leva: spezzare iidm_prep in _a (SOLO il filtro OU: alf, vlp) e _b (i cast + la costruzione dello
+#    struct, che usa l'alf gia' aggiornato). Il model chiama la composta -> G2 necessario.
+#    Dopo il gradino 9 la scala prevede 84 (numl, iidm_nd) e poi il plateau SNN ~107.
+#
+#  --- vecchio commento R6, superato ---
+#  (PROSSIMO COLLO: st_v_free (25 liv) = af*(1 - uu^2) in iidm_use_b -> due moltiplicatori ancora in
+#    serie. Servirebbe una TERZA fase USE per isolare uu^2. ⚠️ Attenzione: il tipo pieno di uu^2 e'
+#    ~104 bit (T.acc e' 26): registrarlo costa. L'originale lo calcolava ma lo consumava subito.)   <-- risolto da R7
+# ============================================================================================
+#
+# ============================================================================================
+# === R4 (decode spezzato) - ⛔ LA "RITRATTAZIONE" QUI SOTTO E' SUPERATA: vedi il riquadro R5/R6 ===
+# R4 = snn_decode_lut tagliata in decode_a (indice+frazione) / decode_b (interp -> 5 parametri), due
+#   fasi della chart invece di una. Bit-exact: G3/G4 dmax=0, parity 0/60000 (max raw 0), B-1 0/3000.
+#   NB: i 5 rami restano SROTOLATI -- il time-mux sarebbe un'ottimizzazione di AREA, che non serve
+#   (14% delle LUT occupate). Qui serviva solo profondita'.
+#
+#   R2                      29.344  collo st_a_iidm (38 liv)
+#   R2 + tool (DIST)        30.600  collo pv_3      (31 liv)
+#   R4 (decode)             30.971  collo st_a_iidm (36 liv)   LUT 7881 (+211) FF 3514 (+183)
+#   R4 + tool (DIST)        30.971  collo st_a_iidm (36 liv)   FF 3553 (+39 SPRECATI: 0 guadagno)
+#
+# ⚠️ LE LEVE NON SI SOMMANO: ognuna da sola vale ~+5%, insieme +5.5% (non +9%). E il tool, che su R2
+#   comprava +4.3%, su R4 non compra NULLA (identico all'ultima cifra) pur spendendo 39 FF.
+#
+# ⛔ RITRATTAZIONE: avevo scritto che il false_path e' "PREDITTIVO, non indicativo" sulla base di due
+#   conferme A UN PASSO (29.605 vs 29.344 e 30.599 vs 30.5998, quest'ultima a 4 cifre). ALLA PRIMA
+#   VERIFICA MULTI-PASSO HA FALLITO: previsti 32.06 su st_v_free, misurati 30.97 su st_a_iidm -- sbagliato
+#   il numero E l'identita' del collo.
+#   Il modello implicito della scala ("i colli sono indipendenti, si tolgono in ordine e i guadagni si
+#   accumulano") e' FALSO: i path condividono logica e routing, e risolverne uno ridistribuisce gli altri.
+#   -> La scala e' un ORDINAMENTO dei colli, NON una tabella di marcia. I gradini lontani (84, 107 MHz)
+#      NON sono obiettivi affidabili e non vanno citati come raggiungibili.
+#   -> Corollario metodologico: una previsione CONDIZIONATA ("se risolvi 1 e 2 allora X") non si verifica
+#      risolvendo solo il 2. Il primo tentativo (R4 senza tool) misurava un'altra cosa: errore di
+#      DISEGNO dell'esperimento, non del metodo. Ma il tentativo corretto (R4+tool) ha comunque fallito.
+# ============================================================================================
+#
+# === R3 "GRATIS": il TOOL fa quello che avrei fatto a mano (2026-07-19) ===
+# Tutti i round di questo studio sono girati con DIST=off CRP=off: pipelining fatto TUTTO a mano.
+# Riprovato il probe di 2b (probe_pipe_tanh) sul design POST-R2, 4 config:
+#   r2op4d (OP=4,DIST) | r2op8d (OP=8,DIST) | r2op16d (OP=16,DIST) | r2op4c (OP=4,DIST,CRP)
+#   -> TUTTE E QUATTRO: Fmax = 30.5998 MHz, critpath started_not_empty_2 -> pv_3 (31 liv, 32.673 ns).
+#      IDENTICHE all'ultima cifra. Il tool rompe l'UNICO collo che sa rompere (st_a_iidm) e si ferma:
+#      dargli 4x i registri non compra nulla. Costo del vincente (r2op4d): +39 FF, +1 LUT, +1 DSP.
+#   -> SMENTITA la mia previsione ("la retroazione della chart impedira' la ridistribuzione"): HDL Coder
+#      ridistribuisce registri DENTRO la chart. Il limite non era la retroazione.
+#
+# ✅ CONFERMA DEL METODO (il risultato piu' utile di tutto lo studio): la previsione col false_path
+#    diceva "tolto st_a_iidm -> 30.599 MHz su pv_3, 31 liv, 32.674 ns". La misura INDIPENDENTE dice
+#    30.5998 MHz su pv_3, 31 liv, 32.673 ns. Quattro cifre significative. Seconda conferma dopo R2
+#    (previsti 29.605, misurati 29.344). -> lo spettro col false_path e' PREDITTIVO, non indicativo:
+#    si puo' decidere se un round vale la pena SENZA implementarlo.
+#
+# ⚠️ NON ANCORA VALIDATO: queste sono misure di SINTESI su RTL rigenerato dal modello scratch m_pipe_*.
+#    Il pipelining preserva la funzione per costruzione, ma "per costruzione" non e' un cancello: cambia
+#    la LATENZA del VHDL, quindi per usarlo davvero vanno messe le opzioni sul blocco di libreria e
+#    rifatto B-1 (RTL == blocco) con hold adeguato. Finche' non e' fatto, 30.600 e' un numero di studio.
+#
+# === POTENZA (2026-07-19) - per lo studio di trade-off ===
+# ⚠️ VECTORLESS (attivita' presunta dal tool), NON da SAIF: valida per CONFRONTARE i round fra loro,
+#    non come consumo reale. I numeri assoluti della Fase B venivano da SAIF su gate-level funcsim.
+#   R1: totale 116 mW = 13 dinamica + 103 statica
+#   R2: totale 115 mW = 12 dinamica + 103 statica   <- R2 consuma MENO (coerente con -203 LUT)
+#   La statica e' il 90% del totale: stesso quadro della Fase B (92%).
+#
+# ⚠️ ATTENZIONE ALL'INTERPRETAZIONE (vale per tutto lo studio di trade-off): queste misure sono TUTTE
+#   allo STESSO clock (125 ns = 8 MHz), che e' il periodo di confronto della Fase B. La dinamica scala
+#   con la frequenza: girare davvero a 29 MHz invece che a 8 la porterebbe da ~12 a ~44 mW (~3,7x),
+#   totale ~147 mW invece di 115. Quindi l'Fmax alta e' "gratis" solo se NON la si usa per alzare il
+#   clock. E in questo sistema NON serve alzarlo: il control-step e' 0,1 s = 800k clock a 8 MHz, mentre
+#   il blocco ne consuma ~571 -- si e' gia' 1400x piu' veloci del necessario.
+#   -> L'Fmax guadagnata va spesa come MARGINE (timing chiuso con slack, tolleranza a PVT, spazio per
+#      logica futura, eventualmente tensione/dispositivo piu' piccoli), NON come clock piu' alto.
+#      Questo e' il vero contenuto del trade-off, e cambia quale configurazione conviene scegliere.
+#
+# ============================================================================================
+# === STUDIO IIDM CONVERGUTO A R2 = 29.344 MHz (2026-07-19). R3 NON SI FA. ===
+# Misurato PRIMA di implementare, con lo stesso metodo dei round precedenti (false_path sul collo):
+#   spenti i 193 registri st_a_iidm -> TETTO-DOPO-R3 = 30.599 MHz  (ep pv_3, 31 liv, 32.674 ns)
+#   PREMIO R3 = +4.3%.  Costo = refactor invasivo (campo nuovo a LARGHEZZA PIENA nello struct -- 1-z^2
+#   NON va stretto a T.acc o e' il bug §2.1 -- + iidm_use spezzata + model riallineato + G2 sui 60k).
+#   VERDETTO: sproporzionato. Si chiude a R2.
+#
+# IL SEGNALE DELLA CONVERGENZA (utile per i prossimi studi): fino a R2 TUTTI i 400 path peggiori
+#   finivano sullo STESSO endpoint -- un solo cono combinatorio dominante, molto piu' lento del resto:
+#   e' per questo che ogni round rendeva tantissimo (+42%, +12%, +68%). A R2 lo spettro NON e' piu'
+#   degenere: il secondo path e' a -4% dal primo. Quando la popolazione dei path si stringe, il
+#   guadagno per round crolla e conviene fermarsi. Non serve provare R3 per saperlo: basta lo spettro.
+#
+# NB: il collo successivo (pv_3) e' il registro d'uscita del DECODE SNN, non piu' IIDM. Salire oltre
+#   ~30 MHz richiederebbe di lavorare sul decode -- altro blocco, altro studio.
+# ============================================================================================
+#
+# === ROUND 2 (2026-07-19) - radice digit-recurrence a mano, dentro la chart. RIUSCITO ===
+# Fmax 17.495 -> 29.344 (+67.7%). Previsione dallo spettro: 29.605 -> scarto 0.9%, e il collo e' caduto
+#   sull'endpoint PREDETTO (st_a_iidm). Il metodo "misura il premio prima di spendere" ha tenuto.
+# AREA DI NUOVO IN CALO: LUT 7873 -> 7670 (-203). Come per il divisore, una ricorrenza a 2 bit/ciclo e'
+#   hardware PIU' PICCOLO dell'array combinatorio srotolato (57 CARRY4 solo per il quadrato di prova).
+#   FF +55 (stato sX/sR/sQ/sk/sabv). DSP e BRAM invariati.
+# Latenza +12 clock (SQRT-INIT + 10 passi + FIN nello stesso ciclo dell'ultimo passo) su 800k: gratis.
+# Bit-exact: G2 0/60000 (il model cambia -> serviva davvero) + G3/G4 + parity 0/60000 + B-1 su RTL fresco.
+#   A monte: prova ESAUSTIVA 262144/262144 + sensibilita' su 2 guasti iniettati (rounding, off-by-one),
+#   RI-ESEGUITA dopo la ristrutturazione in setup/step/fin (il codice era cambiato dopo la prima prova).
+# BILANCIO R0->R2: Fmax 15.673 -> 29.344 (+87%) con LUT 8230 -> 7670 (-560) e FF 3183 -> 3331 (+148).
+#   Fmax e area CONCORDI, non in conflitto: e' la firma del time-mux applicato all'aritmetica srotolata.
+# COLLO ORA: st_a_iidm (38 liv, 34.1 ns) -- l'accelerazione IIDM vera e propria, non piu' una divisione
+#   ne' una radice. 29.34 e' anche il tetto SNN misurato in 2d (~29.3): i due blocchi sono in EQUILIBRIO,
+#   quindi da qui salire richiede di lavorare su ENTRAMBI (o accettare 29 come punto di trade-off).
+RESULT iidm_r2 LUT=7670 FF=3331 DSP=68 BRAM=1 WNS=90.921 Fmax=29.344
+CRITPATH iidm_r2 from=u_IIDM_CTRL/ql_12_reg[1]/C to=u_IIDM_CTRL/st_a_iidm_20_reg[17]/D logic_levels=38 delay=34.072
 RESULT iidm_r1 LUT=7873 FF=3276 DSP=68 BRAM=1 WNS=67.841 Fmax=17.495
 CRITPATH iidm_r1 from=u_IIDM_CTRL/pv_3_reg[3][5]/C to=u_IIDM_CTRL/st_sab_3_reg[4]/D  logic_levels=87 delay=57.152
 #
@@ -66,3 +324,136 @@ CRITPATH iidm_r1 from=u_IIDM_CTRL/pv_3_reg[3][5]/C to=u_IIDM_CTRL/st_sab_3_reg[4
 # --- record grezzi (RESULT/CRITPATH dalla sintesi OOC) ---
 RESULT r9ctrl LUT=8230 FF=3183 DSP=69 BRAM=1 WNS=61.197 Fmax=15.673
 CRITPATH r9ctrl from=u_IIDM_CTRL/started_not_empty_2_reg_rep__15/C to=u_IIDM_CTRL/ql_7_reg[0]/D  logic_levels=204 delay=63.796
+
+# ============================================================================================
+# === VERIFICA COMPLETA DEI CANCELLI (2026-07-20, dopo i 17 round) ===
+#
+# ✅ VERDI — il blocco su cui si e' lavorato (Donatello_ACC_IIDM_M) e' integro:
+#   G2 model vs acc_iidm_open      dmax=0  (60000/60000 control-step)
+#   G3/G4 blocco vs model vs SP3   dmax=0
+#   parity SNN                     0/60000 (max raw 0)
+#   B-1 RTL rigenerato vs blocco   0/3000
+#   G7 parita' col plant Python    errore 0.00e+00 su 3/3 casi
+#   CANCELLO "ALTRO PC" (self-contained, matlab/ FUORI dal path): 4/4 blocchi ok
+#     (ACC_IIDM_M, Champion, LUT16, LUT512) -> i 15 file nuovi sono tutti inlinati nella chart.
+#
+# ⚠️ TRE DIFETTI DI PROCESSO TROVATI (nei CANCELLI, non nel design):
+#
+#  1. `hold` di DEFAULT SOTTO LA LATENZA REALE -> i cancelli SP2 falliscono su codice CORRETTO.
+#     run_block_acciidm_test:  hold=400 -> dmax=0.3242 | hold>=600 -> dmax=0
+#     run_block_closed_loop_test: hold=400 -> dmax fino a 1.438 | hold>=900 -> 8/10 a dmax=0
+#     Il commento nella firma («qualunque valore >= latenza (~341)») e' SBAGLIATO: 341 e' la latenza
+#     della sola SNN, non del blocco completo. -> CORREGGERE default e commento.
+#
+#  2. Il RIFERIMENTO dell'anello chiuso (`snn_cl_step_mex`) e' un artefatto di build NON VERSIONATO:
+#     a HEAD il cancello non parte proprio («Undefined function»). Quindi il «dmax=0 su 10/10»
+#     documentato il 2026-07-15 NON e' riproducibile da un checkout pulito. -> versionare, o
+#     ricostruirlo dentro il cancello stesso.
+#
+#  3. ✅ CHIUSO (era APERTO) — traiettoria 1 in anello chiuso: dmax=0.03906 IDENTICO a hold 900/1500/3000,
+#     quindi NON e' assestamento ma una differenza REALE (le altre 4 traiettorie danno 0).
+#     Compare oltre il passo ~30 (a K=30 traj 1 passa). Cause escluse: parametri di invocazione,
+#     riferimento MEX stantio (ricompilarlo non cambia una cifra), decode (0/1201 divergenti su
+#     sweep denso — ma il test e' ripiegato su griglia SINTETICA: il caricamento del dataset e'
+#     fallito, quindi la prova sui raw REALI RESTA DA FARE).
+#     ✅ RISOLTO 2026-07-20: worktree a HEAD (0d8ee0f9, PRE R2..R17) + MEX ricompilato li' + stesso
+#     cancello (hold=900, K=60) -> traj 1 dmax = 0.03906 **IDENTICO** allo stato attuale; traj 7/23/31/45
+#     dmax=0, identici. La differenza PRECEDE i 17 round: NON e' una regressione.
+#     Il fatto che il valore coincida FINO ALL'ULTIMA CIFRA e' la prova piu' forte: se i round avessero
+#     perturbato quella catena, il numero sarebbe cambiato.
+#     -> I 17 ROUND SONO PULITI. La mappa dei tetti (77.936 MHz, tetto IIDM ~99, plateau SNN ~106) REGGE.
+#     Resta da indagare a parte (difetto preesistente, non bloccante per il trade-off): perche' proprio
+#     traj 1 diverga di 0.039 oltre il passo ~30 mentre le altre 4 sono esatte.
+#
+# 🔎 NOTA DI METODO: ho inseguito per due tentativi la pista del MEX stantio, convinto da date
+#    discordanti (MEX 16/07 01:24 vs acc_iidm_open.m 16/07 20:50) che erano un indizio VERO ma non la
+#    causa. L'ha smentita il fatto che i dmax non cambiassero di UNA CIFRA dopo la ricompilazione.
+#    L'indizio buono era gia' visibile e l'avevo messo da parte: `dv=train` e `dv=inst` davano
+#    risultati IDENTICI su 4 traiettorie su 5 -- impossibile se l'anello girasse davvero come previsto.
+# ============================================================================================
+#
+# ============================================================================================
+# === §AUDIT - AUDIT PRE-STUDIO DI TRADE-OFF (2026-07-20) ====================================
+# Fatto PRIMA di spendere ~70 minuti di esecuzioni, per non produrre dati fallaci. Esito: i DATI
+# sono puliti, il METODO DI MISURA no.
+#
+# --- ✅ COSA REGGE (verificato, non assunto) ---
+#  1. I 17 punti sono stati RIPARSATI dai report Vivado salvati (*/synth/util.rpt, timing.rpt):
+#     Fmax, LUT, FF, DSP, BRAM combaciano con la tabella in testa a questo file su TUTTI E 17.
+#     Nessun errore di trascrizione.
+#  2. Frontiera di Pareto RICALCOLATA indipendentemente dai report: gli 8 punti non dominati
+#     (R2 R7 R9 R11 R12 R15 R16 R17) sono corretti.
+#  3. I round sono configurazioni GENUINAMENTE diverse: IIDM_CTRL.vhd cresce monotono
+#     1.230.151 (R1) -> 1.380.427 (R17) byte.
+#  4. Asse potenza FATTIBILE: l'entity DUT sintetizzata OOC ha la STESSA interfaccia del modulo
+#     pilotato dal banco B-1 (clk,reset,clk_enable,s,v,dv,v_l -> ce_out,accel) -> il SAIF si genera
+#     adattando tb_acciidm_m_open.v. (Gli strumenti della Fase B NO: pilotano un altro top.)
+#
+# --- ⛔ DIFETTO 1: LE MISURE DI TIMING ERANO PRESE SENZA PRESSIONE ---
+# synth_acc_iidm.tcl:24,29 e spectrum_iidm.tcl:21,25 -> `synth_design` gira PRIMA di `create_clock`:
+# la sintesi non ha MAI avuto un vincolo. E l'implementazione di calibrazione girava a 125 ns,
+# ~6x piu' lasca del raggiungibile. Placer e router ottimizzano i path a slack negativo o ~0: con
+# 103 ns di margine non hanno pressione e si fermano.
+#
+# MISURATO sullo STESSO netlist R17, cambiando SOLO il vincolo (4 esecuzioni):
+#   125.000 ns -> WNS +103.910 -> 21.090 ns -> 47.416 MHz  LUT  n/d  (nessuno sforzo)
+#    14.000 ns -> WNS   +0.269 -> 13.731 ns -> 72.828 MHz  LUT 7950  (LIMITE INFERIORE: slack
+#                                                            positivo = il tool si e' FERMATO li')
+#    12.831 ns -> WNS   -0.055 -> 12.886 ns -> 77.604 MHz  LUT 7991  (VALIDA, LA MIGLIORE)
+#    11.000 ns -> WNS   -2.346 -> 13.346 ns -> 74.929 MHz  LUT 8189  (valida ma SOVRA-VINCOLATA)
+#
+# ⚠️ SOVRA-VINCOLARE PEGGIORA -- e l'euristica ingenua e' proprio quella sbagliata. Chiedere 11 ns
+#   invece dei 12.831 raggiungibili costa -3.6% di Fmax e +2.5% di LUT: con un vincolo irraggiungibile
+#   il tool disperde lo sforzo su troppi path falliti. -> "sovra-vincola e leggi periodo-WNS" NON e'
+#   sicuro; il vincolo va messo VICINO al raggiungibile.
+#
+# ⛔ RITRATTAZIONE della calibrazione del 2026-07-20 mattina: avevo scritto che «il post-route e' piu'
+#   lento del 39%, i 77.9 MHz e l'intera scala dei tetti sono ottimistici». FALSO. Col vincolo di
+#   protocollo il divario OOC->post-route e' +0.4% (77.936 -> 77.604). La sintesi era una stima
+#   BUONA; era la misura post-route ad essere fatta male. LA MAPPA DEI TETTI REGGE.
+#
+# ⚠️ MANCANO 14 DCP: esistono solo spec_r1/r2/r17 (synth_acc_iidm.tcl NON salva il checkpoint, lo fa
+#   solo spectrum_iidm.tcl). Gli altri 14 punti vanno risintetizzati dal VHDL. Costo MISURATO della
+#   sintesi: 1m49s (+9s write_checkpoint), NON i "15 minuti" del commento in spectrum_iidm.tcl:27,
+#   che e' stale. Preventivo rivisto della campagna base: ~2h15m, non i 70 min stimati prima.
+#
+# 🔎 NOTA DI METODO: un numero PEGGIORE del previsto non e' automaticamente il numero vero. Il
+#   risultato "brutto" sembrava credibile -- «il routing reale costa» e' un fatto noto -- e per questo
+#   non l'avevo messo in discussione. Smentirlo e' costato UNA esecuzione da 3 minuti.
+#
+# ⚠️ COROLLARIO SPESSO IGNORATO: anche le RISORSE dipendono dal vincolo -- stesso netlist, 7950 LUT
+#   a 14 ns, 8189 a 11 ns, 8387 in sintesi OOC. Una frontiera (Fmax, LUT) e' confrontabile solo se
+#   TUTTI i punti sono misurati con lo stesso protocollo dichiarato.
+#
+# --- ⛔ DIFETTO 2: GLI INGRESSI DELLO STUDIO NON ERANO VERSIONATI (chiuso) ---
+# I sorgenti MATLAB per-round NON esistono (modifiche in place; HEAD a 0d8ee0f9 = R1; R2..R17 non
+# committato) e matlab/hdl_pipe/ e' in .gitignore e conteneva ormai solo iidm_r17. -> 16 punti su 17
+# stavano SOLO in D:/zbd_pipe/, fuori dal repo. Non ipotetico: questo progetto ha gia' perso una
+# scratch dir (D:/zbd_pb2, citato in gen_saif_b2.sh).
+#   -> ARCHIVIATI in matlab/hdl_iidm/vhdl_rounds.tar.gz (1,9 MB: .vhd + i 3 report per round +
+#      MANIFEST.txt con sha256). RIPRISTINO PROVATO, non assunto: 119/119 file verificati,
+#      IIDM_CTRL.vhd di R17 bit-identico all'originale.
+#
+# --- ⛔ DIFETTO 3: report_qor_assessment NON ESISTE QUI ---
+# ERROR [Implflow 47-2944]: richiede licenza > BASIC. Non e' riparabile. Era il "ponte quantitativo"
+# su cui la spec basava il livello 1 (caratterizzare tutti i punti senza implementarli).
+#   -> Il ponte non serve: un'implementazione completa costa 208-264 s, quindi si implementano TUTTI
+#      i punti davvero. La sintesi OOC resta solo per FISSARE IL VINCOLO di ciascun punto.
+#
+# --- ✅ DIFETTI DI SCRIPT RISOLTI ---
+#  a) Regex risorse: la causa NON era il formato del report post-route (cosi' diceva la spec) ma il
+#     BACKSLASH IN TCL -- dentro "..." la sequenza \s collassa in 's'. calib_impl.tcl ne usava uno,
+#     synth_acc_iidm.tcl ne usa due e funziona. Verificato: con \\s tutte e 4 le risorse si agganciano
+#     SU UN REPORT POST-ROUTE.
+#  b) `catch` muto: catturando l'errore e' emersa la causa vera (licenza). Un catch senza messaggio
+#     nasconde esattamente cio' che serve sapere.
+#  c) `remove_clock` NON esiste in Vivado (e' di un altro tool): create_clock con lo stesso nome
+#     RIDEFINISCE. Trovato perche' lo script e' fallito rumorosamente -- come deve.
+#
+# --- PROTOCOLLO DI MISURA ADOTTATO (scripts/impl_point.tcl) ---
+#  1. Vincolo di ogni punto = il SUO ritardo stimato OOC. Il post-route e' ~4% piu' lento -> lo slack
+#     atterra leggermente negativo e la misura e' valida al primo colpo.
+#  2. VALIDITA': (periodo - WNS) e' il ritardo raggiungibile SOLO se WNS <= 0. Con WNS > 0 e' un
+#     LIMITE INFERIORE -> stringere e rifare. Lo script lo DICHIARA in chiaro.
+#  3. WHS >= 0 obbligatorio; il periodo in vigore si RILEGGE e si assert-a contro quello chiesto.
+# ============================================================================================

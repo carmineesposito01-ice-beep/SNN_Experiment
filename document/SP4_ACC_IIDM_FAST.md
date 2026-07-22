@@ -430,3 +430,44 @@ della SNN sola) era un criterio di *simmetria*, non un requisito funzionale: un 
 ## File (variante L, committati — riusabili se L verrà ripresa)
 `acc_recip_lut.m` · `acc_sweep_kernel.m` · `build_acc_sweep_mex.m` · `run_acc_recip_sweep.m` · `acc_types.recipN`
 + `acc_div` in `acc_iidm_open.m`. Commit `457aa6c4`…`e2cb8062`.
+
+---
+
+## Studio IIDM (2026-07-19) — CONVERGUTO a 29,344 MHz
+
+Seguito naturale di 2d (SNN portata a 99 MHz): con la SNN non piu' collo, il controllore restava
+cappato dalla **legge IIDM** a 15,673 MHz. Due round, entrambi bit-exact, entrambi con la stessa leva:
+**sequenzializzare un'operazione aritmetica srotolata**.
+
+| round | leva | Fmax | LUT | FF | DSP |
+|---|---|---|---|---|---|
+| R0 | baseline (divide + sqrt combinatorie) | 15,673 | 8230 | 3183 | 69 |
+| R1 | divisore digit-recurrence, 1 bit/ciclo | 17,495 | 7873 | 3276 | 68 |
+| R2 | radice digit-recurrence, 2 bit/ciclo | **29,344** | **7670** | 3331 | 68 |
+
+**Bilancio R0→R2: Fmax +87%, LUT −560, potenza −1 mW, FF +148, latenza +152 clock** (su 800.000
+disponibili per control-step: irrilevante).
+
+### Il risultato controintuitivo
+Fmax e area sono andate **nella stessa direzione**. Un array combinatorio che calcola tutti i bit di
+una divisione (o di una radice) in parallelo costa piu' silicio del registro che ne calcola uno o due
+per ciclo: il time-mux qui paga due volte. E' l'opposto della SNN, dove i 3,33x di 2d sono costati
++1069 FF. **Regola pratica**: sequenzializzare *aritmetica srotolata* e' win-win; pipelinare *logica
+gia' stretta* si paga in registri.
+
+### Perche' ci si e' fermati a R2
+Misurato prima di implementare (false_path sui registri del collo, sul checkpoint di sintesi):
+tetto dopo R3 = **30,599 MHz, cioe' +4,3%** — contro un refactor invasivo. Sproporzionato.
+
+**Il segnale, riusabile**: fino a R2 *tutti* i 400 path peggiori finivano sullo **stesso** endpoint —
+un solo cono dominante, molto piu' lento del resto, ed e' per questo che ogni round rendeva tantissimo.
+A R2 lo spettro non e' piu' degenere (il secondo path e' a −4%). Quando la popolazione dei path si
+stringe, il guadagno per round crolla: **basta lo spettro per saperlo, non serve provare il round**.
+
+### Cautela per lo studio di trade-off
+Tutte le misure sono allo stesso clock (8 MHz). La dinamica scala con la frequenza: girare davvero a
+29 MHz porterebbe il totale da 115 a ~147 mW. Ma **il clock non va alzato**: il blocco consuma ~571
+clock su 800.000 per control-step, gia' 1400x piu' veloce del necessario. L'Fmax guadagnata va spesa
+come **margine** (slack, PVT, logica futura, dispositivo/tensione piu' piccoli), non come clock.
+
+Record completo con i cancelli: `matlab/hdl_iidm/RESULTS.txt`.

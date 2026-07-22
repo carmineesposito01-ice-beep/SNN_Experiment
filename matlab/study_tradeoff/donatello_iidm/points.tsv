@@ -1,0 +1,18 @@
+tag	srcdir	period_ns	fmax_ooc	nota
+r9ctrl	/d/zbd_pipe/r9ctrl/m_pipe_r9ctrl	63.803	15.673	controllore completo
+iidm_r1	/d/zbd_pipe/iidm_r1/m_pipe_iidm_r1	57.159	17.495	controllore completo
+iidm_r2	/d/zbd_pipe/iidm_r2/m_pipe_iidm_r2	34.079	29.344	controllore completo
+iidm_r4	/d/zbd_pipe/iidm_r4/m_pipe_iidm_r4	32.288	30.971	controllore completo
+iidm_r5	/d/zbd_pipe/iidm_r5/m_pipe_iidm_r5	29.495	33.904	controllore completo
+iidm_r6	/d/zbd_pipe/iidm_r6/m_pipe_iidm_r6	23.491	42.569	controllore completo
+iidm_r7	/d/zbd_pipe/iidm_r7/m_pipe_iidm_r7	23.346	42.834	controllore completo
+iidm_r8	/d/zbd_pipe/iidm_r8/m_pipe_iidm_r8	21.602	46.292	controllore completo
+iidm_r9	/d/zbd_pipe/iidm_r9/m_pipe_iidm_r9	20.616	48.506	controllore completo
+iidm_r10	/d/zbd_pipe/iidm_r10/m_pipe_iidm_r10	19.124	52.290	controllore completo
+iidm_r11	/d/zbd_pipe/iidm_r11/m_pipe_iidm_r11	17.398	57.478	controllore completo
+iidm_r12	/d/zbd_pipe/iidm_r12/m_pipe_iidm_r12	16.377	61.061	controllore completo
+iidm_r13	/d/zbd_pipe/iidm_r13/m_pipe_iidm_r13	15.313	65.304	controllore completo
+iidm_r14	/d/zbd_pipe/iidm_r14/m_pipe_iidm_r14	14.214	70.353	controllore completo
+iidm_r15	/d/zbd_pipe/iidm_r15/m_pipe_iidm_r15	13.724	72.865	controllore completo
+iidm_r16	/d/zbd_pipe/iidm_r16/m_pipe_iidm_r16	12.888	77.592	controllore completo
+iidm_r17	/d/zbd_pipe/iidm_r17/m_pipe_iidm_r17	12.831	77.936	controllore completo

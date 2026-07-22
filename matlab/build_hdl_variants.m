@@ -1,4 +1,32 @@
-function build_hdl_variants()
+function build_hdl_variants(decVariant, snnSrc, initStyle, archStyle)
+%  archStyle = 'chart' (default, storico) | 'split' — [SPLIT] come e' strutturato il blocco Donatello.
+%    'chart': UNA MATLAB Function (normalize + snn_b2_fsm + decode a fasi, tutto inlinato). E' la forma
+%             misurata finora, e il suo muro a 41 MHz e' un COSTO D'INTEGRAZIONE (RESULTS.md §3):
+%             SNN e decode compilati insieme -> DSP raddoppiati (16->~30) e il controllo SNN entra nel
+%             datapath del decode.
+%    'split': DUE MATLAB Function nel subsystem — SNN (normalize + snn_b2_fsm -> raw,valid) e DEC
+%             (latch rawl + fasi decode -> 5 param) — cosi' HDL Coder le sintetizza come entita'
+%             distinte. Il probe (Fase 0) ha provato che due MF con persistent nello stesso subsystem
+%             generano due entity separate, senza conversione a dataflow.
+%  initStyle = 'shared' (default, storico) | 'perVar'  — [A4] come si inizializzano i persistent.
+%    'shared': UN solo `if isempty(started)` protegge l'inizializzazione di TUTTI i persistent.
+%    'perVar': ogni persistent ha il proprio `if isempty(x)`.
+%  ⚠️ MOTIVO: nel VHDL del blocco, `started_not_empty_2` (il flag "sono inizializzato") e' il REGISTRO
+%    da cui parte il path critico, con fanout 117 — perche' con SNN e decode nella stessa chart quel
+%    singolo segnale entra nel datapath di ~100 persistent. Nel probe del decode isolato (10 persistent)
+%    compare 8 volte e non e' un problema; nel blocco compare 49 volte ed e' il muro a 41 MHz.
+%  E' un'OPZIONE e non una sostituzione, cosi' i punti gia' misurati con 'shared' restano confrontabili.
+%  build_hdl_variants(decVariant, snnSrc) — `snnSrc` e' il PATH del sorgente SNN da inlinare
+%    (default: 'snn_b2_fsm.m', lo stato corrente). Per gli stati storici si passa uno snapshot
+%    congelato di `snn_variants/`, es. 'snn_variants/snn_b2_fsm_R5.m'.
+%  ⚠️ NON si muta piu' `snn_b2_fsm.m` in-place: lo scambio temporaneo di un file CONDIVISO ha prodotto
+%    artefatti con meta' configurazione sbagliata, e chiunque generasse qualcosa nel frattempo (probe,
+%    cancello, altro esperimento) leggeva la SNN dell'esperimento in corso.
+%  build_hdl_variants(decVariant) — [A2] profondita' di pipeline del DECODE nei blocchi Donatello:
+%    'fused' (default, decode in un ciclo a se' dopo [A1]) | 'p3' (a|b|c) | 'p5' (a1|a2|b1|b2|c).
+%  Misurata sul probe isolato (build_decodedut): 31,3 / 56,9 / 97,8 MHz. Serve per ACCOPPIARE il decode
+%  alla profondita' SNN giusta: SNN a 99 con decode a 31 spreca ~1000 FF che il blocco non puo' usare.
+%  Le funzioni delle fasi esistono gia' e sono provate bit-exact (round IIDM R4/R10/R12/R17).
 %BUILD_HDL_VARIANTS  Aggiunge a snn_champions_lib.slx i blocchi Donatello HDL-ready SELF-CONTAINED:
 %  `Donatello_Champion` (decode deployato, sigma-LUT 256) + `Donatello_LUT{16..512}` (decode LUT-N).
 %
@@ -15,15 +43,39 @@ function build_hdl_variants()
 %
 %  USO: il time-mux impiega ~341 clock/inferenza -> il modello ospite gira al **rate di clock** e i
 %  params si aggiornano ogni ~341 passi. E' l'architettura (il 5,5x di area risparmiata), non un difetto.
+  if nargin < 1 || isempty(decVariant), decVariant = 'fused'; end
+  assert(any(strcmp(decVariant, {'fused','p3','p5','p6'})), ...
+         'decVariant = fused | p3 | p5 | p6 (dato: %s)', decVariant);
   here = fileparts(mfilename('fullpath'));
+  if nargin < 3 || isempty(initStyle), initStyle = 'shared'; end
+  assert(any(strcmp(initStyle, {'shared','perVar'})), ...
+         'initStyle = shared | perVar (dato: %s)', initStyle);
+  if nargin < 4 || isempty(archStyle), archStyle = 'chart'; end
+  assert(any(strcmp(archStyle, {'chart','split'})), ...
+         'archStyle = chart | split (dato: %s)', archStyle);
+  if nargin < 2 || isempty(snnSrc), snnSrc = 'snn_b2_fsm.m'; end
+  snnPath = fullfile(here, snnSrc);
+  assert(isfile(snnPath), 'sorgente SNN inesistente: %s', snnPath);
+  fprintf('  SNN da: %s\n', snnSrc);
   gen_b2_rom('Donatello');                       % ROM attiva = Donatello -> b2_rom_active.m
   gen_tanh_lut();                                % [B2.0-2b] genera tanh_lut_full.m (LUT tanh bit-exact)
 
   % --- sorgenti VERI da inlinare (single-source: letti, non copiati) ---
   srcRom   = fileread(fullfile(here, 'b2_rom_active.m'));
   srcTypes = fileread(fullfile(here, 'snn_types.m'));
-  srcFsm   = fileread(fullfile(here, 'snn_b2_fsm.m'));
-  srcLut   = fileread(fullfile(here, 'snn_decode_lut.m'));
+  srcFsm   = fileread(snnPath);   % [refactor] path esplicito, non piu' il file condiviso mutato
+  % [R4] snn_decode_lut e' ora la composizione di decode_a + decode_b: vanno inlinate entrambe, o la
+  % chart non le trova. La chart NON chiama snn_decode_lut: chiama le due meta' in due fasi distinte.
+  srcLut   = [fileread(fullfile(here, 'snn_decode_lut.m')) newline newline ...
+              fileread(fullfile(here, 'decode_a.m'))       newline newline ...
+              fileread(fullfile(here, 'decode_a1.m'))      newline newline ...
+              fileread(fullfile(here, 'decode_a2.m'))      newline newline ...
+              fileread(fullfile(here, 'decode_b.m'))       newline newline ...
+              fileread(fullfile(here, 'decode_b1.m'))      newline newline ...
+              fileread(fullfile(here, 'decode_b2.m'))      newline newline ...
+              fileread(fullfile(here, 'decode_c.m'))       newline newline ...
+              fileread(fullfile(here, 'decode_c1.m'))      newline newline ...
+              fileread(fullfile(here, 'decode_c2.m'))];
   srcHdl   = fileread(fullfile(here, 'snn_decode_hdl.m'));
   srcIidm  = fileread(fullfile(here, 'acc_iidm_open.m'));   % SP2: matematica IIDM (single source)
   srcAccT  = fileread(fullfile(here, 'acc_types.m'));       % SP3: tipi dell'IIDM (single source)
@@ -37,12 +89,38 @@ function build_hdl_variants()
   srcDivSu = fileread(fullfile(here, 'div_seq_setup.m'));
   srcDivSt = fileread(fullfile(here, 'div_seq_step.m'));
   srcDivFi = fileread(fullfile(here, 'div_seq_fin.m'));
-  srcPrep  = fileread(fullfile(here, 'iidm_prep.m'));
+  % [R2] radice SEQUENZIALE: stessa struttura del divisore. Provate bit-exact in modo ESAUSTIVO
+  % (262144/262144 valori del dominio, + 2 guasti iniettati che divergono). La chart le chiama negli
+  % stadi SQRT-INIT / SQRT-STEP x10: single source col wrapper sqrt_seq usato dal model.
+  srcSqNb  = fileread(fullfile(here, 'sqrt_seq_nb.m'));
+  srcSqSu  = fileread(fullfile(here, 'sqrt_seq_setup.m'));
+  srcSqSt  = fileread(fullfile(here, 'sqrt_seq_step.m'));
+  srcSqFi  = fileread(fullfile(here, 'sqrt_seq_fin.m'));
+  srcAb    = fileread(fullfile(here, 'iidm_ab.m'));       % af,bf: fonte unica con iidm_prep
+  srcSabx  = fileread(fullfile(here, 'iidm_sabx.m'));     % l'ingresso della radice
+  srcSabxM = fileread(fullfile(here, 'iidm_sabx_mul.m'));  % [R14] il solo prodotto af*bf
+  % [R8] iidm_prep = iidm_prep_a (filtro OU) + iidm_prep_b (cast+struct): la chart le chiama in
+  % due fasi distinte, quindi vanno inlinate tutte e tre.
+  srcPrep  = [fileread(fullfile(here, 'iidm_prep.m'))   newline newline ...
+              fileread(fullfile(here, 'iidm_prep_a.m')) newline newline ...
+              fileread(fullfile(here, 'iidm_prep_a2.m')) newline newline ...
+              fileread(fullfile(here, 'iidm_prep_b.m'))];
   srcNd    = fileread(fullfile(here, 'iidm_nd.m'));
-  srcUse   = fileread(fullfile(here, 'iidm_use.m'));
+  % [R5] iidm_use e' ora la composizione di iidm_use_a + iidm_use_b: la chart chiama le due meta' in
+  % due fasi distinte, quindi vanno inlinate tutte e tre (la composta serve al model, non alla chart).
+  srcUse   = [fileread(fullfile(here, 'iidm_use.m'))   newline newline ...
+              fileread(fullfile(here, 'iidm_use_a.m')) newline newline ...
+              fileread(fullfile(here, 'iidm_use_m.m')) newline newline ...
+              fileread(fullfile(here, 'iidm_use_m2.m')) newline newline ...
+              fileread(fullfile(here, 'iidm_use_b.m'))];
   srcTanh  = fileread(fullfile(here, 'iidm_tanh.m'));
   srcTanhLut = fileread(fullfile(here, 'tanh_lut_full.m'));  % [B2.0-2b] LUT bit-exact, chiamata da iidm_tanh
-  srcFinal = fileread(fullfile(here, 'iidm_final.m'));
+  % [R6] iidm_final e' la composizione di iidm_final_a + iidm_final_b: la chart chiama le due meta'
+  % in due fasi distinte, quindi vanno inlinate tutte e tre.
+  srcFinal = [fileread(fullfile(here, 'iidm_final.m'))   newline newline ...
+              fileread(fullfile(here, 'iidm_final_a.m')) newline newline ...
+              fileread(fullfile(here, 'iidm_final_b.m')) newline newline ...
+              fileread(fullfile(here, 'iidm_final_c.m'))];
 
   d = load(fullfile(here, 'champions_export.mat')); champs = d.champions;
   if iscell(champs), champs = [champs{:}]; end
@@ -55,7 +133,9 @@ function build_hdl_variants()
   % Donatello_LUT64: il primo e' il nome SEMANTICO (cosa si deploya), il secondo la variante di studio.
   NCHAMP = 64;
   names = [{'Donatello_Champion'}, arrayfun(@(N) sprintf('Donatello_LUT%d', N), Ns, 'UniformOutput', false)];
-  calls = [{sprintf('snn_decode_lut(raw, %d)', NCHAMP)}, arrayfun(@(N) sprintf('snn_decode_lut(raw, %d)', N), Ns, 'UniformOutput', false)];
+  % [A1] il decode legge `rawl` (il readout LATCHATO), non `raw`: vedi chart_code.
+  calls = [{sprintf('snn_decode_lut(rawl, %d)', NCHAMP)}, arrayfun(@(N) sprintf('snn_decode_lut(rawl, %d)', N), Ns, 'UniformOutput', false)];
+  Nlist = [NCHAMP, Ns];   % [A2] la macchina a fasi costruisce le chiamate da se': le serve N
   decs  = [{srcLut}, repmat({srcLut}, 1, numel(Ns))];
   desc  = [{['IL CAMPIONE: e'' esattamente cio'' che va sull''FPGA (stesso decode del top deployato ' ...
              'snn_top_b2). Decode della sigmoide via LUT a 64 punti. Perche'' 64: lo studio ' ...
@@ -83,18 +163,15 @@ function build_hdl_variants()
     if getSimulinkBlockHandle(sub) > 0, delete_block(sub); end
     add_block('built-in/Subsystem', sub, 'Position', [40, 30 + (i-1)*80, 230, 70 + (i-1)*80], ...
               'Description', block_description(names{i}, desc{i}));
-    add_block('simulink/User-Defined Functions/MATLAB Function', [sub '/SNN']);
-    chart = sfroot().find('-isa', 'Stateflow.EMChart', 'Path', [sub '/SNN']);
-    chart.Script = chart_code(calls{i}, decs{i}, srcRom, srcTypes, srcFsm, nrm);
-    for j = 1:4
-      add_block('built-in/Inport', [sub '/' in_names{j}], 'Port', num2str(j));
-      add_line(sub, [in_names{j} '/1'], ['SNN/' num2str(j)]);
+    if strcmp(archStyle, 'chart')
+      mount_chart(sub, in_names, out_names, ...
+        chart_code(calls{i}, decs{i}, srcRom, srcTypes, srcFsm, nrm, decVariant, Nlist(i), initStyle));
+    else
+      mount_split(sub, in_names, out_names, ...
+        snn_chart_code(srcRom, srcTypes, srcFsm, nrm), ...
+        dec_chart_code(decs{i}, decVariant, Nlist(i)));
     end
-    for j = 1:5
-      add_block('built-in/Outport', [sub '/' out_names{j}], 'Port', num2str(j));
-      add_line(sub, ['SNN/' num2str(j)], [out_names{j} '/1']);
-    end
-    fprintf('  costruito %s\n', names{i});
+    fprintf('  costruito %s [%s]\n', names{i}, archStyle);
   end
 
   % ---- SP2/SP3: blocco unico campione + plant ACC-IIDM open-loop, HDL-READY ----
@@ -131,7 +208,8 @@ function build_hdl_variants()
   chartM = sfroot().find('-isa', 'Stateflow.EMChart', 'Path', [subM '/IIDM_CTRL']);
   chartM.Script = acciidm_m_chart_code(NCHAMP, srcRom, srcTypes, srcFsm, srcLut, srcAccT, ...
                                        srcFDiv, srcPrep, srcNd, srcUse, srcTanh, srcTanhLut, srcFinal, ...
-                                       srcDivNb, srcDivSu, srcDivSt, srcDivFi, nrm);
+                                       srcDivNb, srcDivSu, srcDivSt, srcDivFi, ...
+                                       srcSqNb, srcSqSu, srcSqSt, srcSqFi, srcAb, srcSabx, srcSabxM, nrm);
   % SOLA CHART nel subsystem (4 ingressi, 1 uscita: identico a SP3). Niente blocco `Divide`, niente Unit
   % Delay, niente handshake, niente feedback: erano l'impalcatura di #1, morta il 2026-07-17 perche' un
   % blocco ACCANTO alla chart impone la conversione MATLAB-to-dataflow, che VIETA `tanh` fixed -- e `tanh`
@@ -218,38 +296,276 @@ function d = block_description(name, decodeNote)
 end
 
 
-function code = chart_code(decodeCall, srcDecode, srcRom, srcTypes, srcFsm, nrm)
-%CHART_CODE  Testo della chart: main + normalize locale + i sorgenti VERI come funzioni locali.
+function mount_chart(sub, in_names, out_names, code)
+%MOUNT_CHART  Montaggio storico: UNA MATLAB Function 'SNN' che fa tutto (4 in -> 5 out).
+  add_block('simulink/User-Defined Functions/MATLAB Function', [sub '/SNN']);
+  chart = sfroot().find('-isa', 'Stateflow.EMChart', 'Path', [sub '/SNN']);
+  chart.Script = code;
+  for j = 1:4
+    add_block('built-in/Inport', [sub '/' in_names{j}], 'Port', num2str(j));
+    add_line(sub, [in_names{j} '/1'], ['SNN/' num2str(j)]);
+  end
+  for j = 1:5
+    add_block('built-in/Outport', [sub '/' out_names{j}], 'Port', num2str(j));
+    add_line(sub, ['SNN/' num2str(j)], [out_names{j} '/1']);
+  end
+end
+
+
+function mount_split(sub, in_names, out_names, snnCode, decCode)
+%MOUNT_SPLIT  [SPLIT] DUE MATLAB Function nel subsystem:
+%    SNN: s,v,dv,v_l -> raw(5), valid       DEC: raw(5), valid -> v0,T,s0,a,b
+%  raw e valid attraversano il confine come segnali -> HDL Coder le sintetizza come entita' distinte.
+  add_block('simulink/User-Defined Functions/MATLAB Function', [sub '/SNN']);
+  chS = sfroot().find('-isa', 'Stateflow.EMChart', 'Path', [sub '/SNN']); chS.Script = snnCode;
+  add_block('simulink/User-Defined Functions/MATLAB Function', [sub '/DEC']);
+  chD = sfroot().find('-isa', 'Stateflow.EMChart', 'Path', [sub '/DEC']); chD.Script = decCode;
+  for j = 1:4      % ingressi fisici -> SNN
+    add_block('built-in/Inport', [sub '/' in_names{j}], 'Port', num2str(j));
+    add_line(sub, [in_names{j} '/1'], ['SNN/' num2str(j)]);
+  end
+  % il confine: SNN uscita 1 = raw, uscita 2 = valid  ->  DEC ingresso 1 = raw, 2 = valid
+  add_line(sub, 'SNN/1', 'DEC/1');
+  add_line(sub, 'SNN/2', 'DEC/2');
+  for j = 1:5      % DEC -> uscite fisiche
+    add_block('built-in/Outport', [sub '/' out_names{j}], 'Port', num2str(j));
+    add_line(sub, ['DEC/' num2str(j)], [out_names{j} '/1']);
+  end
+end
+
+
+function code = snn_chart_code(srcRom, srcTypes, srcFsm, nrm)
+%SNN_CHART_CODE  [SPLIT] La MF "SNN": normalize + snn_b2_fsm, uscita raw(5) + valid. NIENTE decode.
+%  Stessa logica di edge-trigger e stessi persistent di controllo di chart_code, ma si FERMA a raw.
   Lmain = {
-    'function [v0, T, s0, a, b] = SNN(s, v, dv, v_l)'
+    'function [raw, valid] = SNN(s, v, dv, v_l)'
     '%#codegen'
-    '% Donatello TIME-MUX (l''architettura del bitstream) - SELF-CONTAINED: zero dipendenze .m.'
-    '%  I/O FISICO (fixed): s,v,dv,v_l -> v0,T,s0,a,b.  NIENTE start/done: FSM pilotata internamente.'
-    '%  ~341 clock/inferenza (1 neurone/clock) -> i params si aggiornano ogni ~341 passi.'
+    '% [SPLIT] Solo il forward SNN: normalize + snn_b2_fsm. Il decode e'' un''ENTITA'' a se'' (MF DEC).'
     '  Tt = snn_types(''fixed'', 13);'
     '  xn = local_normalize(s, v, dv, v_l, Tt);'
-    '  persistent pv xprev started'
+    '  persistent xprev started'
     '  if isempty(started)'
-    '    pv = fi(zeros(5,1), 1, 21, 13);'
     '    xprev = xn; started = true;'
-    '    go = true;                       % 1a inferenza all''avvio'
+    '    go = true;'
     '  else'
-    '    % EDGE-TRIGGERED sul cambio d''ingresso: 1 campione = 1 inferenza, per QUALUNQUE hold >= 341'
-    '    % clock. (Free-running sarebbe sbagliato: con hold>341 farebbe piu'' inferenze sullo stesso'
-    '    %  ingresso e lo stato evolverebbe troppo in fretta.)'
     '    go = any(xn ~= xprev);'
     '  end'
     '  xprev = xn;'
     '  [raw, valid] = snn_b2_fsm(xn, go);'
-    '  if valid'
-    ['    pv = ' decodeCall ';']
+    'end'};
+  L = [Lmain(:); {''}; normalize_code(nrm); {''}; inlined_header()];
+  code = strjoin(L, newline);
+  code = [code newline newline srcRom newline newline srcTypes newline newline srcFsm];
+end
+
+
+function code = dec_chart_code(srcDecode, decVariant, N)
+%DEC_CHART_CODE  [SPLIT] La MF "DEC": riceve raw(5)+valid dalla SNN, fa latch + macchina a fasi del
+%  decode -> i 5 parametri. E' la seconda meta' di chart_code, isolata: stessa logica [A1]+[A2].
+%  raw e' sfix21_En13 (fi(true,21,13)), lo stesso tipo che rawl latchava nella chart unica.
+  [pers, dec, ~, ini] = decode_phase_code(decVariant, N);   % riusa la macchina a fasi di chart_code
+  Lmain = [{
+    'function [v0, T, s0, a, b] = DEC(raw, valid)'
+    '%#codegen'
+    '% [SPLIT] Solo il decode: latch di raw + fasi. Riceve raw(5)+valid dalla MF SNN (entita'' a se'').'
+    ['  persistent pv ' pers]
+    '  if isempty(pv)'
+    '    pv = fi(zeros(5,1), 1, 21, 13);'}
+    ini(:)
+    {'  end'}
+    dec(:)
+    {'  v0 = pv(1); T = pv(2); s0 = pv(3); a = pv(4); b = pv(5);'
+    'end'}];
+  L = [Lmain(:); {''}; inlined_header()];
+  code = strjoin(L, newline);
+  code = [code newline newline srcDecode];
+end
+
+
+function code = chart_code(decodeCall, srcDecode, srcRom, srcTypes, srcFsm, nrm, decVariant, N, initStyle)
+%  initStyle: 'shared' = un solo isempty(started) per tutti | 'perVar' = uno per variabile ([A4]).
+%CHART_CODE  Testo della chart: main + normalize locale + i sorgenti VERI come funzioni locali.
+%  decVariant = 'fused' | 'p3' | 'p5' -> profondita' di pipeline del DECODE ([A2]).
+%
+%  [A1] DISACCOPPIA readout <-> decode, come 2d R1 fece per il controllore (acciidm_m_chart_code).
+%  Il blocco standalone era rimasto FUSO: readout+decode in un clock -> path pR_idx->pv di 88 livelli
+%  (16,12 MHz a R2; 46 liv / 25,32 MHz a R9). Misurato dopo [A1]: 30,37 MHz, 30 livelli.
+%
+%  [A2] Il decode DA SOLO vale 31,3 MHz fuso, 56,9 a 3 fasi, 97,8 a 5 fasi (probe build_decodedut).
+%  Un blocco composto vale quanto il pezzo piu' lento: la variante va ACCOPPIATA alla profondita' SNN
+%  (fused<->R2, p3<->R5, p5<->R9), altrimenti si paga pipelining che l'altro pezzo annulla.
+%
+%  ⚠️ ORDINE VINCOLANTE: la catena del decode legge `rawl` PRIMA che il latch lo aggiorni, cosi' consuma
+%  il campione del ciclo PRECEDENTE. Invertendo, il decode leggerebbe il rawl appena scritto -> path di
+%  nuovo FUSO. Un cancello sui DATI non lo vedrebbe (stessi valori, solo un clock prima): a vederlo e'
+%  la SINTESI. Il cancello competente qui e' l'Fmax, non il dmax.
+  [decPers, dec, ~, ini] = decode_phase_code(decVariant, N);
+  pers = ['pv xprev started ' decPers];   % i persistent SNN (xprev started) + quelli del decode
+
+  Lmain = [{
+    'function [v0, T, s0, a, b] = SNN(s, v, dv, v_l)'
+    '%#codegen'
+    '% Donatello TIME-MUX (l''architettura del bitstream) - SELF-CONTAINED: zero dipendenze .m.'
+    '%  I/O FISICO (fixed): s,v,dv,v_l -> v0,T,s0,a,b.  NIENTE start/done: FSM pilotata internamente.'
+    '  Tt = snn_types(''fixed'', 13);'
+    '  xn = local_normalize(s, v, dv, v_l, Tt);'
+    ['  persistent ' pers]}
+    init_block(ini, initStyle)
+    {'  if isempty(started)'
+    '    xprev = xn; started = true;'
+    '    go = true;                       % 1a inferenza all''avvio'
+    '  else'
+    '    % EDGE-TRIGGERED sul cambio d''ingresso: 1 campione = 1 inferenza, per QUALUNQUE hold >= latenza'
+    '    go = any(xn ~= xprev);'
     '  end'
-    '  v0 = pv(1); T = pv(2); s0 = pv(3); a = pv(4); b = pv(5);'
-    'end'
-  };
+    '  xprev = xn;'
+    '  [raw, valid] = snn_b2_fsm(xn, go);'}
+    dec(:)
+    {'  v0 = pv(1); T = pv(2); s0 = pv(3); a = pv(4); b = pv(5);'
+    'end'}];
   L = [Lmain(:); {''}; normalize_code(nrm); {''}; inlined_header()];
   code = strjoin(L, newline);
   code = [code newline newline srcRom newline newline srcTypes newline newline srcFsm newline newline srcDecode];
+end
+
+
+function [pers, dec, unused, ini] = decode_phase_code(decVariant, N)
+%DECODE_PHASE_CODE  [SPLIT] FONTE UNICA della macchina a fasi del decode. La usano SIA chart_code (che
+%  vi aggiunge la logica SNN e i persistent xprev/started) SIA dec_chart_code (che la isola in una MF).
+%  Duplicarla farebbe divergere le due architetture alla prima modifica -> single source.
+%
+%  Ritorna:
+%    pers  — i persistent del SOLO decode (rawl + eventuali stadi + dph/dodec). NON include pv/xprev/started.
+%    dec   — le righe che eseguono una fase per ciclo + il latch di rawl su `valid`.
+%    ini   — l'inizializzazione dei persistent del decode (rawl e stadi). NON include `pv = ...`.
+%    unused — [] (segnaposto per compat. con l'estrazione a 4 valori).
+%  ⚠️ ORDINE VINCOLANTE (vedi chart_code): la catena legge `rawl` PRIMA del latch -> campione PRECEDENTE.
+  unused = [];
+  decodeCall = sprintf('snn_decode_lut(rawl, %d)', N);
+  switch decVariant
+    case 'fused'
+      pers = 'rawl dodec';
+      ini  = {'    rawl = fi(zeros(5,1), 1, 21, 13);'
+              '    dodec = false;'};
+      dec  = {'  if dodec'
+              ['    pv = ' decodeCall ';']
+              '    dodec = false;'
+              '  end'
+              '  if valid'
+              '    rawl(:) = raw;               % latch DOPO la catena: rawl e'' un vero registro'
+              '    dodec = true;'
+              '  end'};
+    case 'p3'
+      pers = 'rawl dph q1k q1f q2';
+      ini  = {'    rawl = fi(zeros(5,1), 1, 21, 13);'
+              ['    [q1k, q1f] = decode_a(rawl, ' num2str(N) ');']
+              ['    q2 = decode_b(q1k, q1f, ' num2str(N) ');']
+              '    dph = uint8(0);'};
+      dec  = {'  if dph == 1'
+              ['    [q1k, q1f] = decode_a(rawl, ' num2str(N) '); dph = uint8(2);']
+              '  elseif dph == 2'
+              ['    q2 = decode_b(q1k, q1f, ' num2str(N) '); dph = uint8(3);']
+              '  elseif dph == 3'
+              '    pv = decode_c(q2); dph = uint8(0);'
+              '  end'
+              '  if valid'
+              '    rawl(:) = raw; dph = uint8(1);'
+              '  end'};
+    case 'p5'
+      pers = 'rawl dph s1 s2k f2 f3 s3a s3b s4';
+      ini  = {'    rawl = fi(zeros(5,1), 1, 21, 13);'
+              '    s1 = decode_a1(rawl);'
+              ['    [s2k, f2] = decode_a2(s1, ' num2str(N) ');']
+              '    f3 = f2;'
+              ['    [s3a, s3b] = decode_b1(s2k, ' num2str(N) ');']
+              '    s4 = decode_b2(s3a, s3b, f3);'
+              '    dph = uint8(0);'};
+      % ⚠️ `frac` (f2) nasce in a2 e serve in b2: va RITARDATO (f3) per arrivare allineato con s3a/s3b.
+      dec  = {'  if dph == 1'
+              '    s1 = decode_a1(rawl); dph = uint8(2);'
+              '  elseif dph == 2'
+              ['    [s2k, f2] = decode_a2(s1, ' num2str(N) '); dph = uint8(3);']
+              '  elseif dph == 3'
+              ['    [s3a, s3b] = decode_b1(s2k, ' num2str(N) '); f3 = f2; dph = uint8(4);']
+              '  elseif dph == 4'
+              '    s4 = decode_b2(s3a, s3b, f3); dph = uint8(5);'
+              '  elseif dph == 5'
+              '    pv = decode_c(s4); dph = uint8(0);'
+              '  end'
+              '  if valid'
+              '    rawl(:) = raw; dph = uint8(1);'
+              '  end'};
+    case 'p6'
+      % [A3] come p5, ma decode_c SPEZZATA fra prodotti (c1) e somma+cast (c2). Controproducente sul
+      % timing (a_fast6 = 38,1 MHz), resta disponibile ma non raccomandata.
+      pers = 'rawl dph s1 s2k f2 f3 s3a s3b s4 pr';
+      ini  = {'    rawl = fi(zeros(5,1), 1, 21, 13);'
+              '    s1 = decode_a1(rawl);'
+              ['    [s2k, f2] = decode_a2(s1, ' num2str(N) ');']
+              '    f3 = f2;'
+              ['    [s3a, s3b] = decode_b1(s2k, ' num2str(N) ');']
+              '    s4 = decode_b2(s3a, s3b, f3);'
+              '    pr = decode_c1(s4);'
+              '    dph = uint8(0);'};
+      dec  = {'  if dph == 1'
+              '    s1 = decode_a1(rawl); dph = uint8(2);'
+              '  elseif dph == 2'
+              ['    [s2k, f2] = decode_a2(s1, ' num2str(N) '); dph = uint8(3);']
+              '  elseif dph == 3'
+              ['    [s3a, s3b] = decode_b1(s2k, ' num2str(N) '); f3 = f2; dph = uint8(4);']
+              '  elseif dph == 4'
+              '    s4 = decode_b2(s3a, s3b, f3); dph = uint8(5);'
+              '  elseif dph == 5'
+              '    pr = decode_c1(s4); dph = uint8(6);'
+              '  elseif dph == 6'
+              '    pv = decode_c2(pr); dph = uint8(0);'
+              '  end'
+              '  if valid'
+              '    rawl(:) = raw; dph = uint8(1);'
+              '  end'};
+    otherwise
+      error('decode_phase_code:decVariant', 'decVariant = fused | p3 | p5 | p6');
+  end
+end
+
+
+function L = init_block(ini, initStyle)
+%INIT_BLOCK  [A4] Righe di inizializzazione dei persistent del decode, nelle due forme.
+%
+%  'shared'  — un solo `if isempty(started)` protegge tutto. E' la forma storica, e produce nel VHDL
+%              un flag UNICO (`started_not_empty_2`) che entra nel datapath di OGNI persistent:
+%              fanout 117, ed e' il registro da cui parte il path critico del blocco (muro a 41 MHz).
+%              Nel probe del decode isolato (~10 persistent) il flag compare 8 volte e non si nota;
+%              nel blocco (SNN + decode nella stessa chart, ~100 persistent) compare 49 volte.
+%  'perVar'  — ogni persistent ha il proprio `if isempty(x)`, cosi' HDL Coder puo' mapparlo sul reset
+%              del SUO registro invece che su un mux condiviso.
+%
+%  ⚠️ Le due forme sono FUNZIONALMENTE identiche: tutti i persistent sono vuoti allo stesso primo
+%  ciclo, quindi si inizializzano insieme in entrambi i casi. Ma "identiche per costruzione" non e' un
+%  cancello: lo prova run_block_traj_test (dmax=0).
+  pvLine = '  pv = fi(zeros(5,1), 1, 21, 13);';
+  body   = [{pvLine}; strtrim_keep(ini)];
+  if strcmp(initStyle, 'shared')
+    L = [{'  if isempty(started)'}; cellfun(@(s) ['  ' s], body, 'UniformOutput', false); {'  end'}];
+    return
+  end
+  % perVar: si isola SOLO `pv`, che e' l'ENDPOINT del path critico, e si lascia il resto raggruppato.
+  %
+  % ⚠️ PERCHE' NON TUTTE: separare ogni riga rende VIVA la catena degli inizializzatori delle fasi
+  % (rawl -> decode_a -> decode_b -> ...), che serve solo a fissare i TIPI ma diventa logica
+  % combinatoria reale: misurato 29,678 MHz e path `rawl -> pv` di 32 livelli, PEGGIO dei 41,129 di
+  % partenza. Quel tentativo cambiava DUE cose insieme e quindi non isolava nulla.
+  % Qui si cambia una variabile sola: il mux di init sull'uscita.
+  L = [{['  if isempty(pv), ' strtrim(body{1}) ' end']}
+       {'  if isempty(started)'}
+       cellfun(@(s) ['  ' s], body(2:end), 'UniformOutput', false)
+       {'  end'}];
+end
+
+
+function c = strtrim_keep(ini)
+%STRTRIM_KEEP  normalizza l'indentazione delle righe di init mantenendone l'ordine.
+  c = cellfun(@(s) ['  ' strtrim(s)], ini(:), 'UniformOutput', false);
 end
 
 
@@ -375,7 +691,7 @@ function d = acciidm_description(N)
 end
 
 
-function code = acciidm_m_chart_code(N, srcRom, srcTypes, srcFsm, srcLut, srcAccT, srcFDiv, srcPrep, srcNd, srcUse, srcTanh, srcTanhLut, srcFinal, srcDivNb, srcDivSu, srcDivSt, srcDivFi, nrm)
+function code = acciidm_m_chart_code(N, srcRom, srcTypes, srcFsm, srcLut, srcAccT, srcFDiv, srcPrep, srcNd, srcUse, srcTanh, srcTanhLut, srcFinal, srcDivNb, srcDivSu, srcDivSt, srcDivFi, srcSqNb, srcSqSu, srcSqSt, srcSqFi, srcAb, srcSabx, srcSabxM, nrm)
 %ACCIIDM_M_CHART_CODE  SP4-M-FSM: chart del blocco M. Macro-FSM:
 %    IDLE -(edge-trigger)-> SNN (time-mux ~341 clk) -(valid)-> decode + iidm_prep
 %      -> per k=1..5 { iidm_nd(k) -> emetti (num,den,vin) -> attendi vout -> iidm_use(k,quot) }
@@ -403,16 +719,32 @@ function code = acciidm_m_chart_code(N, srcRom, srcTypes, srcFsm, srcLut, srcAcc
     '  xn = local_normalize(s, v, dv, v_l, Tt);'
     '  % alf/vlp (stato del filtro OU) vivono QUI, nel top-level: HDL Coder vieta i persistent in una'
     '  % funzione non-entry-point chiamata in un condizionale, e iidm_prep e'' chiamata in due rami.'
-    '  persistent pv xprev started acc phase kdiv st alf vlp rawl numl denl ql thl dA dR dQ dB dsq dkbit dns'
+    '  persistent pv xprev started acc phase kdiv st alf vlp rawl numl denl ql thl dA dR dQ dB dsq dkbit dns sX sR sQ sk sabv dkv dfrv blv ouv dsv acbl dadj qaf qbf ds0 ddel'
     '  if isempty(started)'
     '    pv = fi(zeros(5,1), 1, 21, 13);'
     '    xprev = xn; started = true;'
     '    acc = cast(0, ''like'', Ta.out);'
     '    phase = uint8(0); kdiv = uint8(1);'
     '    alf = cast(0, ''like'', Ta.acc); vlp = cast(v_l, ''like'', Ta.st);'
+    '    % [R9] ouv: il TIPO viene dall''espressione dentro iidm_prep_a, non da una dichiarazione'
+    '    [ouv, alf, vlp] = iidm_prep_a(v_l, true, alf, vlp);'
     '    % `pv(:)` (fi) e NON zeros(5,1) (double): due tipi diversi di `p` darebbero DUE specializzazioni'
     '    % di iidm_prep, in silenzio.'
-    '    [st, alf, vlp] = iidm_prep(s, v, dv, v_l, pv(:), true, alf, vlp);'
+    '    % [R2] stato della radice sequenziale: X radicando (consumato 2 bit per passo), R resto,'
+    '    % Q radice parziale, sk contatore di passi (STATO: un for verrebbe srotolato -> 10 radici).'
+    '    sX = fi(0, 0, sqrt_seq_nb()*2, 0); sR = fi(0, 0, sqrt_seq_nb()+2, 0);'
+    '    sQ = fi(0, 0, sqrt_seq_nb(), 0);   sk = uint8(0);'
+    '    % Il TIPO di sabv lo da'' sqrt_seq_fin, non una costante scritta a mano: una sola definizione'
+    '    % (su un argomento nullo e'' un reinterpretcast di una costante -> zero hardware).'
+    '    sabv = sqrt_seq_fin(sQ);'
+    '    % [R4] stato fra le due meta'' del decode. I tipi sono quelli delle uscite di decode_a: se'
+    '    % sbagliassi, il codegen fallisce RUMOROSAMENTE (conflitto di tipo su persistent), non in silenzio.'
+    '    dkv = zeros(5,1,''int32''); dfrv = fi(zeros(5,1), 1, 16, 14);'
+    '    dsv = fi(zeros(5,1), 1, 16, 14);   % tipo Ts, lo stesso dichiarato in decode_b'
+    '    ds0 = fi(zeros(5,1), 1, 16, 14); ddel = fi(zeros(5,1), 1, 16, 14);   % [R17] tipo Ts'
+    '    dadj = fi(zeros(5,1), 1, 18, 13);   % tipo Tadj, lo stesso dichiarato in decode_a1'
+    '    [qaf, qbf] = iidm_ab(pv(:));   % [R14] tipi dedotti da iidm_ab (T.par)'
+    '    [st, alf, vlp] = iidm_prep(s, v, dv, v_l, pv(:), true, alf, vlp, sabv);'
     '    rawl = fi(zeros(5,1), 1, 21, 13);   % latch del readout SNN: spezza il path SNN -> decode'
     '    numl = cast(0, ''like'', Ta.acc); denl = cast(1, ''like'', Ta.acc); ql = cast(0, ''like'', Ta.acc);'
     '    % [IIDM #2] stato della ricorrenza: A dividendo residuo, R resto, Q quoziente, B divisore,'
@@ -423,17 +755,53 @@ function code = acciidm_m_chart_code(N, srcRom, srcTypes, srcFsm, srcLut, srcAcc
     '    % thl col TIPO NATIVO di tanh (NON cast a Ta.acc: butterebbe i bit frazionari del tanh prima'
     '    % del prodotto con bf -> bug §2.1). Il tipo lo da'' tanh stesso su un argomento di tipo Ta.acc.'
     '    thl = tanh(cast(0, ''like'', Ta.acc));'
+    '    % [R6] blv DOPO st e thl: il suo TIPO viene dall''espressione, non da una dichiarazione a mano'
+    '    % (cosi'' non posso sbagliare la larghezza). Ordine obbligato: iidm_final_a li usa entrambi.'
+    '    blv = iidm_final_a(st, thl);'
+    '    acbl = iidm_final_b(st, blv);   % stesso principio: TIPO dedotto dall''espressione'
     '    go = true;'
     '  else'
     '    go = any(xn ~= xprev);             % edge-triggered: 1 campione = 1 inferenza (§3.1.4)'
     '  end'
     '  xprev = xn;'
     '  [raw, valid] = snn_b2_fsm(xn, go);'
-    '  if phase == 1                        % DECODE (un ciclo a se'')'
-    ['    pv = snn_decode_lut(rawl, ' num2str(N) ');']
-    '    phase = uint8(2);'
-    '  elseif phase == 2                    % PREP (un ciclo a se'': guardie, sqrt, filtro OU)'
-    '    [st, alf, vlp] = iidm_prep(s, v, dv, v_l, pv(:), false, alf, vlp);   % 1 volta per control-step (§5)'
+    '  if phase == 1                        % [R4] DECODE-A: indice di tabella + frazione'
+    ['    dadj = decode_a1(rawl);']
+    '    phase = uint8(20);'
+    '  elseif phase == 20                   % [R12] DECODE-A2: scala, indice di tabella e frazione'
+    ['    [dkv, dfrv] = decode_a2(dadj, ' num2str(N) ');']
+    '    phase = uint8(12);'
+    '  elseif phase == 12                   % [R4] DECODE-B: interpolazione -> i 5 parametri IIDM'
+    ['    [ds0, ddel] = decode_b1(dkv, ' num2str(N) ');']
+    '    phase = uint8(23);'
+    '  elseif phase == 23                   % [R17] DECODE-B2: interpolazione lineare s0 + frac*del'
+    '    dsv = decode_b2(ds0, ddel, dfrv);'
+    '    phase = uint8(18);'
+    '  elseif phase == 18                   % [R10] DECODE-C: scalatura finale -> i 5 parametri'
+    '    pv = decode_c(dsv);'
+    '    phase = uint8(10);'
+    '  elseif phase == 10                   % [R2] SQRT-INIT: il radicando af*bf entra nella ricorrenza'
+    '    [qaf, qbf] = iidm_ab(pv(:));'
+    '    phase = uint8(21);'
+    '  elseif phase == 21                   % [R14] SQRT-PRE: il prodotto af*bf entra nella ricorrenza'
+    '    sX = sqrt_seq_setup(iidm_sabx_mul(qaf, qbf));'
+    '    sR(:) = 0; sQ(:) = 0; sk = uint8(sqrt_seq_nb());'
+    '    phase = uint8(11);'
+    '  elseif phase == 11                   % [R2] SQRT-STEP: 2 bit di radicando per ciclo, 10 cicli'
+    '    [sX, sR, sQ] = sqrt_seq_step(sX, sR, sQ);'
+    '    sk = sk - uint8(1);'
+    '    if sk == uint8(0)'
+    '      sabv = sqrt_seq_fin(sQ);         % SQRT-FIN: tipizzazione finale (reinterpretcast, zero HW)'
+    '      phase = uint8(2);'
+    '    end'
+    '  elseif phase == 2                    % PREP (un ciclo a se'': guardie, filtro OU; la sqrt arriva fatta)'
+    '    [ouv, alf, vlp] = iidm_prep_a(v_l, false, alf, vlp);   % 1 volta per control-step (§5)'
+    '    phase = uint8(17);'
+    '  elseif phase == 17                   % [R9] OU-B: il passo esponenziale del filtro'
+    '    alf = iidm_prep_a2(ouv, alf);'
+    '    phase = uint8(16);'
+    '  elseif phase == 16                   % [R8] PREP-B: cast + costruzione dello struct'
+    '    st = iidm_prep_b(s, v, dv, v_l, pv(:), alf, sabv);'
     '    kdiv = uint8(1); phase = uint8(3);'
     '  elseif phase == 3                    % ND: SOLO gli operandi della divisione k'
     '    [numl, denl] = iidm_nd(kdiv, st);'
@@ -457,8 +825,17 @@ function code = acciidm_m_chart_code(N, srcRom, srcTypes, srcFsm, srcLut, srcAcc
     '  elseif phase == 9                    % DIV-FIN: segno + saturazione -> ql'
     '    ql(:) = div_seq_fin(dQ, dsq, dB == 0, dns);'
     '    phase = uint8(5);'
-    '  elseif phase == 5                    % USE: SOLO il consumo del quoziente'
-    '    st = iidm_use(kdiv, ql, st);'
+    '  elseif phase == 5                    % [R5] USE-A: SOLO i quadrati (k=2: q^2, k=3: z e z^2)'
+    '    st = iidm_use_a(kdiv, ql, st);'
+    '    phase = uint8(15);'
+    '  elseif phase == 15                   % [R7] USE-M: il secondo quadrato (k=2: uu^2)'
+    '    st = iidm_use_m(kdiv, st);'
+    '    phase = uint8(22);'
+    '  elseif phase == 22                   % [R16] USE-M2: secondo quadrato (k=2) / sottrazione (k=3)'
+    '    st = iidm_use_m2(kdiv, st);'
+    '    phase = uint8(13);'
+    '  elseif phase == 13                   % [R5] USE-B: prodotti e selezioni'
+    '    st = iidm_use_b(kdiv, ql, st);'
     '    if kdiv >= 5'
     '      phase = uint8(6);'
     '    else'
@@ -467,8 +844,14 @@ function code = acciidm_m_chart_code(N, srcRom, srcTypes, srcFsm, srcLut, srcAcc
     '  elseif phase == 6                    % TANH: stadio a se'' -- era il PATH CRITICO (237 liv, 7,35 MHz)'
     '    thl(:) = iidm_tanh(st);'
     '    phase = uint8(7);'
-    '  elseif phase == 7                    % FINAL: blend + clamp -> accel (tenuta fino al prossimo)'
-    '    acc = iidm_final(st, thl);'
+    '  elseif phase == 7                    % [R6] FINAL-A: a_cah + bf*th (il prodotto col tanh)'
+    '    blv = iidm_final_a(st, thl);'
+    '    phase = uint8(14);'
+    '  elseif phase == 14                   % [R6] FINAL-B: blend + clamp -> accel (tenuta fino al prossimo)'
+    '    acbl = iidm_final_b(st, blv);'
+    '    phase = uint8(19);'
+    '  elseif phase == 19                   % [R11] FINAL-C: cast + selezione ACC + clamp -> accel'
+    '    acc = iidm_final_c(st, acbl);'
     '    phase = uint8(0);'
     '  end'
     '  if valid                             % [2d R1] latch DOPO la catena: rawl e'' un vero registro'
@@ -485,7 +868,11 @@ function code = acciidm_m_chart_code(N, srcRom, srcTypes, srcFsm, srcLut, srcAcc
           newline newline srcPrep newline newline srcNd newline newline srcUse ...
           newline newline srcTanh newline newline srcTanhLut newline newline srcFinal ...
           newline newline srcDivNb newline newline srcDivSu ...
-          newline newline srcDivSt newline newline srcDivFi];
+          newline newline srcDivSt newline newline srcDivFi ...
+          newline newline srcSqNb newline newline srcSqSu ...
+          newline newline srcSqSt newline newline srcSqFi ...
+          newline newline srcAb   newline newline srcSabx ...
+          newline newline srcSabxM];
 end
 
 

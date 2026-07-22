@@ -1,0 +1,12 @@
+# ⚠️ NON E' la tabella della campagna: sono i probe FORWARD-ONLY (SNN senza decode),
+# usati come RIFERIMENTO DIAGNOSTICO per misurare quanto pesa il decode.
+# La tabella vera (9 blocchi Donatello COMPLETI) la genera il Task 2 del piano in points.tsv.
+tag	srcdir	period_ns	fmax_ooc	nota
+snn_fwd_r2	/d/zbd_pipe/snn_fwd_r2/m_snn_fwd_r2	33.619	29.745	SNN forward-only (no decode)
+snn_fwd_r3	/d/zbd_pipe/snn_fwd_r3/m_snn_fwd_r3	20.858	47.943	SNN forward-only (no decode)
+snn_fwd_r4	/d/zbd_pipe/snn_fwd_r4/m_snn_fwd_r4	19.175	52.151	SNN forward-only (no decode)
+snn_fwd_r5	/d/zbd_pipe/snn_fwd_r5/m_snn_fwd_r5	16.087	62.162	SNN forward-only (no decode)
+snn_fwd_r6	/d/zbd_pipe/snn_fwd_r6/m_snn_fwd_r6	13.900	71.942	SNN forward-only (no decode)
+snn_fwd_r7	/d/zbd_pipe/snn_fwd_r7/m_snn_fwd_r7	13.715	72.913	SNN forward-only (no decode)
+snn_fwd_r8	/d/zbd_pipe/snn_fwd_r8/m_snn_fwd_r8	10.887	91.853	SNN forward-only (no decode)
+snn_fwd_r9	/d/zbd_pipe/snn_fwd_r9/m_snn_fwd_r9	10.085	99.157	SNN forward-only (no decode)

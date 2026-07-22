@@ -23,7 +23,12 @@ function accel = acc_iidm_fsm(s, v, dv, v_l, p, rst) %#codegen
   persistent alf vlp
   if isempty(alf), alf = cast(0,   'like', T.acc); end
   if isempty(vlp), vlp = cast(v_l, 'like', T.st);  end
-  [st, alf, vlp] = iidm_prep(s, v, dv, v_l, p, rst, alf, vlp);
+  % R2: la radice non sta piu' dentro iidm_prep (era il collo a 17,5 MHz). Qui si calcola in un colpo --
+  % il model non ha vincoli di clock; la chart usera' la STESSA ricorrenza spalmata su 10 stadi.
+  % `sqrt_seq` e' bit-identica a sqrt() su TUTTI i 262144 valori del dominio (prova esaustiva + 2 guasti
+  % iniettati che divergono): la sostituzione e' provata, non assunta. G2 la ri-verifica sui 60k.
+  sabin = sqrt_seq(iidm_sabx(p));
+  [st, alf, vlp] = iidm_prep(s, v, dv, v_l, p, rst, alf, vlp, sabin);
   for k = 1:5                        % trip-count costante -> il codegen srotola: k e' coder.const
     [num, den] = iidm_nd(k, st);
     q = fsm_div(num, den);

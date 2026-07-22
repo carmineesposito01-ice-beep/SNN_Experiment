@@ -43,3 +43,10 @@ axi/acciidm_m/tb_params.vh
 axi/acciidm_m/cl_*.mem
 axi/acciidm_m/cl_dims.vh
 axi/acciidm_m/cl_meta.mat
+hdl_decode/
+hdl_probe_split/
+hdl_pipe/
+hdl_snn/
+hdl_iidm_divblk/
+hdlsrc_donatello*/
+slprj/

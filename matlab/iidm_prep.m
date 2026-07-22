@@ -1,5 +1,11 @@
-function [st, alf, vlp] = iidm_prep(s, v, dv, v_l, p, rst, alf, vlp) %#codegen
+function [st, alf, vlp] = iidm_prep(s, v, dv, v_l, p, rst, alf, vlp, sabin) %#codegen
 %IIDM_PREP  [SP4-M-FSM] Fase 0 della FSM: guardie, cast, filtro OU, sab, s_safe -> stato `st`.
+%
+%  ⚠️ `sabin` (R2, 2026-07-19) = sqrt(af*bf) GIA' CALCOLATA dal chiamante, non piu' qui dentro.
+%  Motivo: la radice era il COLLO (17,5 MHz, tutti i 400 path peggiori finivano su st_sab) e per
+%  sequenzializzarla serve piu' di un clock -- impossibile dentro una funzione-fase che gira in UNO.
+%  Chi chiama la calcola come sa: il model in un colpo (`sqrt_seq`), la chart in 10 stadi con la STESSA
+%  ricorrenza (sqrt_seq_step). Vedi iidm_sabx per l'ingresso, che e' a fonte unica.
 %  Matematica VERBATIM da acc_iidm_open (righe 24-57): stesse espressioni, stessi cast, stesso ordine.
 %
 %  UNICA implementazione, chiamata SIA dal model (acc_iidm_fsm, per G2 sul dataset) SIA dalla chart del
@@ -15,54 +21,12 @@ function [st, alf, vlp] = iidm_prep(s, v, dv, v_l, p, rst, alf, vlp) %#codegen
   % T COSTRUITO DENTRO (non ricevuto): HDL Coder rifiuta uno struct di prototipi che attraversa le
   % funzioni -- "Struct in expression 'T' has an empty-typed field ... MATLAB-to-dataflow conversion"
   % (acc_types usa fi([],...), campi VUOTI). Con argomento letterale e' coder.const -> ripiegata.
-  T = acc_types('fixed');
-  DT = 0.1; ALPHA = exp(-DT/1.0);
-  v0 = max(p(1), 1e-3); T_ = max(p(2), 1e-3); s0 = p(3); a = max(p(4), 1e-3); b = max(p(5), 1e-3);
-
-  % Lo stato del filtro OU (alf, vlp) ARRIVA e TORNA: qui NON c'e' persistent. Motivo: HDL Coder vieta i
-  % persistent in una funzione non-entry-point chiamata piu' di una volta o dentro un condizionale
-  % ("Non-top-level functions with persistent variables may be invoked only once") -- e la chart del
-  % blocco M chiama iidm_prep in due rami (init e valid). Lo STORAGE vive quindi nel top-level (la chart
-  % / il model acc_iidm_fsm); qui resta il CALCOLO, che e' l'unica fonte (single-source intatto).
-  % `rst` azzera il filtro a inizio traiettoria; `x(:) =` per non cambiare il tipo (§9).
-  if rst
-    alf(:) = 0;
-    vlp(:) = v_l;
-  end
-
-  sq = cast(s,  'like', T.st);   vq = cast(v,   'like', T.st);
-  dq = cast(dv, 'like', T.st);   lq = cast(v_l, 'like', T.st);
-  v0f = cast(v0, 'like', T.par); Tf_ = cast(T_, 'like', T.par); s0f = cast(s0, 'like', T.par);
-  af  = cast(a,  'like', T.par); bf  = cast(b,  'like', T.par);
-
-  % stima a_l (filtro OU su differenze finite del leader): divisore COSTANTE DT.
-  % Moltiplicazione per 1/DT invece di divide(): HDL Coder rifiuta divide() nella conversione dataflow
-  % della chart M ("Call to function 'divide' is not supported unless all of its input arguments are
-  % constant") e per un divisore COSTANTE ripiegherebbe comunque in un moltiplicatore shallow.
-  % Che sia bit-identico a divide(x, 0.1) NON e' assunto: lo prova G2 (dmax=0 vs acc_iidm_open, che qui
-  % usa divide()). Se non lo fosse, G2 fallirebbe e servirebbe un'altra strada.
-  INV_DT = 1/DT;
-  alf = cast(ALPHA*alf + (1-ALPHA)*((lq - vlp) * INV_DT), 'like', T.acc);
-  vlp = cast(lq, 'like', T.st);
-
-  sab    = cast(max(sqrt(af*bf), 1e-6), 'like', T.par);
-  s_safe = cast(max(sq, 2.0), 'like', T.st);
-
-  st = struct( ...
-    'vq',      vq, ...
-    'dq',      dq, ...
-    'v0f',     v0f, ...
-    'Tf_',     Tf_, ...
-    's0f',     s0f, ...
-    'af',      af, ...
-    'bf',      bf, ...
-    'sab',     sab, ...
-    's_safe',  s_safe, ...
-    'a_l_bar', cast(min(alf, af), 'like', T.acc), ...
-    's_star',  cast(0, 'like', T.st), ...
-    'v_free',  cast(0, 'like', T.acc), ...
-    'z',       cast(0, 'like', T.acc), ...
-    'a_iidm',  cast(0, 'like', T.acc), ...
-    'a_cah',   cast(0, 'like', T.acc), ...
-    'dd',      cast(0, 'like', T.acc));
+%
+%  ⚠️ SINGLE SOURCE (R8, 2026-07-19): composizione di iidm_prep_a (SOLO il filtro OU) e
+%  iidm_prep_b (cast + costruzione dello struct), che la chart esegue in DUE clock -- il filtro OU
+%  era il collo (alf -> a_l_bar, gradini 8 e 9 della scala). G2 prova sui 60000 control-step che il
+%  taglio e' bit-neutro.
+  [d, alf, vlp] = iidm_prep_a(v_l, rst, alf, vlp);   % R9: differenza finita
+  alf           = iidm_prep_a2(d, alf);              % R9: passo esponenziale
+  st         = iidm_prep_b(s, v, dv, v_l, p, alf, sabin);
 end
