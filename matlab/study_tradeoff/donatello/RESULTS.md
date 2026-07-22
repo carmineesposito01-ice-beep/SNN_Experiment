@@ -326,3 +326,31 @@ promessa (contrasto col −39% della prima calibrazione IIDM a vincolo LASCO, ch
 
 **Il tetto pratico del Donatello e' ~91 MHz deployabili** (architettura split, p5+R9). La caccia al FAST
 ha portato il blocco da 25,3 (don_a1) a 91,3 MHz reali = **×3,6**, con area confrontabile.
+
+## 12. TABELLA DEFINITIVA — Blocco A split, dataset completo (2026-07-22)
+
+Ogni metrica verificata sull'artefatto, non ereditata. Snapshot SNN congelati, cache azzerata.
+
+| tier | config | dmax | Fmax OOC | Fmax post-route | LUT OOC→route | FF | DSP | BRAM(tile/RAMB18) | WHS | entity |
+|---|---|---|---|---|---|---|---|---|---|---|
+| SLOW | fused+R2 | **0** | 30,545 | **29,619** | 3681→3645 | 1817 | 52 | 1 / 2 | +0,121 | 2 (SNN,DEC) |
+| BALANCED | p3+R5 | **0** | 56,440 | **56,246** | 4282→3891 | 2173 | 52 | 1 / 2 | +0,098 | 2 (SNN,DEC) |
+| **FAST** | **p5+R9** | **0** | 92,920 | **91,291** | 4883→4548 | 3288 | 52 | 1 / 2 | +0,098 | 2 (SNN,DEC) |
+
+Note: `dmax=0` su traiettoria reale per la coppia SPECIFICA di ogni tier (gate_split_tiers, non ereditato
+dal preflight). Il vincolo di sintesi riduce ANCHE l'area (LUT OOC→route in calo su tutti). BRAM 1 tile /
+2 RAMB18 invariata OOC→post-route. Latenze: SLOW 341 (fused, no fasi decode), FAST 405 (p5, 5 fasi).
+split3 (leva 3) su SLOW: -348 LUT ulteriori a Fmax invariata.
+
+### ✅ Blocco A: COMPLETO. Deployabile raccomandato = FAST (p5+R9 split) a ~91 MHz reali.
+Da 25,3 (don_a1 fused+R9 chart) a 91,3 post-route = **×3,6**, area confrontabile, hold positivo.
+
+---
+
+## NOTA METODOLOGICA per il Blocco B / confronto MPC (fpga-expert ch30)
+Le Fmax qui sono timing STATICO (deterministico): la "regola della distribuzione" (mediana/p99/max su
+N≥1000) NON si applica. Si applichera' invece al confronto **SNN-FPGA vs MPC-software** del Blocco B:
+- **same-window rule**: finestre identiche sui due lati (prep buffer, cache flush, kernel, read-back).
+- **baseline difendibile**: MPC-SW compilato -O3 + flag target dichiarati, NON -O0 (errore metodologico noto).
+- **jitter del control-loop**: e' l'argomento piu' forte per l'HW dedicato — va MISURATO (p99−mediana) e
+  confrontato col jitter-margin del loop, non asserito.
