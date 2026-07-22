@@ -1,4 +1,7 @@
-function build_hdl_variants(decVariant, snnSrc, initStyle, archStyle)
+function build_hdl_variants(decVariant, snnSrc, initStyle, archStyle, decInit)
+%  decInit = 'shared' (default) | 'pvSplit' — [Leva2, solo con archStyle='split'] isola il flag di
+%    init di `pv` dal datapath del decode. Il collo di sp_fast (92,9 MHz, 4 liv) e' il flag
+%    `pv_not_empty` che entra nell'aritmetica, non la profondita' logica.
 %  archStyle = 'chart' (default, storico) | 'split' — [SPLIT] come e' strutturato il blocco Donatello.
 %    'chart': UNA MATLAB Function (normalize + snn_b2_fsm + decode a fasi, tutto inlinato). E' la forma
 %             misurata finora, e il suo muro a 41 MHz e' un COSTO D'INTEGRAZIONE (RESULTS.md §3):
@@ -51,8 +54,11 @@ function build_hdl_variants(decVariant, snnSrc, initStyle, archStyle)
   assert(any(strcmp(initStyle, {'shared','perVar'})), ...
          'initStyle = shared | perVar (dato: %s)', initStyle);
   if nargin < 4 || isempty(archStyle), archStyle = 'chart'; end
-  assert(any(strcmp(archStyle, {'chart','split'})), ...
-         'archStyle = chart | split (dato: %s)', archStyle);
+  assert(any(strcmp(archStyle, {'chart','split','split3'})), ...
+         'archStyle = chart | split | split3 (dato: %s)', archStyle);
+  if nargin < 5 || isempty(decInit), decInit = 'shared'; end
+  assert(any(strcmp(decInit, {'shared','pvSplit'})), ...
+         'decInit = shared | pvSplit (dato: %s)', decInit);
   if nargin < 2 || isempty(snnSrc), snnSrc = 'snn_b2_fsm.m'; end
   snnPath = fullfile(here, snnSrc);
   assert(isfile(snnPath), 'sorgente SNN inesistente: %s', snnPath);
@@ -166,10 +172,15 @@ function build_hdl_variants(decVariant, snnSrc, initStyle, archStyle)
     if strcmp(archStyle, 'chart')
       mount_chart(sub, in_names, out_names, ...
         chart_code(calls{i}, decs{i}, srcRom, srcTypes, srcFsm, nrm, decVariant, Nlist(i), initStyle));
-    else
+    elseif strcmp(archStyle, 'split')
       mount_split(sub, in_names, out_names, ...
         snn_chart_code(srcRom, srcTypes, srcFsm, nrm), ...
-        dec_chart_code(decs{i}, decVariant, Nlist(i)));
+        dec_chart_code(decs{i}, decVariant, Nlist(i), decInit));
+    else   % split3: NORM | SNN | DEC, tre entita' [Leva3]
+      mount_split3(sub, in_names, out_names, ...
+        norm_chart_code(srcTypes, nrm), ...
+        snn_chart_code_xn(srcRom, srcTypes, srcFsm), ...
+        dec_chart_code(decs{i}, decVariant, Nlist(i), decInit));
     end
     fprintf('  costruito %s [%s]\n', names{i}, archStyle);
   end
@@ -334,6 +345,69 @@ function mount_split(sub, in_names, out_names, snnCode, decCode)
 end
 
 
+function mount_split3(sub, in_names, out_names, normCode, snnCode, decCode)
+%MOUNT_SPLIT3  [Leva3] TRE MATLAB Function: NORM (s,v,dv,v_l -> xn) | SNN (xn -> raw,valid) |
+%  DEC (raw,valid -> 5 param). Isola il normalize (14 DSP dei reciproci a 34 bit) dalla SNN.
+  add_block('simulink/User-Defined Functions/MATLAB Function', [sub '/NORM']);
+  chN = sfroot().find('-isa','Stateflow.EMChart','Path',[sub '/NORM']); chN.Script = normCode;
+  add_block('simulink/User-Defined Functions/MATLAB Function', [sub '/SNN']);
+  chS = sfroot().find('-isa','Stateflow.EMChart','Path',[sub '/SNN']); chS.Script = snnCode;
+  add_block('simulink/User-Defined Functions/MATLAB Function', [sub '/DEC']);
+  chD = sfroot().find('-isa','Stateflow.EMChart','Path',[sub '/DEC']); chD.Script = decCode;
+  for j = 1:4      % ingressi fisici -> NORM
+    add_block('built-in/Inport', [sub '/' in_names{j}], 'Port', num2str(j));
+    add_line(sub, [in_names{j} '/1'], ['NORM/' num2str(j)]);
+  end
+  add_line(sub, 'NORM/1', 'SNN/1');    % xn attraversa NORM->SNN
+  add_line(sub, 'SNN/1', 'DEC/1');     % raw   attraversa SNN->DEC
+  add_line(sub, 'SNN/2', 'DEC/2');     % valid
+  for j = 1:5
+    add_block('built-in/Outport', [sub '/' out_names{j}], 'Port', num2str(j));
+    add_line(sub, ['DEC/' num2str(j)], [out_names{j} '/1']);
+  end
+end
+
+
+function code = norm_chart_code(srcTypes, nrm)
+%NORM_CHART_CODE  [Leva3] La MF "NORM": s,v,dv,v_l -> xn (4). Istanzia il tipo T e chiama il normalize.
+%  Le 4 moltiplicazioni per i reciproci a 34 bit sono i ~14 DSP che nell'architettura split stanno
+%  dentro la MF SNN insieme al core: qui diventano un'entita' a se'.
+  Lmain = {
+    'function xn = NORM(s, v, dv, v_l)'
+    '%#codegen'
+    '% [Leva3] Solo la normalizzazione fisico->xn. xn e'' sfix19_En13 (T.V), 4 valori.'
+    '  Tt = snn_types(''fixed'', 13);'
+    '  xn = local_normalize(s, v, dv, v_l, Tt);'
+    'end'};
+  L = [Lmain(:); {''}; normalize_code(nrm)];
+  code = strjoin(L, newline);
+  code = [code newline newline srcTypes];   % snn_types serve per Tt
+end
+
+
+function code = snn_chart_code_xn(srcRom, srcTypes, srcFsm)
+%SNN_CHART_CODE_XN  [Leva3] La MF "SNN" che parte da xn GIA' normalizzato (il normalize e' l'entita'
+%  NORM a monte). Uguale a snn_chart_code ma SENZA local_normalize e con ingresso xn invece dei fisici.
+  Lmain = {
+    'function [raw, valid] = SNN(xn)'
+    '%#codegen'
+    '% [Leva3] Solo il forward SNN, ingresso xn gia'' normalizzato da NORM. NIENTE normalize qui.'
+    '  persistent xprev started'
+    '  if isempty(started)'
+    '    xprev = xn; started = true;'
+    '    go = true;'
+    '  else'
+    '    go = any(xn ~= xprev);'
+    '  end'
+    '  xprev = xn;'
+    '  [raw, valid] = snn_b2_fsm(xn, go);'
+    'end'};
+  L = [Lmain(:); {''}; inlined_header()];
+  code = strjoin(L, newline);
+  code = [code newline newline srcRom newline newline srcTypes newline newline srcFsm];
+end
+
+
 function code = snn_chart_code(srcRom, srcTypes, srcFsm, nrm)
 %SNN_CHART_CODE  [SPLIT] La MF "SNN": normalize + snn_b2_fsm, uscita raw(5) + valid. NIENTE decode.
 %  Stessa logica di edge-trigger e stessi persistent di controllo di chart_code, ma si FERMA a raw.
@@ -359,20 +433,41 @@ function code = snn_chart_code(srcRom, srcTypes, srcFsm, nrm)
 end
 
 
-function code = dec_chart_code(srcDecode, decVariant, N)
+function code = dec_chart_code(srcDecode, decVariant, N, decInit)
 %DEC_CHART_CODE  [SPLIT] La MF "DEC": riceve raw(5)+valid dalla SNN, fa latch + macchina a fasi del
 %  decode -> i 5 parametri. E' la seconda meta' di chart_code, isolata: stessa logica [A1]+[A2].
 %  raw e' sfix21_En13 (fi(true,21,13)), lo stesso tipo che rawl latchava nella chart unica.
+%  decInit = 'shared' (default) | 'pvSplit' — [Leva2] come si inizializza.
+%    'shared':  un unico `if isempty(pv)` per pv + tutti i persistent del decode.
+%    'pvSplit': `pv` ha il SUO flag isempty, il resto resta raggruppato. Motivo: il path critico di
+%               sp_fast (92,9 MHz, 4 liv) NON e' aritmetica profonda ma il flag di init `pv_not_empty`
+%               che entra nel datapath (startpoint pv_not_empty_reg_rep). Isolarlo abbassa il fanout
+%               del flag su pv. ⚠️ Si separa SOLO pv: separare anche gli init delle fasi rende VIVA la
+%               catena rawl->decode_a->... (provato sul blocco chart: perVar-v1 = 29,7 MHz, PEGGIO).
+  if nargin < 4 || isempty(decInit), decInit = 'shared'; end
   [pers, dec, ~, ini] = decode_phase_code(decVariant, N);   % riusa la macchina a fasi di chart_code
+  if strcmp(decInit, 'pvSplit')
+    initBlock = [{'  if isempty(pv)'
+                  '    pv = fi(zeros(5,1), 1, 21, 13);'
+                  '  end'
+                  '  if isempty(started_dec)'}
+                 ini(:)
+                 {'    started_dec = true;'
+                  '  end'}];
+    persDecl = ['  persistent pv started_dec ' pers];
+  else
+    initBlock = [{'  if isempty(pv)'
+                  '    pv = fi(zeros(5,1), 1, 21, 13);'}
+                 ini(:)
+                 {'  end'}];
+    persDecl = ['  persistent pv ' pers];
+  end
   Lmain = [{
     'function [v0, T, s0, a, b] = DEC(raw, valid)'
     '%#codegen'
     '% [SPLIT] Solo il decode: latch di raw + fasi. Riceve raw(5)+valid dalla MF SNN (entita'' a se'').'
-    ['  persistent pv ' pers]
-    '  if isempty(pv)'
-    '    pv = fi(zeros(5,1), 1, 21, 13);'}
-    ini(:)
-    {'  end'}
+    persDecl}
+    initBlock
     dec(:)
     {'  v0 = pv(1); T = pv(2); s0 = pv(3); a = pv(4); b = pv(5);'
     'end'}];

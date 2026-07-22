@@ -255,3 +255,74 @@ diversa da tutte quelle usate finora:
 ⚠️ **Due diagnosi sbagliate di fila su questo muro**, entrambe con una spiegazione tecnica plausibile.
 La regola per la terza: nessuna leva si applica prima di un **esperimento che isoli la causa**, e la
 previsione va scritta *prima* della misura.
+
+## 9. Leva 2 (decode pipeline / pv-split) — ⛔ NESSUN GUADAGNO, tetto dell'architettura a fasi
+
+Il collo di `sp_fast` (92,9 MHz, 4 liv) non e' aritmetica ne' `decode_c`: e' il **flag di init** che entra
+nel datapath del registro d'uscita del primo stadio del decode (`s1_9` = uscita di `decode_a1`).
+- **`decInit='pvSplit'`** (isola il flag di `pv`): 92,945 MHz — **invariato**. `pv_not_empty` sparisce
+  dal path, ma lo startpoint diventa `started_dec_not_empty` (il flag che protegge gli altri init):
+  ho solo SPOSTATO il nome del flag, non tolto il flag dal path. dmax=0.
+- **Diagnosi**: qualunque persistente inizializzato con `isempty` genera un flag di init, e HDL Coder ne
+  mette uno nel datapath del registro d'uscita di ogni stadio. Il collo e' STRUTTURALE:
+  "un registro inizializzato per stadio, col suo flag di init". Non e' *quale* flag.
+- **Per superarlo** servirebbe far partire i registri da reset HARDWARE invece che da `isempty` — un
+  cambiamento di come HDL Coder emette lo stato, non di codice MATLAB. Fuori portata per ora.
+
+→ **92,9 MHz e' il tetto pratico dell'architettura a fasi.** La pipeline vera (probe `p5`=97,8) darebbe
+~5% in piu' ma costa registri di stadio e gira a vuoto 355 clock su 360 (il time-mux alimenta il decode
+1 volta ogni ~360 cicli): area sprecata per un margine marginale. Non conviene.
+
+## 10. Leva 3 (normalize come 3a entita', archStyle='split3') — neutro su Fmax, −LUT
+
+NORM | SNN | DEC come tre entita' distinte (probe Fase 0: tre MF con persistent → OK, no dataflow).
+Il normalize (4 moltiplicazioni per reciproci a 34 bit = ~14 DSP) esce dalla MF SNN.
+
+| punto | split (2 ent.) | **split3 (3 ent.)** | LUT split→split3 | path critico split3 |
+|---|---|---|---|---|
+| FAST (p5+R9) | 92,920 | **92,920** | 4883 → 4910 (+27) | `pv_not_empty→s1_9` in u_DEC, 4 liv |
+| SLOW (fused+R2) | 30,5 | **30,545** | 4053 → **3705 (−348)** | `pR_idx→pC_fat` in u_SNN, **51 liv** |
+
+**Verdetto: il normalize NON rallentava ne' la SNN ne' il decode.**
+- Su FAST il collo e' in u_DEC (invariato): il normalize non era mai nel path critico. +27 LUT (wrapper 3a entita').
+- Su SLOW il collo e' **dentro u_SNN** (`pR_idx→pC_fat`, 51 liv = la profondita' aritmetica dello
+  stadio-C, non il normalize). La SNN R2 resta a 30,5 anche senza normalize nel datapath: il suo collo
+  e' interno. Il normalize era 14 DSP di AREA, non di RITARDO.
+- ✅ **Guadagno collaterale reale**: split3 SLOW usa **−348 LUT** (3705 vs 4053). HDL Coder ottimizza
+  meglio tre entita' piccole che due; il normalize isolato non trascina piu' area nella SNN.
+
+→ La leva 3 non alza il tetto (92,9 resta), ma e' **gratis o meglio in area** e piu' pulita
+architetturalmente (NORM riusabile). Vale come default per l'architettura split.
+
+⚠️ NORM isolata NON ha Fmax registro-registro: e' logica PURAMENTE COMBINATORIA (4 moltiplicazioni +
+clamp, zero registri) -> non ha clock ne' path sequenziale proprio. Conferma che il normalize e'
+AREA (14 DSP), non un collo temporale.
+
+## 11. Leva 1 (vincolo di sintesi + post-route) — i numeri DEPLOYABILI veri
+
+Tutti i numeri sopra sono sintesi **libera OOC** (ottimistici). Qui: sintesi VINCOLATA al ritardo OOC
+del punto + post-route (`synth_point.tcl` con periodo + `impl_point.tcl`, regola WNS<=0). Sono i numeri
+su cui si sceglie DAVVERO la configurazione da mettere su silicio.
+
+| tier | config | OOC libera | **post-route** | delta | hold (WHS) | validita' |
+|---|---|---|---|---|---|---|
+| SLOW | fused+R2 | 30,545 | **29,619** | −3,0% | +0,121 | VALIDA (WNS −1,023) |
+| BALANCED | p3+R5 | 56,440 | **56,246** | −0,3% | +0,098 | VALIDA (WNS −0,061) |
+| **FAST** | **p5+R9** | 92,920 | **91,291** | −1,8% | +0,098 | VALIDA (WNS −0,192) |
+
+**Il FAST e' ~91 MHz DEPLOYABILI veri** su xc7z020, timing chiuso, hold positivo — non un numero OOC.
+Divario OOC→post-route fra −0,3% e −3,0%: i numeri OOC erano onesti. La sintesi VINCOLATA mantiene la
+promessa (contrasto col −39% della prima calibrazione IIDM a vincolo LASCO, che era un artefatto).
+
+---
+
+## RIEPILOGO — le tre leve di ricerca (2026-07-22)
+
+| leva | cosa | esito |
+|---|---|---|
+| **2** decode pipeline / pv-split | isolare il flag di init dal path | ⛔ 92,9 invariato: il collo e' STRUTTURALE (un flag di init per stadio), non aggredibile da codice MATLAB |
+| **3** normalize 3a entita' (split3) | NORM \| SNN \| DEC | ➖ Fmax invariata MA −348 LUT su SLOW: il normalize e' AREA (14 DSP combinatori), non ritardo. Piu' pulito, gratis o meglio |
+| **1** vincolo + post-route | numeri deployabili | ✅ FAST 91,3 · BALANCED 56,2 · SLOW 29,6 MHz reali, hold positivo. Divario OOC minimo |
+
+**Il tetto pratico del Donatello e' ~91 MHz deployabili** (architettura split, p5+R9). La caccia al FAST
+ha portato il blocco da 25,3 (don_a1) a 91,3 MHz reali = **×3,6**, con area confrontabile.
