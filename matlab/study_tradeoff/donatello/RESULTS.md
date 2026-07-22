@@ -346,9 +346,11 @@ reciproco. Il delay ha DUE facce (misurate, non dedotte — `measure_split_tiers
   Un RISULTATO storico, per giunta legato al tetto Fmax di un design vecchio (questi tier fanno 29–91 MHz).
 - **latenza** = N clock d'inferenza (`run_block_traj_test`, edge-triggered); ×125 ns = tempo reale **solo SE**
   clockato a 8 MHz.
-- **requisito FISICO** = **solo il control-step da 0,1 s** (loop a 10 Hz): la latenza deve starci dentro →
-  clock minimo ~4 kHz (SLOW 341 clk/0,1 s = 3,41 kHz; FAST 405 clk = 4,05 kHz). A 8 MHz e' lo 0,043–0,051%
-  del budget (colonna "% budget 800k" = latenza ÷ 800.000 = 8 MHz × 0,1 s): gia' ~2000× sopra il bisogno.
+- **requisito FISICO** = il **control-step**, non 8 MHz. Layer cooperativo (V2V BSM / V2I SPaT) = **10 Hz/100 ms**;
+  ma il controllo reale e' **multi-rate**: il loop locale (feedback sensori di bordo) gira **50–500 Hz = 20–2 ms**
+  (Ibrahim/TNO 802.11p: superiore 10 Hz, inferiore 2 ms; sensore min 20 ms — vedi fonti in SESSION_RESUME/chat).
+  Dove sta la SNN (cooperativo vs locale) fissa il budget. Persino nel caso piu' stretto (2 ms) a 8 MHz il blocco
+  usa ~2,5% (clock minimo ~200 kHz): **sovradimensionato in ogni scenario**.
 
 **Risorse** (post-route, xc7z020):
 
@@ -358,14 +360,17 @@ reciproco. Il delay ha DUE facce (misurate, non dedotte — `measure_split_tiers
 | BALANCED | 4282→3891 | 2173 | 52 | 1 / 2 | +0,098 | 2 (SNN,DEC) |
 | **FAST** | 4883→4548 | 3288 | 52 | 1 / 2 | +0,098 | 2 (SNN,DEC) |
 
-> **Il delay pesa la Fmax — e le due facce tirano in versi OPPOSTI.** Il critical-path premia FAST
-> (10,95 ns, **11,4× di margine** sui 125 ns); la latenza end-to-end **penalizza** FAST (405 clk vs 341:
-> piu' stadi di pipeline = piu' clock, e a 8 MHz ogni clock costa gli stessi 125 ns → FAST e' il PIU' LENTO
-> in wall-clock, 50,6 vs 42,6 µs). Senza la colonna latenza si crederebbe FAST "piu' veloce": non lo e' —
-> ha piu' MARGINE ma piu' latenza. **Chi vince**: a 8 MHz la latenza e' lo 0,043–0,051% del budget
-> (control-step 100 ms), quindi gli +64 clock di FAST (+8 µs) sono immateriali; domina il margine di
-> critical-path (robustezza: chiusura timing facile, testa per alzare il clock, PVT). Se il budget di
-> latenza fosse stretto la lettura si ribalterebbe — ecco perche' il delay va nel record accanto alla Fmax.
+> **Il delay pesa la Fmax — ma il verso dipende dal clock di deploy.** Due scenari:
+> - **stesso clock per tutti** (es. forzati a un 8 MHz comune): FAST ha PIU' clock (405 vs 341) → e' il PIU'
+>   LENTO in wall-clock (50,6 vs 42,6 µs). E' l'artefatto profondita'-pipeline vs throughput A CLOCK FISSO —
+>   e' la colonna "latenza @8 MHz" qui sopra.
+> - **ognuno al suo Fmax** (deploy reale — 8 MHz NON e' un requisito): la classifica si **INVERTE** →
+>   SLOW 341/29,6 MHz = **11,5 µs**, BAL 363/56,2 = **6,45 µs**, **FAST 405/91,3 = 4,44 µs = il PIU' VELOCE**.
+>   Entrambe le facce (margine di critical-path E latenza wall-clock) premiano FAST.
+>
+> **Chi vince**: la latenza non vincola in nessuno scenario — anche al budget locale piu' stretto (~2 ms) il
+> blocco usa ~2,5%. Decide il **margine di critical-path** (headroom), che si paga in **AREA** (FAST +1471 FF,
+> +900 LUT vs SLOW): il vero trade-off e' quanto headroom vs quanto chip riservato al V2I futuro.
 
 Note: `dmax=0` su traiettoria reale per la coppia SPECIFICA di ogni tier (`measure_split_tiers.sh`, non
 ereditato dal preflight). Il vincolo di sintesi riduce ANCHE l'area (LUT OOC→route in calo su tutti). BRAM
