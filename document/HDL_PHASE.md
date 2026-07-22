@@ -281,6 +281,11 @@ usa **341 = 0,04 %**.) **Il rapporto col `FixedStep` non va più conosciuto.**
 > bulletproof: aggiungere un ingresso esplicito `new_sample`. `run_block_traj_test` verifica anche che su ingresso
 > costante l'inferenza sia **una sola** (cioè che non sia tornato il free-running).
 
+> **Low-power readiness:** lo stesso segnale idle dell'edge-trigger è l'enable per un futuro **clock-gating**
+> (BUFGCE, `enable = ¬busy`) — il blocco è già clock-gating-ready. Razionale, drop-in e distinzione clock-gating
+> (FPGA, solo dinamica) vs power-gating (solo ASIC, anche leakage) in
+> `matlab/study_tradeoff/donatello/RESULTS.md` §12 "Predisposizione low-power".
+
 ### §3.1.3 Normalizzazione dentro il blocco: la precisione è critica (VERIFICATO 2026-07-14)
 I blocchi di libreria hanno I/O **fisico**, quindi normalizzano **in fixed** al proprio interno (il deployato la fa in
 SW float e riceve `xn`, §3.1). Perché il risultato sia **identico** al path float servono **DUE** condizioni:

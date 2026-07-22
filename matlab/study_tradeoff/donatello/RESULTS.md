@@ -379,6 +379,29 @@ ereditato dal preflight). Il vincolo di sintesi riduce ANCHE l'area (LUT OOC→r
 ### ✅ Blocco A: COMPLETO. Deployabile raccomandato = FAST (p5+R9 split) a ~91 MHz reali.
 Da 25,3 (don_a1 fused+R9 chart) a 91,3 post-route = **×3,6**, area confrontabile, hold positivo.
 
+### Predisposizione low-power (clock-gating-ready) — deciso 2026-07-22, NON implementato
+Il blocco e' progettato **clock-gating-ready**; il gating **non e' instanziato** (scelta: zero rischio sul
+bitstream attuale). Razionale: su questo 7020 @8 MHz la potenza e' ~90% **statica** (dinamica ~8 mW), quindi
+il clock-gating darebbe pochi mW. MA su un chip piu' veloce / nodo FinFET / duty-cycle alto la **dinamica
+(∝ f)** puo' diventare la limitante — e la leva contro la dinamica e' il clock-gating. Predisporlo ORA e'
+~gratis (le risorse non esplodono), quindi vale.
+
+**Cosa rende il blocco gia' pronto** (nessuna modifica richiesta):
+1. FSM **edge-triggered** → segnale **busy/done** gia' presente (idle noto senza logica aggiuntiva).
+2. **Confine registrato** (architettura split: I/O su registri).
+3. **Set di stato** noto e documentato per un'eventuale retention: `V, fatigue, s_prev, V_LI, x_buf`.
+
+**Drop-in futuro** (quando c'e' un target di deployment reale):
+- **Clock-gating** (FPGA): 1 `BUFGCE` sul clock del blocco, enable = ¬busy → ri-verifica `dmax=0` (logica
+  invariata ⇒ bit-exact atteso) + ri-sintesi. Taglia la dinamica durante l'idle (~99,95% a 100 ms, ~97% a
+  2 ms). **Non** tocca il leakage.
+- **Power-gating** (solo se ASIC / hard-macro): dominio UPF + isolation + **retention FF** sul set di stato →
+  taglia ANCHE il leakage. **Non disponibile per-blocco** sul PL 7-series; il wake-latency deve stare nel
+  budget idle. Il confine pulito dello split e' gia' il substrato giusto.
+
+Costo della sola predisposizione: **nullo** (nessun `BUFGCE` ora; busy e confine registrato gia' esistono).
+Base: fpga-expert ch04 (mai gate combinatorio → clock-enable) e ch22 (UPF / retention).
+
 ---
 
 ## NOTA METODOLOGICA per il Blocco B / confronto MPC (fpga-expert ch30)
