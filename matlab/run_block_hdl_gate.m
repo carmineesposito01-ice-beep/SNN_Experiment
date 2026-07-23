@@ -45,8 +45,8 @@ function ok = run_block_hdl_gate(blockName)
   % Donatello_ACC_IIDM una sola (accel). Fino al 2026-07-15 erano fisse a 5: sul blocco SP2 il gate
   % falliva cablando le porte, cioe' sull'HARNESS -> e quell'errore si sarebbe scambiato per un
   % verdetto di HDL Coder (una conferma FALSA del "non sintetizzabile").
-  nOut = numel(find_system([lib '/' blockName], 'SearchDepth', 1, 'BlockType', 'Outport'));
-  assert(nOut >= 1, 'il blocco "%s" non ha uscite: non c''e'' nulla da generare', blockName);
+  pp = get_param([lib '/' blockName], 'Ports'); nOut = pp(2);   % robusto ai blocchi MASCHERATI
+  assert(nOut >= 1, 'il blocco "%s" non ha uscite: non c''e'' nulla da generare', blockName);   % (find_system non guarda sotto la mask)
 
   mdl = 'gate_mdl'; new_system(mdl); load_system(mdl);
   sub = [mdl '/DUT'];
