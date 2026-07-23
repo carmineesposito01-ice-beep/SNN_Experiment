@@ -253,15 +253,19 @@ cd "D:/Project_MBSE/1.Reti Neurali/Rete_SNN_Test/CF_FSNN/.worktrees/Simulink_Imp
 ```
 Expected: per ogni tier/traiettoria `dmax vs riferimento = 0` e `TRAJ TEST PASSATO`, poi `=== G2 POSITIVO OK ===`. (L'assert interno `dmax==0` ferma tutto se un tier diverge.)
 
-- [ ] **Step 2: Cancello NEGATIVO — con ingresso a 13 bit frazionari deve FALLIRE**
+- [ ] **Step 2: Cancello NEGATIVO — con ingresso a 10 bit frazionari deve FALLIRE**
 
 Prova che il gate discrimina (ingresso degradato → dmax>0 → l'assert scatta).
+⚠️ **`nfrac=10`, non 13**: verificato in esecuzione (2026-07-23) che i tier splitpipe restano bit-exact
+(`dmax=0`) a nfrac=13 su tutte e 5 le traj (anche K=40) — più robusti di quanto il commento di
+`run_block_traj_test` assumeva. A **nfrac=10** la normalizzazione devia abbastanza da flippare uno spike →
+i parametri divergono → l'assert scatta. È la soglia che rende il gate provato-sensibile.
 
 Run:
 ```bash
-"$MATLAB" -batch "addpath(pwd); ok=false; try, run_block_traj_test(20,'Donatello_FAST',500,1,13); catch e, ok=true; fprintf('atteso FAIL: %s\n', e.message); end; assert(ok,'CONTROLLO NEGATIVO non scattato: il gate NON discrimina'); disp('=== G2 NEGATIVO OK: il gate discrimina ===')"
+"$MATLAB" -batch "addpath(pwd); ok=false; try, run_block_traj_test(20,'Donatello_FAST',500,1,10); catch e, ok=true; fprintf('atteso FAIL (nfrac=10): %s\n', e.message); end; assert(ok,'CONTROLLO NEGATIVO non scattato: il gate NON discrimina'); disp('=== G2 NEGATIVO OK: il gate discrimina ===')"
 ```
-Expected: `atteso FAIL: … dmax=…` poi `=== G2 NEGATIVO OK ===`. (Se stampa `=== TRAJ TEST PASSATO` a nfrac=13, il gate non discrimina → STOP.)
+Expected: `atteso FAIL (nfrac=10): … dmax=…` poi `=== G2 NEGATIVO OK ===`. (Se passa anche a nfrac=10, il gate non discrimina → STOP.)
 
 - [ ] **Step 3: Commit (registro d'esito)**
 

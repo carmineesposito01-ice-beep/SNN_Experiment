@@ -324,6 +324,15 @@ Residuo = moltiplicazione 34-bit **intrinseca** (2 DSP cascati, ~13,5 ns, ~2 ns 
 phys_opt / AdaptivePipelining / 2-stadi NON la spezzano; i 91 richiederebbero decomposizione **2×2**
 (+~25% FF → contro l'obiettivo area/V2I) → **scartata**. **Record completo + piano ripresa: RESULTS.md §15.**
 
+> **✅ 2026-07-23 — i 3 tier splitpipe sono ora BLOCCHI di libreria.** `Donatello_SLOW` (R2·fused),
+> `Donatello_BALANCED` (R5·p3), `Donatello_FAST` (R9·p5) aggiunti a `snn_champions_lib.slx` da
+> **`build_tier_blocks.m`** (che riusa i mount estratti da `build_hdl_variants` in file condivisi):
+> self-contained, HDL-ready, `dmax=0`, latenze 342/364/406. Gate G1–G4 verdi (dettaglio in SESSION_RESUME).
+> ⚠️ Nel VHDL il marker splitpipe è **`op_reg`/`op_prev`** — i nomi di funzione (`local_normalize_ops`) NON
+> sopravvivono a HDL Coder. La coerenza col VHDL misurato è provata **modulo-nomi** (package, chart-id `c<n>`,
+> segnali `p<n>`, tutti derivati dal nome del blocco → 0 diff logiche). VHDL archiviato in
+> `study_tradeoff/donatello/vhdl_tiers.tar.gz`.
+
 ## §4 Architettura del core (`matlab/snn_core.m`)
 - **Type-parametrizzato** via `snn_types('double'|'fixed', nfrac)`: stesso codice per parità (double) e HDL (fi).
 - 1 chiamata = 1 control-step = `nt=10` tick interni; stato `persistent` (V, fatigue, s_prev, V_LI, x_buf);

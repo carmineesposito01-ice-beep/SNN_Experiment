@@ -24,6 +24,19 @@
 > **➡️ PENDENTE (ripresa post-pausa):** (1) **scelta candidato** SLOW/BAL/FAST per il Blocco B — APERTA, decide
 > l'utente (base: report §5.2/§6 + RESULTS §16 — area/V2I vs margine; SLOW=area-min, BAL=compromesso, FAST=alto-margine); (2) rinviati:
 > **SAIF** power (traiettoria reale) + **verifica RTL xsim** del candidato; poi **Blocco B** (SNN+IIDM in anello).
+>
+> **✅ AGGIORNAMENTO 2026-07-23 — TIER A BLOCCHI DI LIBRERIA (plug&play).** `Donatello_SLOW/BALANCED/FAST`
+> sono ora blocchi di `snn_champions_lib.slx` (architettura **splitpipe**, decode LUT-64): **self-contained +
+> HDL-ready + simulabili** come gli altri. Builder `build_tier_blocks.m` (riusa i mattoni di montaggio estratti
+> da `build_hdl_variants` in file condivisi: `mount_split`/`snn_chart_code`/`dec_chart_code`/…). **Gate tutti
+> verdi:** G1 self-contained (`run_block_hdl_gate` ×3, DualPortRAM) · G2 `dmax=0` su 3×5 traj + controllo
+> negativo a **nfrac=10** (a 13 bit i tier restano bit-exact, più robusti del previsto) · G3 firma HDL
+> (`tier_signature_gate.sh`: R2/R5/R9 · fused/p3/p5 · splitpipe `op_reg`) · G4 coerenza col VHDL misurato in
+> `D:/zbd_p1` (`tier_coherence_gate.sh`, confronto **modulo-nomi** — 0 diff logiche, provato sensibile) + VHDL
+> **archiviato** in `donatello/vhdl_tiers.tar.gz`. Base `Champion`/`LUT{N}` **obsoleti, NON toccati**. La scelta
+> del prescelto poggia ora su oggetti reali e deployabili. Spec+piano: `docs/superpowers/{specs,plans}/2026-07-23-donatello-tier-blocks*`.
+> **Prossimo (Fase 2, tentativo best-effort):** blocco unico configurabile `Donatello_Tier` (Variant+Mask); se
+> HDL Coder non regge, restano i 3 blocchi separati.
 
 **Repo/posizione:** `D:\Project_MBSE\1.Reti Neurali\Rete_SNN_Test\CF_FSNN\.worktrees\Simulink_Importer`,
 branch **`Simulink_Importer`**. **Tutto committato, NON ancora pushato** (ahead di `origin/Simulink_Importer`; il push si fa solo su richiesta dell'utente). Working tree pulito. ⚠️ File dell'utente da NON toccare né stageare: `closed_loop_demo.slx` e `slblocks.m`
