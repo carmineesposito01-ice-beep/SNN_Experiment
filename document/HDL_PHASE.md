@@ -332,6 +332,11 @@ phys_opt / AdaptivePipelining / 2-stadi NON la spezzano; i 91 richiederebbero de
 > sopravvivono a HDL Coder. La coerenza col VHDL misurato è provata **modulo-nomi** (package, chart-id `c<n>`,
 > segnali `p<n>`, tutti derivati dal nome del blocco → 0 diff logiche). VHDL archiviato in
 > `study_tradeoff/donatello/vhdl_tiers.tar.gz`.
+>
+> **✅ 2026-07-24 — blocco UNICO configurabile `Donatello_Tier`** (Variant Subsystem + mask TIER,
+> `build_tier_configurable.m`): con `VariantActivationTime='update diagram'` HDL Coder genera **solo la variante
+> scelta dal menu**, bit-identica (modulo nomi) al blocco separato per tutti e 3 i tier + self-contained + `dmax=0`.
+> ⚠️ Le variant condition NON accettano funzioni → `TIER` numerico (mask popup `Evaluate=on`) e `TIER==k`.
 
 ## §4 Architettura del core (`matlab/snn_core.m`)
 - **Type-parametrizzato** via `snn_types('double'|'fixed', nfrac)`: stesso codice per parità (double) e HDL (fi).

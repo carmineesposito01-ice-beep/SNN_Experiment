@@ -35,8 +35,15 @@
 > `D:/zbd_p1` (`tier_coherence_gate.sh`, confronto **modulo-nomi** — 0 diff logiche, provato sensibile) + VHDL
 > **archiviato** in `donatello/vhdl_tiers.tar.gz`. Base `Champion`/`LUT{N}` **obsoleti, NON toccati**. La scelta
 > del prescelto poggia ora su oggetti reali e deployabili. Spec+piano: `docs/superpowers/{specs,plans}/2026-07-23-donatello-tier-blocks*`.
-> **Prossimo (Fase 2, tentativo best-effort):** blocco unico configurabile `Donatello_Tier` (Variant+Mask); se
-> HDL Coder non regge, restano i 3 blocchi separati.
+> **✅ Fase 2 FATTA (2026-07-24) — blocco unico configurabile `Donatello_Tier`:** Variant Subsystem con le 3
+> varianti tier + **mask con menu TIER** (SLOW/BALANCED/FAST). Il mask seleziona la variante; HDL Coder
+> (`VariantActivationTime='update diagram'`) genera **solo il tier scelto**, identico al blocco separato
+> corrispondente (**0 diff logiche** su SNN/DEC/DualPortRAM per tutti e 3 i tier) + self-contained + `dmax=0`.
+> Builder `build_tier_configurable.m`. Il "coronamento" plug&play: un blocco, un menu. ⚠️ Le variant condition
+> NON accettano funzioni (niente `strcmp`) → `TIER` numerico (mask popup `Evaluate=on` = indice) + `TIER==k`.
+> Fix collaterale a `run_block_hdl_gate` (conteggio uscite via `get_param Ports`, robusto ai blocchi mascherati).
+> **⚠️ Debito segnalato (task):** `run_block_sync_check` copre solo i blocchi a chart singola — salta gli split
+> (Champion/LUT/tier); va esteso.
 
 **Repo/posizione:** `D:\Project_MBSE\1.Reti Neurali\Rete_SNN_Test\CF_FSNN\.worktrees\Simulink_Importer`,
 branch **`Simulink_Importer`**. **Tutto committato, NON ancora pushato** (ahead di `origin/Simulink_Importer`; il push si fa solo su richiesta dell'utente). Working tree pulito. ⚠️ File dell'utente da NON toccare né stageare: `closed_loop_demo.slx` e `slblocks.m`
