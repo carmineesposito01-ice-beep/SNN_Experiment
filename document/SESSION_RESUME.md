@@ -5,7 +5,7 @@
 
 ---
 
-## ▶ RIPRESA A FREDDO — LEGGERE QUESTO BLOCCO PER PRIMO (agg. 2026-07-18)
+## ▶ RIPRESA A FREDDO — LEGGERE QUESTO BLOCCO PER PRIMO (agg. 2026-07-23)
 
 > **Ruolo di questo file:** punto d'ingresso + **STATO** del track `Simulink_Importer`. NON è la procedura
 > generale (quella è la skill `session-reprise`). È un **guida ai documenti**: quando dice «leggi X», leggi X —
@@ -19,16 +19,15 @@
 > VINCOLATO io-timed**, NON i preset-directive di Vivado = solo un test) + report.
 > **Risultato:** Fmax reale **SLOW 29,8 / BAL 58,4 / FAST 73,8 MHz** (FAST = lock 73,6 → metro↔RTL concordano).
 > **Fmax = MARGINE** (t_inf 5,5–16,7 µs, ~6000–18000× sotto il budget 0,1 s) → il criterio è l'**AREA** (V2I).
-> **📄 Report:** `report/Trade_Off_Study_Parte_A.pdf` (commit `53c089ea`); dati `points_phase2.tsv`; record completo
+> **📄 Report:** `report/Trade_Off_Study_Parte_A.pdf` (commit `fa4b6c9b`, ristrutturato su richiesta); dati `points_phase2.tsv`; record completo
 > **RESULTS.md §16**; tooling `sweep_phase2.sh`+`impl_point.tcl` (`652ed9e5`). Lib = lock committato (73,6).
 > **➡️ PENDENTE (ripresa post-pausa):** (1) **scelta candidato** SLOW/BAL/FAST per il Blocco B — APERTA, decide
-> l'utente (§7 report: area/V2I vs margine; SLOW=area-min, BAL=compromesso, FAST=alto-margine); (2) rinviati:
+> l'utente (base: report §5.2/§6 + RESULTS §16 — area/V2I vs margine; SLOW=area-min, BAL=compromesso, FAST=alto-margine); (2) rinviati:
 > **SAIF** power (traiettoria reale) + **verifica RTL xsim** del candidato; poi **Blocco B** (SNN+IIDM in anello).
 
 **Repo/posizione:** `D:\Project_MBSE\1.Reti Neurali\Rete_SNN_Test\CF_FSNN\.worktrees\Simulink_Importer`,
-branch **`Simulink_Importer`**. **Tutto committato e pushato**, working tree pulito (restano solo file
-dell'utente: `closed_loop_demo.slx` modificato-non-mio [`M`], `slblocks.m` + i `*.mexw64` untracked [`??`] — **NON
-toccarli né stagearli**).
+branch **`Simulink_Importer`**. **Tutto committato, NON ancora pushato** (ahead di `origin/Simulink_Importer`; il push si fa solo su richiesta dell'utente). Working tree pulito. ⚠️ File dell'utente da NON toccare né stageare: `closed_loop_demo.slx` e `slblocks.m`
+(tracciati e puliti), `*.mexw64` (gitignorati).
 *(Esistono altri track/worktree — es. `Simulator`, `main`/EventProp — con LORO SESSION_RESUME: questo file vale
 solo per `Simulink_Importer`.)*
 
@@ -419,29 +418,37 @@ quando la scelta è genuinamente dell'utente. **In italiano.** Diretti sui findi
 report è giusto per il motivo sbagliato") senza addolcirli. Checkpoint espliciti sul lavoro lungo. L'utente è
 competente (MBSE/SNN/FPGA): niente spiegazioni base non richieste.
 
-### 🗄️ PROMPT DI RIPRESA — STORICO/SUPERATO (Fase B/C, 2026-07-11). NON usare: il prompt ATTUALE è nel blocco ▶ in cima.
-> Volutamente una **guida a LEGGERE i documenti**, non un dump di informazioni.
+### 📋 PROMPT DI RIPRESA (ATTUALE — agg. 2026-07-23) — guida a LEGGERE i documenti, non un dump.
+> Copia-incolla questo in una chat nuova dopo /clear. (Il vecchio prompt Fase B/C è superato: pending diverse.)
 
 ```
 Riprendi il progetto CF_FSNN, track HDL / Simulink_Importer. Non ho contesto in questa chat (post-clear):
-NON chiedermi lo stato — ricostruiscilo dai documenti.
+NON chiedermi lo stato — ricostruiscilo dai documenti, non a memoria.
 
 Repo: D:\Project_MBSE\1.Reti Neurali\Rete_SNN_Test\CF_FSNN
-Worktree/branch: .worktrees\Simulink_Importer  (branch Simulink_Importer)
+Worktree/branch: .worktrees\Simulink_Importer  (branch Simulink_Importer; commit LOCALI, non ancora pushati)
 
-1. git -C ".worktrees\Simulink_Importer" pull ; poi git status e git log --oneline -8 per lo stato reale.
-2. Leggi PRIMA document/SESSION_RESUME.md -> blocco "RIPRESA A FREDDO - Fase B/C": e' il punto d'ingresso
-   (stato, branch, le AZIONI pendenti coi puntatori, MODI DI LAVORO, TONO). Segui i puntatori che indica
-   (deliverable FPGA_PHASE_B_POWER.md, spec/piani in docs/superpowers/, ecc.): LEGGI i doc, non ricostruire a memoria.
+1. git -C ".worktrees\Simulink_Importer" status  e  git log --oneline -8  per lo stato reale (NIENTE pull:
+   i commit sono locali, ahead di origin). Working tree pulito; i file dell'utente da NON toccare sono
+   closed_loop_demo.slx / slblocks.m (tracciati) e *.mexw64 (gitignorati).
+2. Leggi PRIMA document/SESSION_RESUME.md -> blocco "▶ RIPRESA A FREDDO" in CIMA: e' il punto d'ingresso, con
+   lo stato dei DUE track paralleli (stesso branch), le AZIONI pendenti coi puntatori, i MODI DI LAVORO e il
+   TONO. Segui i puntatori — LEGGI i doc, non ricostruire a memoria. Per il track appena chiuso (Studio
+   Trade-off, Blocco A): matlab/study_tradeoff/donatello/RESULTS.md §16 e report/Trade_Off_Study_Parte_A.pdf.
 3. La tua memoria (MEMORY.md + memorie) e' gia' caricata: contesto supplementare, non dipendenza.
 
-Poi, PRIMA di lavorare, dimmi in breve: (a) stato attuale, (b) le azioni pendenti (dovrebbero essere 2:
-report Fase B via skill create-report, e/o esecuzione harness Fase C via superpowers:executing-plans),
-(c) i modi di lavoro e il tono che adotterai - e ASPETTA la mia conferma su cosa fare.
+Poi, PRIMA di lavorare, dimmi in breve: (a) lo stato dei due track; (b) le AZIONI pendenti — per il BLOCCO A
+(Studio Trade-off, CHIUSO): la SCELTA del candidato SLOW/BAL/FAST per il Blocco B, aperta e da decidere
+(base: report Trade_Off_Study_Parte_A §5-§6 su risorse/potenza per tier + RESULTS §16), piu' i rinviati
+SAIF-power e verifica RTL xsim del candidato; per SP4 / FASE B2.0 (track parallelo APERTO): completare la
+validazione RTL della versione FPGA (harness xsim; 2a-M1/M2 gia' verdi, resta 2c full-60k + pipeline IIDM —
+dettaglio nel blocco "FASE B2.0" di SESSION_RESUME); (c) i modi di
+lavoro e il tono che adotterai. Poi ASPETTA la mia conferma su cosa fare.
 
-Adotta i MODI DI LAVORO e il TONO descritti in SESSION_RESUME (in sintesi: niente workaround -> indaga la
-CAUSA; cura costante della documentazione; design prima del codice via skill superpowers; VHDL mai a mano /
-core SNN congelato; commit senza Co-Authored-By; tono tecnico, onesto senza overclaiming, decisi, in italiano).
+Adotta i MODI DI LAVORO e il TONO di SESSION_RESUME (in sintesi: verifica sul DATASET mai su un caso singolo,
+riportando quanti/quanti; una claim va VERIFICATA non dichiarata; root cause prima del fix; design prima del
+codice via skill superpowers; VHDL mai a mano / core SNN congelato bit-exact; commit conventional SENZA
+Co-Authored-By; tono italiano, deciso, evidence-first, onesto senza overclaiming, con checkpoint sul lavoro lungo).
 ```
 
 ---

@@ -610,7 +610,7 @@ Lo studio A (§12–§14) è stato **rifatto sul metro REALE** sul blocco `split
 
 > La ripresa pianificata in §15 è **ESEGUITA**. I 3 tier ri-caratterizzati sul Fmax REALE io-timed sul blocco
 > `splitpipe` VERIFICATO in Phase 1 (4-in/5-out, dmax=0, firme R2/R5/R9). Dati: `points_phase2.tsv` (18 punti).
-> Report: `report/Trade_Off_Study_Parte_A.{md,pdf}` (12 pag, commit `53c089ea`), gen `scripts/build_blocco_a_report.py`.
+> Report: `report/Trade_Off_Study_Parte_A.{md,pdf}` (12 pag, commit `fa4b6c9b` = versione ristrutturata), gen `scripts/build_blocco_a_report.py`.
 > Campagna+tooling: commit `652ed9e5` (`sweep_phase2.sh`, `impl_point.tcl` +io/+report_power/+hold-interno).
 
 ### Metodo (corretto rispetto al primo giro)
@@ -639,7 +639,7 @@ Lo studio A (§12–§14) è stato **rifatto sul metro REALE** sul blocco `split
 ### Scelta candidato — APERTA (decide l'utente)
 Poiché l'Fmax è solo margine e il V2I richiede spazio sul chip, il criterio è l'**AREA**: candidati **SLOW/BAL**
 (compatti); **FAST** = opzione alto-margine (+34% LUT / +74% FF vs SLOW). BAL = compromesso (+15%/+18% vs SLOW,
-Fmax ×2). SLOW-vs-BAL **non imposto dai dati** → decide l'utente (spazio V2I vs margine di riserva). Vedi §7 del report.
+Fmax ×2). SLOW-vs-BAL **non imposto dai dati** → decide l'utente (spazio V2I vs margine di riserva). Vedi §5.2-§6 del report.
 
 ### Rinviato (post-pausa)
 1. **SAIF** (potenza activity-based dalla traiettoria reale) sui 2 punti chiave/tier — raffinamento; il chip è
