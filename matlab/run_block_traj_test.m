@@ -1,4 +1,4 @@
-function dmax = run_block_traj_test(K, blockName, hold, trajIdx)
+function dmax = run_block_traj_test(K, blockName, hold, trajIdx, nfrac)
 %RUN_BLOCK_TRAJ_TEST  Prova dei blocchi HDL-ready sulla TRAIETTORIA REALE del dataset.
 %  Verifica che il blocco, pilotato in streaming con la traiettoria (un control-step per periodo
 %  d'inferenza), riproduca il riferimento — cioe' che lo **stato si porti correttamente** fra
@@ -9,13 +9,16 @@ function dmax = run_block_traj_test(K, blockName, hold, trajIdx)
 %  3) confronta la sequenza di params col riferimento = MEX (normalize float) + `snn_decode_hdl`.
 %
 %  Atteso: **dmax = 0** (bit-exact).
+%  nfrac (opz., default 20): bit frazionari dell'ingresso. 20 = bit-exact; passare 13 forza il caso
+%    NON bit-exact (CONTROLLO NEGATIVO: il gate DEVE far scattare l'assert dmax==0 -> prova che discrimina).
 %  ⚠️ Gli ingressi sono pilotati a `fixdt(1,32,20)`: con >=20 bit frazionari il blocco e' bit-exact.
 %     Con ingressi a Q?.13 l'arrotondamento di xn devia di 1 LSB ~1 volta su 25 step -> uno spike
 %     flippa -> i params divergono (HDL_PHASE §3.1.3).
   if nargin < 1 || isempty(K), K = 20; end
   if nargin < 2 || isempty(blockName), blockName = 'Donatello_Champion'; end
-  if nargin < 3 || isempty(hold), hold = 400; end     % QUALUNQUE valore >= latenza va bene
+  if nargin < 3 || isempty(hold), hold = 500; end     % >= latenza MAX (FAST splitpipe = 406); QUALUNQUE valore >= latenza
   if nargin < 4 || isempty(trajIdx), trajIdx = 1; end
+  if nargin < 5 || isempty(nfrac), nfrac = 20; end    % bit frazionari ingresso; <20 (es.13) -> NON bit-exact
   here = fileparts(mfilename('fullpath'));
   ds = load(fullfile(here, 'test_dataset.mat')); tr = ds.trajectories;
   assert(trajIdx <= numel(tr), 'traiettoria %d inesistente (ne esistono %d)', trajIdx, numel(tr));
@@ -29,7 +32,7 @@ function dmax = run_block_traj_test(K, blockName, hold, trajIdx)
   % 1) LATENZA (ingresso costante). Il blocco e' edge-triggered sul cambio d'ingresso: con un
   %    ingresso costante deve fare UNA SOLA inferenza. (Col vecchio free-running ne faceva una ogni
   %    341 clock -> stato che evolve troppo in fretta: era il difetto.)
-  P_log = drive(blockName, val(:,1) * ones(1,3), 700, 700);
+  P_log = drive(blockName, val(:,1) * ones(1,3), 700, 700, nfrac);
   chg = find(any(abs(diff(P_log,1,1)) > 0, 2));
   assert(~isempty(chg), 'nessun aggiornamento params: il blocco non produce (FSM ferma?)');
   lat = chg(1);
@@ -52,7 +55,7 @@ function dmax = run_block_traj_test(K, blockName, hold, trajIdx)
 
   % 3) blocco in streaming sulla traiettoria; campionamento DETERMINISTICO (non sui cambiamenti:
   %    due inferenze possono dare params identici e l'indicizzazione slitterebbe)
-  P_all = drive(blockName, val(:,1:K), hold, K*hold + 20);
+  P_all = drive(blockName, val(:,1:K), hold, K*hold + 20, nfrac);
   idx = hold * (0:K-1).' + lat + 1;
   idx = idx(idx <= size(P_all,1));
   p_blk = P_all(idx, :);
@@ -66,7 +69,7 @@ function dmax = run_block_traj_test(K, blockName, hold, trajIdx)
   fprintf('=== TRAJ TEST PASSATO: %s bit-exact in streaming ===\n', blockName);
 end
 
-function P = drive(blockName, seq, hold, stopT)
+function P = drive(blockName, seq, hold, stopT, nfrac)
 % pilota il blocco con la sequenza fisica seq (4 x K), ogni colonna tenuta `hold` clock
   K = size(seq, 2);
   ts = [(0:K-1).' * hold, seq.'];
@@ -80,7 +83,7 @@ function P = drive(blockName, seq, hold, stopT)
   add_line(mdl, 'src/1', 'dm/1');
   for j = 1:4
     add_block('simulink/Signal Attributes/Data Type Conversion', [mdl '/c' num2str(j)], ...
-              'OutDataTypeStr', 'fixdt(1,32,20)');       % >=20 bit frazionari: vedi help
+              'OutDataTypeStr', sprintf('fixdt(1,32,%d)', nfrac));  % >=20 frazionari=bit-exact; 13=ctrl negativo
     add_line(mdl, ['dm/' num2str(j)], ['c' num2str(j) '/1']);
     add_line(mdl, ['c' num2str(j) '/1'], ['DUT/' num2str(j)]);
   end

@@ -79,6 +79,13 @@ if {$PROF eq "area"} {
   set t1 [clock seconds] ; route_design -directive Explore   ; set t_route [expr {[clock seconds]-$t1}]
   phys_opt_design
   puts "IMPL-PROFILO: perf (Explore + phys_opt_design post-place e post-route)"
+} elseif {$PROF eq "power"} {
+  set t1 [clock seconds] ; opt_design   ; set t_opt   [expr {[clock seconds]-$t1}]
+  set t1 [clock seconds] ; place_design ; set t_place [expr {[clock seconds]-$t1}]
+  power_opt_design
+  set t1 [clock seconds] ; route_design ; set t_route [expr {[clock seconds]-$t1}]
+  power_opt_design
+  puts "IMPL-PROFILO: power (power_opt_design post-place e post-route)"
 } else {
   set t1 [clock seconds] ; opt_design   ; set t_opt   [expr {[clock seconds]-$t1}]
   set t1 [clock seconds] ; place_design ; set t_place [expr {[clock seconds]-$t1}]
@@ -106,6 +113,17 @@ if {$whs < 0} {
 }
 puts "IMPL-CRITPATH-SETUP from=[get_property STARTPOINT_PIN $ps] to=[get_property ENDPOINT_PIN $ps] liv=[get_property LOGIC_LEVELS $ps] delay=[get_property DATAPATH_DELAY $ps]"
 puts "IMPL-CRITPATH-HOLD  from=[get_property STARTPOINT_PIN $ph] to=[get_property ENDPOINT_PIN $ph] liv=[get_property LOGIC_LEVELS $ph] delay=[get_property DATAPATH_DELAY $ph]"
+# HOLD INTERNO (reg->reg, esclude le PORTE): con set_input_delay 0 il hold sulle porte e' un ARTEFATTO
+# del modello (ingresso stabile al bordo -> arrival 0 -> un path corto porta->reg non puo' rispettare il
+# hold). Il hold REALE del blocco e' quello reg-reg, che io-timing NON tocca. Va riportato a parte, altrimenti
+# ogni punto risulterebbe "hold-invalid" per un artefatto e non per un difetto.
+set hpi [get_timing_paths -delay_type min -max_paths 1 -nworst 1 -from [all_registers] -to [all_registers]]
+if {[llength $hpi] > 0} {
+  set whsi [get_property SLACK [lindex $hpi 0]]
+  puts "IMPL-HOLD-INT whs_interno=$whsi from=[get_property STARTPOINT_PIN [lindex $hpi 0]] to=[get_property ENDPOINT_PIN [lindex $hpi 0]]"
+} else {
+  puts "IMPL-HOLD-INT whs_interno=NON AGGANCIATO"
+}
 
 report_utilization      -file $outdir/util_routed.rpt
 report_timing_summary   -file $outdir/timing_routed.rpt
@@ -144,6 +162,18 @@ foreach n {{Slice LUTs\*?} {LUT as Memory} {Slice Registers} {DSPs} {Block RAM T
     puts "IMPL-RES $n = $v"
   } else {
     puts "IMPL-RES $n = NON AGGANCIATO"
+  }
+}
+
+# POTENZA: vectorless di default (attivita' stimata); se un SAIF e' letto PRIMA (read_saif) diventa
+# activity-based. Stesso parser a posizione del blocco risorse: la tabella e' | Nome | valore |.
+report_power -file $outdir/power_routed.rpt
+set pw [report_power -return_string]
+foreach n {{Total On-Chip Power \(W\)} {Dynamic \(W\)} {Device Static \(W\)}} {
+  if {[regexp "\\|\\s*${n}\\s*\\|\\s*(\[0-9.\]+)" $pw -> v]} {
+    puts "IMPL-POWER $n = $v"
+  } else {
+    puts "IMPL-POWER $n = NON AGGANCIATO"
   }
 }
 
