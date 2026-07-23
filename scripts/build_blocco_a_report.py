@@ -24,9 +24,9 @@ ROOT       = os.path.dirname(HERE)                       # worktree Simulink_Imp
 OUTDIR     = os.path.join(ROOT, 'report')
 FIGDIR     = os.path.join(OUTDIR, 'figures_blocco_a')
 TSV_PATH   = os.path.join(ROOT, 'matlab', 'study_tradeoff', 'donatello', 'points_phase2.tsv')
-DOC_NAME   = 'FPGA_BLOCCO_A_REPORT'
-DOC_TITLE  = 'CF_FSNN — Report FPGA "Blocco A": trade-off dei tier Donatello'
-FOOTER_TEXT = 'CF_FSNN — Report FPGA Blocco A · Fmax reale io-timed, stima Vivado (non silicio)'
+DOC_NAME   = 'Trade_Off_Study_Parte_A'
+DOC_TITLE  = 'CF_FSNN — Studio di trade-off, Parte A: caratterizzazione FPGA dei tier Donatello'
+FOOTER_TEXT = 'CF_FSNN — Studio di trade-off, Parte A · Fmax io-timed, stima Vivado post-implementazione'
 EQ_DPI     = 200
 os.makedirs(FIGDIR, exist_ok=True)
 
@@ -77,6 +77,14 @@ def margin(tag, label):
 
 def static_pct(tag, label):
     return P(tag, label, 'Psta_W') / P(tag, label, 'Ptot_W') * 100.0
+
+def pct(val, res):
+    """Occupazione percentuale del dispositivo xc7z020 (totali DEV, datasheet DS187)."""
+    return val / DEV[res] * 100.0
+
+def lut_range(tag):
+    vals = [P(tag, g, 'LUT') for g in GRID]
+    return int(min(vals)), int(max(vals))
 
 # numeri di testa (grounded)
 FMAX_MAX = {t: P(t, TIGHT, 'Fmax_MHz') for t in TAGS}       # 29.777 / 58.370 / 73.812
@@ -242,14 +250,13 @@ def build_doc():
     A(('cover', {
         'title': DOC_TITLE,
         'subtitle': 'Caratterizzazione dei tre tier del blocco Donatello (SLOW/BAL/FAST) sul Fmax reale '
-                    'io-timed e sul trade-off area–potenza, per scegliere il candidato al Blocco B su '
-                    'Zynq-7020 (PYNQ-Z1).',
+                    'io-timed e sul trade-off fra risorse e potenza, come base per la selezione del '
+                    'candidato al Blocco B su Zynq-7020 (scheda PYNQ-Z1).',
         'meta': [
             'Livello di fedeltà: stima Vivado post-implementazione con timing d\'integrazione '
             '(io-timed) — non misura su silicio.',
             'Fonte dei numeri: matlab/study_tradeoff/donatello/points_phase2.tsv (18 punti, dai report '
             'Vivado util/timing/power via sweep_phase2.sh).',
-            'Contesto e metodo: RESULTS.md §15 (Fmax reale io-timed e fix splitpipe), HDL_PHASE.md §3.1.5.',
             'Toolchain: Vivado 2026.1 · FPGA Xilinx Zynq-7000 xc7z020-clg400-1 (scheda PYNQ-Z1).',
         ],
     }))
@@ -260,28 +267,29 @@ def build_doc():
     A(('p', 'Il blocco Donatello è la rete spiking che identifica i cinque parametri del controllore '
             'car-following a partire da quattro grandezze cinematiche. Lo studio ne caratterizza tre '
             'realizzazioni — i tier **SLOW**, **BAL** e **FAST** — ottenute accoppiando tre profondità '
-            'di rete (round SNN R2, R5, R9) con tre profondità di decodifica (fusa, pipeline a 3 stadi, '
-            'pipeline a 5 stadi). Ogni tier è sintetizzato per lo Zynq-7020 e misurato sul **Fmax reale '
-            'io-timed**, la frequenza effettivamente disponibile quando gli ingressi sono registrati, '
-            'non sul Fmax interno reg-reg che sovrastima la via di calcolo.'))
-    A(('p', 'Al metro reale le tre realizzazioni si separano in modo netto e monotòno: la frequenza '
-            'massima vale **' + f'{FMAX_MAX["sp_slow"]:.1f}' + '**, **' + f'{FMAX_MAX["sp_balanced"]:.1f}'
+            'di rete (round SNN R2, R5, R9) con tre profondità di decodifica (fusa, pipeline a tre stadi, '
+            'pipeline a cinque stadi). Ogni tier è sintetizzato per lo Zynq-7020 e misurato sul **Fmax '
+            'reale io-timed**: la frequenza disponibile quando gli ingressi del blocco sono registrati, '
+            'come avviene in ogni integrazione, così che il cammino dalle porte d\'ingresso fino '
+            'all\'inizio dell\'inferenza sia temporizzato insieme al resto.'))
+    A(('p', 'La frequenza massima raggiungibile cresce in modo monotòno con la profondità del tier: **'
+            + f'{FMAX_MAX["sp_slow"]:.1f}' + '**, **' + f'{FMAX_MAX["sp_balanced"]:.1f}'
             + '** e **' + f'{FMAX_MAX["sp_fast"]:.1f} MHz' + '** per SLOW, BAL e FAST. Il valore di FAST '
             'coincide con il blocco deployabile già congelato (' + f'{FAST_LOCK:g} MHz' + '), a conferma '
-            'che il metro di misura e l\'RTL descrivono lo stesso oggetto. L\'area di logica e i registri '
-            'crescono con la profondità di pipeline, e la potenza è dominata dalla dispersione statica '
-            'del dispositivo, costante, mentre la quota dinamica scala con il clock.'))
-    A(('p', 'La conclusione operativa è che il **Fmax è margine, non requisito**. Il tempo di inferenza '
-            'di ogni tier resta fra ' + f'{tinf_us("sp_fast", TIGHT):.1f}' + ' e '
+            'che il metro di misura e l\'RTL descrivono lo stesso oggetto. Le risorse di logica e i '
+            'registri crescono anch\'essi con la profondità di pipeline, mentre la potenza è dominata '
+            'dalla dispersione statica del dispositivo, costante, con una quota dinamica che scala con il '
+            'clock.'))
+    A(('p', 'Il risultato che orienta la lettura è che il **Fmax è margine, non requisito**. Il tempo di '
+            'inferenza di ogni tier resta fra ' + f'{tinf_us("sp_fast", TIGHT):.1f}' + ' e '
             + f'{tinf_us("sp_slow", DEPLOY):.1f} µs' + ', cioè fra circa **' + f'{MARG_MIN:.0f}×' +
-            '** (il margine più stretto) e **' + f'{MARG_MAX:.0f}×' + '** (il più largo) sotto il budget '
-            'di un passo di controllo (0.1 s). Poiché nessuna soglia di frequenza vincola, e poiché '
-            'l\'estensione futura verso la comunicazione veicolo-infrastruttura (V2I) richiederà spazio '
-            'sul chip, il criterio che discrimina i tier è l\'**area** (e la potenza), non la velocità. '
-            'Lo studio presenta il trade-off completo; la scelta finale del candidato resta all\'utente '
-            'dove i dati non impongono un vincitore netto (§7).'))
+            '** e **' + f'{MARG_MAX:.0f}×' + '** sotto il budget di un passo di controllo (0.1 s). Nessuna '
+            'soglia di frequenza vincola il progetto; le grandezze che distinguono i tre tier in modo '
+            'rilevante per il deployment sono perciò l\'occupazione di risorse e la potenza. Il documento '
+            'riporta la caratterizzazione completa su queste grandezze, come base per la selezione del '
+            'candidato al Blocco B.'))
     A(('callout', 'Convenzione dei marcatori: ● grandezza misurata o verificata bit-esatta (correttezza '
-                  'funzionale, latenza in clock); ○ stima Vivado post-implementazione (Fmax, area, '
+                  'funzionale, latenza in clock); ○ stima Vivado post-implementazione (Fmax, risorse, '
                   'potenza) con timing d\'integrazione io-timed, precedente alla misura su silicio.'))
 
     # ---------------------------------------------------------------- 2
@@ -298,7 +306,7 @@ def build_doc():
                'multiplazione temporale (macchina a stati con memoria su blocchi RAM, dieci tick interni '
                'per passo) e decodificate in cinque parametri tramite una tabella a 64 punti. Il registro '
                'sugli operandi del normalize (op_reg, architettura splitpipe) appartiene a tutti e tre i '
-               'tier. Fonte: architettura del blocco, RESULTS.md §15.')))
+               'tier.')))
     A(('p', 'Ogni tier è il blocco **completo e autonomo**: il VHDL è generato dal solo modello Simulink, '
             'senza cablaggi manuali, e la rete è realizzata a multiplazione temporale, riusando una sola '
             'via di calcolo con lo stato tenuto in memoria a doppia porta. I tre tier differiscono per due '
@@ -306,11 +314,13 @@ def build_doc():
             'pipeline di decodifica (fusa, tre stadi, cinque stadi) — accoppiati come SLOW = R2 con '
             'decodifica fusa, BAL = R5 con pipeline a tre stadi, FAST = R9 con pipeline a cinque stadi.'))
     A(('p', 'Il vincolo di deployment è la scheda PYNQ-Z1, che porta uno Zynq-7020 (xc7z020-clg400-1). '
-            'Il fine dello studio non è massimizzare una metrica, ma **scegliere il tier candidato** a '
-            'entrare nel Blocco B, dove la rete sarà chiusa in anello con il controllore a inseguimento '
-            'intelligente. Poiché è previsto un secondo blocco di comunicazione veicolo-infrastruttura '
-            'sullo stesso dispositivo, lo spazio di logica lasciato libero è una risorsa di progetto: la '
-            'compattezza pesa quanto la frequenza, e spesso di più.'))
+            'Il fine dello studio non è massimizzare una singola metrica, ma **caratterizzare i tre tier** '
+            'sulle grandezze rilevanti per il deployment — frequenza, risorse, potenza, timing — così che '
+            'la selezione del candidato per il Blocco B, dove la rete sarà chiusa in anello con il '
+            'controllore a inseguimento intelligente, poggi su dati solidi. Sullo stesso dispositivo è '
+            'previsto un secondo blocco per la comunicazione veicolo-infrastruttura: la logica lasciata '
+            'libera è una risorsa di progetto, e la caratterizzazione delle risorse ha perciò rilievo '
+            'diretto per il seguito.'))
 
     # ---------------------------------------------------------------- 3
     A(('h1', '3. Metodo — Fase 1: verifica del blocco'))
@@ -352,84 +362,111 @@ def build_doc():
 
     # ---------------------------------------------------------------- 4
     A(('h1', '4. Metodo — Fase 2: curve a clock vincolato (io-timed)'))
-    A(('p', 'La seconda fase misura le prestazioni al variare del vincolo di clock. Due scelte di metodo '
-            'ne determinano la validità: il timing d\'integrazione e la natura delle varianti.'))
-    A(('h2', '4.1 Il metro reale: timing d\'integrazione'))
-    A(('p', 'Il Fmax di una sintesi out-of-context senza vincoli sulle porte è un metro **interno**, '
-            'reg-reg: misura solo i percorsi fra registri e ignora il cammino che va dall\'ingresso, '
-            'attraverso la normalizzazione, fino all\'inizio dell\'inferenza. Quel cammino, invisibile '
-            'finché le porte non sono temporizzate, diventa reale non appena gli ingressi del blocco sono '
-            'registrati — cioè in ogni deployment. Il metro interno sovrastima perciò la frequenza '
-            'disponibile, e appiattisce i tier l\'uno sull\'altro perché tutti condividono lo stesso muro '
-            'di normalizzazione. Il **Fmax reale** si ottiene temporizzando gli ingressi e le uscite '
-            '(io-timed): è la frequenza su cui si sceglie davvero.'))
-    A(('p', 'Perché il cammino d\'ingresso non domini, gli operandi del normalize sono registrati fra il '
-            'clamp e la moltiplicazione (architettura splitpipe), e l\'edge-trigger confronta gli '
-            'operandi registrati. Lo stadio aggiunto spezza il muro e costa un solo clock di latenza, '
-            'restando bit-esatto. Il residuo è la moltiplicazione intrinseca a 34 bit, che non si spezza '
-            'senza aumentare l\'area — la risorsa che questo studio vuole preservare.'))
-    A(('h2', '4.2 Le varianti nascono dal vincolo di clock, non dai preset'))
-    A(('p', 'Le curve non sono generate da direttive di ottimizzazione di Vivado: quelle sono state '
-            'provate e spostano gli estremi di appena qualche punto percentuale, un guadagno immateriale '
-            'per un progetto così piccolo. Le varianti nascono invece dal **vincolo di clock** imposto '
-            'alla sintesi. Il periodo target è spazzato su una griglia {0.90; 1.00; 1.40; 2.00; 3.00} '
-            'volte il ritardo io misurato al punto di ancoraggio, più il clock lasco di deploy (125 ns). '
-            'Stringendo il vincolo, lo strumento compra velocità con area: il punto più stretto è la '
-            'variante a massimo Fmax e area alta, il clock lasco è la variante ad area minima. Un solo '
-            'sweep mappa così l\'intero trade-off area–clock.'))
-    A(('callout', 'Riproducibilità: numero di thread di Vivado fissato, seme 0, VHDL byte-identico fra i '
-                  'punti, versione dello strumento registrata (Vivado 2026.1). Il ritardo di ancoraggio è '
-                  'misurato io-timed su un seme, non ereditato dal metro interno.'))
+    A(('p', 'La seconda fase misura le prestazioni al variare del vincolo di clock imposto alla sintesi. '
+            'Due scelte di metodo ne determinano la validità: come si temporizza il blocco e come nascono '
+            'le sue varianti.'))
+    A(('h2', '4.1 Il metro: timing d\'integrazione'))
+    A(('p', 'Il blocco si deploya con gli ingressi registrati da uno stadio a monte, quindi il cammino '
+            'che parte dalle porte d\'ingresso, attraversa la normalizzazione e arriva all\'inizio '
+            'dell\'inferenza è un percorso temporizzato a tutti gli effetti. La misura lo include '
+            'imponendo un ritardo di riferimento nullo su ingressi e uscite (timing d\'integrazione, o '
+            'io-timed): il **Fmax io-timed** è così la frequenza su cui il blocco si integra davvero. Una '
+            'sintesi out-of-context che lasci le porte non temporizzate valuterebbe soltanto i percorsi '
+            'fra registri interni e lascerebbe quel cammino fuori dal conto; per questo la '
+            'caratterizzazione adotta il metro io-timed.'))
+    A(('p', 'Perché il cammino d\'ingresso non sia il collo di bottiglia, gli operandi del normalize sono '
+            'registrati fra il clamp e la moltiplicazione (architettura splitpipe) e l\'edge-trigger '
+            'confronta gli operandi registrati. Lo stadio aggiunto mantiene il blocco bit-esatto e costa '
+            'un solo clock di latenza. Il percorso critico che resta è la moltiplicazione a 34 bit della '
+            'normalizzazione, intrinseca alla precisione richiesta e mappata su due DSP in cascata.'))
+    A(('h2', '4.2 Le varianti nascono dal vincolo di clock'))
+    A(('p', 'Le varianti di ciascun tier non sono realizzazioni RTL diverse, ma lo **stesso blocco** '
+            'sintetizzato sotto vincoli di clock diversi. Il periodo di clock chiesto alla sintesi è una '
+            'leva di progetto: un periodo più corto costringe lo strumento a lavorare di più sul percorso '
+            'critico, e lo ottiene spendendo area — replica logica, sceglie celle più veloci, alza il '
+            'Fmax a costo di più LUT; un periodo più lungo produce l\'opposto, meno area alla frequenza, '
+            'più bassa ma sufficiente, che il vincolo lasco richiede.'))
+    A(('p', 'Un solo sweep del vincolo mappa così l\'intero trade-off. Il periodo target percorre una '
+            'griglia di multipli del ritardo io misurato al punto d\'ancoraggio — x0.90, x1.00, x1.40, '
+            'x2.00, x3.00 — più il periodo lasco di riferimento per il deploy (125 ns). L\'etichetta '
+            '**x0.90** è quindi il vincolo più stretto (il 90% del ritardo d\'ancoraggio) e definisce il '
+            '**tetto di Fmax**, con l\'area più alta; l\'etichetta **deploy** è il vincolo lasco e '
+            'definisce l\'**area minima**, alla frequenza operativa. I due estremi non sono realizzazioni '
+            'in concorrenza: sono i due capi della stessa curva. Quale portare al silicio dipende da '
+            'quanta frequenza serve, e poiché il Fmax è margine abbondante (§6) il punto operativo '
+            'ragionevole è quello ad area minima — che non paga logica per una velocità non richiesta — '
+            'mentre il tetto di Fmax resta la misura di quanto il blocco potrebbe correre.'))
+    A(('callout', 'Come leggere le tabelle di §5.2. Ogni riga è un punto dello sweep. **Vincolo**: il '
+                  'periodo di clock imposto alla sintesi, come multiplo del ritardo d\'ancoraggio (deploy '
+                  '= 125 ns). **Ritardo**: il ritardo del percorso critico io-timed raggiunto, da cui '
+                  'Fmax = 1/ritardo. **LUT, FF, DSP, BRAM**: le risorse occupate. **Ptot**: la potenza '
+                  'totale su chip (stima vectorless). **Hold int.**: il margine di tenuta interno reg-reg '
+                  'peggiore — positivo significa chiuso. Riproducibilità: thread di Vivado e seme fissati, '
+                  'VHDL byte-identico fra i punti, versione dello strumento registrata (Vivado 2026.1).'))
 
     # ---------------------------------------------------------------- 5
     A(('h1', '5. Risultati'))
-    A(('h2', '5.1 Il Fmax reale, separato e monotòno'))
-    A(('p', 'Al metro io-timed i tre tier non si appiattiscono più: la frequenza massima cresce in modo '
-            'monotòno da SLOW a FAST. Che il valore di FAST (' + f'{FMAX_MAX["sp_fast"]:.1f} MHz' + ') '
-            'coincida con il blocco deployabile congelato (' + f'{FAST_LOCK:g} MHz' + ') è la prova che il '
-            'metro e l\'RTL misurano lo stesso oggetto, senza deriva fra caratterizzazione e artefatto.'))
-    A(('img', (fig_fmax(), 'Figura 5.1 — Fmax reale io-timed per tier, al clock di deploy (area minima) e '
-               'al punto stretto (massimo Fmax). La progressione SLOW < BAL < FAST è netta a entrambi gli '
-               'estremi della curva. Fonte: points_phase2.tsv (punti x0.90 e deploy-ref).')))
-    A(('h2', '5.2 Le curve area–clock e la potenza'))
-    A(('p', 'La griglia di vincoli disegna per ogni tier una curva monotòna: al crescere della frequenza '
-            'richiesta cresce l\'occupazione di logica, fino al pavimento d\'area raggiunto al clock '
-            'lasco. Le curve dei tre tier sono separate — quella di FAST sta più a destra e più in alto '
-            '— perché il pavimento è fissato dalla profondità di pipeline, non dal vincolo. I registri, '
-            'in particolare, non dipendono dal clock ma solo dal tier: ' + f'{int(FF_TIER["sp_slow"])}' +
-            ', ' + f'{int(FF_TIER["sp_balanced"])}' + ' e ' + f'{int(FF_TIER["sp_fast"])}' + ' per SLOW, '
-            'BAL e FAST.'))
+    A(('h2', '5.1 Il Fmax reale io-timed'))
+    A(('p', 'La frequenza massima raggiungibile cresce in modo monotòno con la profondità del tier, da '
+            'SLOW a FAST. Che il valore di FAST (' + f'{FMAX_MAX["sp_fast"]:.1f} MHz' + ') coincida con il '
+            'blocco deployabile congelato (' + f'{FAST_LOCK:g} MHz' + ') conferma che il metro e l\'RTL '
+            'misurano lo stesso oggetto, senza deriva fra caratterizzazione e artefatto.'))
+    A(('img', (fig_fmax(), 'Figura 5.1 — Fmax reale io-timed per tier, ai due capi della curva del '
+               'vincolo: il clock lasco di deploy (area minima) e il vincolo più stretto (tetto di Fmax). '
+               'La progressione SLOW < BAL < FAST è netta a entrambi gli estremi. Fonte: points_phase2.tsv '
+               '(punti x0.90 e deploy-ref).')))
+    A(('h2', '5.2 Risorse, curve area–clock e potenza'))
+    A(('p', 'L\'occupazione del dispositivo è modesta su tutti i tier e cresce con la profondità di '
+            'pipeline. La risorsa più sollecitata sono i DSP — ' + f'{int(P("sp_slow", TIGHT, "DSP"))}' +
+            ' blocchi, costanti su tutti i tier e su tutti i vincoli, pari a circa il '
+            + f'{pct(P("sp_slow", TIGHT, "DSP"), "DSP"):.0f}%' + ' dei ' + f'{DEV["DSP"]}' + ' presenti '
+            'sullo Zynq-7020 — mentre LUT, registri e blocchi RAM restano in cifra singola percentuale. '
+            'La tabella riporta l\'occupazione completa: l\'intervallo di LUT copre la curva del vincolo, '
+            'gli altri tre valori non dipendono dal clock.'))
+    A(('table', (
+        ['Tier', 'LUT (min–max)', 'FF', 'DSP', 'BRAM'],
+        [[NAME[t],
+          f'{lut_range(t)[0]}–{lut_range(t)[1]} ({pct(lut_range(t)[0],"LUT"):.1f}–{pct(lut_range(t)[1],"LUT"):.1f}%)',
+          f'{int(FF_TIER[t])} ({pct(FF_TIER[t],"FF"):.1f}%)',
+          f'{int(P(t, TIGHT, "DSP"))} ({pct(P(t, TIGHT, "DSP"),"DSP"):.1f}%)',
+          f'{int(P(t, TIGHT, "BRAM"))} ({pct(P(t, TIGHT, "BRAM"),"BRAM"):.1f}%)'] for t in TAGS],
+    )))
+    A(('p', 'Al variare del vincolo si muovono soltanto le LUT e la quota dinamica di potenza; registri, '
+            'DSP e blocchi RAM sono fissati dall\'RTL. La curva area–clock che ne risulta è monotòna: al '
+            'crescere della frequenza richiesta cresce l\'occupazione di LUT, fino al pavimento raggiunto '
+            'al clock lasco. Le curve dei tre tier restano separate perché quel pavimento è fissato dalla '
+            'profondità di pipeline, non dal vincolo.'))
     A(('img', (fig_curves(), 'Figura 5.2 — A sinistra: LUT contro Fmax reale; ogni punto è un vincolo di '
-               'clock, dal più stretto (stella, massimo Fmax) al lasco (cerchio vuoto, area minima). A '
+               'clock, dal più stretto (stella, tetto di Fmax) al lasco (cerchio vuoto, area minima). A '
                'destra: potenza totale contro Fmax; la dispersione statica (linea tratteggiata) è '
                'costante, la quota dinamica cresce con il clock. Fonte: points_phase2.tsv.')))
-    A(('p', 'La potenza racconta la stessa fisica dal lato energetico. La componente statica del '
-            'dispositivo è costante intorno a ' + f'{sum(PSTA.values())/len(PSTA)*1000:.0f} mW' + ' e non '
-            'dipende dal progetto; la componente dinamica cresce con il clock. La quota statica domina '
-            'perciò al clock di deploy — dove supera il novanta per cento del totale — e resta comunque '
-            'la maggioranza persino al punto più aggressivo. Non esiste un unico valore di quota statica: '
-            'sull\'intero dataset va da circa il **' + f'{min(static_pct(t, g) for t in TAGS for g in GRID):.0f}%' +
-            '** (FAST e BAL al punto stretto, dove la dinamica pesa di più) a circa il **'
-            + f'{max(static_pct(t, g) for t in TAGS for g in GRID):.0f}%' + '** (al clock di deploy).'))
+    A(('p', 'La potenza segue la stessa fisica dal lato energetico. La componente statica del dispositivo '
+            'è costante intorno a ' + f'{sum(PSTA.values())/len(PSTA)*1000:.0f} mW' + ' e non dipende dal '
+            'progetto; la componente dinamica cresce con il clock. La quota statica supera il novanta per '
+            'cento del totale al clock di deploy e resta la maggioranza anche al punto più aggressivo, '
+            'variando fra circa il **' + f'{min(static_pct(t, g) for t in TAGS for g in GRID):.0f}%' +
+            '** al vincolo più stretto e circa il **'
+            + f'{max(static_pct(t, g) for t in TAGS for g in GRID):.0f}%' + '** al clock di deploy. La '
+            'stima di potenza è vectorless: l\'attività di commutazione è calcolata dallo strumento '
+            'anziché estratta da una simulazione della traiettoria; poiché la quota dinamica — l\'unica '
+            'che una stima d\'attività correggerebbe — è minoritaria ai punti di deploy, il suo peso sul '
+            'totale è contenuto.'))
     for t in TAGS:
         A(('h3', f'5.2.{TAGS.index(t)+1} Curva del tier {NAME[t]} ({ROUND[t]} · decode {DECODE[t]})'))
         rows = []
         for g in GRID:
-            regime = 'stretto (max Fmax)' if g == TIGHT else ('deploy (area min.)' if g == DEPLOY else 'intermedio')
             rows.append([
                 g.replace('deploy-ref', 'deploy'),
                 f'{P(t, g, "delay_ns"):.2f}',
                 f'{P(t, g, "Fmax_MHz"):.2f}',
                 f'{int(P(t, g, "LUT"))}',
+                f'{int(P(t, g, "FF"))}',
+                f'{int(P(t, g, "DSP"))}',
+                f'{int(P(t, g, "BRAM"))}',
                 f'{P(t, g, "Ptot_W")*1000:.0f}',
                 f'{P(t, g, "WHS_int"):+.3f}',
-                regime,
             ])
-        A(('table', (['Vincolo', 'Ritardo [ns]', 'Fmax [MHz]', 'LUT', 'Ptot [mW]', 'Hold int. [ns]', 'Regime'], rows)))
-    A(('p', 'In tutte le curve i registri, i blocchi aritmetici dedicati e la memoria a blocchi restano '
-            'invariati col vincolo (' + f'{int(P("sp_slow", TIGHT, "DSP"))}' + ' DSP48 e '
-            + f'{int(P("sp_slow", TIGHT, "BRAM"))}' + ' blocco RAM per tutti i punti): a muoversi col '
-            'clock sono solo la logica combinatoria e la quota dinamica di potenza.'))
+        A(('table', (['Vincolo', 'Ritardo [ns]', 'Fmax [MHz]', 'LUT', 'FF', 'DSP', 'BRAM', 'Ptot [mW]', 'Hold int. [ns]'], rows)))
     A(('h2', '5.3 Timing di tenuta e determinismo'))
     A(('p', 'Il tempo di tenuta interno reg-reg è **positivo in ogni punto** (fra '
             + f'{min(P(t, g, "WHS_int") for t in TAGS for g in GRID):+.3f}' + ' e '
@@ -475,69 +512,26 @@ def build_doc():
                'latenze in clock (RESULTS.md §12).')))
     A(('p', 'La lettura è univoca: nessuna soglia di frequenza vincola il progetto. L\'Fmax è un margine '
             'abbondante, non un requisito, e ogni frazione di velocità in più è priva di valore pratico. '
-            'Il tier si sceglie perciò su altre grandezze.'))
+            'Le grandezze su cui i tre tier si distinguono in modo rilevante per il deployment sono '
+            'perciò quelle riportate in §5 — l\'occupazione di risorse e la potenza — su cui questa '
+            'caratterizzazione offre la base per la selezione del candidato al Blocco B.'))
+    A(('callout', 'Fedeltà. Tutte le grandezze di frequenza, risorse e potenza sono stime Vivado '
+                  'post-implementazione con timing d\'integrazione io-timed (marcatore ○), non misure su '
+                  'silicio: sono il metro corretto per confrontare i tier fra loro, mentre la verità di '
+                  'riferimento richiede la sintesi nel contenitore di sistema completo e, per la potenza, '
+                  'la misura sulla scheda fisica.'))
 
-    # ---------------------------------------------------------------- 7
-    A(('h1', '7. Scelta del candidato Donatello per il Blocco B'))
-    A(('p', 'Poiché il Fmax è solo margine, il criterio che discrimina i tier è ciò che costa davvero sul '
-            'dispositivo: l\'**area** occupata e, in seconda battuta, la potenza. La rilevanza dell\'area '
-            'non è astratta — sullo stesso Zynq-7020 dovrà trovare posto anche il blocco di comunicazione '
-            'veicolo-infrastruttura, quindi ogni tabella di lookup e ogni registro lasciati liberi sono '
-            'un margine di progetto per il seguito.'))
-    A(('table', (
-        ['Tier', 'Round · decode', 'Fmax deploy [MHz]', 'Fmax max [MHz]', 'LUT (deploy)', 'FF', 't_inf deploy [µs]'],
-        [[NAME[t], f'{ROUND[t]} · {DECODE[t]}', f'{FMAX_DEP[t]:.1f}', f'{FMAX_MAX[t]:.1f}',
-          f'{int(LUT_DEP[t])}', f'{int(FF_TIER[t])}', f'{tinf_us(t, DEPLOY):.2f}'] for t in TAGS],
-    )))
-    A(('p', 'Agli estremi, il trade-off è chiaro. **SLOW** ha l\'area minima — '
-            + f'{int(LUT_DEP["sp_slow"])} LUT e {int(FF_TIER["sp_slow"])} registri' + ' al clock di '
-            'deploy — al prezzo del Fmax più basso, che però resta migliaia di volte oltre il bisogno. '
-            '**FAST** offre il massimo margine di frequenza, ma costa **' + f'+{FAST_LUT_DELTA:.0f}%' +
-            ' di logica e +' + f'{FAST_FF_DELTA:.0f}%' + ' di registri** rispetto a SLOW: un prezzo '
-            'd\'area pagato per una velocità di cui non c\'è domanda. **BAL** siede in mezzo con un '
-            'rapporto favorevole — raddoppia il margine di frequenza rispetto a SLOW ('
-            + f'{FMAX_DEP["sp_balanced"]:.1f}' + ' contro ' + f'{FMAX_DEP["sp_slow"]:.1f} MHz' + ' al '
-            'deploy) per un sovrapprezzo d\'area contenuto, **' + f'+{BAL_LUT_DELTA:.0f}%' + ' di logica '
-            'e +' + f'{BAL_FF_DELTA:.0f}%' + ' di registri**.'))
-    A(('p', 'Il criterio dell\'area indica quindi **SLOW o BAL** come candidati naturali per il Blocco B, '
-            'con FAST relegato al ruolo di opzione ad alto margine per il caso in cui il seguito del '
-            'progetto dovesse richiedere frequenze oggi non previste. Fra SLOW e BAL la scelta non è '
-            'imposta dai dati: SLOW minimizza il chip riservato, BAL raddoppia il margine per un '
-            'sovrapprezzo modesto. La decisione dipende da quanto spazio il V2I richiederà e da quanto '
-            'margine di frequenza si voglia tenere di riserva — un compromesso di progetto che questo '
-            'studio documenta ma **lascia esplicitamente all\'utente**.'))
-
-    # ---------------------------------------------------------------- 8
-    A(('h1', '8. Riproducibilità e limiti'))
-    A(('p', 'Le curve sono rigenerabili dal driver di sweep con lo stesso VHDL byte-identico, thread e '
-            'seme fissati e versione dello strumento registrata; il dato grezzo è il file '
-            'points_phase2.tsv, diciotto punti da cui questo documento è interamente derivato. Restano da '
-            'dichiarare tre limiti di fedeltà.'))
-    A(('p', 'Il primo è la natura della stima di **potenza**, che è vectorless: l\'attività di '
-            'commutazione è stimata dallo strumento, non estratta da una simulazione della traiettoria '
-            'reale. Il raffinamento con file di attività dalla traiettoria è rinviato; il suo peso è '
-            'però contenuto, perché il dispositivo è per la maggior parte dispersione statica e la quota '
-            'dinamica — l\'unica che una stima di attività correggerebbe — è una minoranza del bilancio '
-            'ai punti di deploy. Il secondo è il tempo di **tenuta sulle porte**, negativo solo come '
-            'artefatto del modello a ritardo di porta nullo: il tempo di tenuta reale, interno reg-reg, è '
-            'positivo ovunque. Il terzo, il più importante, è che tutte le grandezze di frequenza, area e potenza '
-            'sono **stime Vivado io-timed, non misure su silicio**: sono il metro corretto per '
-            'confrontare i tier e per stimare il deployabile, ma la verità di riferimento richiede la '
-            'sintesi completa nel contenitore di sistema e, per la potenza, la misura sulla scheda '
-            'fisica. La verifica RTL del candidato scelto nel contenitore reale è il passo che precede il '
-            'deploy.'))
-
-    # ---------------------------------------------------------------- 9
-    A(('h1', '9. Riferimenti'))
+    # ---------------------------------------------------------------- Riferimenti
+    A(('h1', 'Riferimenti'))
     A(('table', (
         ['Riferimento', 'Tema'],
         [
-            ['CF_FSNN, matlab/study_tradeoff/donatello/points_phase2.tsv — dataset delle curve io-timed (18 punti).', 'Dati (§5-§7)'],
+            ['CF_FSNN, matlab/study_tradeoff/donatello/points_phase2.tsv — dataset delle curve io-timed (18 punti).', 'Dati (§5-§6)'],
             ['CF_FSNN, matlab/study_tradeoff/donatello/RESULTS.md §15 — Fmax reale io-timed e fix splitpipe.', 'Metodo (§4)'],
             ['CF_FSNN, matlab/study_tradeoff/donatello/RESULTS.md §12-§13 — latenze in clock e curva area-vs-clock.', 'Latenza, curve (§5-§6)'],
             ['CF_FSNN, document/HDL_PHASE.md §3.1.3-§3.1.5 — precisione di normalizzazione, edge-trigger, splitpipe.', 'Verifica (§3-§4)'],
             ['CF_FSNN, matlab/study_tradeoff/common/run_block_a_matrix.sh — cancello strutturale (firma decode + round).', 'Verifica (§3)'],
-            ['CF_FSNN, matlab/study_tradeoff/common/sweep_phase2.sh — driver dello sweep io-timed a clock vincolato.', 'Riproducibilità (§4, §8)'],
+            ['CF_FSNN, matlab/study_tradeoff/common/sweep_phase2.sh — driver dello sweep io-timed a clock vincolato.', 'Riproducibilità (§4)'],
             ['AMD/Xilinx. Vivado Design Suite 2026.1; Zynq-7000 SoC Data Sheet (DS187).', 'Toolchain e dispositivo'],
             ['Digilent. PYNQ-Z1 Reference Manual (board xc7z020-clg400-1).', 'Scheda di deploy'],
         ],

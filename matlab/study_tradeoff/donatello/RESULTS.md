@@ -606,11 +606,11 @@ Lo studio A (§12–§14) è stato **rifatto sul metro REALE** sul blocco `split
 
 ---
 
-## 16. ✅ STUDIO A RIFATTO SUL METRO REALE — FATTO (2026-07-23) · report/FPGA_BLOCCO_A_REPORT.pdf
+## 16. ✅ STUDIO A RIFATTO SUL METRO REALE — FATTO (2026-07-23) · report/Trade_Off_Study_Parte_A.pdf
 
 > La ripresa pianificata in §15 è **ESEGUITA**. I 3 tier ri-caratterizzati sul Fmax REALE io-timed sul blocco
 > `splitpipe` VERIFICATO in Phase 1 (4-in/5-out, dmax=0, firme R2/R5/R9). Dati: `points_phase2.tsv` (18 punti).
-> Report: `report/FPGA_BLOCCO_A_REPORT.{md,pdf}` (12 pag, commit `53c089ea`), gen `scripts/build_blocco_a_report.py`.
+> Report: `report/Trade_Off_Study_Parte_A.{md,pdf}` (12 pag, commit `53c089ea`), gen `scripts/build_blocco_a_report.py`.
 > Campagna+tooling: commit `652ed9e5` (`sweep_phase2.sh`, `impl_point.tcl` +io/+report_power/+hold-interno).
 
 ### Metodo (corretto rispetto al primo giro)

@@ -19,7 +19,7 @@
 > VINCOLATO io-timed**, NON i preset-directive di Vivado = solo un test) + report.
 > **Risultato:** Fmax reale **SLOW 29,8 / BAL 58,4 / FAST 73,8 MHz** (FAST = lock 73,6 → metro↔RTL concordano).
 > **Fmax = MARGINE** (t_inf 5,5–16,7 µs, ~6000–18000× sotto il budget 0,1 s) → il criterio è l'**AREA** (V2I).
-> **📄 Report:** `report/FPGA_BLOCCO_A_REPORT.pdf` (commit `53c089ea`); dati `points_phase2.tsv`; record completo
+> **📄 Report:** `report/Trade_Off_Study_Parte_A.pdf` (commit `53c089ea`); dati `points_phase2.tsv`; record completo
 > **RESULTS.md §16**; tooling `sweep_phase2.sh`+`impl_point.tcl` (`652ed9e5`). Lib = lock committato (73,6).
 > **➡️ PENDENTE (ripresa post-pausa):** (1) **scelta candidato** SLOW/BAL/FAST per il Blocco B — APERTA, decide
 > l'utente (§7 report: area/V2I vs margine; SLOW=area-min, BAL=compromesso, FAST=alto-margine); (2) rinviati:
