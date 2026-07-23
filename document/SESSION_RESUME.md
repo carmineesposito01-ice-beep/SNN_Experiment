@@ -11,16 +11,19 @@
 > generale (quella è la skill `session-reprise`). È un **guida ai documenti**: quando dice «leggi X», leggi X —
 > non ricostruire a memoria.
 
-### 🔬 TRACK STUDIO TRADE-OFF (Donatello SNN, Blocco A) — agg. 2026-07-23 — DOMANI SI RIPRENDE DA QUI
-> Track PARALLELO a SP4/Fase B2.0 (stesso branch). **Scoperta grossa 2026-07-22/23:** lo studio A misurava
-> il **Fmax INTERNO** reg-reg, non quello **DEPLOYABILE**. Al metro reale (io-timed) i 91 MHz di FAST erano
-> **illusori** (~47, muro nel normalize, comune a tutti i tier). **Fix committato:** archStyle **`splitpipe`**
-> (registro operandi) → FAST reale **73,6 MHz**, bit-exact (dmax=0, latenza 406), +1 latenza, 4-in/5-out.
-> Ci si è fermati lì (i 91 richiederebbero decomposizione 2×2 = +~25% FF → contro l'obiettivo area/V2I).
-> **➡️ DOMANI — rifare lo studio A sul metro REALE:** leggi `matlab/study_tradeoff/donatello/RESULTS.md`
-> **§15** (record completo + la sezione «COSA DEVE FARE LA RIPRESA»: ri-caratterizzare SLOW/BAL/FAST con
-> `splitpipe`+`io`, rifare la curva area-vs-Fmax-REALE, scegliere il candidato Donatello per il Blocco B).
-> Strumenti nuovi: `impl_point.tcl` 5° arg `io`; `build_hdl_variants` archStyle `splitpipe`. Codice locked a 73,6.
+### 🔬 TRACK STUDIO TRADE-OFF (Donatello SNN, Blocco A) — ✅ COMPLETO 2026-07-23 (report consegnato)
+> Track PARALLELO a SP4/Fase B2.0 (stesso branch). **Blocco A CHIUSO** al metro REALE io-timed. Il primo giro
+> misurava il Fmax INTERNO reg-reg (illusorio, tier appiattiti ~47); fix `splitpipe` (registro operandi) →
+> muro d'ingresso tolto. **FATTO 2026-07-23:** Phase 1 (verifica: i 3 tier SONO il blocco Donatello 4-in/5-out
+> self-contained, dmax=0, firme di pipeline R2/R5/R9, + controllo negativo Q?.10) + Phase 2 (curve a **CLOCK
+> VINCOLATO io-timed**, NON i preset-directive di Vivado = solo un test) + report.
+> **Risultato:** Fmax reale **SLOW 29,8 / BAL 58,4 / FAST 73,8 MHz** (FAST = lock 73,6 → metro↔RTL concordano).
+> **Fmax = MARGINE** (t_inf 5,5–16,7 µs, ~6000–18000× sotto il budget 0,1 s) → il criterio è l'**AREA** (V2I).
+> **📄 Report:** `report/FPGA_BLOCCO_A_REPORT.pdf` (commit `53c089ea`); dati `points_phase2.tsv`; record completo
+> **RESULTS.md §16**; tooling `sweep_phase2.sh`+`impl_point.tcl` (`652ed9e5`). Lib = lock committato (73,6).
+> **➡️ PENDENTE (ripresa post-pausa):** (1) **scelta candidato** SLOW/BAL/FAST per il Blocco B — APERTA, decide
+> l'utente (§7 report: area/V2I vs margine; SLOW=area-min, BAL=compromesso, FAST=alto-margine); (2) rinviati:
+> **SAIF** power (traiettoria reale) + **verifica RTL xsim** del candidato; poi **Blocco B** (SNN+IIDM in anello).
 
 **Repo/posizione:** `D:\Project_MBSE\1.Reti Neurali\Rete_SNN_Test\CF_FSNN\.worktrees\Simulink_Importer`,
 branch **`Simulink_Importer`**. **Tutto committato e pushato**, working tree pulito (restano solo file

@@ -594,8 +594,8 @@ contrario: paga la risorsa scarsa (area) per +13 MHz su un bisogno di kHz-MHz. I
 - `build_hdl_variants` archStyle **`splitpipe`** = il blocco deployabile (op_reg, 73,6).
 - `snn_chart_code(...,pipe)` + `local_normalize_ops`/`local_normalize_mul` (split del normalize).
 
-### COSA DEVE FARE LA RIPRESA DELLO STUDIO A (domani)
-Lo studio A (§12–§14) va **rifatto sul metro REALE**, sul blocco `splitpipe`:
+### COSA DEVE FARE LA RIPRESA DELLO STUDIO A — ✅ ESEGUITO 2026-07-23 → vedi §16
+Lo studio A (§12–§14) è stato **rifatto sul metro REALE** sul blocco `splitpipe` (i 4 passi sotto, fatti):
 1. **Ri-caratterizzare i 3 tier con `splitpipe` + `io`**: il Fmax reale deployabile di SLOW/BAL/FAST col fix.
    SLOW resta ~29 (collo interno, core congelato); BAL/FAST salgono col op_reg (FAST 73,6; BAL da misurare,
    atteso ~56 = suo interno). Driver: `sweep_clock_curve.sh` esteso con `io`, oppure una campagna mirata.
@@ -603,3 +603,45 @@ Lo studio A (§12–§14) va **rifatto sul metro REALE**, sul blocco `splitpipe`
 3. **Scegliere il candidato Donatello** per il Blocco B sul Fmax REALE + area + latenza (+1 per splitpipe).
    Probabile riordino: al metro reale i tier si riordinano rispetto a §13.
 4. Verifica RTL (xsim) del candidato prima del deploy (il metro io e' una stima; il vero e' col wrapper).
+
+---
+
+## 16. ✅ STUDIO A RIFATTO SUL METRO REALE — FATTO (2026-07-23) · report/FPGA_BLOCCO_A_REPORT.pdf
+
+> La ripresa pianificata in §15 è **ESEGUITA**. I 3 tier ri-caratterizzati sul Fmax REALE io-timed sul blocco
+> `splitpipe` VERIFICATO in Phase 1 (4-in/5-out, dmax=0, firme R2/R5/R9). Dati: `points_phase2.tsv` (18 punti).
+> Report: `report/FPGA_BLOCCO_A_REPORT.{md,pdf}` (12 pag, commit `53c089ea`), gen `scripts/build_blocco_a_report.py`.
+> Campagna+tooling: commit `652ed9e5` (`sweep_phase2.sh`, `impl_point.tcl` +io/+report_power/+hold-interno).
+
+### Metodo (corretto rispetto al primo giro)
+- **Phase 1 — verifica del blocco PRIMA di misurare** (il doppio-check chiesto): ogni tier è il Donatello
+  completo self-contained (VHDL dal solo `.slx`, time-mux DualPortRAM), **bit-exact (dmax=0)**, con **firma di
+  pipeline** nel VHDL che ne prova il round (R2: nessuno · R5: +pCa · R9: pCx/pCm/pCa) + **controllo negativo**
+  (ingresso degradato a Q?.10 → dmax 0,23 → il gate discrimina). Harness temporanei, non versionati.
+- **Phase 2 — curve a CLOCK VINCOLATO io-timed** = il metodo (§13-style), **NON** i preset-directive di Vivado
+  (erano solo il test §14, non migliorano: lo confermano i dati). Le varianti area/performance nascono dal
+  **vincolo di clock**. Driver `sweep_phase2.sh` (self-anchor P0 io, griglia {0,9..3,0}×P0 + deploy, `impl_point
+  io` + potenza vectorless + hold INTERNO reg-reg che isola l'artefatto io-delay=0 sulle porte).
+
+### Risultato — Fmax REALE io-timed (da `points_phase2.tsv`)
+| tier | max-Fmax (x0.90) | @deploy | LUT (min→max) | FF | Ptot (deploy→tight) | latenza | t_inf@max |
+|---|---|---|---|---|---|---|---|
+| **SLOW** R2·fused | 29,8 | 20,5 | 3446→3857 | 1998 | 108→127 mW | 342 | 11,5 µs |
+| **BAL** R5·p3 | 58,4 | 41,3 | 3977→4217 | 2354 | 114→197 mW | 364 | 6,2 µs |
+| **FAST** R9·p5 | 73,8 | 51,8 | 4625→4677 | 3474 | 111→188 mW | 406 | 5,5 µs |
+
+- **Fmax reale separato e monotòno** (29,8/58,4/73,8) — non più appiattito come al metro interno. **FAST 73,8 =
+  lock committato 73,6** → metro↔RTL concordano (nessuna deriva).
+- **Fmax = MARGINE, non requisito**: t_inf 5,5–16,7 µs, **~6000–18000× sotto** il budget control-step 0,1 s.
+- Area/FF scalano col tier; potenza **static-dominata** (quota statica 53–95%, ~104 mW leakage costante);
+  **hold interno + ovunque** (WHS_io ≈ −0,5 = artefatto io-delay=0 sulle porte, non un difetto).
+
+### Scelta candidato — APERTA (decide l'utente)
+Poiché l'Fmax è solo margine e il V2I richiede spazio sul chip, il criterio è l'**AREA**: candidati **SLOW/BAL**
+(compatti); **FAST** = opzione alto-margine (+34% LUT / +74% FF vs SLOW). BAL = compromesso (+15%/+18% vs SLOW,
+Fmax ×2). SLOW-vs-BAL **non imposto dai dati** → decide l'utente (spazio V2I vs margine di riserva). Vedi §7 del report.
+
+### Rinviato (post-pausa)
+1. **SAIF** (potenza activity-based dalla traiettoria reale) sui 2 punti chiave/tier — raffinamento; il chip è
+   static-dominato quindi pesa poco. Tooling pronto: `impl_point.tcl` accetta un SAIF letto prima (`read_saif`).
+2. **Verifica RTL (xsim)** del candidato scelto nel wrapper reale, prima del deploy (il metro io è una stima).
