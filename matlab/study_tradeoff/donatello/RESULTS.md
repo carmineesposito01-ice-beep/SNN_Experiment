@@ -300,6 +300,13 @@ AREA (14 DSP), non un collo temporale.
 
 ## 11. Leva 1 (vincolo di sintesi + post-route) — i numeri DEPLOYABILI veri
 
+> ⚠️ **SUPERATO da §15 (2026-07-23) — leggi §15 prima di fidarti dei numeri "91/56/30 reali" qui e in §12.**
+> Anche la sintesi VINCOLATA + post-route di questa sezione è **reg-reg INTERNA**: `impl_point.tcl` senza il
+> 5° arg `io` **non tempifica i percorsi di porta**, quindi il percorso ingresso→normalize→`go` resta fuori
+> dalla misura. Il Fmax **realmente deployabile** (ingressi registrati, io-timed) è **~la metà** — FAST
+> 91→**47**, BAL 56→**50**, SLOW 30→**29** — e col fix `splitpipe` FAST risale a **73,6**. Il "−1,8% OOC→
+> post-route" qui sotto era onesto *entro l'anello interno*; non copriva il collo vero. §15 ha i numeri giusti.
+
 Tutti i numeri sopra sono sintesi **libera OOC** (ottimistici). Qui: sintesi VINCOLATA al ritardo OOC
 del punto + post-route (`synth_point.tcl` con periodo + `impl_point.tcl`, regola WNS<=0). Sono i numeri
 su cui si sceglie DAVVERO la configurazione da mettere su silicio.
@@ -318,6 +325,9 @@ promessa (contrasto col −39% della prima calibrazione IIDM a vincolo LASCO, ch
 
 ## RIEPILOGO — le tre leve di ricerca (2026-07-22)
 
+> ⚠️ I "91/56/30 MHz reali" della leva 1 qui sotto sono il Fmax **INTERNO** reg-reg → **SUPERATO da §15**
+> (io-timed: FAST **47**, col fix `splitpipe` **73,6**). Le leve 2/3 (struttura, area) restano valide.
+
 | leva | cosa | esito |
 |---|---|---|
 | **2** decode pipeline / pv-split | isolare il flag di init dal path | ⛔ 92,9 invariato: il collo e' STRUTTURALE (un flag di init per stadio), non aggredibile da codice MATLAB |
@@ -328,6 +338,10 @@ promessa (contrasto col −39% della prima calibrazione IIDM a vincolo LASCO, ch
 ha portato il blocco da 25,3 (don_a1) a 91,3 MHz reali = **×3,6**, con area confrontabile.
 
 ## 12. TABELLA DEFINITIVA — Blocco A split, dataset completo (2026-07-22)
+
+> ⚠️ **Colonne Fmax/µs = Fmax INTERNO reg-reg → SUPERATE da §15** (io-timed reale ~metà; FAST split 47,
+> `splitpipe` 73,6). Resta valida la **latenza in CLOCK** (405/363/341 — metrica-indipendente): il verdetto
+> «FAST = meno clock = più veloce» sopravvive al cambio di metro; è solo il µs assoluto a scalare col Fmax vero.
 
 Ogni metrica verificata sull'artefatto, non ereditata. Snapshot SNN congelati, cache azzerata.
 
@@ -376,8 +390,12 @@ Note: `dmax=0` su traiettoria reale per la coppia SPECIFICA di ogni tier (`measu
 ereditato dal preflight). Il vincolo di sintesi riduce ANCHE l'area (LUT OOC→route in calo su tutti). BRAM
 1 tile / 2 RAMB18 invariata OOC→post-route. split3 (leva 3) su SLOW: -348 LUT ulteriori a Fmax invariata.
 
-### ✅ Blocco A: COMPLETO. Deployabile raccomandato = FAST (p5+R9 split) a ~91 MHz reali.
-Da 25,3 (don_a1 fused+R9 chart) a 91,3 post-route = **×3,6**, area confrontabile, hold positivo.
+### ⚠️ ~~Blocco A: COMPLETO. Deployabile raccomandato = FAST (p5+R9 split) a ~91 MHz reali.~~ — SUPERATO da §15
+~~Da 25,3 (don_a1 fused+R9 chart) a 91,3 post-route = **×3,6**, area confrontabile, hold positivo.~~
+**Il "91 MHz reali" era il Fmax INTERNO reg-reg, non quello deployabile** (§15, 2026-07-23): al metro io-timed
+il FAST-split vale ~47 MHz (collo = ingresso→normalize→`go`), e col fix `splitpipe` **73,6 MHz** bit-exact.
+Il Blocco A **NON è chiuso**: va rifatto sul metro reale (§15 → «COSA DEVE FARE LA RIPRESA»). La scelta del
+candidato Donatello per il Blocco B è **rinviata** a quella ri-caratterizzazione.
 
 ### Predisposizione low-power (clock-gating-ready) — deciso 2026-07-22, NON implementato
 Il blocco e' progettato **clock-gating-ready**; il gating **non e' instanziato** (scelta: zero rischio sul
@@ -514,3 +532,74 @@ endpoint (driver `sweep_directives.sh`, stesso pinning determinismo):
 **Conclusione ottimizzazione:** Blocco A caratterizzato anche a flusso mirato. Guadagno massimo utile =
 FAST-perf (~+4,5%, quasi 100 MHz, +69 LUT); altrove il default e' la scelta pragmatica. Dati:
 `points_directives.tsv`.
+
+---
+
+## 15. ⚠️ IL METRO SBAGLIATO — Fmax REALE (io-timed) e il fix splitpipe (2026-07-22/23)
+
+> **DA LEGGERE PRIMA DI RIFARE LO STUDIO A.** §12–§14 misurano il **Fmax INTERNO reg-reg** (OOC senza
+> `set_input_delay`, come documentato da sempre in `impl_point.tcl`). E' un metro valido per CONFRONTARE
+> configurazioni, MA **non e' il Fmax deployabile**: esclude il percorso ingresso→normalize→`go`, che in
+> deployment (ingressi registrati) e' reale. Il Fmax reale e' **~la meta'**.
+
+### Come e' emerso
+La sonda hold-last (§task #30) ha aggiunto un registro all'ingresso: questo ha reso **timato** il percorso
+ingresso→normalize→edge-trigger, prima invisibile (le porte OOC non sono timate senza PARTPIN). Verificato
+con `impl_point.tcl` opzione **`io`** (5o arg = `set_input_delay/set_output_delay 0`): FAST-senza-hold + io
+da' lo STESSO percorso `dv→normalize→SNN CE` (~22 ns). Quindi non e' un costo dell'hold-last — e' il metro.
+
+### Fmax REALE dei 3 tier (io-timed, architettura split senza pipeline)
+| tier | Fmax INTERNO (§12/§13) | **Fmax REALE (io)** | percorso critico reale |
+|---|---|---|---|
+| SLOW | 30 MHz | **29,1** | interno SNN (46 liv, 34,3 ns) — il normalize NON e' il suo collo |
+| BAL | 56 MHz | **50,5** | normalize (dv→xbuf, 20,5 ns) |
+| FAST | 91 MHz | **46,6** | normalize (dv→xbuf, 22,2 ns) |
+
+**Conseguenza pesante:** i 91 MHz di FAST erano **illusori**. Al metro reale FAST (47) ≈ BAL (50, anzi
+leggermente sotto), perche' **entrambi sbattono sullo stesso muro normalize** (stesso `local_normalize`).
+FAST costa pero' +657 LUT/+1115 FF vs BAL: al metro reale, senza fix, **BAL domina FAST**.
+
+### Il fix: architettura `splitpipe` (registro sugli operandi del normalize)
+`build_hdl_variants` archStyle **`splitpipe`**: `snn_chart_code(...,pipe=true)` registra gli OPERANDI del
+normalize (`op_reg`) fra il clamp e la moltiplicazione, e l'edge-trigger confronta gli operandi registrati.
+`local_normalize` e' stata splittata in `local_normalize_ops` (clamp) + `local_normalize_mul` (moltiplic.),
+con `local_normalize` = composizione **bit-identica** per i chiamanti condivisi (verificato dmax=0). Fuori
+dal core `snn_b2_fsm` congelato. **4-in/5-out invariato.**
+
+Due fix chiave imparati (memoria `cf-fsnn-fpga-fmax-sweep-method`):
+1. registrare gli **operandi** (non xn): la moltiplicazione finisce in uno stadio suo.
+2. init del persistente a **costante 0** (NON `=op`): un init combinatorio crea un bypass ingresso→mul→xbuf
+   che tiene il percorso non-spezzato (60 MHz). Con init costante il registro spezza pulito → 73,6.
+
+| | FAST reale (io) | costo | latenza |
+|---|---|---|---|
+| split (no pipe) | 47 MHz | — | 405 |
+| **splitpipe (op_reg)** | **73,6 MHz** | +220 LUT, +186 FF | 406 (+1) |
+
+**bit-exact (dmax=0)**, il muro vero (input→normalize→go) **RISOLTO**: il percorso critico ora e' interno.
+FAST torna a battere BAL con margine reale.
+
+### Perche' ci si e' fermati a 73,6 (residuo = moltiplicazione intrinseca)
+Il collo residuo (~13,5 ns) e' la **moltiplicazione a 34 bit** (2 DSP cascati), ~2 ns sopra il pavimento SNN
+(~11 ns = 91). **Non si spezza** con: phys_opt (retiming, provato → 63/78), AdaptivePipelining di HDL Coder
+(provato → 75,7, non pipelina la moltiplicazione costante), registro a 2 stadi (78,3). L'operando e' a
+**32 bit** e il reciproco a **34 bit**: ENTRAMBI oltre le dimensioni del DSP (25×18), quindi la moltiplic.
+e' intrinsecamente ≥2-DSP-cascati. L'unica via a 91 = **decomposizione manuale 2×2** (split di entrambi gli
+operandi → 16 prodotti parziali, pipeline multi-stadio, bit-exact). **Scartata:** costa **~+800 FF (+25%)**,
++DSP, +LUT → **AUMENTA l'area**, che e' la risorsa che lo studio ottimizza (chip per il V2I). Trade-off al
+contrario: paga la risorsa scarsa (area) per +13 MHz su un bisogno di kHz-MHz. Il muro vero e' gia' risolto.
+
+### Strumenti nuovi (per la ripresa)
+- `impl_point.tcl` **5o arg `io`** = timing d'integrazione (input/output delay 0) → misura il Fmax REALE.
+- `build_hdl_variants` archStyle **`splitpipe`** = il blocco deployabile (op_reg, 73,6).
+- `snn_chart_code(...,pipe)` + `local_normalize_ops`/`local_normalize_mul` (split del normalize).
+
+### COSA DEVE FARE LA RIPRESA DELLO STUDIO A (domani)
+Lo studio A (§12–§14) va **rifatto sul metro REALE**, sul blocco `splitpipe`:
+1. **Ri-caratterizzare i 3 tier con `splitpipe` + `io`**: il Fmax reale deployabile di SLOW/BAL/FAST col fix.
+   SLOW resta ~29 (collo interno, core congelato); BAL/FAST salgono col op_reg (FAST 73,6; BAL da misurare,
+   atteso ~56 = suo interno). Driver: `sweep_clock_curve.sh` esteso con `io`, oppure una campagna mirata.
+2. **Rifare la curva area-vs-Fmax** con l'Fmax reale (l'asse AREA di §13 regge; si rifa' l'asse Fmax).
+3. **Scegliere il candidato Donatello** per il Blocco B sul Fmax REALE + area + latenza (+1 per splitpipe).
+   Probabile riordino: al metro reale i tier si riordinano rispetto a §13.
+4. Verifica RTL (xsim) del candidato prima del deploy (il metro io e' una stima; il vero e' col wrapper).

@@ -307,6 +307,23 @@ driftano. Misurato con reciproci Q?.20: esatto fino al control-step 14, poi devi
 > **Regola d'uso**: pilotare i blocchi con segnali a **≥20 bit frazionari**. Con meno, il blocco *funziona* ma non è
 > bit-exact al riferimento SW (≈1 spike flippato ogni ~25 control-step).
 
+### §3.1.5 Fmax INTERNO vs REALE + `splitpipe` (il muro del normalize) — 2026-07-22/23
+⚠️ Il Fmax OOC reg-reg (studio trade-off §12-§14 in RESULTS.md) **NON è il Fmax deployabile**: esclude il
+percorso ingresso→normalize→`go`, che con ingressi registrati (deployment) è reale e vale **~la METÀ**
+(FAST 91→47, BAL 56→50, SLOW 30→29). Si misura col **5° arg `io`** di `impl_point.tcl`
+(`set_input_delay/set_output_delay 0`). Al metro reale i tier si appiattiscono (BAL≈FAST, muro comune nel
+normalize) → i 91 di FAST erano **illusori**.
+
+**Fix = archStyle `splitpipe`** in `build_hdl_variants`: registra gli **OPERANDI** del normalize (`op_reg`)
+fra clamp e moltiplicazione, edge-trigger sugli operandi registrati → spezza il percorso → FAST reale
+47→**73,6 MHz**, bit-exact (dmax=0), **+1 latenza (406)**, **4-in/5-out**, fuori dal core `snn_b2_fsm`
+congelato. `local_normalize` splittata in `local_normalize_ops`+`local_normalize_mul` (composizione
+**bit-identica** per i chiamanti condivisi). ⚠️ init del persistente a **COSTANTE 0** (non `=op`: un init
+combinatorio crea un bypass ingresso→mul→xbuf che NON spezza → 60 invece di 73,6).
+Residuo = moltiplicazione 34-bit **intrinseca** (2 DSP cascati, ~13,5 ns, ~2 ns sopra il pavimento SNN);
+phys_opt / AdaptivePipelining / 2-stadi NON la spezzano; i 91 richiederebbero decomposizione **2×2**
+(+~25% FF → contro l'obiettivo area/V2I) → **scartata**. **Record completo + piano ripresa: RESULTS.md §15.**
+
 ## §4 Architettura del core (`matlab/snn_core.m`)
 - **Type-parametrizzato** via `snn_types('double'|'fixed', nfrac)`: stesso codice per parità (double) e HDL (fi).
 - 1 chiamata = 1 control-step = `nt=10` tick interni; stato `persistent` (V, fatigue, s_prev, V_LI, x_buf);
