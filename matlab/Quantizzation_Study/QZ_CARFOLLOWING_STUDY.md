@@ -125,26 +125,59 @@ car-following. Ipotesi degli **"equilibri interni"** — confermata **rigorosame
 un anello che maschera le collisioni, ma su 99 scenari duri con cut-in reali, anello provato fedele, e baseline
 oracolo che separa il costo-quantizzazione da ciò che è fisicamente inevitabile.
 
-## 7. Ginocchio e livelli candidati
-- **Sicurezza**: nessun ginocchio — invariante fino a nfrac=2 (limite estremo testato).
-- **Fedeltà dei parametri** (NRMSE): ginocchio **~nfrac=4** (0.11); sopra è piatta (~0.08-0.10), sotto raddoppia
-  per bit (0.20 a n3, 0.33 a n2).
+## 7. Risultati — hardware (risorse/potenza/Fmax vs nfrac)
+Config di riferimento **FAST-like** (forward corrente + splitpipe + decode p5), vincolo **deploy 125 ns io-timed**,
+**stesso protocollo per tutti i livelli** (confronto valido). Sintesi OOC Vivado 2026.1, `xc7z020clg400-1`. Dati:
+`res_sweep.tsv`; figura `figures/quantization_curves.png`. Estratto:
 
-Il vincolo sui bit **non viene dalla sicurezza** (che regge fino a 2), ma dalla fedeltà dei parametri se la si
-vuole vicina al riferimento. Candidati per il menu quantizzazione: **nfrac ≥ 4-5** conserva params ~fedeli;
-**nfrac 2-3** resta sicuro ma con parametri visibilmente diversi (utile per il massimo risparmio di area se conta
-solo il comportamento). La scelta finale incrocia questi con le curve **risorse/potenza/Fmax** (§8).
+| nfrac | LUT | FF | DSP | Ptot_W | dLUT% (vs 13) | NRMSE param |
+|---|---|---|---|---|---|---|
+| 2 | 2832 | 1713 | 30 | 0.109 | **−38.8** | 0.327 |
+| 4 | 4856 | 2381 | 31 | 0.111 | **+4.9** (picco) | 0.109 |
+| 5 | 3664 | 2497 | 51 | 0.112 | −20.8 | 0.097 |
+| 8 | 4043 | 2864 | 51 | 0.113 | −12.6 | 0.089 |
+| 13 | 4628 | 3474 | 52 | 0.111 | 0.0 | 0.000 |
 
-## 8. Limiti e prossimo fronte
-- **Comportamento/sicurezza soltanto.** Le curve **risorse (LUT/DSP/FF) / potenza / Fmax vs nfrac** + il ginocchio
-  hardware + la **configurazione canonica** (Fmax massimo via ricerca a passo adattivo) sono il fronte **Vivado**
-  (Task 3-6 del piano `docs/superpowers/plans/2026-07-24-quantization-study.md`), ancora da eseguire. Solo lì il
-  trade-off diventa "quanti bit convengono davvero".
-- **`max_DRAC`** troppo spiky per una curva; usare min_gap/brake_margin/coll_extra come metriche di sicurezza pulite.
-- **Ingressi non quantizzati** nell'anello (come `simulate`): lo studio varia il **solo** `nfrac` del core; la
-  quantizzazione V2X a 20 bit degli ingressi è un asse separato, fuori scope.
+Il risparmio d'area **non è monotòno** — è dominato dal confine di inferenza **DSP↔LUT**:
+- **FF**: pulito, monotòno (~+120/bit) → **−51%** da 13 a 2 bit. La metrica di risparmio affidabile.
+- **DSP**: **gradino a nfrac=5→4** (51 → 31 → 30): sotto 5 bit ~20 moltiplicatori escono dai DSP.
+- **LUT**: monotòno 13→5 (−21%), poi **picco a n4** (+4.9%, i mult usciti dai DSP diventano logica LUT), poi giù a
+  n2-3. → **n4 è dominato da n5** (n5: meno LUT, params ugualmente fedeli, stessi DSP; n4 conviene solo se
+  DSP-limitato).
+- **Potenza**: **piatta** (−1.8% a n2), **static-dominata** (0.103 W statica su ~0.11 tot). La quantizzazione **non
+  salva potenza** su Zynq-7020 → conferma la nota clock-gating: il vantaggio si materializza su chip
+  dynamic-dominati (dove la rete idle >99.9% dà il taglio senza costo).
+- **Fmax**: rumore ~52-60 MHz al vincolo lasco (WNS +105-108) → **margine**, non proprietà del design (tutti
+  ~10⁴× il control-step). Vedi impl_point.tcl §validità.
 
-## 9. Riproducibilità
+**Task 6 (config canonica / Fmax massimo via bisezione): NON eseguito, con motivo.** Fmax è margine (tutti
+~55 MHz vs requisito ~4 kHz); massimizzarlo per livello aggiungerebbe decine di sintesi per un numero senza valore
+operativo (coerente con l'onestà §9 della spec: la config canonica è "caratterizzazione del limite").
+
+## 8. Ginocchio e menu quantizzazione (integrato: fedeltà × hardware)
+- **Sicurezza**: invariante fino a nfrac=2 (0 collisioni extra) → floor.
+- **Fedeltà parametri** (NRMSE): ginocchio ~nfrac=4-5; sopra piatta (~0.09), sotto raddoppia (0.20@n3, 0.33@n2).
+- **Hardware**: FF −51% a n2, DSP a gradino sotto n5, LUT non-monotona (tradeoff), potenza piatta.
+
+**Il collo NON è l'hardware, è la fedeltà dei parametri.** Il risparmio d'area è modesto e la potenza è piatta;
+la scelta di bit la detta l'NRMSE. Menu proposto:
+
+| livello | uso | NRMSE | risparmio (vs n13) |
+|---|---|---|---|
+| **n8** | conservativo | 0.089 | −13% LUT, −18% FF, DSP pieno |
+| **n5** | sweet spot | 0.097 | **−21% LUT, −28% FF**, DSP pieno |
+| **n2** | aggressivo / safety-only | 0.327 (ma 0 collisioni) | −39% LUT, **−51% FF**, DSP 30 |
+
+## 9. Limiti
+- **Config FAST-like** (non BAL, il prescelto): risorse/potenza/**ginocchio** sono tier-robusti (la quantizzazione
+  tocca la logica del core, identica tra i tier); solo l'**Fmax assoluto** è quello di FAST. Per l'Fmax canonico di
+  BAL, ri-girare Task 6 sulla config BAL (economico, harness pronto).
+- **`max_DRAC`** troppo spiky per una curva; usare min_gap/brake_margin/coll_extra come SSM pulite.
+- **Ingressi non quantizzati** nell'anello (come `simulate`): si varia il **solo** `nfrac` del core; la
+  quantizzazione V2X 20 bit degli ingressi è un asse separato, fuori scope.
+- **Per-campo mixed-precision** (frazionari indipendenti per V/fatigue/acc/raw/w): future work (spec §8).
+
+## 10. Riproducibilità
 ```
 gen_exhaustive_qz_dataset.py   (cf_sim python) -> exhaustive_scenarios.json   [build_scenarios canonico]
 qz_build_exhaustive_dataset.m                  -> test_dataset_exhaustive.mat
@@ -154,6 +187,10 @@ qz_cl_selftest.m               -> collisione nei due sensi + teletrasporto
 qz_cl_validate.m               -> cl_sweep.tsv   (sweep nfrac 2-13, SSM + NRMSE)
 qz_cl_severity.m               -> impact_dv sulle inevitabili
 qz_run_fixed_sweep.m           -> acc_sweep.tsv  (accuratezza open-loop max|d|)
+qz_gen_block_vhdl.m            -> VHDL Donatello a nfrac variabile (core+normalize; decode En13; gate bit-exact @13)
+qz_sweep_nfrac.sh              -> res_sweep.tsv  (risorse/potenza/Fmax vs nfrac, sintesi OOC io-timed)
+qz_knee.m                      -> tavola incrociata + menu livelli
+qz_figs.py                     (python base, matplotlib) -> figures/quantization_curves.png
 ```
 Anello: `qz_cl_sim.m` (+ `qz_safety_metrics.m`). Motore canonico di riferimento:
-`<worktree Simulator>/utils/closed_loop_eval.py`.
+`<worktree Simulator>/utils/closed_loop_eval.py`. Harness sintesi: `study_tradeoff/common/{synth,impl}_point.tcl`.
