@@ -44,8 +44,12 @@ function qz_cl_severity(levels)
   end
   fprintf('\nmax impact_dv sugli inevitabili — oracolo=%.2f m/s\n', max(oimp));
   fprintf('nfrac | max_impact | delta_vs_oracolo\n');
+  fid = fopen(fullfile(here,'sev_sweep.tsv'),'w'); fprintf(fid,'nfrac\tmax_impact_dv\toracle_max\n');
   for li = 1:numel(levels)
     mx = max(IMP(:,li));
     fprintf('%5d | %10.2f | %+.2f\n', levels(li), mx, mx - max(oimp));
+    fprintf(fid,'%d\t%.4f\t%.4f\n', levels(li), mx, max(oimp));
   end
+  fclose(fid);
+  fprintf('scritto %s\n', fullfile(here,'sev_sweep.tsv'));
 end
