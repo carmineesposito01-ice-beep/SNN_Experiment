@@ -7,6 +7,11 @@ function qz_run_fixed_sweep()
   mroot = fileparts(here);                                  % .../matlab
   d = load(fullfile(mroot, 'champions_export.mat')); champs = d.champions;
   if iscell(champs), champs = [champs{:}]; end
+  % SOLO Donatello: e' il forward DEPLOYATO (blocco Donatello_Tier, prescelto BAL). Gli altri champion
+  % sono reti diverse, non deployate -> la loro curva di quantizzazione e' irrilevante per questo studio.
+  % (I tier SLOW/BAL/FAST condividono questo stesso forward -> stessa accuratezza-vs-nfrac.)
+  champs = champs(arrayfun(@(x) strcmp(char(string(x.name)), 'Donatello'), champs));
+  assert(~isempty(champs), 'champion Donatello non trovato in champions_export.mat');
   fracs = [5 7 8 9 10 11 12 13];
 
   rows = {};   % {champion, nfrac, maxd}
