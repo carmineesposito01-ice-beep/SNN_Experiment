@@ -25,7 +25,7 @@
 ```bash
 cd "D:/Project_MBSE/1.Reti Neurali/Rete_SNN_Test/CF_FSNN/.worktrees/Simulink_Importer/matlab"
 mkdir -p Quantizzation_Study
-printf '*.slx\n*.mexw64\nb2_rom_active.m\nslprj/\ncodegen/\n*_sweep.tsv\nfigures/\n' > Quantizzation_Study/.gitignore
+printf '*.slx\n*.mexw64\nb2_rom_active.m\nslprj/\ncodegen/\n' > Quantizzation_Study/.gitignore  # i TSV e le figure sono dati/output -> si committano
 ls -la Quantizzation_Study
 ```
 Expected: la cartella esiste col `.gitignore`.
