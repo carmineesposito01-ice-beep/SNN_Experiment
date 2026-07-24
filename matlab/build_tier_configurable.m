@@ -22,6 +22,7 @@ function build_tier_configurable()
   tiers = {'SLOW','snn_variants/snn_b2_fsm_R2.m','fused'
            'BALANCED','snn_variants/snn_b2_fsm_R5.m','p3'
            'FAST','snn_variants/snn_b2_fsm_R9.m','p5'};
+  nfracs = [13 8 5 2];   % livelli canonici dello studio quantizzazione (13=piena precisione, bit-exact)
   in_names={'s','v','dv','v_l'}; out_names={'v0','T','s0','a','b'};
 
   lib='snn_champions_lib'; libfile=fullfile(here,[lib '.slx']);
@@ -46,14 +47,21 @@ function build_tier_configurable()
   for j=1:4, add_line(sub, [in_names{j} '/1'], ['VS/' num2str(j)], 'autorouting','on'); end
   for j=1:5, add_line(sub, ['VS/' num2str(j)], [out_names{j} '/1'], 'autorouting','on'); end
 
-  for i=1:size(tiers,1)
-    nm=tiers{i,1}; srcFsm=fileread(fullfile(here,tiers{i,2})); dec=tiers{i,3};
-    v=[vs '/' nm]; add_block('built-in/Subsystem', v);
-    mount_split(v, in_names, out_names, ...
-      snn_chart_code(srcRom,srcTypes,srcFsm,nrm,true), ...
-      dec_chart_code(srcLut,dec,64,'shared'));
-    set_param(v, 'VariantControl', sprintf('TIER==%d', i));   % TIER numerico (indice del popup); le
-    fprintf('  variante %s montata (VariantControl TIER==%d)\n', nm, i);   % condizioni variant NON accettano funzioni (es. strcmp)
+  % 3 tier x 4 livelli nfrac = 12 varianti, ognuna col nfrac COTTO CONCRETO nella chart (sostituisco il 13
+  % hardcoded del forward+cast Tt del normalize con il valore). Tipi concreti -> nessun problema di
+  % risoluzione (un nfrac come mask-PARAMETER non aggancia attraverso il Variant Subsystem: muro Simulink,
+  % verificato). Il decode resta En13. A nfrac=13 la sostituzione 13->13 e' NO-OP -> variante bit-exact storica.
+  for ti=1:size(tiers,1)
+    nm=tiers{ti,1}; srcFsm=fileread(fullfile(here,tiers{ti,2})); dec=tiers{ti,3};
+    snnRef = snn_chart_code(srcRom,srcTypes,srcFsm,nrm,true);
+    for ni=1:numel(nfracs)
+      nf = nfracs(ni);
+      snnCode = regexprep(snnRef, "snn_types\(\s*'fixed'\s*,\s*13\s*\)", sprintf("snn_types('fixed', %d)", nf));
+      v=[vs '/' sprintf('%s_n%d', nm, nf)]; add_block('built-in/Subsystem', v);
+      mount_split(v, in_names, out_names, snnCode, dec_chart_code(srcLut,dec,64,'shared'));
+      set_param(v, 'VariantControl', sprintf('TIER==%d && NFRAC==%d', ti, ni));   % indici 1-based dei due popup
+    end
+    fprintf('  tier %s montato x nfrac %s\n', nm, mat2str(nfracs));
   end
   set_param(vs, 'VariantControlMode','expression', 'VariantActivationTime','update diagram');
 
@@ -64,7 +72,13 @@ function build_tier_configurable()
   % VariantControl TIER==1/2/3. (Con 'off' TIER sarebbe la stringa e servirebbe strcmp, non ammesso.)
   m.addParameter('Name','TIER','Prompt','Tier (trade-off area/margine)', ...
                  'Type','popup','TypeOptions',{'SLOW','BALANCED','FAST'}, ...
-                 'Evaluate','on','Value','SLOW');
+                 'Evaluate','on','Value','BALANCED');
+  % NFRAC: bit frazionari del core SNN (quantizzazione). Popup dei 4 livelli canonici dello studio;
+  % Evaluate='on' -> indice 1-based (1=13, 2=8, 3=5, 4=2), usato dai VariantControl NFRAC==ni.
+  % 13 = piena precisione (bit-exact col forward storico). Vedi Quantizzation_Study/QZ_CARFOLLOWING_STUDY.md.
+  m.addParameter('Name','NFRAC','Prompt','nfrac (bit fraz. core: 13 pieno / 8 / 5 / 2)', ...
+                 'Type','popup','TypeOptions',{'13','8','5','2'}, ...
+                 'Evaluate','on','Value','13');
   m.Description = tier_configurable_description();
   set_param(sub, 'MaskSelfModifiable','on');
 
@@ -76,12 +90,17 @@ end
 function s = tier_configurable_description()
   L = {
     'Donatello_Tier - SNN car-following (champion Donatello) CONFIGURABILE.'
-    'Un solo blocco, un menu TIER: SLOW / BALANCED / FAST. La scelta seleziona la variante attiva'
-    '(Variant Subsystem, VariantActivationTime=update diagram): HDL Coder genera SOLO il tier scelto,'
-    'identico al blocco separato Donatello_<TIER> (provato bit-exact modulo nomi).'
+    'Un solo blocco, DUE menu: TIER (SLOW/BALANCED/FAST) + NFRAC (13/8/5/2). La coppia seleziona la'
+    'variante attiva (Variant Subsystem, VariantActivationTime=update diagram): HDL Coder genera SOLO'
+    'la variante scelta, coi tipi fixed-point gia'' cotti a quel nfrac.'
     ''
     'TIER: SLOW = R2/fused (area minima, ~30 MHz io-timed, 342 clk) · BALANCED = R5/p3 (~58 MHz, 364) ·'
     '      FAST = R9/p5 (margine massimo, ~74 MHz, 406). Stessi 5 parametri, diverso profilo risorse/Fmax.'
+    ''
+    'NFRAC: bit frazionari del CORE SNN (V/fatigue/acc/accw/pesi/raw). 13=piena precisione (bit-exact) ·'
+    '       8=conservativo · 5=sweet-spot area/fedelta'' · 2=aggressivo (safety-only). Meno bit = meno area'
+    '       (FF/DSP) ma parametri meno fedeli; il decode resta En13, l''I/O fisico non e'' toccato. Sicurezza'
+    '       car-following invariante fino a 2 bit (studio quantizzazione). 3 tier x 4 nfrac = 12 varianti.'
     ''
     'I/O fisico (fixed >=20 bit frazionari): s,v,dv,v_l -> v0,T,s0,a,b. Edge-triggered, niente start/done.'
     'Self-contained. Rigenerazione: build_tier_configurable.m (NON modificare a mano).'

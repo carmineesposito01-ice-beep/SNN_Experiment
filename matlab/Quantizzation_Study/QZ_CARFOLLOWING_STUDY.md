@@ -194,3 +194,14 @@ qz_figs.py                     (python base, matplotlib) -> figures/quantization
 ```
 Anello: `qz_cl_sim.m` (+ `qz_safety_metrics.m`). Motore canonico di riferimento:
 `<worktree Simulator>/utils/closed_loop_eval.py`. Harness sintesi: `study_tradeoff/common/{synth,impl}_point.tcl`.
+
+## 11. Menu nel blocco (implementato)
+Il blocco `Donatello_Tier` (`snn_champions_lib.slx`) ha ora un **2° popup NFRAC** (13/8/5/2, i livelli canonici)
+ortogonale al popup TIER → **3 tier × 4 nfrac = 12 varianti** Variant Subsystem, ognuna col nfrac **cotto
+concreto** nella chart SNN (decode fisso En13). Builder: `build_tier_configurable.m`. Gate:
+`qz_tier_nfrac_gate.m` (default BALANCED/n13 **bit-exact** al riferimento storico; 12 varianti compilano;
+quantizzazione morde: max|Δparam| vs n13 = 0.68@n8 / 1.16@n5 / 2.07@n2; makehdl@n8 → VHDL valido).
+⚠️ **Muro Simulink (registrato)**: un `nfrac` come **mask-parameter vivo** (word-length parametrico) funziona
+in una MATLAB Function co-locata ma **NON aggancia attraverso il Variant Subsystem** (la Parameter data
+annidata non risolve il parametro mask del blocco top, anche con `Tunable=false`; verificato in
+`probe_nfrac_mask`). Le **varianti discrete** aggirano il problema (tipi concreti, robusti).
