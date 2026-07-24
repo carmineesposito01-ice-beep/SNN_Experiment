@@ -133,8 +133,13 @@ scrive il report. La **Fase C** (test sull'FPGA *fisica*) resta separata e in at
 
 **Backlog (studi a sé, DOPO B2.0):** 1) **Timing study** (spingere lo slack → max Fmax); 2) **Quantization study**
 (meno bit fixed → meno FPGA vs perdita accuracy, mappa non-lineare — grande); 3) **Fase C + confronto MPC↔SNN**
-(design parcheggiato, `cf-fsnn-mpc-vs-snn-design`). Restano anche le opzioni di track: promuovere M a deploy · V2I
-in Simulink · merge → main.
+(design parcheggiato, `cf-fsnn-mpc-vs-snn-design`); 4) **Clock-gating** (segnato 2026-07-24, DOPO la
+validazione): su Zynq-7020 la potenza è static-dominata (~92%) → ROI basso QUI, ma la rete è **predisposta
+per costruzione** (idle >99,9%: ~364 clk attivi su ~800k per control-step) → su chip più efficienti, dove la
+P_dinamica diventa il collo, il vantaggio si materializza **senza contropartita**. Semi-auto via Vivado
+(clock-enable già presente nel time-mux + `-gated_clock_conversion auto` + `power_opt_design`), NON a mano sul
+VHDL; primo passo = misura SAIF della dinamica in idle. Restano anche le opzioni di track: promuovere M a
+deploy · V2I in Simulink · merge → main.
 
 **Se si torna su SP4, LEGGI PRIMA** `document/SP4_ACC_IIDM_FAST.md` (in testa: il riquadro ✅ SP4 CHIUSO, poi
 §Variante M-FSM #2a): contiene i numeri, le **quattro strade chiuse coi loro perché** (L approssima · M-v1
