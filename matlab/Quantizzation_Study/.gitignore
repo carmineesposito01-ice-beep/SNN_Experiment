@@ -1,0 +1,5 @@
+*.slx
+*.mexw64
+b2_rom_active.m
+slprj/
+codegen/
