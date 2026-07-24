@@ -25,14 +25,26 @@ Questo era il future work registrato in `docs/superpowers/specs/2026-07-24-quant
 ## 2. Obiettivo e criteri di successo
 
 Obiettivo: trovare l'**allocazione dei 6 nfrac per-campo** che **massimizza il risparmio d'area** mantenendo il
-comportamento car-following **indistinguibile** dal full-precision.
+comportamento car-following **indistinguibile** dal full-precision — con la stessa ricchezza di metriche e lo
+stesso rigore dello studio nfrac unico, rendendo poi la configurazione modificabile nel blocco e i risultati
+inseriti nel report.
 
 Successo = tutti veri:
-1. Una **mappa di sensibilità per-campo** (6 curve) da misura sull'intero dataset esaustivo, non su un campione.
-2. Una o più **configurazioni per-campo candidate** che passano il cancello comportamentale in verifica congiunta.
-3. Il **risparmio d'area** della configurazione area-ottimale, misurato da sintesi reale, confrontato col nfrac
-   unico e col full-precision.
-4. Tutto **isolato** in `matlab/Quantizzation_Study/`; gli script funzionanti originali non modificati.
+1. Una **mappa di sensibilità per-campo** (6 curve) da misura sull'intero dataset esaustivo, non su un campione,
+   che riporta l'**intero cruscotto di metriche** dello studio unico (non solo la metrica-cancello): SSM di
+   sicurezza (collisioni extra, min_gap, brake_margin, max_DRAC, min_TTC), NRMSE per-parametro, e — sui casi
+   inevitabili — la severità (impact_dv).
+2. Una o più **configurazioni per-campo candidate** che passano il cancello comportamentale in verifica congiunta,
+   con il cruscotto completo riportato per ciascuna.
+3. Le **curve hardware** (risorse LUT/FF/DSP, potenza, Fmax) da sintesi reale, con lo **stesso protocollo io-timed**
+   dello studio unico, su un **numero ridotto di punti** (i finalisti + i riferimenti; §5.C) per non pagare le ~12
+   ore di uno sweep per-campo completo — e il **risparmio** della config area-ottimale rispetto al miglior nfrac
+   uniforme a pari cancello e al full-precision.
+4. La **Modalità Avanzata** nel blocco `Donatello_Tier`: una config che espone e rende modificabili i 6 nfrac
+   per-campo (§5.D).
+5. I risultati **aggiunti al report** dello studio di quantizzazione (§5.E).
+6. Tutto **isolato** in `matlab/Quantizzation_Study/`; gli script funzionanti originali non modificati (il blocco e
+   il report sono estensioni additive, non riscritture).
 
 ## 3. Il cancello (comportamentale)
 
@@ -71,8 +83,10 @@ neutra (cancello §7).
 ### 5.A — Sensibilità per-campo
 Per ciascun campo `f` dei sei: si fissano gli altri cinque a 13 e si abbassa `n_f` da 13 fino a **1** (con lo **0**
 = solo interi incluso come estensione per i campi che a 1 sono ancora ampiamente dentro il cancello). Per ogni
-livello si misura, sull'intero dataset, `max|Δgap|` vs full-precision e le collisioni extra. Ne risultano **6
-curve** e, per ciascun campo, il **floor**: il minimo `n_f` che passa ancora il cancello.
+livello si misura, sull'intero dataset, l'**intero cruscotto** dello studio unico: la metrica-cancello
+`max|Δgap|` vs full-precision e le collisioni extra (che **decidono** il floor, §3), e — per la stessa ricchezza
+di prima — `min_gap`, `brake_margin`, `max_DRAC`, `min_TTC` e l'NRMSE per-parametro (che **caratterizzano**). Ne
+risultano **6 curve** e, per ciascun campo, il **floor**: il minimo `n_f` che passa ancora il cancello.
 
 Costo: solo anello chiuso. Le configurazioni sono ~6 campi × ~12 livelli = ~72, ciascuna con un MEX del forward a
 precisione mista (build una volta, in background); nessuna sintesi. Se il `fi` interpretato è troppo lento, MEXare
@@ -88,21 +102,53 @@ proibitivo e inutile). Come minimo:
 
 Ogni candidata è verificata **in congiunta** sull'intero dataset con lo stesso cancello (§3).
 
-### 5.C — Area
-Sui **soli finalisti** (l'aggressiva accettata e, se utile, una o due varianti): generazione VHDL a precisione
-mista (`qz_gen_block_vhdl`) + sintesi OOC io-timed al vincolo di deploy (riuso `qz_sweep_nfrac.sh`-style e il
-tooling `study_tradeoff/common/*.tcl`). Si riportano risorse (LUT/FF/DSP) e potenza, e il **risparmio** rispetto a
-due riferimenti espliciti: il **miglior nfrac uniforme che passa lo stesso cancello** (§3) — cioè "quanto guadagna
-la precisione mista rispetto all'uniforme a pari comportamento" — e il **full-precision**.
+### 5.C — Area (sintesi su punti ridotti)
+Uno sweep Vivado per-campo completo (~6 campi × ~12 livelli = ~72 sintesi io-timed) costerebbe **~12 ore**; qui si
+sintetizza un **insieme ridotto** di configurazioni, con lo **stesso protocollo io-timed** e le **stesse metriche**
+dello studio unico (risorse LUT/FF/DSP/BRAM, potenza, Fmax):
+- il **full-precision** (tutti-13) come riferimento;
+- il **miglior nfrac uniforme** che passa il cancello §3 — il termine di paragone "a pari comportamento";
+- i **finalisti** per-campo (l'aggressiva accettata e le eventuali varianti di back-off di §5.B);
+- **opzionale**, se il tempo lo consente: i **6 config "un-campo-al-floor"** (ogni campo al suo floor, gli altri a
+  13), per attribuire a ciascun campo il suo contributo hardware — l'analogo per-campo della curva
+  risorse-vs-nfrac dello studio unico.
+
+Si riportano risorse e potenza di ciascuno e il **risparmio** della config area-ottimale rispetto ai due
+riferimenti (miglior uniforme e full-precision). VHDL a precisione mista da `qz_gen_block_vhdl` (generazione dei
+tipi per-campo); sintesi con `qz_sweep_nfrac.sh`-style e il tooling `study_tradeoff/common/*.tcl`. Determinismo di
+sintesi (thread/seme fissi) come nello studio unico.
+
+### 5.D — Modalità Avanzata nel blocco
+Dopo la scelta della config area-ottimale, il blocco `Donatello_Tier` guadagna una **Modalità Avanzata** che
+espone e rende modificabili **tutti i 6 nfrac per-campo**, non il solo bit unico.
+
+⚠️ **Vincolo Simulink noto** (dallo studio unico): un nfrac come **mask-parameter vivo** (word-length parametrico)
+NON aggancia attraverso il Variant Subsystem, e la via a **varianti discrete** (usata per il menu NFRAC 13/8/5/2)
+è impraticabile qui — 6 campi liberi darebbero un'esplosione combinatoria di varianti. La Modalità Avanzata usa
+quindi una **mask auto-modificante**: una checkbox "Avanzata" che, quando attiva, mostra 6 campi (uno per tipo) e,
+all'applicazione, un callback rigenera la chart della variante attiva coi **tipi per-campo cotti concreti**
+(stessa logica di sostituzione di `qz_gen_block_vhdl`, ma per-campo). Tipi concreti → nessun problema di
+risoluzione. Il menu NFRAC semplice (13/8/5/2) resta come Modalità Base (imposta i 6 nfrac uguali).
+
+Cancelli: a tutti-13 la Modalità Avanzata coincide **bit per bit** col forward storico (no-op); una config
+per-campo nota (es. i floor) produce il comportamento atteso e genera VHDL valido; il menu Base resta invariato.
+
+### 5.E — Estensione del report
+I risultati (curve di sensibilità per-campo, config area-ottimale, risparmio hardware) sono **aggiunti al report**
+esistente `report/QUANTIZATION_STUDY_REPORT.{md,pdf}` come **nuova sezione**, dallo stesso generatore
+(`scripts/build_quantization_report.py`, sorgente unica): nuovi TSV per-campo → nuove figure e tabelle → nuova
+sezione, con lo stesso register e gli stessi cancelli di qualità (numeri ancorati, determinismo, audit).
 
 ## 6. Output
 
-- Le **6 curve di sensibilità** (`max|Δgap|` e collisioni extra vs bit, per campo) + i 6 floor.
-- La **configurazione per-campo area-ottimale** (i 6 nfrac) e le eventuali varianti, con il verdetto del cancello.
-- Le **risorse/potenza** dei finalisti e il risparmio d'area misurato.
-- Un **doc sorgente** (grounded sui TSV, stile `QZ_CARFOLLOWING_STUDY.md`) per un futuro report.
-- L'eventuale aggiunta della config come **profilo del blocco** è una Fase successiva, decisa se il risparmio la
-  giustifica (fuori da questo studio).
+- Le **6 curve di sensibilità** per-campo, ciascuna col cruscotto completo (`max|Δgap|`, collisioni extra,
+  `min_gap`, `brake_margin`, `max_DRAC`, `min_TTC`, NRMSE per-parametro) + i 6 floor.
+- La **configurazione per-campo area-ottimale** (i 6 nfrac) e le eventuali varianti, col cruscotto completo, la
+  **severità** sugli inevitabili e il verdetto del cancello.
+- Le **risorse/potenza/Fmax** dell'insieme ridotto (§5.C) e il **risparmio** vs miglior uniforme e full-precision.
+- La **Modalità Avanzata** nel blocco `Donatello_Tier` (§5.D).
+- Il **report esteso** (§5.E): nuova sezione mixed-precision in `report/QUANTIZATION_STUDY_REPORT.{md,pdf}`, più il
+  doc sorgente `matlab/Quantizzation_Study/QZ_CARFOLLOWING_STUDY.md` aggiornato.
 
 ## 7. Cancelli (vincolanti)
 
@@ -112,6 +158,11 @@ la precisione mista rispetto all'uniforme a pari comportamento" — e il **full-
 - **Rilevatore comportamentale provato nei due sensi**: il cancello §3 deve **accettare** una config buona nota
   (es. tutti a 8, dallo studio unico) e **rifiutare** una config cattiva nota (es. un campo a 0 che sfonda la
   soglia). Un cancello mai visto fallire non è un cancello.
+- **Modalità Avanzata bit-exact @ full-precision**: la variante rigenerata a tutti-13 coincide bit per bit col
+  blocco storico (come il menu NFRAC a n13, dmax=0); il menu Base (13/8/5/2) resta invariato; una config per-campo
+  nota genera VHDL valido (time-mux, DualPortRAM).
+- **Report**: numeri ancorati ai nuovi TSV, `.md` byte-stabile su due build, audit avversariale (come per lo
+  studio unico).
 - **Dataset, mai campione**: ogni misura sull'intero dataset esaustivo; riportare quanti su quanti.
 
 ## 8. Rischi e note
@@ -129,6 +180,11 @@ la precisione mista rispetto all'uniforme a pari comportamento" — e il **full-
 - **Onestà sul risparmio**: come nello studio unico, la potenza è static-dominata su Zynq-7020 e l'Fmax è margine;
   il risparmio per-campo si leggerà soprattutto su LUT/FF/DSP, e va confrontato onestamente col nfrac unico (non
   col full-precision soltanto).
+- **Fragilità della mask auto-modificante (§5.D)**: un callback che rigenera una chart a ogni "applica" è più
+  fragile di una variante statica (edge-case su salvataggi/undo/copie del blocco). Va isolato e provato nei due
+  sensi; se risultasse troppo fragile, il **ripiego robusto** è un **argomento del builder** —
+  `build_tier_configurable` esteso con l'override per-campo, che rigenera il blocco alla config scelta — meno
+  "menu vivo" ma senza callback.
 
 ## 9. Riferimenti
 
