@@ -12,7 +12,7 @@ function qz_run_fixed_sweep()
   % (I tier SLOW/BAL/FAST condividono questo stesso forward -> stessa accuratezza-vs-nfrac.)
   champs = champs(arrayfun(@(x) strcmp(char(string(x.name)), 'Donatello'), champs));
   assert(~isempty(champs), 'champion Donatello non trovato in champions_export.mat');
-  fracs = [5 7 8 9 10 11 12 13];
+  fracs = [2 3 4 5 6 7 8 9 10 11 12 13];
 
   rows = {};   % {champion, nfrac, maxd}
   fprintf('%-13s |', 'champion / f');
