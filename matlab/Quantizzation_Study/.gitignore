@@ -2,4 +2,5 @@
 *.mexw64
 b2_rom_active.m
 slprj/
-codegen/
+codegen*/
+mp_ref13_*.mat
