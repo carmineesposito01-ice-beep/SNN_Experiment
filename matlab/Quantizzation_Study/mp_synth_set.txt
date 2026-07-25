@@ -1,0 +1,3 @@
+full_precision:13,13,13,13,13,13
+finale:13,13,4,13,13,4
+uniform4_ref:4,4,4,4,4,4
