@@ -116,7 +116,9 @@ _TRUNC_MAP = {
     "verita'": 'verità', "proprieta'": 'proprietà', "sommita'": 'sommità',
     "parita'": 'parità', "sparsita'": 'sparsità', "qualita'": 'qualità',
     "unita'": 'unità', "possibilita'": 'possibilità', "difficolta'": 'difficoltà',
-    "sensibilita'": 'sensibilità', "quantita'": 'quantità',
+    "sensibilita'": 'sensibilità', "quantita'": 'quantità', "velocita'": 'velocità',
+    "severita'": 'severità', "profondita'": 'profondità', "discontinuita'": 'discontinuità',
+    "evitabilita'": 'evitabilità', "pero'": 'però',
     "perche'": 'perché', "poiche'": 'poiché', "anziche'": 'anziché',
     "pressoche'": 'pressoché', "finche'": 'finché', "affinche'": 'affinché',
     "cioe'": 'cioè', "piu'": 'più', "gia'": 'già', "puo'": 'può',
@@ -251,7 +253,7 @@ def fig_mp_sensitivity():
 def fig_mp_area():
     """Risorse dei finalisti, % del full-precision (etichette = assoluti): LUT su, FF/DSP giu'."""
     cfgs = ['full_precision', 'finale', 'uniform4_ref']
-    labs = ['full 13×6', 'finale [13,13,4,13,13,4]', 'uniform 4×6 (fuori cancello)']
+    labs = ['full 13×6', 'finale [13,13,4,13,13,4]', 'uniform 4×6 (con perdita)']
     mets = ['LUT', 'FF', 'DSP']; fp = {m: mpr('full_precision', m) for m in mets}
     x = list(range(len(mets))); w = 0.26; cc = [PAL['grigio'], PAL['blu'], PAL['ambra']]
     fig, ax = plt.subplots(figsize=(8.0, 3.0))
@@ -280,8 +282,9 @@ def build_doc():
             'Livello di fedelta\': il car-following e\' da simulazione in anello chiuso provata bit-vicina '
             'al motore di riferimento; risorse, potenza e frequenza sono stime Vivado post-implementazione '
             '(out-of-context), non misura su silicio.',
-            'Fonte dei numeri: matlab/Quantizzation_Study/{cl_sweep, res_sweep, acc_sweep, sev_sweep}.tsv, '
-            'prodotti dagli script dello studio. Nessun numero e\' scritto a mano nel testo.',
+            'Fonte dei numeri: matlab/Quantizzation_Study/{cl_sweep, res_sweep, acc_sweep, sev_sweep, '
+            'mp_sens, mp_finalists, mp_res}.tsv, prodotti dagli script dello studio. Nessun numero e\' '
+            'scritto a mano nel testo.',
             'Campione: Donatello, il forward deployato del blocco Donatello_Tier. Dataset '
             'di prova: %d traiettorie su %d scenari canonici, di cui %d con evento di cut-in.' % (N_TRAJ, N_SCEN, N_CUTIN),
         ],
@@ -294,9 +297,9 @@ def build_doc():
             'virgola fissa. Il numero di bit frazionari del suo calcolo interno, indicato nel seguito con '
             'nfrac, governa insieme l\'accuratezza e il costo su silicio: piu\' bit danno piu\' precisione '
             'ma occupano piu\' area e dissipano piu\' potenza. Questo studio ne caratterizza il '
-            'compromesso su due fronti indipendenti — l\'accuratezza del comportamento in strada e '
-            'l\'occupazione hardware — spingendo la quantizzazione fino al limite estremo di due soli bit '
-            'frazionari.'))
+            'compromesso su tre fronti — la sicurezza del comportamento in strada, la fedelta\' dei '
+            'parametri stimati e l\'occupazione hardware — spingendo la quantizzazione fino al limite '
+            'estremo di due soli bit frazionari.'))
     A(('p', 'Il risultato centrale e\' che la **sicurezza del car-following resta invariata fino a due '
             'bit frazionari**. Su %d traiettorie che comprendono %d eventi di discontinuita\' del gap '
             '(cut-in, dove un veicolo si inserisce a distanza ridotta, e cut-out, dove il leader esce) e '
@@ -317,9 +320,11 @@ def build_doc():
             'interni della rete probabilistica — e il ginocchio di quella fedelta\' cade attorno a '
             'quattro-cinque bit. I quattro livelli utili che ne risultano sono stati resi selezionabili '
             'come menu nel blocco di deploy.'))
-    A(('callout', 'Marcatori usati nel documento: ● grandezza misurata o verificata (comportamento in '
-                  'anello chiuso, parita\' col riferimento); ○ stima Vivado post-implementazione (risorse, '
-                  'potenza, frequenza), precedente alla misura su silicio.'))
+    A(('p', 'Un\'analisi complementare, campo per campo, raffina il quadro: dei sei tipi in virgola fissa '
+            'del core, **due — gli accumulatori d\'ingresso e i pesi — sono sovradimensionati e riducibili '
+            'a quattro bit senza alcuna perdita**, mentre gli altri quattro fissano la precisione. E\' una '
+            'conferma indipendente che il limite e\' la fedelta\', non l\'hardware; i sei bit per campo sono '
+            'esposti nel blocco come Modalita\' Avanzata (Sezione 8).'))
 
     # --- 2. Scopo e metodo ---
     A(('h1', '2. Scopo e metodo'))
@@ -409,12 +414,12 @@ def build_doc():
             'a tredici bit o del controllore a conoscenza perfetta.' % (SEV_MAX, ORACLE_IMP)))
     A(('img', (fig_severity(), 'Figura 4.2 — Severita\' (velocita\' relativa al contatto) sulle %d '
                'traiettorie inevitabili, al variare di nfrac. La linea tratteggiata e\' la severita\' '
-               'dell\'oracolo. La curva della rete e\' piatta e le si sovrappone. Fonte: sev_sweep.tsv.' % N_INEV)))
+               'dell\'oracolo. La curva della rete e\' piatta e le resta appena sotto. Fonte: sev_sweep.tsv.' % N_INEV)))
 
     # --- 5. Fedelta' dei parametri ---
     A(('h1', '5. Fedelta\' dei parametri e il ginocchio'))
     A(('p', 'Se la sicurezza non si degrada, cosa lo fa? La fedelta\' dei parametri stimati. L\'errore '
-            'normalizzato medio dei cinque parametri rispetto a piena precisione cresce in modo liscio al '
+            'normalizzato medio dei cinque parametri (NRMSE) rispetto a piena precisione cresce in modo liscio al '
             'calare dei bit, con un ginocchio attorno a quattro-cinque bit frazionari: e\' pressoche\' '
             'costante sopra — passa da **%.3f** a otto bit a **%.3f** a cinque — e poi accelera sotto, '
             'raddoppiando quasi a ogni bit, fino a **%.3f** a tre e **%.3f** a due. La rete probabilistica '
@@ -440,7 +445,7 @@ def build_doc():
     A(('h1', '6. Costo hardware'))
     A(('p', 'Il costo su silicio e\' stato misurato sintetizzando il forward a ciascun nfrac su Vivado, in '
             'modalita\' out-of-context su una configurazione di pipeline di riferimento, con lo stesso '
-            'vincolo di clock di deploy per tutti i livelli, cosi\' che il confronto sia omogeneo. Il '
+            'vincolo di clock di deploy (125 ns, io-timed) per tutti i livelli, cosi\' che il confronto sia omogeneo. Il '
             'risparmio d\'area non e\' un semplice andamento monotono: e\' '
             'governato dal confine di inferenza fra blocchi aritmetici dedicati e logica combinatoria.'))
     A(('img', (fig_resources(), 'Figura 6.1 — Risorse al variare di nfrac. A sinistra celle logiche e '
@@ -453,8 +458,10 @@ def build_doc():
             'quel travaso rende le **celle logiche** non monotone: calano da tredici a cinque bit '
             '(**%.0f%%** a cinque bit), poi risalgono a quattro — dove le moltiplicazioni uscite dai '
             'blocchi diventano logica — e infine scendono di nuovo a due-tre bit, dove quella stessa logica '
-            'si restringe. Il livello a quattro bit e\' percio\' dominato dal livello a cinque, che usa meno '
-            'celle a pari fedelta\'.' % (FFDROP_PCT, LUTDROP5)))
+            'si restringe. Il livello a cinque bit usa cosi\' meno celle logiche del livello a quattro ed e\' '
+            'anche piu\' fedele; il livello a quattro conserva pero\' meno blocchi aritmetici, un vantaggio '
+            'che pesa solo se il DSP e\' la risorsa scarsa — non il caso qui. Nel menu prevale percio\' il '
+            'cinque.' % (FFDROP_PCT, LUTDROP5)))
     A(('p', 'La **potenza** non partecipa a questo compromesso: e\' piatta — scende di appena l\'%.1f%% da '
             'tredici a due bit. La ragione e\' che su questo dispositivo la dispersione statica vale il '
             '**%.0f%%** della potenza totale; la quota dinamica della logica, la sola che scala con i bit, '
@@ -555,8 +562,8 @@ def build_doc():
             % ' '.join(str(x) for x in MP_FINAL)))
     A(('img', (fig_mp_area(), 'Figura 8.2 — Risorse dei finalisti a 125 ns io-timed, in percentuale del '
                'full-precision (etichette = valori assoluti). La finale taglia i blocchi aritmetici e i '
-               'registri ma alza le celle logiche; la uniforme a quattro bit (fuori cancello, solo '
-               'riferimento hardware) mostra il soffitto. Fonte: mp_res.tsv.')))
+               'registri ma alza le celle logiche; la uniforme a quattro bit (con perdita, cioe\' non '
+               'bit-identica, solo riferimento hardware) mostra il soffitto. Fonte: mp_res.tsv.')))
     A(('table', (
         ['Config', 'LUT', 'FF', 'DSP', 'slack WNS (ns)', 'P dinamica (mW)'],
         [
@@ -564,7 +571,7 @@ def build_doc():
              '%d' % mpr('full_precision','DSP'), '%.0f' % mpr('full_precision','WNS'), '%.0f' % (mpr('full_precision','Pdyn_W')*1000)],
             ['finale [%s]' % ','.join(str(x) for x in MP_FINAL), '%d' % mpr('finale','LUT'), '%d' % mpr('finale','FF'),
              '%d' % mpr('finale','DSP'), '%.0f' % mpr('finale','WNS'), '%.0f' % (mpr('finale','Pdyn_W')*1000)],
-            ['uniform 4×6 (fuori cancello)', '%d' % mpr('uniform4_ref','LUT'), '%d' % mpr('uniform4_ref','FF'),
+            ['uniform 4×6 (con perdita)', '%d' % mpr('uniform4_ref','LUT'), '%d' % mpr('uniform4_ref','FF'),
              '%d' % mpr('uniform4_ref','DSP'), '%.0f' % mpr('uniform4_ref','WNS'), '%.0f' % (mpr('uniform4_ref','Pdyn_W')*1000)],
         ],
     )))
@@ -574,7 +581,7 @@ def build_doc():
             'nella Sezione 6 — le moltiplicazioni strette di acc e w escono dai blocchi e diventano celle. '
             'La potenza non aiuta: la **dinamica** passa da %.0f a %.0f mW (sale, per le celle in piu\'), e '
             'a questa scala di pochi milliwatt stimati la differenza e\' entro la risoluzione. Il **margine '
-            'di timing** e\' enorme — slack di circa %.0f ns sul vincolo di deploy da 125 ns — dunque la '
+            'di timing** e\' enorme — lo slack (worst negative slack, WNS) e\' di circa %.0f ns sul vincolo di deploy da 125 ns — dunque la '
             'frequenza non e\' il collo. La lettura onesta: i bit sovra-dimensionati di acc e w sono liberi '
             'da togliere nel comportamento, ma su questo Zynq DSP-ricco e static-dominato il taglio '
             '**ribilancia blocchi verso celle** senza vero guadagno d\'area ne\' di potenza. Il valore '
