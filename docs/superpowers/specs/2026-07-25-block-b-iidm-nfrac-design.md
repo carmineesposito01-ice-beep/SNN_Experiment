@@ -62,9 +62,12 @@ dove l'IIDM diventa la fonte d'errore dominante.
 
 - **Hardware**: sintesi io-timed (deploy 125 ns) di `acc_iidm_fsm` a ogni nfrac ∈ {13,8,5,2} → LUT/FF/DSP/BRAM
   + potenza (**dinamica** prominente) + **slack (WNS)**. Insieme ridotto (4 punti) per non sforare le ore Vivado.
-- **Report SPECCHIATO**: documento dedicato a sé `report/ACC_IIDM_QUANTIZATION_REPORT.{md,pdf}` (generatore
-  deterministico grounded, via skill `create-report`), stessa struttura e disciplina del report dell'estimator:
-  numeri dai TSV, figure, equazioni, ToC, lettura onesta.
+- **Report — SEZIONE aggiunta al report esistente** (non un documento a sé): lo studio IIDM diventa una **nuova
+  sezione** di `report/QUANTIZATION_STUDY_REPORT.{md,pdf}`, estendendo `scripts/build_quantization_report.py`
+  (loader `qzi_*.tsv` + figure specchiate fedeltà/hardware IIDM). Il titolo/cornice del report si allarga da
+  "quantizzazione della rete spiking" a "quantizzazione del **sistema** car-following (estimator + controllore)".
+  Stessa disciplina: numeri dai TSV, figure, lettura onesta, determinismo + QC + audit. Coerente: è lo studio
+  specchiato dello stesso sistema.
 
 Output dati (committati): `qzi_cl_sweep.tsv`, `qzi_res_sweep.tsv`, `qzi_sev_sweep.tsv`, `qzi_acc_sweep.tsv`.
 
