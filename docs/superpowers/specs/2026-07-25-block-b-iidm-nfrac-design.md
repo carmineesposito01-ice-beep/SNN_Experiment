@@ -4,17 +4,18 @@
 
 ## 1. Obiettivo
 
-Produrre un **secondo blocco di libreria riutilizzabile** — il controllore **IIDM standalone**, HDL-ready,
-configurabile in precisione (menu NFRAC) — **componibile accanto** a `Donatello_Tier` (l'estimator, Blocco A)
-in un file Simulink:
+Produrre un **blocco di libreria riutilizzabile e GENERICO** — il controllore **`ACC-IIDM` standalone**,
+HDL-ready, configurabile in precisione (menu NFRAC). **Non è legato a Donatello**: riceve i 5 parametri IDM
+*in ingresso* (da qualunque fonte) e calcola l'accelerazione. Si compone naturalmente con `Donatello_Tier`
+(l'estimator, Blocco A), ma resta usabile per conto suo in progetti diversi:
 
 ```
-Donatello_Tier (s,v,dv,v_l → v0,T,s0,a,b)  →  Donatello_IIDM (s,v,dv,v_l + v0,T,s0,a,b → accel)
+[qualunque estimator, es. Donatello_Tier → v0,T,s0,a,b]  →  ACC-IIDM (s,v,dv,v_l + v0,T,s0,a,b → accel)
 ```
 
-Ogni blocco resta usabile per conto suo (massimo riuso in progetti diversi). Prima del blocco, uno **studio
-NFRAC dell'IIDM** che ne caratterizza il compromesso sicurezza/fedeltà/hardware — sul modello dello studio di
-quantizzazione dell'estimator.
+Prima del blocco, uno **studio NFRAC dell'IIDM** che ne caratterizza il compromesso sicurezza/fedeltà/hardware.
+È lo **studio SPECCHIATO** di quello dell'estimator: **stesse metriche**, ma con la **SNN congelata** (piena
+precisione) e questa volta l'**IIDM che varia**.
 
 **Perché "solo NFRAC" e non TIER:** sull'IIDM il TIER **non è un vero trade-off** — la variante veloce `M`
 (SP4) domina la `SP3` (riferimento) su *entrambi* gli assi (LUT −21% **e** Fmax ×4,6). Non c'è SLOW↔FAST da
@@ -42,22 +43,36 @@ fissa a **M** (la migliore).
 Mirror dello studio dell'estimator, applicato all'IIDM. **Riuso**: `qz_cl_sim`, `qz_safety_metrics`,
 `test_dataset_exhaustive.mat`, il tooling di sintesi `study_tradeoff/common/*.tcl`, il generatore report.
 
-- **Comportamentale (car-following)**: l'anello chiuso fedele con l'**estimator al riferimento** (piena
-  precisione) e l'**IIDM a nfrac** ∈ {13,8,5,2}. Lo stepFun dell'anello usa `acc_iidm_open` con
-  `acc_types('fixed',nfrac)` per l'accel (l'estimator resta fisso → si isola l'effetto della quantizzazione
-  IIDM). Metriche, **stessi due criteri dell'estimator**:
-  - **Sicurezza**: 0 collisioni extra vs oracolo (baseline per-traiettoria).
-  - **Fedeltà**: NRMSE dell'accelerazione (e/o del gap) vs full-precision.
-  - Più il **budget `E_iidm`** (footprint in accel) confrontato con `E_snn`, per collocare il floor.
+**Studio SPECCHIATO dell'estimator: STESSE metriche, SNN congelata, IIDM che varia.** L'anello chiuso fedele
+gira con l'**SNN a piena precisione** (congelata) e l'**IIDM a nfrac** ∈ {13,8,5,2}. Lo stepFun usa
+`acc_iidm_open` con `acc_types('fixed',nfrac)` per l'accel (SNN fissa → si isola l'effetto della quantizzazione
+IIDM). Le **metriche sono le stesse dello studio dell'estimator**, con quelle sull'*uscita diretta* calcolate
+sull'accel (dove là erano sui 5 parametri):
+
+| Metrica (come l'estimator) | Nell'IIDM specchiato |
+|---|---|
+| Sicurezza — 0 collisioni extra vs oracolo | identica (esito car-following) |
+| Fedeltà — NRMSE | NRMSE dell'**accel** (uscita IIDM), normalizzato sull'escursione |
+| Severità — impact_dv sulle inevitabili | identica |
+| Accuratezza open-loop — max\|d\| worst-case | max\|d\| sull'**accel** |
+| Hardware — LUT/FF/DSP/potenza/Fmax vs nfrac | sintesi di `acc_iidm_fsm` (invece dell'SNN forward) |
+
+Lente aggiuntiva specifica dell'IIDM: il **budget `E_iidm` vs `E_snn`** (già misurato, floor 8) per collocare
+dove l'IIDM diventa la fonte d'errore dominante.
+
 - **Hardware**: sintesi io-timed (deploy 125 ns) di `acc_iidm_fsm` a ogni nfrac ∈ {13,8,5,2} → LUT/FF/DSP/BRAM
-  + potenza (dinamica prominente) + **slack (WNS)**. Insieme ridotto (4 punti) per non sforare le ore Vivado.
-- **Report**: documento dedicato `report/IIDM_QUANTIZATION_REPORT.{md,pdf}` (generatore deterministico grounded,
-  via skill `create-report`), stessa disciplina del report dell'estimator: numeri dai TSV, figure, equazioni,
-  ToC, lettura onesta.
+  + potenza (**dinamica** prominente) + **slack (WNS)**. Insieme ridotto (4 punti) per non sforare le ore Vivado.
+- **Report SPECCHIATO**: documento dedicato a sé `report/ACC_IIDM_QUANTIZATION_REPORT.{md,pdf}` (generatore
+  deterministico grounded, via skill `create-report`), stessa struttura e disciplina del report dell'estimator:
+  numeri dai TSV, figure, equazioni, ToC, lettura onesta.
 
-Output dati (committati): `qzi_cl_sweep.tsv`, `qzi_res_sweep.tsv` (+ eventuale severità/accuratezza).
+Output dati (committati): `qzi_cl_sweep.tsv`, `qzi_res_sweep.tsv`, `qzi_sev_sweep.tsv`, `qzi_acc_sweep.tsv`.
 
-### Parte 2 — Blocco `Donatello_IIDM` (nome proposto, in `snn_champions_lib.slx`)
+### Parte 2 — Blocco `ACC-IIDM` (in `snn_champions_lib.slx`)
+
+**Nome `ACC-IIDM`, senza prefisso Donatello**: il blocco è generico (riceve i parametri IDM da qualunque
+fonte, non solo dall'SNN). Distinto da `Donatello_ACC_IIDM` (SP2, che ha l'SNN *dentro*): questo è il solo
+controllore IIDM. File/funzioni di supporto mantengono il prefisso `acc_iidm_`/`qzi_`.
 
 - **Sorgente**: `acc_iidm_fsm` con `acc_types` nfrac **cotto concreto** per variante (stessa tecnica del menu
   NFRAC di `build_tier_configurable`: sostituzione del nfrac hardcoded con il valore, un Variant Subsystem con
