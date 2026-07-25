@@ -50,7 +50,11 @@ function build_tier_configurable(nf)
   for j=1:5, add_block('built-in/Outport', [sub '/' out_names{j}], 'Port', num2str(j)); end
 
   vs=[sub '/VS']; add_block('simulink/Ports & Subsystems/Variant Subsystem', vs);
-  if getSimulinkBlockHandle([vs '/Subsystem'])>0, delete_block([vs '/Subsystem']); end
+  % rimuovi OGNI sottosistema-scelta default del template (Subsystem/Subsystem1/...): altrimenti ne resta
+  % uno inerte (VariantControl=false) che sporca il VS. (Prima si cancellava solo quello chiamato 'Subsystem'.)
+  hVS = getSimulinkBlockHandle(vs);
+  kids = find_system(vs,'SearchDepth',1,'MatchFilter',@Simulink.match.allVariants,'BlockType','SubSystem');
+  for i=1:numel(kids), if getSimulinkBlockHandle(kids{i}) ~= hVS, delete_block(kids{i}); end; end
   for bt = {'Inport','Outport'}
     t = find_system(vs,'SearchDepth',1,'BlockType',bt{1});
     for i=1:numel(t), delete_block(t{i}); end
@@ -105,6 +109,11 @@ function build_tier_configurable(nf)
   end
   m.Description = tier_configurable_description();
   set_param(sub, 'MaskSelfModifiable','on');
+
+  % LAYOUT: auto-arrangia i diagrammi prima di salvare, cosi' il blocco e' ordinato su disco
+  % (ingressi a sinistra -> VS -> uscite a destra, allineati; niente blocchi sparsi). Solo grafica.
+  try, Simulink.BlockDiagram.arrangeSystem(sub); catch ME, warning('arrange %s: %s', sub, ME.message); end
+  try, Simulink.BlockDiagram.arrangeSystem(vs);  catch ME, warning('arrange %s: %s', vs, ME.message); end
 
   set_param(lib, 'EnableLBRepository','on');
   save_system(lib, libfile); close_system(lib,0);
