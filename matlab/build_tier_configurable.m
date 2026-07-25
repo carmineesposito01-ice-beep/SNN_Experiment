@@ -1,13 +1,26 @@
-function build_tier_configurable()
+function build_tier_configurable(nf)
 %BUILD_TIER_CONFIGURABLE  Aggiunge a snn_champions_lib.slx il blocco UNICO configurabile Donatello_Tier:
-%  un Variant Subsystem con 3 varianti tier (SLOW/BALANCED/FAST, chart split splitpipe LUT-64) + una
-%  MASK con menu a tendina TIER. HDL Coder genera SOLO la variante selezionata (VariantActivationTime=
-%  'update diagram'): equivalente al blocco separato corrispondente (provato: 0 diff logiche).
-%  Riusa i mattoni condivisi (mount_split/snn_chart_code/dec_chart_code). NON tocca gli altri blocchi.
+%  un Variant Subsystem con 3 varianti tier (SLOW/BALANCED/FAST, chart split splitpipe LUT-64) x 4 livelli
+%  NFRAC (13/8/5/2) = 12 varianti "Base", PIU' 3 varianti "ADV" (Modalita' Avanzata, nfrac PER-CAMPO cotti a
+%  `nf`). MASK con: TIER + NFRAC (menu Base) + checkbox ADV + 6 slider per-campo (nV..nw). HDL Coder genera
+%  SOLO la variante selezionata. Riusa i mattoni condivisi (mount_split/snn_chart_code/dec_chart_code).
+%
+%  ADV (Modalita' Avanzata) = Approccio A ROBUSTO: la variante <tier>_ADV e' cotta CONCRETA a `nf` al build
+%  (tipi qz_snn_types_mp per-campo, come le varianti Base cuociono snn_types). La checkbox ADV la SELEZIONA
+%  (variant control -> ammesso sui link risolti); il callback tier_adv_cb fa SOLO visibilita' (niente
+%  rigenerazione chart live: quella non funziona su un blocco linkato -> muro Simulink, verificato con sonda).
+%  Per cambiare la config ADV: ri-esegui build_tier_configurable([nV nfat nacc naccw nraw nw]).
+%
+%  nf (opz., default [13 13 13 13 13 13] = piena precisione, bit-exact): config Modalita' Avanzata per-campo.
+  if nargin < 1 || isempty(nf), nf = [13 13 13 13 13 13]; end
+  nf = round(double(nf(:)).');
+  assert(numel(nf)==6 && all(nf>=1 & nf<=13), 'nf: 6 interi in [1,13] [V fatigue acc accw raw w]');
   here = fileparts(mfilename('fullpath')); cd(here);
   gen_b2_rom('Donatello');
   srcRom   = fileread('b2_rom_active.m');
   srcTypes = fileread('snn_types.m');
+  % Modalita' Avanzata: inietta ANCHE qz_snn_types_mp (tipi per-campo) nella chart ADV
+  srcTypesMp = [srcTypes newline newline fileread(fullfile('Quantizzation_Study','qz_snn_types_mp.m'))];
   srcLut   = [fileread('snn_decode_lut.m') newline newline ...
               fileread('decode_a.m')  newline newline fileread('decode_a1.m') newline newline ...
               fileread('decode_a2.m') newline newline fileread('decode_b.m')  newline newline ...
@@ -22,7 +35,7 @@ function build_tier_configurable()
   tiers = {'SLOW','snn_variants/snn_b2_fsm_R2.m','fused'
            'BALANCED','snn_variants/snn_b2_fsm_R5.m','p3'
            'FAST','snn_variants/snn_b2_fsm_R9.m','p5'};
-  nfracs = [13 8 5 2];   % livelli canonici dello studio quantizzazione (13=piena precisione, bit-exact)
+  nfracs = [13 8 5 2];   % livelli canonici Base (13=piena precisione, bit-exact)
   in_names={'s','v','dv','v_l'}; out_names={'v0','T','s0','a','b'};
 
   lib='snn_champions_lib'; libfile=fullfile(here,[lib '.slx']);
@@ -47,63 +60,78 @@ function build_tier_configurable()
   for j=1:4, add_line(sub, [in_names{j} '/1'], ['VS/' num2str(j)], 'autorouting','on'); end
   for j=1:5, add_line(sub, ['VS/' num2str(j)], [out_names{j} '/1'], 'autorouting','on'); end
 
-  % 3 tier x 4 livelli nfrac = 12 varianti, ognuna col nfrac COTTO CONCRETO nella chart (sostituisco il 13
-  % hardcoded del forward+cast Tt del normalize con il valore). Tipi concreti -> nessun problema di
-  % risoluzione (un nfrac come mask-PARAMETER non aggancia attraverso il Variant Subsystem: muro Simulink,
-  % verificato). Il decode resta En13. A nfrac=13 la sostituzione 13->13 e' NO-OP -> variante bit-exact storica.
+  % 3 tier x 4 livelli nfrac = 12 varianti BASE (snn_types cotto concreto) + 1 variante ADV per tier
+  % (qz_snn_types_mp per-campo cotto a nf). VariantControl: Base = ADV==0 && TIER && NFRAC ; ADV = ADV==1 && TIER.
+  % A nfrac=13 (Base) e a nf=[13x6] (ADV) la sostituzione e' NO-OP -> variante bit-exact storica.
   for ti=1:size(tiers,1)
     nm=tiers{ti,1}; srcFsm=fileread(fullfile(here,tiers{ti,2})); dec=tiers{ti,3};
     snnRef = snn_chart_code(srcRom,srcTypes,srcFsm,nrm,true);
     for ni=1:numel(nfracs)
-      nf = nfracs(ni);
-      snnCode = regexprep(snnRef, "snn_types\(\s*'fixed'\s*,\s*13\s*\)", sprintf("snn_types('fixed', %d)", nf));
-      v=[vs '/' sprintf('%s_n%d', nm, nf)]; add_block('built-in/Subsystem', v);
+      nlev = nfracs(ni);
+      snnCode = regexprep(snnRef, "snn_types\(\s*'fixed'\s*,\s*13\s*\)", sprintf("snn_types('fixed', %d)", nlev));
+      v=[vs '/' sprintf('%s_n%d', nm, nlev)]; add_block('built-in/Subsystem', v);
       mount_split(v, in_names, out_names, snnCode, dec_chart_code(srcLut,dec,64,'shared'));
-      set_param(v, 'VariantControl', sprintf('TIER==%d && NFRAC==%d', ti, ni));   % indici 1-based dei due popup
+      set_param(v, 'VariantControl', sprintf('ADV==0 && TIER==%d && NFRAC==%d', ti, ni));
     end
-    fprintf('  tier %s montato x nfrac %s\n', nm, mat2str(nfracs));
+    % variante Modalita' Avanzata (per-campo): tipi qz_snn_types_mp cotti a nf ; attiva quando ADV==1
+    snnRefMp   = snn_chart_code(srcRom,srcTypesMp,srcFsm,nrm,true);
+    snnCodeAdv = regexprep(snnRefMp, "snn_types\(\s*'fixed'\s*,\s*13\s*\)", ...
+                 sprintf("qz_snn_types_mp('fixed', [%d %d %d %d %d %d])", nf(1),nf(2),nf(3),nf(4),nf(5),nf(6)));
+    va=[vs '/' sprintf('%s_ADV', nm)]; add_block('built-in/Subsystem', va);
+    mount_split(va, in_names, out_names, snnCodeAdv, dec_chart_code(srcLut,dec,64,'shared'));
+    set_param(va, 'VariantControl', sprintf('ADV==1 && TIER==%d', ti));
+    fprintf('  tier %s montato x nfrac %s + ADV %s\n', nm, mat2str(nfracs), mat2str(nf));
   end
   set_param(vs, 'VariantControlMode','expression', 'VariantActivationTime','update diagram');
 
-  % MASK con menu a tendina TIER (la parte "cliccabile"). Evaluate off -> TIER e' la stringa scelta,
-  % usata dai VariantControl strcmp(TIER,'SLOW'|'BALANCED'|'FAST').
+  % MASK: TIER + NFRAC (menu Base) + ADV (checkbox) + 6 slider per-campo. Evaluate='on' su tutti (indici/valori).
   m = Simulink.Mask.create(sub);
-  % Evaluate='on': il popup restituisce l'INDICE 1-based (1=SLOW,2=BALANCED,3=FAST), usato dai
-  % VariantControl TIER==1/2/3. (Con 'off' TIER sarebbe la stringa e servirebbe strcmp, non ammesso.)
   m.addParameter('Name','TIER','Prompt','Tier (trade-off area/margine)', ...
                  'Type','popup','TypeOptions',{'SLOW','BALANCED','FAST'}, ...
                  'Evaluate','on','Value','BALANCED');
-  % NFRAC: bit frazionari del core SNN (quantizzazione). Popup dei 4 livelli canonici dello studio;
-  % Evaluate='on' -> indice 1-based (1=13, 2=8, 3=5, 4=2), usato dai VariantControl NFRAC==ni.
-  % 13 = piena precisione (bit-exact col forward storico). Vedi Quantizzation_Study/QZ_CARFOLLOWING_STUDY.md.
-  m.addParameter('Name','NFRAC','Prompt','nfrac (bit fraz. core: 13 pieno / 8 / 5 / 2)', ...
+  m.addParameter('Name','NFRAC','Prompt','nfrac Base (13 pieno / 8 / 5 / 2)', ...
                  'Type','popup','TypeOptions',{'13','8','5','2'}, ...
                  'Evaluate','on','Value','13');
+  % Modalita' Avanzata: checkbox ADV (seleziona le varianti ADV) + 6 slider (Range 1..13, step 1) che MOSTRANO
+  % la config cotta. Il callback tier_adv_cb gestisce solo la visibilita' (sicuro su link).
+  m.addParameter('Name','ADV','Prompt','Modalita'' Avanzata (nfrac per-campo)', ...
+                 'Type','checkbox','Value','off','Evaluate','on','Callback','tier_adv_cb(gcb)');
+  fld = {'nV','V (membrana)'; 'nfat','fatigue (soglia)'; 'nacc','acc (ingresso)'; ...
+         'naccw','accw (wide)'; 'nraw','raw (readout)'; 'nw','w (pesi po2)'};
+  for k=1:6
+    ps = m.addParameter('Name',fld{k,1},'Prompt',['nfrac ' fld{k,2}], ...
+                        'Type','slider','Value',num2str(nf(k)),'Evaluate','on','Visible','off');
+    ps.Range = [1 13]; ps.StepSize = 1;
+  end
   m.Description = tier_configurable_description();
   set_param(sub, 'MaskSelfModifiable','on');
 
   set_param(lib, 'EnableLBRepository','on');
   save_system(lib, libfile); close_system(lib,0);
-  fprintf('OK: Donatello_Tier (configurabile, 3 varianti + mask TIER) aggiunto a %s.slx\n', lib);
+  fprintf('OK: Donatello_Tier (Base 12 var + ADV nf=%s) aggiunto a %s.slx\n', mat2str(nf), lib);
 end
 
 function s = tier_configurable_description()
   L = {
     'Donatello_Tier - SNN car-following (champion Donatello) CONFIGURABILE.'
-    'Un solo blocco, DUE menu: TIER (SLOW/BALANCED/FAST) + NFRAC (13/8/5/2). La coppia seleziona la'
-    'variante attiva (Variant Subsystem, VariantActivationTime=update diagram): HDL Coder genera SOLO'
-    'la variante scelta, coi tipi fixed-point gia'' cotti a quel nfrac.'
+    'Un blocco, due modi. BASE: menu TIER (SLOW/BALANCED/FAST) + NFRAC (13/8/5/2). AVANZATO: checkbox ADV +'
+    '6 slider nfrac per-campo. La selezione attiva la variante (Variant Subsystem, update diagram): HDL Coder'
+    'genera SOLO la variante scelta, coi tipi fixed-point gia'' cotti.'
     ''
-    'TIER: SLOW = R2/fused (area minima, ~30 MHz io-timed, 342 clk) · BALANCED = R5/p3 (~58 MHz, 364) ·'
-    '      FAST = R9/p5 (margine massimo, ~74 MHz, 406). Stessi 5 parametri, diverso profilo risorse/Fmax.'
+    'TIER: SLOW = R2/fused (area minima) · BALANCED = R5/p3 · FAST = R9/p5 (margine massimo).'
     ''
-    'NFRAC: bit frazionari del CORE SNN (V/fatigue/acc/accw/pesi/raw). 13=piena precisione (bit-exact) ·'
-    '       8=conservativo · 5=sweet-spot area/fedelta'' · 2=aggressivo (safety-only). Meno bit = meno area'
-    '       (FF/DSP) ma parametri meno fedeli; il decode resta En13, l''I/O fisico non e'' toccato. Sicurezza'
-    '       car-following invariante fino a 2 bit (studio quantizzazione). 3 tier x 4 nfrac = 12 varianti.'
+    'NFRAC (Base): bit frazionari UNICI del core SNN. 13=piena precisione (bit-exact) · 8 · 5 · 2 (safety-only).'
     ''
-    'I/O fisico (fixed >=20 bit frazionari): s,v,dv,v_l -> v0,T,s0,a,b. Edge-triggered, niente start/done.'
-    'Self-contained. Rigenerazione: build_tier_configurable.m (NON modificare a mano).'
+    'MODALITA'' AVANZATA (ADV): 6 nfrac indipendenti [V fatigue acc accw raw w]. Gli slider MOSTRANO la config'
+    'attualmente COTTA nella variante ADV. Studio quantizzazione per-campo: acc/w scendibili a 4 bit'
+    'bit-exact (pesi po2, min 2^-4); V/fatigue/accw/raw servono pieni sotto il cancello 0.5 m. Config'
+    'area-ottimale = [13 13 4 13 13 4].'
+    'PER CAMBIARE la config ADV: esegui  build_tier_configurable([nV nfat nacc naccw nraw nw])  (ri-cuoce la'
+    'variante ADV a quei valori). Gli slider sono il valore da passare; la loro modifica nella mask NON ri-cuoce'
+    'da sola (un blocco linkato non si auto-rigenera: si passa dal builder).'
+    ''
+    'I/O fisico (fixed >=20 bit frazionari): s,v,dv,v_l -> v0,T,s0,a,b. Edge-triggered. Self-contained.'
+    'Richiede matlab/ sul path (callback tier_adv_cb). Rigenerazione: build_tier_configurable.m.'
   };
   s = strjoin(L, newline);
 end
