@@ -125,25 +125,29 @@ Questi quattro livelli sono stati resi selezionabili nel blocco di deploy Donate
 
 ## 8. Quantizzazione per-campo (mixed-precision)
 
-Le sezioni precedenti usano un unico nfrac per l'intero core. Ma i sei tipi in virgola fissa — potenziale di membrana, soglia adattiva, i due accumulatori, il readout e i pesi — non hanno la stessa sensibilità. Questa sezione assegna a ciascuno un nfrac **indipendente** e chiede: la precisione mista per campo permette tagli che quella uniforme non concede? Il criterio qui è più severo della sicurezza: è l'**indistinguibilita' comportamentale** — scarto massimo del gap sotto **0.5 m** rispetto alla piena precisione, su tutto il dataset, con zero collisioni extra. È un cancello molto più stretto di quello di sicurezza della Sezione 4, ed è ciò che rende informativa l'analisi.
+Le sezioni precedenti abbassano un unico nfrac per l'intero core, e ne misurano il costo con due criteri: la **sicurezza** — zero collisioni evitabili in più rispetto all'oracolo (Sezione 4) — e la **fedeltà** dei parametri, l'NRMSE (Sezione 5). Questa sezione pone una domanda complementare con gli **stessi due criteri**: i sei tipi del core valgono tutti i loro bit allo stesso modo? Ciascuno riceve un nfrac indipendente, e si misura fin dove ognuno può scendere da solo, tenendo gli altri cinque a tredici.
 
-![Figura 8.1 — Sensibilità per-campo: scarto massimo del gap quando si abbassa il nfrac di un solo campo, tenendo gli altri cinque a tredici. acc e w restano a zero (bit-identici) fino a quattro bit, poi saltano; V, fatigue, accw e raw superano il cancello già al primo bit tolto. Fonte: mp_sens.tsv.](figures_quant/mp_sensitivity.png)
-*Figura 8.1 — Sensibilità per-campo: scarto massimo del gap quando si abbassa il nfrac di un solo campo, tenendo gli altri cinque a tredici. acc e w restano a zero (bit-identici) fino a quattro bit, poi saltano; V, fatigue, accw e raw superano il cancello già al primo bit tolto. Fonte: mp_sens.tsv.*
+Sul fronte della **sicurezza** la risposta è coerente con la Sezione 4, ed è netta: **ogni campo, da solo, tollera la riduzione fino a un solo bit senza alcuna collisione aggiuntiva**. Su tutte le 78 configurazioni per campo — sei campi per tredici livelli — le collisioni extra restano zero. Come per lo studio uniforme, la sicurezza non è il limite: non è lei a dire quanti bit servano.
 
-Il verdetto è netto e **asimmetrico**. Solo due campi sono riducibili: gli accumulatori d'ingresso e i pesi scendono a **quattro** bit frazionari senza alcuna perdita — l'uscita resta bit-identica alla piena precisione. Gli altri quattro non tollerano nemmeno un bit in meno sotto il cancello dei 0.5 m.
+![Figura 8.1 — Fedeltà per campo (NRMSE dei parametri rispetto alla piena precisione) quando si abbassa il nfrac di un solo campo, tenendo gli altri cinque a tredici. acc e w restano esattamente a zero — riduzione senza perdita — fino a quattro bit; V, fatigue, accw e raw degradano già al primo bit tolto. In tutte le configurazioni le collisioni extra sono zero. Fonte: mp_sens.tsv.](figures_quant/mp_sensitivity.png)
+*Figura 8.1 — Fedeltà per campo (NRMSE dei parametri rispetto alla piena precisione) quando si abbassa il nfrac di un solo campo, tenendo gli altri cinque a tredici. acc e w restano esattamente a zero — riduzione senza perdita — fino a quattro bit; V, fatigue, accw e raw degradano già al primo bit tolto. In tutte le configurazioni le collisioni extra sono zero. Fonte: mp_sens.tsv.*
 
-| Campo | Ruolo | Floor (nfrac) | Comportamento scendendo |
+È la **fedeltà** a separare i sei campi, e lo fa in modo netto. Due di essi — l'accumulatore d'ingresso e i pesi — mantengono NRMSE **esattamente a zero** fino a quattro bit: la loro riduzione non è un compromesso ma **senza perdita**, l'uscita bit-identica alla piena precisione. Gli altri quattro degradano al primo bit tolto. È un risultato di natura diversa da quello dello studio uniforme: non "quanta perdita è tollerabile", ma "quali campi non portano informazione da togliere".
+
+| Campo | Ruolo | Floor senza perdita (nfrac) | Sicurezza |
 |---|---|---|---|
-| V | potenziale di membrana | 13 | rompe subito a 12 |
-| fatigue | soglia adattiva | 13 | rompe subito a 12 |
-| acc | accumulatore d'ingresso | 4 | bit-identico 13→4, rompe a 3 |
-| accw | accumulatore largo | 13 | rompe subito a 12 |
-| raw | uscita del readout | 13 | rompe subito a 12 |
-| w | pesi a potenza di due | 4 | bit-identico 13→4, rompe a 3 |
+| V | potenziale di membrana | 13 | fino a 1 bit |
+| fatigue | soglia adattiva | 13 | fino a 1 bit |
+| acc | accumulatore d'ingresso | 4 | fino a 1 bit |
+| accw | accumulatore largo | 13 | fino a 1 bit |
+| raw | uscita del readout | 13 | fino a 1 bit |
+| w | pesi a potenza di due | 4 | fino a 1 bit |
 
-Il meccanismo è verificato, non ipotizzato. Ispezionando i pesi del campione, **tutte** le matrici (fc, ricorrenti, readout) sono potenze di due con modulo minimo esattamente **2⁻⁴**. Quindi 4 bit frazionari rappresentano ogni peso in modo esatto (a tre bit il peso 2⁻⁴ sparisce, e la rete si rompe); e l'accumulatore d'ingresso, che somma pesi-po2 per spike interi, vive su una griglia da 2⁻⁴ e serve anch'esso a quattro bit. Gli altri quattro campi portano grandezze **continue** — pilotate da quantità non-po2 come la soglia e i parametri del decode — e usano tutta la loro precisione: sotto il cancello stretto, ogni bit tolto si amplifica nell'anello oltre i 0.5 m.
+Il "floor senza perdita" è il nfrac più basso a cui l'uscita resta bit-identica alla piena precisione. La sicurezza — colonna a fianco — regge invece fino a un bit per ogni campo, esattamente come nello studio uniforme; le due colonne dicono cose diverse, e solo la fedeltà distingue i campi.
 
-Ne segue la tesi dello studio. La config **area-ottimale accettata è [13 13 4 13 13 4]** — soli acc e w a quattro bit — e passa il cancello con scarto massimo del gap di **0 m**: è **bit-identica** alla piena precisione, non un compromesso. Per contrasto, una quantizzazione **uniforme** non può scendere sotto tredici: già a dodici rompono V, fatigue, accw e raw. Il valore della precisione mista è esattamente questo — sfrutta la struttura a potenze di due per tagliare i due campi che portano i pesi, un taglio che l'uniforme non concede.
+Il meccanismo è verificato, non ipotizzato. Ispezionando i pesi del campione, **tutte** le matrici (fc, ricorrenti, readout) sono potenze di due con modulo minimo esattamente **2⁻⁴**. Quindi 4 bit frazionari rappresentano ogni peso in modo esatto (a tre bit il peso 2⁻⁴ sparisce, e la rete si rompe); e l'accumulatore d'ingresso, che somma pesi-po2 per spike interi, vive su una griglia da 2⁻⁴ e serve anch'esso a quattro bit. Gli altri quattro campi portano grandezze **continue** — pilotate da quantità non-po2 come la soglia e i parametri del decode — e usano tutta la loro precisione: ogni bit tolto sposta subito i parametri.
+
+Ne segue la relazione con lo studio uniforme. La config **senza perdita è [13 13 4 13 13 4]** — soli acc e w a quattro bit — con NRMSE e scarto del gap **nulli** (verifica congiunta): è **bit-identica** alla piena precisione. La riduzione *con perdita* dello studio uniforme — il ginocchio attorno a quattro-cinque bit — è dunque guidata dai **quattro campi continui**; la precisione mista isola e rimuove la parte senza perdita (acc e w) che quella uniforme, muovendo tutti i campi insieme, non può separare. In questo senso i due studi sono coerenti e complementari: l'uniforme misura il compromesso di fedeltà, il per-campo individua ciò che è ridondante a monte del compromesso.
 
 ![Figura 8.2 — Risorse dei finalisti a 125 ns io-timed, in percentuale del full-precision (etichette = valori assoluti). La finale taglia i blocchi aritmetici e i registri ma alza le celle logiche; la uniforme a quattro bit (fuori cancello, solo riferimento hardware) mostra il soffitto. Fonte: mp_res.tsv.](figures_quant/mp_area.png)
 *Figura 8.2 — Risorse dei finalisti a 125 ns io-timed, in percentuale del full-precision (etichette = valori assoluti). La finale taglia i blocchi aritmetici e i registri ma alza le celle logiche; la uniforme a quattro bit (fuori cancello, solo riferimento hardware) mostra il soffitto. Fonte: mp_res.tsv.*

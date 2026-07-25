@@ -209,10 +209,17 @@ annidata non risolve il parametro mask del blocco top, anche con `Tunable=false`
 ## 12. Mixed-precision per-campo (nfrac indipendenti)
 
 Estensione: **6 nfrac indipendenti** per i tipi del core `[V fatigue acc accw raw w]` invece di un unico
-nfrac. Cancello = **indistinguibilità comportamentale**: `max|Δgap| ≤ 0.5 m` vs full-precision su tutte le
-99 traj **E** 0 collisioni extra vs oracolo (molto più stretto della sicurezza del §4).
+nfrac, misurati con **gli stessi criteri dello studio uniforme**: **sicurezza** (0 collisioni extra vs
+oracolo, §4) + **fedeltà** NRMSE (§5). ⚠️ Il cancello `max|Δgap|≤0.5 m` (`qz_mp_gate` `THR`) è solo una soglia
+strumentale: dà **gli stessi floor** del criterio "bit-identico" (NRMSE=0), perché i campi sensibili rompono
+già al primo bit (0.9 m **e** NRMSE≠0 a 12) e acc/w sono a 0 fino a 4. **NON è un vincolo di sicurezza** (quello
+è 0 collisioni extra, qui soddisfatto **ovunque**).
 
-**Floor per campo** (nfrac minimo che passa, isolato — `mp_sens.tsv`, 78 config):
+- **Sicurezza**: `coll_extra=0` su TUTTE le 78 config (anche a 1 bit, 40 m di Δgap) → **ogni campo scende fino
+  a 1 bit** senza collisioni extra, coerente con "sicuro fino a n2" dell'uniforme. La sicurezza non è il limite.
+- **Fedeltà (ciò che distingue i campi)**: **floor senza perdita** = nfrac minimo con uscita bit-identica (NRMSE=0).
+
+**Floor senza perdita per campo** (`mp_sens.tsv`, 78 config; sicurezza a 1 bit per tutti):
 
 | Campo | Floor | | Campo | Floor |
 |---|---|---|---|---|

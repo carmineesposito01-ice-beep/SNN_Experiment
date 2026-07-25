@@ -229,20 +229,22 @@ def fig_accuracy():
     plt.close(fig); return p
 
 def fig_mp_sensitivity():
-    """Mixed-precision: max|Δgap| vs nfrac, una curva per campo (altri a 13), + cancello 0.5 m."""
+    """Mixed-precision: NRMSE parametri per campo (stesso metro di fedelta' del §4). acc/w a 0 (lossless) fino a 4."""
     cols = {'V': PAL['blu'], 'fatigue': PAL['mac'], 'acc': PAL['ac'], 'accw': PAL['ambra'],
             'raw': PAL['blunav'], 'w': PAL['rosso']}
     fig, ax = plt.subplots(figsize=(8.4, 3.2))
     for fld in MP_FIELDS:
         rows = sorted([r for r in MP_SENS if r['field'] == fld], key=lambda r: int(r['nfrac']))
-        xs = [int(r['nfrac']) for r in rows]; ys = [float(r['maxdgap']) for r in rows]
-        ax.plot(xs, ys, 'o-', color=cols[fld], ms=3, lw=1.1, label='%s (floor %d)' % (fld, MP_FLOORS[fld]))
-    ax.axhline(MP_THR, color='k', ls='--', lw=1.0); ax.text(9.6, MP_THR + 0.09, 'cancello 0.5 m', fontsize=7.5)
-    ax.set_ylim(0, 3.2); ax.set_xlim(13.6, 0.4)   # 13 -> 1 (verso di riduzione)
+        xs = [int(r['nfrac']) for r in rows]; ys = [float(r['NRMSE_mean']) for r in rows]
+        ax.plot(xs, ys, 'o-', color=cols[fld], ms=3, lw=1.1, label='%s (lossless fino a %d)' % (fld, MP_FLOORS[fld]))
+    ax.set_ylim(0, 0.22); ax.set_xlim(13.6, 0.4)   # 13 -> 1 (verso di riduzione)
     ax.set_xlabel('nfrac del campo (gli altri cinque a 13)', fontsize=9)
-    ax.set_ylabel('max|Δgap| vs full-precision (m)', fontsize=9)
+    ax.set_ylabel('NRMSE parametri vs full-precision', fontsize=9)
+    ax.text(0.985, 0.045, '0 collisioni extra a ogni config: sicurezza preservata ovunque',
+            transform=ax.transAxes, ha='right', fontsize=7.6, color=PAL['ac'])
     ax.legend(fontsize=7, ncol=2, loc='upper center'); _style(ax)
-    ax.set_title('Sensibilità per-campo: acc/w piatti a 0 fino a 4 bit; V/fatigue/accw/raw rompono a 12', fontsize=9.0)
+    ax.set_title('Fedeltà per-campo (NRMSE): acc/w restano a zero (bit-identici) fino a 4 bit; gli altri degradano a 12',
+                 fontsize=8.7)
     p = os.path.join(FIGDIR, 'mp_sensitivity.png'); fig.savefig(p, dpi=150, bbox_inches='tight', facecolor='white')
     plt.close(fig); return p
 
@@ -498,48 +500,59 @@ def build_doc():
 
     # --- 8. Quantizzazione per-campo (mixed-precision) ---
     A(('h1', '8. Quantizzazione per-campo (mixed-precision)'))
-    A(('p', 'Le sezioni precedenti usano un unico nfrac per l\'intero core. Ma i sei tipi in virgola fissa '
-            '— potenziale di membrana, soglia adattiva, i due accumulatori, il readout e i pesi — non hanno '
-            'la stessa sensibilita\'. Questa sezione assegna a ciascuno un nfrac **indipendente** e chiede: '
-            'la precisione mista per campo permette tagli che quella uniforme non concede? Il criterio qui e\' '
-            'piu\' severo della sicurezza: e\' l\'**indistinguibilita\' comportamentale** — scarto massimo del '
-            'gap sotto **%.1f m** rispetto alla piena precisione, su tutto il dataset, con zero collisioni '
-            'extra. E\' un cancello molto piu\' stretto di quello di sicurezza della Sezione 4, ed e\' cio\' '
-            'che rende informativa l\'analisi.' % MP_THR))
-    A(('img', (fig_mp_sensitivity(), 'Figura 8.1 — Sensibilita\' per-campo: scarto massimo del gap quando '
-               'si abbassa il nfrac di un solo campo, tenendo gli altri cinque a tredici. acc e w restano a '
-               'zero (bit-identici) fino a quattro bit, poi saltano; V, fatigue, accw e raw superano il '
-               'cancello gia\' al primo bit tolto. Fonte: mp_sens.tsv.')))
-    A(('p', 'Il verdetto e\' netto e **asimmetrico**. Solo due campi sono riducibili: gli accumulatori '
-            'd\'ingresso e i pesi scendono a **quattro** bit frazionari senza alcuna perdita — l\'uscita '
-            'resta bit-identica alla piena precisione. Gli altri quattro non tollerano nemmeno un bit in '
-            'meno sotto il cancello dei %.1f m.' % MP_THR))
+    A(('p', 'Le sezioni precedenti abbassano un unico nfrac per l\'intero core, e ne misurano il costo con '
+            'due criteri: la **sicurezza** — zero collisioni evitabili in piu\' rispetto all\'oracolo '
+            '(Sezione 4) — e la **fedelta\'** dei parametri, l\'NRMSE (Sezione 5). Questa sezione pone una '
+            'domanda complementare con gli **stessi due criteri**: i sei tipi del core valgono tutti i loro '
+            'bit allo stesso modo? Ciascuno riceve un nfrac indipendente, e si misura fin dove ognuno puo\' '
+            'scendere da solo, tenendo gli altri cinque a tredici.'))
+    A(('p', 'Sul fronte della **sicurezza** la risposta e\' coerente con la Sezione 4, ed e\' netta: **ogni '
+            'campo, da solo, tollera la riduzione fino a un solo bit senza alcuna collisione aggiuntiva**. Su '
+            'tutte le %d configurazioni per campo — sei campi per tredici livelli — le collisioni extra '
+            'restano zero. Come per lo studio uniforme, la sicurezza non e\' il limite: non e\' lei a dire '
+            'quanti bit servano.' % (6 * 13)))
+    A(('img', (fig_mp_sensitivity(), 'Figura 8.1 — Fedelta\' per campo (NRMSE dei parametri rispetto alla '
+               'piena precisione) quando si abbassa il nfrac di un solo campo, tenendo gli altri cinque a '
+               'tredici. acc e w restano esattamente a zero — riduzione senza perdita — fino a quattro bit; '
+               'V, fatigue, accw e raw degradano gia\' al primo bit tolto. In tutte le configurazioni le '
+               'collisioni extra sono zero. Fonte: mp_sens.tsv.')))
+    A(('p', 'E\' la **fedelta\'** a separare i sei campi, e lo fa in modo netto. Due di essi — l\'accumulatore '
+            'd\'ingresso e i pesi — mantengono NRMSE **esattamente a zero** fino a quattro bit: la loro '
+            'riduzione non e\' un compromesso ma **senza perdita**, l\'uscita bit-identica alla piena '
+            'precisione. Gli altri quattro degradano al primo bit tolto. E\' un risultato di natura diversa '
+            'da quello dello studio uniforme: non "quanta perdita e\' tollerabile", ma "quali campi non '
+            'portano informazione da togliere".'))
     A(('table', (
-        ['Campo', 'Ruolo', 'Floor (nfrac)', 'Comportamento scendendo'],
+        ['Campo', 'Ruolo', 'Floor senza perdita (nfrac)', 'Sicurezza'],
         [
-            ['V',       'potenziale di membrana',  str(MP_FLOORS['V']),       'rompe subito a 12'],
-            ['fatigue', 'soglia adattiva',         str(MP_FLOORS['fatigue']), 'rompe subito a 12'],
-            ['acc',     'accumulatore d\'ingresso', str(MP_FLOORS['acc']),     'bit-identico 13→4, rompe a 3'],
-            ['accw',    'accumulatore largo',      str(MP_FLOORS['accw']),    'rompe subito a 12'],
-            ['raw',     'uscita del readout',      str(MP_FLOORS['raw']),     'rompe subito a 12'],
-            ['w',       'pesi a potenza di due',   str(MP_FLOORS['w']),       'bit-identico 13→4, rompe a 3'],
+            ['V',       'potenziale di membrana',  str(MP_FLOORS['V']),       'fino a 1 bit'],
+            ['fatigue', 'soglia adattiva',         str(MP_FLOORS['fatigue']), 'fino a 1 bit'],
+            ['acc',     'accumulatore d\'ingresso', str(MP_FLOORS['acc']),     'fino a 1 bit'],
+            ['accw',    'accumulatore largo',      str(MP_FLOORS['accw']),    'fino a 1 bit'],
+            ['raw',     'uscita del readout',      str(MP_FLOORS['raw']),     'fino a 1 bit'],
+            ['w',       'pesi a potenza di due',   str(MP_FLOORS['w']),       'fino a 1 bit'],
         ],
     )))
+    A(('p', 'Il "floor senza perdita" e\' il nfrac piu\' basso a cui l\'uscita resta bit-identica alla piena '
+            'precisione. La sicurezza — colonna a fianco — regge invece fino a un bit per ogni campo, esattamente '
+            'come nello studio uniforme; le due colonne dicono cose diverse, e solo la fedelta\' distingue i campi.'))
     A(('p', 'Il meccanismo e\' verificato, non ipotizzato. Ispezionando i pesi del campione, **tutte** le '
             'matrici (fc, ricorrenti, readout) sono potenze di due con modulo minimo esattamente **2⁻⁴**. '
             'Quindi %d bit frazionari rappresentano ogni peso in modo esatto (a tre bit il peso 2⁻⁴ '
             'sparisce, e la rete si rompe); e l\'accumulatore d\'ingresso, che somma pesi-po2 per spike '
             'interi, vive su una griglia da 2⁻⁴ e serve anch\'esso a quattro bit. Gli altri quattro campi '
             'portano grandezze **continue** — pilotate da quantita\' non-po2 come la soglia e i parametri '
-            'del decode — e usano tutta la loro precisione: sotto il cancello stretto, ogni bit tolto si '
-            'amplifica nell\'anello oltre i %.1f m.' % (MP_PO2_FRAC, MP_THR)))
-    A(('p', 'Ne segue la tesi dello studio. La config **area-ottimale accettata e\' [%s]** — soli acc e w a '
-            'quattro bit — e passa il cancello con scarto massimo del gap di **%.2g m**: e\' **bit-identica** '
-            'alla piena precisione, non un compromesso. Per contrasto, una quantizzazione **uniforme** non '
-            'puo\' scendere sotto tredici: gia\' a dodici rompono V, fatigue, accw e raw. Il valore della '
-            'precisione mista e\' esattamente questo — sfrutta la struttura a potenze di due per tagliare i '
-            'due campi che portano i pesi, un taglio che l\'uniforme non concede.'
-            % (' '.join(str(x) for x in MP_FINAL), MP_FIN_DGAP)))
+            'del decode — e usano tutta la loro precisione: ogni bit tolto sposta subito i parametri.'
+            % MP_PO2_FRAC))
+    A(('p', 'Ne segue la relazione con lo studio uniforme. La config **senza perdita e\' [%s]** — soli acc e '
+            'w a quattro bit — con NRMSE e scarto del gap **nulli** (verifica congiunta): e\' **bit-identica** '
+            'alla piena precisione. La riduzione *con perdita* dello studio uniforme — il ginocchio attorno a '
+            'quattro-cinque bit — e\' dunque guidata dai **quattro campi continui**; la precisione mista '
+            'isola e rimuove la parte senza perdita (acc e w) che quella uniforme, muovendo tutti i campi '
+            'insieme, non puo\' separare. In questo senso i due studi sono coerenti e complementari: '
+            'l\'uniforme misura il compromesso di fedelta\', il per-campo individua cio\' che e\' ridondante '
+            'a monte del compromesso.'
+            % ' '.join(str(x) for x in MP_FINAL)))
     A(('img', (fig_mp_area(), 'Figura 8.2 — Risorse dei finalisti a 125 ns io-timed, in percentuale del '
                'full-precision (etichette = valori assoluti). La finale taglia i blocchi aritmetici e i '
                'registri ma alza le celle logiche; la uniforme a quattro bit (fuori cancello, solo '
