@@ -79,6 +79,31 @@ DEADLINE_MS = 100.0                    # passo di controllo del car-following
 FMAX_LO     = min(res(nf,'Fmax_MHz') for nf in NF)
 FMAX_HI     = max(res(nf,'Fmax_MHz') for nf in NF)
 
+# --- Mixed-precision (per-campo): loader + numeri, grounded da mp_*.tsv ------
+def _mp_rows(name):
+    with open(os.path.join(QZ, name), newline='', encoding='utf-8') as f:
+        return list(csv.DictReader(f, delimiter='\t'))
+MP_SENS   = _mp_rows('mp_sens.tsv')                       # field, nfrac, maxdgap, coll_extra, pass, ...
+MP_RES    = {r['config']: r for r in _mp_rows('mp_res.tsv')}  # config -> WNS/Fmax/LUT/FF/DSP/Ptot/Pdyn/Psta
+MP_FIN    = _mp_rows('mp_finalists.tsv')
+MP_FIELDS = ['V', 'fatigue', 'acc', 'accw', 'raw', 'w']
+MP_THR    = 0.5                                           # cancello comportamentale max|Δgap| [m]
+def mp_floor(fld):
+    p = [int(r['nfrac']) for r in MP_SENS if r['field'] == fld and int(float(r['pass'])) == 1]
+    return min(p) if p else 13
+MP_FLOORS = {f: mp_floor(f) for f in MP_FIELDS}
+MP_FINAL  = [MP_FLOORS[f] for f in MP_FIELDS]             # config area-ottimale [13 13 4 13 13 4]
+MP_REDUC  = [f for f in MP_FIELDS if MP_FLOORS[f] < 13]   # campi riducibili (acc, w)
+MP_FIN_DGAP = float(MP_FIN[-1]['maxdgap'])               # config finale: max|Δgap| (0 = bit-identica al full)
+def mpr(cfg, k): return float(MP_RES[cfg][k])
+MP_DSP_DROP = (mpr('full_precision','DSP') - mpr('finale','DSP')) / mpr('full_precision','DSP') * 100
+MP_FF_DROP  = (mpr('full_precision','FF')  - mpr('finale','FF'))  / mpr('full_precision','FF')  * 100
+MP_LUT_RISE = (mpr('finale','LUT') - mpr('full_precision','LUT')) / mpr('full_precision','LUT') * 100
+MP_SLACK    = mpr('full_precision','WNS')                 # slack io-timed a 125 ns (metrica di margine)
+MP_PDYN_FP  = mpr('full_precision','Pdyn_W') * 1000       # potenza dinamica [mW]
+MP_PDYN_FI  = mpr('finale','Pdyn_W') * 1000
+MP_PO2_FRAC = MP_FLOORS['w']                             # = 4: i pesi po2 hanno minimo 2^-4 (sonda pesi)
+
 PAL = {'blu': '#26527a', 'blunav': '#1a3c6e', 'ac': '#2e7d4f', 'mac': '#b5522a',
        'grigio': '#8a94a0', 'ambra': '#c9992b', 'rosso': '#b5384d'}
 
@@ -91,6 +116,7 @@ _TRUNC_MAP = {
     "verita'": 'verità', "proprieta'": 'proprietà', "sommita'": 'sommità',
     "parita'": 'parità', "sparsita'": 'sparsità', "qualita'": 'qualità',
     "unita'": 'unità', "possibilita'": 'possibilità', "difficolta'": 'difficoltà',
+    "sensibilita'": 'sensibilità', "quantita'": 'quantità',
     "perche'": 'perché', "poiche'": 'poiché', "anziche'": 'anziché',
     "pressoche'": 'pressoché', "finche'": 'finché', "affinche'": 'affinché',
     "cioe'": 'cioè', "piu'": 'più', "gia'": 'già', "puo'": 'può',
@@ -200,6 +226,43 @@ def fig_accuracy():
     ax.set_xlabel('nfrac', fontsize=9); ax.set_ylabel('max|d| sui 5 parametri (unita\' fisiche)', fontsize=9); _style(ax)
     ax.set_title('Accuratezza open-loop (worst-case): pessimista, degrada sotto nfrac=4', fontsize=9.3)
     p = os.path.join(FIGDIR, 'accuracy.png'); fig.savefig(p, dpi=150, bbox_inches='tight', facecolor='white')
+    plt.close(fig); return p
+
+def fig_mp_sensitivity():
+    """Mixed-precision: max|Δgap| vs nfrac, una curva per campo (altri a 13), + cancello 0.5 m."""
+    cols = {'V': PAL['blu'], 'fatigue': PAL['mac'], 'acc': PAL['ac'], 'accw': PAL['ambra'],
+            'raw': PAL['blunav'], 'w': PAL['rosso']}
+    fig, ax = plt.subplots(figsize=(8.4, 3.2))
+    for fld in MP_FIELDS:
+        rows = sorted([r for r in MP_SENS if r['field'] == fld], key=lambda r: int(r['nfrac']))
+        xs = [int(r['nfrac']) for r in rows]; ys = [float(r['maxdgap']) for r in rows]
+        ax.plot(xs, ys, 'o-', color=cols[fld], ms=3, lw=1.1, label='%s (floor %d)' % (fld, MP_FLOORS[fld]))
+    ax.axhline(MP_THR, color='k', ls='--', lw=1.0); ax.text(9.6, MP_THR + 0.09, 'cancello 0.5 m', fontsize=7.5)
+    ax.set_ylim(0, 3.2); ax.set_xlim(13.6, 0.4)   # 13 -> 1 (verso di riduzione)
+    ax.set_xlabel('nfrac del campo (gli altri cinque a 13)', fontsize=9)
+    ax.set_ylabel('max|Δgap| vs full-precision (m)', fontsize=9)
+    ax.legend(fontsize=7, ncol=2, loc='upper center'); _style(ax)
+    ax.set_title('Sensibilità per-campo: acc/w piatti a 0 fino a 4 bit; V/fatigue/accw/raw rompono a 12', fontsize=9.0)
+    p = os.path.join(FIGDIR, 'mp_sensitivity.png'); fig.savefig(p, dpi=150, bbox_inches='tight', facecolor='white')
+    plt.close(fig); return p
+
+def fig_mp_area():
+    """Risorse dei finalisti, % del full-precision (etichette = assoluti): LUT su, FF/DSP giu'."""
+    cfgs = ['full_precision', 'finale', 'uniform4_ref']
+    labs = ['full 13×6', 'finale [13,13,4,13,13,4]', 'uniform 4×6 (fuori cancello)']
+    mets = ['LUT', 'FF', 'DSP']; fp = {m: mpr('full_precision', m) for m in mets}
+    x = list(range(len(mets))); w = 0.26; cc = [PAL['grigio'], PAL['blu'], PAL['ambra']]
+    fig, ax = plt.subplots(figsize=(8.0, 3.0))
+    for i, cfg in enumerate(cfgs):
+        pos = [xi + (i - 1) * w for xi in x]; vals = [mpr(cfg, m) / fp[m] * 100 for m in mets]
+        b = ax.bar(pos, vals, w, color=cc[i], label=labs[i])
+        for r, m in zip(b, mets):
+            ax.text(r.get_x() + r.get_width() / 2, r.get_height() + 1.2, '%d' % int(mpr(cfg, m)), ha='center', fontsize=6.3)
+    ax.axhline(100, color='k', lw=0.7, ls=':'); ax.set_xticks(x); ax.set_xticklabels(mets)
+    ax.set_ylabel('% del full-precision', fontsize=9); ax.set_ylim(0, 132)
+    ax.legend(fontsize=7.3, loc='lower center'); _style(ax)
+    ax.set_title('Risorse dei finalisti a 125 ns io-timed: finale taglia DSP/FF, alza LUT', fontsize=9.2)
+    p = os.path.join(FIGDIR, 'mp_area.png'); fig.savefig(p, dpi=150, bbox_inches='tight', facecolor='white')
     plt.close(fig); return p
 
 
@@ -433,8 +496,87 @@ def build_doc():
                   'quattro varianti discrete, coi tipi gia\' fissati, aggirano il vincolo e sono la '
                   'soluzione robusta adottata.'))
 
-    # --- 8. Limiti residui ---
-    A(('h1', '8. Limiti residui'))
+    # --- 8. Quantizzazione per-campo (mixed-precision) ---
+    A(('h1', '8. Quantizzazione per-campo (mixed-precision)'))
+    A(('p', 'Le sezioni precedenti usano un unico nfrac per l\'intero core. Ma i sei tipi in virgola fissa '
+            '— potenziale di membrana, soglia adattiva, i due accumulatori, il readout e i pesi — non hanno '
+            'la stessa sensibilita\'. Questa sezione assegna a ciascuno un nfrac **indipendente** e chiede: '
+            'la precisione mista per campo permette tagli che quella uniforme non concede? Il criterio qui e\' '
+            'piu\' severo della sicurezza: e\' l\'**indistinguibilita\' comportamentale** — scarto massimo del '
+            'gap sotto **%.1f m** rispetto alla piena precisione, su tutto il dataset, con zero collisioni '
+            'extra. E\' un cancello molto piu\' stretto di quello di sicurezza della Sezione 4, ed e\' cio\' '
+            'che rende informativa l\'analisi.' % MP_THR))
+    A(('img', (fig_mp_sensitivity(), 'Figura 8.1 — Sensibilita\' per-campo: scarto massimo del gap quando '
+               'si abbassa il nfrac di un solo campo, tenendo gli altri cinque a tredici. acc e w restano a '
+               'zero (bit-identici) fino a quattro bit, poi saltano; V, fatigue, accw e raw superano il '
+               'cancello gia\' al primo bit tolto. Fonte: mp_sens.tsv.')))
+    A(('p', 'Il verdetto e\' netto e **asimmetrico**. Solo due campi sono riducibili: gli accumulatori '
+            'd\'ingresso e i pesi scendono a **quattro** bit frazionari senza alcuna perdita — l\'uscita '
+            'resta bit-identica alla piena precisione. Gli altri quattro non tollerano nemmeno un bit in '
+            'meno sotto il cancello dei %.1f m.' % MP_THR))
+    A(('table', (
+        ['Campo', 'Ruolo', 'Floor (nfrac)', 'Comportamento scendendo'],
+        [
+            ['V',       'potenziale di membrana',  str(MP_FLOORS['V']),       'rompe subito a 12'],
+            ['fatigue', 'soglia adattiva',         str(MP_FLOORS['fatigue']), 'rompe subito a 12'],
+            ['acc',     'accumulatore d\'ingresso', str(MP_FLOORS['acc']),     'bit-identico 13→4, rompe a 3'],
+            ['accw',    'accumulatore largo',      str(MP_FLOORS['accw']),    'rompe subito a 12'],
+            ['raw',     'uscita del readout',      str(MP_FLOORS['raw']),     'rompe subito a 12'],
+            ['w',       'pesi a potenza di due',   str(MP_FLOORS['w']),       'bit-identico 13→4, rompe a 3'],
+        ],
+    )))
+    A(('p', 'Il meccanismo e\' verificato, non ipotizzato. Ispezionando i pesi del campione, **tutte** le '
+            'matrici (fc, ricorrenti, readout) sono potenze di due con modulo minimo esattamente **2⁻⁴**. '
+            'Quindi %d bit frazionari rappresentano ogni peso in modo esatto (a tre bit il peso 2⁻⁴ '
+            'sparisce, e la rete si rompe); e l\'accumulatore d\'ingresso, che somma pesi-po2 per spike '
+            'interi, vive su una griglia da 2⁻⁴ e serve anch\'esso a quattro bit. Gli altri quattro campi '
+            'portano grandezze **continue** — pilotate da quantita\' non-po2 come la soglia e i parametri '
+            'del decode — e usano tutta la loro precisione: sotto il cancello stretto, ogni bit tolto si '
+            'amplifica nell\'anello oltre i %.1f m.' % (MP_PO2_FRAC, MP_THR)))
+    A(('p', 'Ne segue la tesi dello studio. La config **area-ottimale accettata e\' [%s]** — soli acc e w a '
+            'quattro bit — e passa il cancello con scarto massimo del gap di **%.2g m**: e\' **bit-identica** '
+            'alla piena precisione, non un compromesso. Per contrasto, una quantizzazione **uniforme** non '
+            'puo\' scendere sotto tredici: gia\' a dodici rompono V, fatigue, accw e raw. Il valore della '
+            'precisione mista e\' esattamente questo — sfrutta la struttura a potenze di due per tagliare i '
+            'due campi che portano i pesi, un taglio che l\'uniforme non concede.'
+            % (' '.join(str(x) for x in MP_FINAL), MP_FIN_DGAP)))
+    A(('img', (fig_mp_area(), 'Figura 8.2 — Risorse dei finalisti a 125 ns io-timed, in percentuale del '
+               'full-precision (etichette = valori assoluti). La finale taglia i blocchi aritmetici e i '
+               'registri ma alza le celle logiche; la uniforme a quattro bit (fuori cancello, solo '
+               'riferimento hardware) mostra il soffitto. Fonte: mp_res.tsv.')))
+    A(('table', (
+        ['Config', 'LUT', 'FF', 'DSP', 'slack WNS (ns)', 'P dinamica (mW)'],
+        [
+            ['full 13×6', '%d' % mpr('full_precision','LUT'), '%d' % mpr('full_precision','FF'),
+             '%d' % mpr('full_precision','DSP'), '%.0f' % mpr('full_precision','WNS'), '%.0f' % (mpr('full_precision','Pdyn_W')*1000)],
+            ['finale [%s]' % ','.join(str(x) for x in MP_FINAL), '%d' % mpr('finale','LUT'), '%d' % mpr('finale','FF'),
+             '%d' % mpr('finale','DSP'), '%.0f' % mpr('finale','WNS'), '%.0f' % (mpr('finale','Pdyn_W')*1000)],
+            ['uniform 4×6 (fuori cancello)', '%d' % mpr('uniform4_ref','LUT'), '%d' % mpr('uniform4_ref','FF'),
+             '%d' % mpr('uniform4_ref','DSP'), '%.0f' % mpr('uniform4_ref','WNS'), '%.0f' % (mpr('uniform4_ref','Pdyn_W')*1000)],
+        ],
+    )))
+    A(('p', 'In hardware, pero\', il pranzo comportamentalmente gratis **non** e\' un risparmio pulito. La '
+            'finale taglia i blocchi aritmetici del **%.0f%%** e i registri del **%.0f%%**, ma **alza** le '
+            'celle logiche del **%.0f%%**: e\' lo stesso confine fra blocchi dedicati e logica gia\' visto '
+            'nella Sezione 6 — le moltiplicazioni strette di acc e w escono dai blocchi e diventano celle. '
+            'La potenza non aiuta: la **dinamica** passa da %.0f a %.0f mW (sale, per le celle in piu\'), e '
+            'a questa scala di pochi milliwatt stimati la differenza e\' entro la risoluzione. Il **margine '
+            'di timing** e\' enorme — slack di circa %.0f ns sul vincolo di deploy da 125 ns — dunque la '
+            'frequenza non e\' il collo. La lettura onesta: i bit sovra-dimensionati di acc e w sono liberi '
+            'da togliere nel comportamento, ma su questo Zynq DSP-ricco e static-dominato il taglio '
+            '**ribilancia blocchi verso celle** senza vero guadagno d\'area ne\' di potenza. Il valore '
+            'dell\'analisi per-campo e\' **diagnostico** — dice quali campi portano informazione e quali no — '
+            'e conferma, per via indipendente, il verdetto dello studio uniforme: il collo dei bit e\' la '
+            'fedelta\', non l\'hardware.' % (MP_DSP_DROP, MP_FF_DROP, MP_LUT_RISE, MP_PDYN_FP, MP_PDYN_FI, MP_SLACK)))
+    A(('p', 'I sei nfrac per campo sono esposti nel blocco di deploy come **Modalita\' Avanzata**: una '
+            'casella di spunta accanto ai menu di base sblocca sei cursori (uno per campo, da 1 a 13). '
+            'Come per il menu di base, la configurazione e\' realizzata da varianti coi tipi gia\' fissati '
+            '— il generatore del blocco cuoce la variante avanzata ai valori scelti — perche\' un blocco '
+            'legato alla libreria non puo\' rigenerare la propria logica a runtime. Alla piena precisione '
+            'la variante avanzata coincide bit per bit con quella di base.'))
+
+    # --- 9. Limiti residui ---
+    A(('h1', '9. Limiti residui'))
     A(('p', 'Vanno dichiarati quattro limiti. Le curve di risorse, potenza e frequenza sono stime Vivado '
             'post-implementazione con vincolo di deploy, non misure su silicio; il loro andamento relativo '
             'fra i livelli e\' affidabile, i valori assoluti attendono la misura su scheda. La '
@@ -443,11 +585,13 @@ def build_doc():
             'quantizzazione tocca la logica del core, comune ai profili — mentre il solo valore assoluto di '
             'frequenza massima e\' specifico di quella configurazione. Lo studio varia esclusivamente i bit '
             'del core: la quantizzazione degli ingressi e\' un asse separato, fuori campo. Infine, la '
-            'quantizzazione a precisione mista per campo — bit frazionari indipendenti per ciascun tipo del '
-            'core — e\' lavoro futuro, non affrontato qui.'))
+            'caratterizzazione hardware della precisione mista (Sezione 8) poggia su un insieme ridotto di '
+            'tre configurazioni sintetizzate, non su uno sweep completo per campo — che richiederebbe ore '
+            'di sintesi; le curve di sensibilita\' sono isolate, un campo per volta, e la verifica '
+            'congiunta delle interazioni e\' svolta sulla sola configurazione finale.'))
 
-    # --- 9. Riferimenti ---
-    A(('h1', '9. Riferimenti'))
+    # --- 10. Riferimenti ---
+    A(('h1', '10. Riferimenti'))
     A(('table', (
         ['Riferimento', 'Tema'],
         [

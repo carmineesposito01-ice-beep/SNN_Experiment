@@ -20,8 +20,9 @@
 | 5. Fedeltà dei parametri e il ginocchio |
 | 6. Costo hardware |
 | 7. Livelli utili e menu nel blocco |
-| 8. Limiti residui |
-| 9. Riferimenti |
+| 8. Quantizzazione per-campo (mixed-precision) |
+| 9. Limiti residui |
+| 10. Riferimenti |
 
 
 ## 1. Sintesi
@@ -122,12 +123,48 @@ Questi quattro livelli sono stati resi selezionabili nel blocco di deploy Donate
 > **Nota.** Nota realizzativa: un menu che pilotasse la profondita' di bit come parametro vivo, rigenerando i tipi a runtime, non si è potuto ottenere, perché un parametro di contenitore non raggiunge una funzione annidata dentro un sotto-sistema a varianti. Le quattro varianti discrete, coi tipi già fissati, aggirano il vincolo e sono la soluzione robusta adottata.
 
 
-## 8. Limiti residui
+## 8. Quantizzazione per-campo (mixed-precision)
 
-Vanno dichiarati quattro limiti. Le curve di risorse, potenza e frequenza sono stime Vivado post-implementazione con vincolo di deploy, non misure su silicio; il loro andamento relativo fra i livelli è affidabile, i valori assoluti attendono la misura su scheda. La caratterizzazione hardware è inoltre condotta su una configurazione di pipeline di riferimento: il ginocchio e le curve di risorsa e potenza sono robusti al profilo scelto — la quantizzazione tocca la logica del core, comune ai profili — mentre il solo valore assoluto di frequenza massima è specifico di quella configurazione. Lo studio varia esclusivamente i bit del core: la quantizzazione degli ingressi è un asse separato, fuori campo. Infine, la quantizzazione a precisione mista per campo — bit frazionari indipendenti per ciascun tipo del core — è lavoro futuro, non affrontato qui.
+Le sezioni precedenti usano un unico nfrac per l'intero core. Ma i sei tipi in virgola fissa — potenziale di membrana, soglia adattiva, i due accumulatori, il readout e i pesi — non hanno la stessa sensibilità. Questa sezione assegna a ciascuno un nfrac **indipendente** e chiede: la precisione mista per campo permette tagli che quella uniforme non concede? Il criterio qui è più severo della sicurezza: è l'**indistinguibilita' comportamentale** — scarto massimo del gap sotto **0.5 m** rispetto alla piena precisione, su tutto il dataset, con zero collisioni extra. È un cancello molto più stretto di quello di sicurezza della Sezione 4, ed è ciò che rende informativa l'analisi.
+
+![Figura 8.1 — Sensibilità per-campo: scarto massimo del gap quando si abbassa il nfrac di un solo campo, tenendo gli altri cinque a tredici. acc e w restano a zero (bit-identici) fino a quattro bit, poi saltano; V, fatigue, accw e raw superano il cancello già al primo bit tolto. Fonte: mp_sens.tsv.](figures_quant/mp_sensitivity.png)
+*Figura 8.1 — Sensibilità per-campo: scarto massimo del gap quando si abbassa il nfrac di un solo campo, tenendo gli altri cinque a tredici. acc e w restano a zero (bit-identici) fino a quattro bit, poi saltano; V, fatigue, accw e raw superano il cancello già al primo bit tolto. Fonte: mp_sens.tsv.*
+
+Il verdetto è netto e **asimmetrico**. Solo due campi sono riducibili: gli accumulatori d'ingresso e i pesi scendono a **quattro** bit frazionari senza alcuna perdita — l'uscita resta bit-identica alla piena precisione. Gli altri quattro non tollerano nemmeno un bit in meno sotto il cancello dei 0.5 m.
+
+| Campo | Ruolo | Floor (nfrac) | Comportamento scendendo |
+|---|---|---|---|
+| V | potenziale di membrana | 13 | rompe subito a 12 |
+| fatigue | soglia adattiva | 13 | rompe subito a 12 |
+| acc | accumulatore d'ingresso | 4 | bit-identico 13→4, rompe a 3 |
+| accw | accumulatore largo | 13 | rompe subito a 12 |
+| raw | uscita del readout | 13 | rompe subito a 12 |
+| w | pesi a potenza di due | 4 | bit-identico 13→4, rompe a 3 |
+
+Il meccanismo è verificato, non ipotizzato. Ispezionando i pesi del campione, **tutte** le matrici (fc, ricorrenti, readout) sono potenze di due con modulo minimo esattamente **2⁻⁴**. Quindi 4 bit frazionari rappresentano ogni peso in modo esatto (a tre bit il peso 2⁻⁴ sparisce, e la rete si rompe); e l'accumulatore d'ingresso, che somma pesi-po2 per spike interi, vive su una griglia da 2⁻⁴ e serve anch'esso a quattro bit. Gli altri quattro campi portano grandezze **continue** — pilotate da quantità non-po2 come la soglia e i parametri del decode — e usano tutta la loro precisione: sotto il cancello stretto, ogni bit tolto si amplifica nell'anello oltre i 0.5 m.
+
+Ne segue la tesi dello studio. La config **area-ottimale accettata è [13 13 4 13 13 4]** — soli acc e w a quattro bit — e passa il cancello con scarto massimo del gap di **0 m**: è **bit-identica** alla piena precisione, non un compromesso. Per contrasto, una quantizzazione **uniforme** non può scendere sotto tredici: già a dodici rompono V, fatigue, accw e raw. Il valore della precisione mista è esattamente questo — sfrutta la struttura a potenze di due per tagliare i due campi che portano i pesi, un taglio che l'uniforme non concede.
+
+![Figura 8.2 — Risorse dei finalisti a 125 ns io-timed, in percentuale del full-precision (etichette = valori assoluti). La finale taglia i blocchi aritmetici e i registri ma alza le celle logiche; la uniforme a quattro bit (fuori cancello, solo riferimento hardware) mostra il soffitto. Fonte: mp_res.tsv.](figures_quant/mp_area.png)
+*Figura 8.2 — Risorse dei finalisti a 125 ns io-timed, in percentuale del full-precision (etichette = valori assoluti). La finale taglia i blocchi aritmetici e i registri ma alza le celle logiche; la uniforme a quattro bit (fuori cancello, solo riferimento hardware) mostra il soffitto. Fonte: mp_res.tsv.*
+
+| Config | LUT | FF | DSP | slack WNS (ns) | P dinamica (mW) |
+|---|---|---|---|---|---|
+| full 13×6 | 4628 | 3474 | 52 | 106 | 8 |
+| finale [13,13,4,13,13,4] | 5203 | 3045 | 36 | 106 | 10 |
+| uniform 4×6 (fuori cancello) | 4856 | 2381 | 31 | 106 | 8 |
+
+In hardware, pero', il pranzo comportamentalmente gratis **non** è un risparmio pulito. La finale taglia i blocchi aritmetici del **31%** e i registri del **12%**, ma **alza** le celle logiche del **12%**: è lo stesso confine fra blocchi dedicati e logica già visto nella Sezione 6 — le moltiplicazioni strette di acc e w escono dai blocchi e diventano celle. La potenza non aiuta: la **dinamica** passa da 8 a 10 mW (sale, per le celle in più), e a questa scala di pochi milliwatt stimati la differenza è entro la risoluzione. Il **margine di timing** è enorme — slack di circa 106 ns sul vincolo di deploy da 125 ns — dunque la frequenza non è il collo. La lettura onesta: i bit sovra-dimensionati di acc e w sono liberi da togliere nel comportamento, ma su questo Zynq DSP-ricco e static-dominato il taglio **ribilancia blocchi verso celle** senza vero guadagno d'area né di potenza. Il valore dell'analisi per-campo è **diagnostico** — dice quali campi portano informazione e quali no — e conferma, per via indipendente, il verdetto dello studio uniforme: il collo dei bit è la fedeltà, non l'hardware.
+
+I sei nfrac per campo sono esposti nel blocco di deploy come **Modalità Avanzata**: una casella di spunta accanto ai menu di base sblocca sei cursori (uno per campo, da 1 a 13). Come per il menu di base, la configurazione è realizzata da varianti coi tipi già fissati — il generatore del blocco cuoce la variante avanzata ai valori scelti — perché un blocco legato alla libreria non può rigenerare la propria logica a runtime. Alla piena precisione la variante avanzata coincide bit per bit con quella di base.
 
 
-## 9. Riferimenti
+## 9. Limiti residui
+
+Vanno dichiarati quattro limiti. Le curve di risorse, potenza e frequenza sono stime Vivado post-implementazione con vincolo di deploy, non misure su silicio; il loro andamento relativo fra i livelli è affidabile, i valori assoluti attendono la misura su scheda. La caratterizzazione hardware è inoltre condotta su una configurazione di pipeline di riferimento: il ginocchio e le curve di risorsa e potenza sono robusti al profilo scelto — la quantizzazione tocca la logica del core, comune ai profili — mentre il solo valore assoluto di frequenza massima è specifico di quella configurazione. Lo studio varia esclusivamente i bit del core: la quantizzazione degli ingressi è un asse separato, fuori campo. Infine, la caratterizzazione hardware della precisione mista (Sezione 8) poggia su un insieme ridotto di tre configurazioni sintetizzate, non su uno sweep completo per campo — che richiederebbe ore di sintesi; le curve di sensibilità sono isolate, un campo per volta, e la verifica congiunta delle interazioni è svolta sulla sola configurazione finale.
+
+
+## 10. Riferimenti
 
 | Riferimento | Tema |
 |---|---|

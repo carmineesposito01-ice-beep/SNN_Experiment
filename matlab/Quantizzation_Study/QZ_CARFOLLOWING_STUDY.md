@@ -205,3 +205,52 @@ quantizzazione morde: max|Δparam| vs n13 = 0.68@n8 / 1.16@n5 / 2.07@n2; makehdl
 in una MATLAB Function co-locata ma **NON aggancia attraverso il Variant Subsystem** (la Parameter data
 annidata non risolve il parametro mask del blocco top, anche con `Tunable=false`; verificato in
 `probe_nfrac_mask`). Le **varianti discrete** aggirano il problema (tipi concreti, robusti).
+
+## 12. Mixed-precision per-campo (nfrac indipendenti)
+
+Estensione: **6 nfrac indipendenti** per i tipi del core `[V fatigue acc accw raw w]` invece di un unico
+nfrac. Cancello = **indistinguibilità comportamentale**: `max|Δgap| ≤ 0.5 m` vs full-precision su tutte le
+99 traj **E** 0 collisioni extra vs oracolo (molto più stretto della sicurezza del §4).
+
+**Floor per campo** (nfrac minimo che passa, isolato — `mp_sens.tsv`, 78 config):
+
+| Campo | Floor | | Campo | Floor |
+|---|---|---|---|---|
+| V | **13** | | accw | **13** |
+| fatigue | **13** | | raw | **13** |
+| acc | **4** | | w | **4** |
+
+**Asimmetria + meccanismo VERIFICATO**: solo `acc`/`w` riducibili (a 4 bit, bit-identici 13→4). La sonda
+pesi conferma: **tutte** le matrici (fc/rec_U/rec_V/readout) sono **po2 con minimo 2⁻⁴** → 4 bit frazionari
+bastano esatti; a 3 il peso 2⁻⁴ sparisce. `acc` (accumulo pesi-po2×spike interi) vive sulla griglia 2⁻⁴.
+`V/fatigue/accw/raw` portano grandezze continue (soglia/decode non-po2) → servono pieni sotto 0.5 m.
+
+**Config area-ottimale** = `[13 13 4 13 13 4]` (`mp_finalists.tsv`, verifica CONGIUNTA): `max|Δgap|=0`,
+**bit-identica** al full-precision. L'**uniforme non scende sotto 13** (a 12 rompono 4 campi) → la
+precisione mista taglia acc/w dove l'uniforme non può.
+
+**Hardware** (`mp_res.tsv`, 3 config @125 ns io-timed su Zynq-7020; **VHDL mp@[13×6] provato bit-exact** al
+gen unico@13, diff solo contatore segnali):
+
+| Config | LUT | FF | DSP | slack WNS (ns) | Pdyn (mW) |
+|---|---|---|---|---|---|
+| full `[13×6]` | 4628 | 3474 | 52 | 106 | 8 |
+| finale `[13,13,4,13,13,4]` | 5203 | 3045 | 36 | 106 | 10 |
+| uniform `[4×6]` (fuori cancello) | 4856 | 2381 | 31 | 106 | 8 |
+
+**Onesto**: il taglio è comportamentalmente gratis ma in HW **non è un risparmio pulito** — DSP −31% e
+FF −12%, ma **LUT +12%** (confine DSP↔LUT: moltiplicatori stretti → celle) e **potenza piatta** (dinamica
+8→10 mW, sale per le celle; a pochi mW è entro risoluzione). Slack ~106 ns (Fmax non è il collo). Valore =
+**diagnostico**; conferma indipendente del §6 (il collo dei bit è la fedeltà, non l'hardware).
+
+**Modalità Avanzata nel blocco** (`build_tier_configurable(nf)`): checkbox ADV + 6 slider (1..13) nella
+mask; ADV attiva 3 varianti `<tier>_ADV` **cotte concrete** a `nf` (tipi `qz_snn_types_mp` per-campo);
+callback `tier_adv_cb` = **solo visibilità** (sicuro su link). La config ADV si imposta ri-eseguendo il
+builder (il **B live è impossibile su blocco linkato** — la chart di un link vive nella libreria, non
+modificabile per-istanza; sonda `probe_adv`. Approccio A robusto adottato).
+
+**File**: `qz_snn_types_mp.m` `qz_snn_cl_step_mp.m` `qz_mp_gate.m` `qz_mp_sensitivity.m` `qz_mp_combine.m`
+`qz_gen_block_vhdl_mp.m` `qz_mp_synth.sh` `qz_mp_advanced_gate.m` `tier_adv_cb.m`. Gate: `qz_mp_selftest0`
+(forward bit-exact @full-precision), `qz_mp_gate_selftest` (detector nei due sensi: accetta @13, rifiuta @2),
+`qz_mp_advanced_gate` (5 gate: Base no-regressione · struttura · ADV≡Base · ADV discrimina · HDL da ADV).
+Dati: `mp_sens.tsv` `mp_finalists.tsv` `mp_res.tsv`. Report: sezione §8 di `QUANTIZATION_STUDY_REPORT`.
