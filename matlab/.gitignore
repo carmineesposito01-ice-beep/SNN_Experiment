@@ -10,10 +10,11 @@ tanh_lut_interp.m
 snn_traj_fixed_r16_mex.*
 snn_traj_fixed_r8_mex.*
 
-# Studio IIDM (Quantizzation_Study_IIDM) — MEX + codegen rigenerabili (qzi_cl_validate / codegen)
-Quantizzation_Study_IIDM/qzi_cl_step_n*_mex.*
+# Studio IIDM (Quantizzation_Study_IIDM) — MEX + codegen + progresso rigenerabili
+Quantizzation_Study_IIDM/qzi_cl_step_*_mex.*
 Quantizzation_Study_IIDM/codegen_ni*/
 Quantizzation_Study_IIDM/hdl_iidm_n*/
+Quantizzation_Study_IIDM/qzi_acc_progress.txt
 
 # Fase B2.0 — VHDL generato per la validazione RTL (rigenerabile via rtl_gen_dut) + artefatti xsim
 hdlsrc_*/
