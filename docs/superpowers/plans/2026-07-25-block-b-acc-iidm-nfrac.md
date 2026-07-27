@@ -10,6 +10,26 @@
 
 ---
 
+> **⚠️ PIVOT in esecuzione (2026-07-25) — l'architettura M NON è parametrica in nfrac.**
+> Il gate abilitatore (Task 3) ha PROVATO (diagnostico a tre vie) che l'FSM `acc_iidm_fsm` (architettura M,
+> divisore/sqrt SEQUENZIALI) ha le larghezze di bit **cablate per nfrac=8**: cuocere un altro nfrac rompe
+> `sqrt_seq_setup` (`reinterpretcast`: word length must match). **Un menu-precisione su M è infattibile** senza
+> ri-derivare quelle larghezze per livello. Conseguenze:
+> - **Task 3** (cuoci nfrac nell'FSM M): **MORTO/rimosso**. Il suo esito è il *finding* «M è nfrac=8-specifico» → nel report.
+> - **Task 4** (hardware): si sintetizza l'IIDM **NATIVO** (`acc_iidm_open` inlinato + `acc_types` cotto — le
+>   sqrt/divide NATIVE scalano col nfrac; pattern provato SP3 `acciidm_chart_code`), NON la FSM M.
+> - **Task 5** (blocco): blocco **NATIVO** standalone (chart SP3 **meno la SNN**, 9 in→accel) con menu NFRAC
+>   **{13,8,5}** — il 2 è ESCLUSO (Task 1: 49 collisioni extra). Non architettura M (che resta deployata come
+>   `Donatello_ACC_IIDM_M`, nfrac=8).
+> - Lo **studio** (Task 1,2 safety/fedeltà/severità) è **intatto**: gira su `acc_iidm_open`, type-parametrico.
+> - **Cwd-gotcha** (registrata): sostituire funzioni via `addpath(tempdir)` NON basta — la cwd (matlab/) vince
+>   sul path; serve `cd(td)`. Comunque irrilevante ora (l'abilitatore-per-copia è morto; il nativo cuoce via `regexprep` inline).
+>
+> Il codice dettagliato di Task 4/5 nativi si scrive in fase d'esecuzione (come già fatto per Task 1-2). Le
+> sezioni Task 3/4/5 sotto sono **SUPERSEDED** da questo riquadro dove in conflitto.
+
+---
+
 ## Convenzioni operative (valgono per tutti i task)
 
 - **Commit**: messaggi convenzionali, SENZA `Co-Authored-By`. Push SOLO su richiesta.
