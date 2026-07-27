@@ -125,6 +125,37 @@ _TRUNC_MAP = {
     "cosi'": 'così', "percio'": 'perciò', "cio'": 'ciò', "bensi'": 'bensì',
     "ne'": 'né', "e'": 'è',
 }
+# --- IIDM (Blocco B): studio NFRAC SPECCHIATO del controllore, grounded da qzi_*.tsv ----------
+QZI = os.path.join(ROOT, 'matlab', 'Quantizzation_Study_IIDM')
+def _load_qzi(name):
+    out = {}
+    with open(os.path.join(QZI, name), newline='', encoding='utf-8') as f:
+        for r in csv.DictReader(f, delimiter='\t'):
+            out[int(float(r['nfrac']))] = r
+    return out
+QZI_CL  = _load_qzi('qzi_cl_sweep.tsv')   # nfrac,coll_total,coll_extra,min_gap_avoid,brake_margin_avoid,max_DRAC,NRMSE_accel
+QZI_ACC = _load_qzi('qzi_acc_sweep.tsv')  # nfrac,NRMSE_accel,maxd_accel (open-loop IIDM@nfrac vs IIDM double)
+QZI_SEV = _load_qzi('qzi_sev_sweep.tsv')  # nfrac,max_impact_dv,oracle_max
+QZI_RES = {}
+with open(os.path.join(QZI, 'qzi_res.tsv'), newline='', encoding='utf-8') as f:
+    for _r in csv.DictReader(f, delimiter='\t'):
+        QZI_RES[_r['label']] = _r
+QZI_NF   = sorted(QZI_CL, reverse=True)                                          # [13, 8, 5, 2]
+def qcl(nf, k):   return float(QZI_CL[nf][k])
+def qacc(nf, k):  return float(QZI_ACC[nf][k])
+def qres(lbl, k): return float(QZI_RES[lbl][k])
+QZI_SAFE  = [nf for nf in QZI_NF if int(float(QZI_CL[nf]['coll_extra'])) == 0]   # [13,8,5]
+QZI_COLL2 = int(float(QZI_CL[2]['coll_extra'])) if 2 in QZI_CL else 0            # 49: a nfrac=2 il c-f rompe
+QZI_MAXD8 = qacc(8, 'maxd_accel')                                               # ~0.81 ~ budget E_iidm@8=0.83
+QZI_SEVOK = all(abs(float(QZI_SEV[nf]['max_impact_dv']) - float(QZI_SEV[nf]['oracle_max'])) < 0.2 for nf in QZI_NF)
+R17_FMAX_STD  = qres('r17_standalone', 'Fmax_MHz')                              # 75.63 (IIDM-only)
+R17_FMAX_CTRL = qres('r17_controller', 'Fmax_MHz')                              # 77.936 (controllore)
+R17_BASE      = qres('r0_baseline', 'Fmax_MHz')                                 # 15.673 (R0)
+R17_LUT_STD   = qres('r17_standalone', 'LUT')                                   # 3670
+R17_GAIN_PCT  = (R17_FMAX_CTRL - R17_BASE) / R17_BASE * 100.0                   # +397%
+R17_ROUNDS    = 17                                                             # round della campagna (hdl_iidm/RESULTS.txt)
+
+
 def norm_it(s):
     """Troncate ASCII -> accenti veri (minuscolo e inizio-frase); non tocca le elisioni l'/dell'/un'."""
     s = str(s)
@@ -230,6 +261,27 @@ def fig_accuracy():
     p = os.path.join(FIGDIR, 'accuracy.png'); fig.savefig(p, dpi=150, bbox_inches='tight', facecolor='white')
     plt.close(fig); return p
 
+def fig_iidm():
+    """IIDM specchiato: fedelta' open-loop (NRMSE accel) sull'asse sx, collisioni extra sul dx (il 2 rompe)."""
+    xs = sorted(QZI_NF)                              # [2,5,8,13]
+    nr = [qacc(nf, 'NRMSE_accel') for nf in xs]
+    ce = [qcl(nf, 'coll_extra') for nf in xs]
+    fig, ax = plt.subplots(figsize=(8.2, 3.0))
+    a2 = ax.twinx(); a2.bar(xs, ce, width=0.6, color=PAL['rosso'], alpha=0.28); a2.grid(False)
+    a2.set_ylim(0, max(ce) * 1.28 + 1)
+    a2.set_ylabel('collisioni extra (su %d evitabili)' % (N_TRAJ - N_INEV), color=PAL['rosso'], fontsize=8)
+    ax.plot(xs, nr, 'o-', color=PAL['blu'], zorder=5)
+    ax.set_xlabel('nfrac IIDM (bit frazionari)', fontsize=9)
+    ax.set_ylabel('NRMSE accel (open-loop vs double)', fontsize=9)
+    ax.set_zorder(a2.get_zorder() + 1); ax.patch.set_visible(False)
+    a2.annotate('nfrac=2 ROMPE (%d extra)' % QZI_COLL2, xy=(2, max(ce)), xytext=(4.6, max(ce) * 0.72),
+                fontsize=8, color=PAL['rosso'], ha='center',
+                arrowprops=dict(arrowstyle='->', color=PAL['rosso'], lw=0.8))
+    _style(ax)
+    ax.set_title('IIDM: fedelta\' degrada coi bit; sicuro a 13/8/5, il 2 rompe il car-following', fontsize=9.3)
+    p = os.path.join(FIGDIR, 'iidm.png'); fig.savefig(p, dpi=150, bbox_inches='tight', facecolor='white')
+    plt.close(fig); return p
+
 def fig_mp_sensitivity():
     """Mixed-precision: NRMSE parametri per campo (stesso metro di fedelta' del §4). acc/w a 0 (lossless) fino a 4."""
     cols = {'V': PAL['blu'], 'fatigue': PAL['mac'], 'acc': PAL['ac'], 'accw': PAL['ambra'],
@@ -283,8 +335,9 @@ def build_doc():
             'al motore di riferimento; risorse, potenza e frequenza sono stime Vivado post-implementazione '
             '(out-of-context), non misura su silicio.',
             'Fonte dei numeri: matlab/Quantizzation_Study/{cl_sweep, res_sweep, acc_sweep, sev_sweep, '
-            'mp_sens, mp_finalists, mp_res}.tsv, prodotti dagli script dello studio. Nessun numero e\' '
-            'scritto a mano nel testo.',
+            'mp_sens, mp_finalists, mp_res}.tsv per la rete; matlab/Quantizzation_Study_IIDM/{qzi_cl_sweep, '
+            'qzi_acc_sweep, qzi_sev_sweep, qzi_res}.tsv per il controllore IIDM (Sezione 9). Tutti prodotti '
+            'dagli script dello studio; nessun numero e\' scritto a mano nel testo.',
             'Campione: Donatello, il forward deployato del blocco Donatello_Tier. Dataset '
             'di prova: %d traiettorie su %d scenari canonici, di cui %d con evento di cut-in.' % (N_TRAJ, N_SCEN, N_CUTIN),
         ],
@@ -595,8 +648,75 @@ def build_doc():
             'legato alla libreria non puo\' rigenerare la propria logica a runtime. Alla piena precisione '
             'la variante avanzata coincide bit per bit con quella di base.'))
 
-    # --- 9. Limiti residui ---
-    A(('h1', '9. Limiti residui'))
+    # --- 9. Il controllore IIDM: studio specchiato ---
+    A(('h1', '9. Il controllore IIDM: studio specchiato'))
+    A(('p', 'La rete e\' meta\' del sistema di car-following; l\'altra meta\' e\' il controllore ACC-IIDM che '
+            'trasforma i cinque parametri stimati in accelerazione. Questa sezione ne caratterizza la '
+            'quantizzazione con lo **stesso metodo** applicato alla rete, a ruoli invertiti: la rete e\' '
+            'congelata a piena precisione e a variare e\' ora il nfrac dell\'IIDM. L\'anello chiuso e le '
+            'metriche sono le stesse; cio\' che nella rete si misurava sui cinque parametri, qui si misura '
+            'sull\'accelerazione — l\'uscita del controllore.'))
+    A(('p', 'La **sicurezza ha un floor diverso da quello della rete**. Fino a cinque bit frazionari il '
+            'controllore quantizzato non provoca **alcuna collisione aggiuntiva** rispetto all\'oracolo; a '
+            'due bit, invece, il car-following **si rompe** — %d collisioni evitabili mancate, con passaggi '
+            'a gap negativo. E\' una differenza sostanziale rispetto alla rete, sicura fino a due bit: '
+            'l\'IIDM e\' il pezzo fragile alla precisione estrema, e il suo floor di sicurezza cade fra '
+            'cinque e due bit.' % QZI_COLL2))
+    A(('img', (fig_iidm(), 'Figura 9.1 — Controllore IIDM al variare del suo nfrac. La curva (asse sinistro) '
+               'e\' l\'errore normalizzato dell\'accelerazione open-loop rispetto al riferimento in doppia '
+               'precisione; le barre (asse destro) sono le collisioni aggiuntive rispetto all\'oracolo — '
+               'nulle a 13/8/5, %d a due bit. Fonte: qzi_cl_sweep.tsv, qzi_acc_sweep.tsv.' % QZI_COLL2)))
+    A(('p', 'La **fedelta\'** dell\'accelerazione degrada in modo liscio e monotono al scendere dei bit: '
+            'l\'errore normalizzato open-loop passa da %.4f a tredici bit a %.3f a due, e lo scarto '
+            'worst-case sale da %.2f a %.2f m/s². Il valore a otto bit — %.2f m/s² di scarto massimo — '
+            'coincide col **budget di quantizzazione gia\' stabilito** per l\'IIDM (l\'errore in '
+            'accelerazione che la quantizzazione della rete aveva gia\' introdotto a monte): otto bit e\' il '
+            'punto in cui l\'IIDM smette di essere trascurabile rispetto alla rete. E\' lo sweet-spot.'
+            % (qacc(13, 'NRMSE_accel'), qacc(2, 'NRMSE_accel'),
+               qacc(13, 'maxd_accel'), qacc(2, 'maxd_accel'), QZI_MAXD8)))
+    A(('p', 'La **severita\'** conferma il quadro della rete: sulle traiettorie fisicamente inevitabili, '
+            'l\'impatto al contatto del controllore quantizzato resta pari a quello dell\'oracolo a ogni '
+            'nfrac — la quantizzazione dell\'IIDM non rende i crash inevitabili piu\' violenti. Fonte: '
+            'qzi_sev_sweep.tsv.'))
+    A(('p', '**Il blocco di deploy: architettura veloce, precisione fissa.** A differenza della rete, il '
+            'controllore ottimizzato **non e\' parametrico in precisione**: divisore e radice quadrata '
+            '*digit-recurrence* hanno larghezze di bit cablate per otto bit frazionari, e cambiare nfrac '
+            'romperebbe quelle ricorrenze. Percio\' il blocco dell\'IIDM e\' a **precisione fissa a otto '
+            'bit** — proprio lo sweet-spot individuato sopra — senza menu.'))
+    A(('p', 'Quell\'implementazione e\' il frutto di una campagna di ottimizzazione a **%d round**, tutti '
+            'bit-esatti, che ha portato il controllore da **%.1f MHz** (divisione combinatoria, baseline) a '
+            '**%.1f MHz** (+%.0f%%): divisore e radice sequenzializzati (uno-due bit per ciclo, hardware '
+            'piu\' piccolo del combinatorio srotolato) e le catene lunghe della legge IIDM distribuite su '
+            'piu\' stadi di registro. Il blocco **standalone** (senza la rete, i cinque parametri in '
+            'ingresso) e\' derivato da quell\'architettura e sintetizza a **%.1f MHz** allo stesso collo '
+            'critico (l\'accelerazione IIDM); la differenza di ~%.0f%% dal controllore completo e\' il '
+            'contesto standalone — i parametri arrivano dagli ingressi invece che dal decodificatore '
+            'pipelinato della rete. Come per la rete, questa frequenza e\' **margine**: un passo di '
+            'controllo da 0,1 s dura 800.000 clock a 8 MHz, contro i ~150 di una inferenza.'
+            % (R17_ROUNDS, R17_BASE, R17_FMAX_CTRL, R17_GAIN_PCT, R17_FMAX_STD,
+               (R17_FMAX_CTRL - R17_FMAX_STD) / R17_FMAX_CTRL * 100.0)))
+    A(('table', (
+        ['Variante IIDM', 'Fmax (MHz)', 'LUT', 'FF', 'DSP', 'collo (liv.)'],
+        [
+            ['baseline R0 (combinatorio)', '%.1f' % qres('r0_baseline', 'Fmax_MHz'),
+             '%d' % qres('r0_baseline', 'LUT'), '%d' % qres('r0_baseline', 'FF'),
+             '%d' % qres('r0_baseline', 'DSP'), '%d' % qres('r0_baseline', 'critpath_liv')],
+            ['controllore R17 (SNN+IIDM)', '%.1f' % R17_FMAX_CTRL, '%d' % qres('r17_controller', 'LUT'),
+             '%d' % qres('r17_controller', 'FF'), '%d' % qres('r17_controller', 'DSP'),
+             '%d' % qres('r17_controller', 'critpath_liv')],
+            ['IIDM standalone R17 (blocco)', '%.1f' % R17_FMAX_STD, '%d' % R17_LUT_STD,
+             '%d' % qres('r17_standalone', 'FF'), '%d' % qres('r17_standalone', 'DSP'),
+             '%d' % qres('r17_standalone', 'critpath_liv')],
+        ],
+    )))
+    A(('p', 'Il blocco e\' provato bit-esatto rispetto al modello di riferimento in doppia precisione '
+            '(errore massimo nullo in streaming) e genera VHDL in modo self-contained. Resta componibile '
+            'con qualunque stimatore: riceve i cinque parametri e restituisce l\'accelerazione. In sintesi, '
+            'il sistema car-following completo — stima (rete) e legge di controllo (IIDM) — e\' ora '
+            'caratterizzato in quantizzazione su entrambe le meta\'.'))
+
+    # --- 10. Limiti residui ---
+    A(('h1', '10. Limiti residui'))
     A(('p', 'Vanno dichiarati quattro limiti. Le curve di risorse, potenza e frequenza sono stime Vivado '
             'post-implementazione con vincolo di deploy, non misure su silicio; il loro andamento relativo '
             'fra i livelli e\' affidabile, i valori assoluti attendono la misura su scheda. La '

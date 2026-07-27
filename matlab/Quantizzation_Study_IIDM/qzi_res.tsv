@@ -1,0 +1,4 @@
+label	Fmax_MHz	LUT	FF	DSP	BRAM	critpath_liv	nota
+r17_standalone	75.63	3670	1173	17	0	15	IIDM-only (chart R17 meno SNN), collo st_a_iidm, OOC xc7z020 125ns
+r17_controller	77.936	8387	4069	68	1	14	SNN+IIDM (Donatello_ACC_IIDM_M), collo st_a_iidm, da hdl_iidm/RESULTS.txt
+r0_baseline	15.673	8230	3183	69	1	204	divide() combinatoria in-chart, prima della campagna (R0)

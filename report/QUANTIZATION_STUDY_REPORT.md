@@ -3,7 +3,7 @@
 > **Caratterizzazione del compromesso di quantizzazione fixed-point del core spiking per il car-following (Donatello): sicurezza del comportamento in anello chiuso e costo hardware su Zynq-7020, al variare dei bit frazionari del calcolo neurale.**
 
 > Livello di fedeltà: il car-following è da simulazione in anello chiuso provata bit-vicina al motore di riferimento; risorse, potenza e frequenza sono stime Vivado post-implementazione (out-of-context), non misura su silicio.  
-> Fonte dei numeri: matlab/Quantizzation_Study/{cl_sweep, res_sweep, acc_sweep, sev_sweep, mp_sens, mp_finalists, mp_res}.tsv, prodotti dagli script dello studio. Nessun numero è scritto a mano nel testo.  
+> Fonte dei numeri: matlab/Quantizzation_Study/{cl_sweep, res_sweep, acc_sweep, sev_sweep, mp_sens, mp_finalists, mp_res}.tsv per la rete; matlab/Quantizzation_Study_IIDM/{qzi_cl_sweep, qzi_acc_sweep, qzi_sev_sweep, qzi_res}.tsv per il controllore IIDM (Sezione 9). Tutti prodotti dagli script dello studio; nessun numero è scritto a mano nel testo.  
 > Campione: Donatello, il forward deployato del blocco Donatello_Tier. Dataset di prova: 99 traiettorie su 9 scenari canonici, di cui 33 con evento di cut-in.  
 
 ---
@@ -21,7 +21,8 @@
 | 6. Costo hardware |
 | 7. Livelli utili e menu nel blocco |
 | 8. Quantizzazione per-campo (mixed-precision) |
-| 9. Limiti residui |
+| 9. Il controllore IIDM: studio specchiato |
+| 10. Limiti residui |
 | 10. Riferimenti |
 
 
@@ -163,7 +164,33 @@ In hardware, però, il pranzo comportamentalmente gratis **non** è un risparmio
 I sei nfrac per campo sono esposti nel blocco di deploy come **Modalità Avanzata**: una casella di spunta accanto ai menu di base sblocca sei cursori (uno per campo, da 1 a 13). Come per il menu di base, la configurazione è realizzata da varianti coi tipi già fissati — il generatore del blocco cuoce la variante avanzata ai valori scelti — perché un blocco legato alla libreria non può rigenerare la propria logica a runtime. Alla piena precisione la variante avanzata coincide bit per bit con quella di base.
 
 
-## 9. Limiti residui
+## 9. Il controllore IIDM: studio specchiato
+
+La rete è meta' del sistema di car-following; l'altra meta' è il controllore ACC-IIDM che trasforma i cinque parametri stimati in accelerazione. Questa sezione ne caratterizza la quantizzazione con lo **stesso metodo** applicato alla rete, a ruoli invertiti: la rete è congelata a piena precisione e a variare è ora il nfrac dell'IIDM. L'anello chiuso e le metriche sono le stesse; ciò che nella rete si misurava sui cinque parametri, qui si misura sull'accelerazione — l'uscita del controllore.
+
+La **sicurezza ha un floor diverso da quello della rete**. Fino a cinque bit frazionari il controllore quantizzato non provoca **alcuna collisione aggiuntiva** rispetto all'oracolo; a due bit, invece, il car-following **si rompe** — 49 collisioni evitabili mancate, con passaggi a gap negativo. È una differenza sostanziale rispetto alla rete, sicura fino a due bit: l'IIDM è il pezzo fragile alla precisione estrema, e il suo floor di sicurezza cade fra cinque e due bit.
+
+![Figura 9.1 — Controllore IIDM al variare del suo nfrac. La curva (asse sinistro) è l'errore normalizzato dell'accelerazione open-loop rispetto al riferimento in doppia precisione; le barre (asse destro) sono le collisioni aggiuntive rispetto all'oracolo — nulle a 13/8/5, 49 a due bit. Fonte: qzi_cl_sweep.tsv, qzi_acc_sweep.tsv.](figures_quant/iidm.png)
+*Figura 9.1 — Controllore IIDM al variare del suo nfrac. La curva (asse sinistro) è l'errore normalizzato dell'accelerazione open-loop rispetto al riferimento in doppia precisione; le barre (asse destro) sono le collisioni aggiuntive rispetto all'oracolo — nulle a 13/8/5, 49 a due bit. Fonte: qzi_cl_sweep.tsv, qzi_acc_sweep.tsv.*
+
+La **fedeltà** dell'accelerazione degrada in modo liscio e monotono al scendere dei bit: l'errore normalizzato open-loop passa da 0.0008 a tredici bit a 0.045 a due, e lo scarto worst-case sale da 0.19 a 5.54 m/s². Il valore a otto bit — 0.81 m/s² di scarto massimo — coincide col **budget di quantizzazione già stabilito** per l'IIDM (l'errore in accelerazione che la quantizzazione della rete aveva già introdotto a monte): otto bit è il punto in cui l'IIDM smette di essere trascurabile rispetto alla rete. È lo sweet-spot.
+
+La **severità** conferma il quadro della rete: sulle traiettorie fisicamente inevitabili, l'impatto al contatto del controllore quantizzato resta pari a quello dell'oracolo a ogni nfrac — la quantizzazione dell'IIDM non rende i crash inevitabili più violenti. Fonte: qzi_sev_sweep.tsv.
+
+**Il blocco di deploy: architettura veloce, precisione fissa.** A differenza della rete, il controllore ottimizzato **non è parametrico in precisione**: divisore e radice quadrata *digit-recurrence* hanno larghezze di bit cablate per otto bit frazionari, e cambiare nfrac romperebbe quelle ricorrenze. Perciò il blocco dell'IIDM è a **precisione fissa a otto bit** — proprio lo sweet-spot individuato sopra — senza menu.
+
+Quell'implementazione è il frutto di una campagna di ottimizzazione a **17 round**, tutti bit-esatti, che ha portato il controllore da **15.7 MHz** (divisione combinatoria, baseline) a **77.9 MHz** (+397%): divisore e radice sequenzializzati (uno-due bit per ciclo, hardware più piccolo del combinatorio srotolato) e le catene lunghe della legge IIDM distribuite su più stadi di registro. Il blocco **standalone** (senza la rete, i cinque parametri in ingresso) è derivato da quell'architettura e sintetizza a **75.6 MHz** allo stesso collo critico (l'accelerazione IIDM); la differenza di ~3% dal controllore completo è il contesto standalone — i parametri arrivano dagli ingressi invece che dal decodificatore pipelinato della rete. Come per la rete, questa frequenza è **margine**: un passo di controllo da 0,1 s dura 800.000 clock a 8 MHz, contro i ~150 di una inferenza.
+
+| Variante IIDM | Fmax (MHz) | LUT | FF | DSP | collo (liv.) |
+|---|---|---|---|---|---|
+| baseline R0 (combinatorio) | 15.7 | 8230 | 3183 | 69 | 204 |
+| controllore R17 (SNN+IIDM) | 77.9 | 8387 | 4069 | 68 | 14 |
+| IIDM standalone R17 (blocco) | 75.6 | 3670 | 1173 | 17 | 15 |
+
+Il blocco è provato bit-esatto rispetto al modello di riferimento in doppia precisione (errore massimo nullo in streaming) e genera VHDL in modo self-contained. Resta componibile con qualunque stimatore: riceve i cinque parametri e restituisce l'accelerazione. In sintesi, il sistema car-following completo — stima (rete) e legge di controllo (IIDM) — è ora caratterizzato in quantizzazione su entrambe le meta'.
+
+
+## 10. Limiti residui
 
 Vanno dichiarati quattro limiti. Le curve di risorse, potenza e frequenza sono stime Vivado post-implementazione con vincolo di deploy, non misure su silicio; il loro andamento relativo fra i livelli è affidabile, i valori assoluti attendono la misura su scheda. La caratterizzazione hardware è inoltre condotta su una configurazione di pipeline di riferimento: il ginocchio e le curve di risorsa e potenza sono robusti al profilo scelto — la quantizzazione tocca la logica del core, comune ai profili — mentre il solo valore assoluto di frequenza massima è specifico di quella configurazione. Lo studio varia esclusivamente i bit del core: la quantizzazione degli ingressi è un asse separato, fuori campo. Infine, la caratterizzazione hardware della precisione mista (Sezione 8) poggia su un insieme ridotto di tre configurazioni sintetizzate, non su uno sweep completo per campo — che richiederebbe ore di sintesi; le curve di sensibilità sono isolate, un campo per volta, e la verifica congiunta delle interazioni è svolta sulla sola configurazione finale.
 
