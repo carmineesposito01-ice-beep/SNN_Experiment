@@ -104,7 +104,8 @@ function build_tier_configurable(nf)
          'naccw','accw (wide)'; 'nraw','raw (readout)'; 'nw','w (pesi po2)'};
   for k=1:6
     ps = m.addParameter('Name',fld{k,1},'Prompt',['nfrac ' fld{k,2}], ...
-                        'Type','slider','Value',num2str(nf(k)),'Evaluate','on','Visible','off');
+                        'Type','slider','Value',num2str(nf(k)),'Evaluate','on','Visible','off', ...
+                        'Callback','tier_nfrac_round_cb(gcb)');   % vincola a INTERO (StepSize non copre il digitato)
     ps.Range = [1 13]; ps.StepSize = 1;
   end
   m.Description = tier_configurable_description();
