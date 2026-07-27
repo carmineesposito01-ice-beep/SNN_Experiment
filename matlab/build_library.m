@@ -20,7 +20,7 @@ function build_library()
   for i = 1:numel(champs)
     c = champs(i); name = char(string(c.name));
     sub = [lib '/' name];
-    add_block('built-in/Subsystem', sub);
+    add_block('built-in/Subsystem', sub, 'Description', champ_description(name));
     add_block('simulink/User-Defined Functions/MATLAB Function', [sub '/SNN']);
     chart = sfroot().find('-isa', 'Stateflow.EMChart', 'Path', [sub '/SNN']);
     chart.Script = inlined_code(c);            % <-- self-contained, pesi bakati

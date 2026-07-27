@@ -109,6 +109,7 @@ function build_tier_configurable(nf)
     ps.Range = [1 13]; ps.StepSize = 1;
   end
   m.Description = tier_configurable_description();
+  set_param(sub, 'Description', tier_configurable_description());   % anche block-level (Block Properties)
   set_param(sub, 'MaskSelfModifiable','on');
 
   % LAYOUT: auto-arrangia i diagrammi prima di salvare, cosi' il blocco e' ordinato su disco
@@ -123,25 +124,20 @@ end
 
 function s = tier_configurable_description()
   L = {
-    'Donatello_Tier - SNN car-following (champion Donatello) CONFIGURABILE.'
-    'Un blocco, due modi. BASE: menu TIER (SLOW/BALANCED/FAST) + NFRAC (13/8/5/2). AVANZATO: checkbox ADV +'
-    '6 slider nfrac per-campo. La selezione attiva la variante (Variant Subsystem, update diagram): HDL Coder'
-    'genera SOLO la variante scelta, coi tipi fixed-point gia'' cotti.'
+    'Donatello_Tier - SNN car-following (champion Donatello), tier di trade-off CONFIGURABILE.'
     ''
-    'TIER: SLOW = R2/fused (area minima) · BALANCED = R5/p3 · FAST = R9/p5 (margine massimo).'
+    'FUNZIONE: stima i 5 parametri IDM (v0, T, s0, a, b) dallo stato di car-following (s, v, dv, v_l).'
     ''
-    'NFRAC (Base): bit frazionari UNICI del core SNN. 13=piena precisione (bit-exact) · 8 · 5 · 2 (safety-only).'
+    'MENU BASE: TIER (SLOW/BALANCED/FAST = area minima / compromesso / margine massimo) + NFRAC (bit'
+    'frazionari del core: 13 = piena precisione bit-exact / 8 / 5 / 2 safety-only). La selezione attiva la'
+    'variante (Variant Subsystem); HDL Coder genera SOLO quella, coi tipi fixed-point gia'' cotti.'
     ''
-    'MODALITA'' AVANZATA (ADV): 6 nfrac indipendenti [V fatigue acc accw raw w]. Gli slider MOSTRANO la config'
-    'attualmente COTTA nella variante ADV. Studio quantizzazione per-campo: acc/w scendibili a 4 bit'
-    'bit-exact (pesi po2, min 2^-4); V/fatigue/accw/raw servono pieni sotto il cancello 0.5 m. Config'
-    'area-ottimale = [13 13 4 13 13 4].'
-    'PER CAMBIARE la config ADV: esegui  build_tier_configurable([nV nfat nacc naccw nraw nw])  (ri-cuoce la'
-    'variante ADV a quei valori). Gli slider sono il valore da passare; la loro modifica nella mask NON ri-cuoce'
-    'da sola (un blocco linkato non si auto-rigenera: si passa dal builder).'
+    'MODALITA'' AVANZATA (checkbox ADV): 6 nfrac per-campo [V fatigue acc accw raw w]; gli slider mostrano la'
+    'config cotta. Solo acc/w scendono a 4 bit bit-exact (pesi po2, min 2^-4); area-ottimale [13 13 4 13 13 4].'
+    'Per cambiarla: build_tier_configurable([...]) (la mask NON ri-cuoce da sola su un blocco linkato).'
     ''
-    'I/O fisico (fixed >=20 bit frazionari): s,v,dv,v_l -> v0,T,s0,a,b. Edge-triggered. Self-contained.'
-    'Richiede matlab/ sul path (callback tier_adv_cb). Rigenerazione: build_tier_configurable.m.'
+    'I/O fisico fixed >=20 bit fraz.: s,v,dv,v_l -> v0,T,s0,a,b. Edge-triggered. Self-contained (la mask'
+    'Avanzata richiede matlab/ sul path, callback tier_adv_cb). Rigenerazione: build_tier_configurable.m.'
   };
   s = strjoin(L, newline);
 end

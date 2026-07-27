@@ -1,4 +1,7 @@
-function ok = run_block_hdl_gate(blockName)
+function ok = run_block_hdl_gate(blockName, maskParams)
+%  maskParams (opz.): cell {name,val,...} da set_param sul DUT prima di makehdl (es. per selezionare
+%    una variante: {'NLUT','16'} sul Donatello_LUT, {'TIER','FAST','NFRAC','2'} sul Donatello_Tier).
+%    Default vuoto = variante di default del blocco. Backward-compatible.
 %RUN_BLOCK_HDL_GATE  Cancello "ALTRO PC" per i blocchi HDL-ready self-contained di snn_champions_lib.
 %  Dimostra il requisito: **portando SOLO il .slx su un altro PC, HDL Coder deve generare il VHDL,
 %  senza alcun altro file**. Come: copia solo `snn_champions_lib.slx` in una cartella isolata, TOGLIE
@@ -51,6 +54,7 @@ function ok = run_block_hdl_gate(blockName)
   mdl = 'gate_mdl'; new_system(mdl); load_system(mdl);
   sub = [mdl '/DUT'];
   add_block([lib '/' blockName], sub);
+  if nargin >= 2 && ~isempty(maskParams), set_param(sub, maskParams{:}); end   % seleziona la variante
   vals = {'10', '6', '2', '4'};                      % s, v, dv, v_l fisici (fixed: double non e' HDL)
   for j = 1:4
     add_block('simulink/Sources/Constant', [mdl '/i' num2str(j)], 'Value', vals{j}, ...

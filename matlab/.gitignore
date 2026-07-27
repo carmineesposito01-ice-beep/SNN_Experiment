@@ -56,3 +56,7 @@ hdl_snn/
 hdl_iidm_divblk/
 hdlsrc_donatello*/
 slprj/
+
+# VHDL generato per ri-sintesi di conferma Fmax (rigenerabile via gen_r17_vhdl.m / gen_acciidm_m_vhdl.m)
+hdl_iidm_r17/
+hdl_acciidm_m/

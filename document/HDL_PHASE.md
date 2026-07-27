@@ -383,6 +383,13 @@ Config in `make_hdl.m`: `LoopOptimization='StreamLoops'`, `ConstantMultiplierOpt
   xc7z020 @8 MHz = **8614 LUT · 2134 FF · 71 DSP · 9,30 MHz** (WNS +17,4 ns, latenza 358 clk), `dmax=0` vs SP3,
   **self-contained + HDL-ready** (gate `run_block_hdl_gate` PASSED, 2026-07-17). **BRAM non catturato** nel run
   OOC. Tecnica: time-mux dell'IIDM via FSM a stadi (1 divisore condiviso). Doc: `SP4_ACC_IIDM_FAST.md`.
+  - ⚠️ **SUPERATO da R17 (2026-07-19, `hdl_iidm/RESULTS.txt`)**: divisore E radice (s_star) resi **SEQUENZIALI**
+    (digit-recurrence 1-2 bit/ciclo) → il blocco corrente è **R17**: OOC **77,9 MHz** (R0 15,7 → R17, +397%),
+    8387 LUT / 4069 FF / 68 DSP, collo `st_a_iidm` (14 liv), bit-exact ogni round. Il **9,30 MHz** sopra è la
+    variante SP4 combinatoria (predecessore). ⚠️ 77,9 = **OOC reg-reg** (non io-timed): il deployabile è inferiore.
+    Ri-verificato **self-contained + HDL-ready 2026-07-27** (`run_milestone_hdl_gates` 5/5, DualPortRAM, 0 err/warn).
+    **Ri-sintesi OOC 2026-07-27** (Vivado xc7z020, 125 ns, `synth_acc_iidm.tcl` su VHDL fresco) **CONFERMA**:
+    **77,936 MHz · 8387 LUT · 4069 FF · 68 DSP · 1 BRAM**, collo `st_a_iidm` 14 liv — identica a R17. Il 9,30 è chiuso.
 - ⏳ **[FASE B2.0 — aperta 2026-07-17] Validazione RTL del blocco M**: il VHDL generato è solo *generato*, **mai
   simulato in xsim** vs riferimento sul **dataset intero** (anello ③ = cosim, finora fatto per la sola SNN B2, non
   per il controllore). Da fare: testbench HDL full-dataset con metriche vere (non traiettoria ridotta — lezione
@@ -415,6 +422,14 @@ Config in `make_hdl.m`: `LoopOptimization='StreamLoops'`, `ConstantMultiplierOpt
     tra il blocco fisico (local_normalize) e il riferimento software (snn_normalize), da tenere per il confronto MPC.
     ⏳ Misura CLOSED-LOOP della deriva (si smorza o accumula?) = nota, non ancora fatta.
   - **PROSSIMO grande:** report intermedio (checkpoint) → riordino file matlab → 2b (ottimizzazione `tanh`) → 2c.
+- ✅ **[MILESTONE 2026-07-27] Libreria consolidata a 8 blocchi, tutti verificati sul dataset.** Riordino **18→8**
+  (4 Campioni double + `Donatello_LUT` combinato + `Donatello_Tier` + `ACC-IIDM` + `Donatello_ACC_IIDM_M`;
+  `reorg_library.m` rimuove i singoli assorbiti). **Combine gate** `run_lut_combine_gate`: LUT combinato@N bit-exact
+  ai singoli storici (`dmax=0`, 6 N × 25 control-step), discrimina N. **Test consolidato** `snn_lib_dataset_test.slx`
+  + `run_lib_dataset_test`: **8/8 PASS** sul dataset (Campioni vs `ref_params`; HDL vs MEX+decode / `acc_iidm_open`,
+  `dmax=0`). **Gate HDL self-contained** `run_milestone_hdl_gates`: **5/5 PASS** (LUT N=64 e N=16, Tier, ACC_IIDM_M,
+  ACC-IIDM). Report QC'd (create-report, 6 fix, rebuild deterministico). Finding composizione + workflow libreria: §9.
+  Stato completo: `SESSION_RESUME.md` §MILESTONE 2026-07-27.
 
 ## §7 File (worktree)
 - **Sorgente HDL:** `matlab/snn_core.m` (mod), `matlab/snn_types.m` (mod, +`accw`),
@@ -521,3 +536,19 @@ Config in `make_hdl.m`: `LoopOptimization='StreamLoops'`, `ConstantMultiplierOpt
   pipelinato), o si rinuncia alla bit-esattezza (LUT/float = approssimare) o si porta quell'unità **dentro**
   la chart. È ciò che ha ucciso l'approccio "FSM + blocco Divide" di SP4-M
   (`document/SP4_ACC_IIDM_FAST.md` §Variante M-FSM).
+- **⚠️ Composizione estimatore→controllore: gli ingressi del controllore devono cambiare SINCRONI
+  (VERIFICATO 2026-07-27, banco `snn_lib_dataset_test`)**. `ACC-IIDM` è edge-triggered (`go = any(x≠xprev)`):
+  1 cambio d'ingresso = 1 inferenza, e l'OU (stima `a_l`) aggiorna **una volta** per inferenza. Se lo si compone
+  DAL VIVO con `Donatello_Tier`/`Donatello_LUT` (estimatore→params), i 4 ingressi FISICI cambiano a inizio
+  control-step ma i 5 PARAMS arrivano ~405 clock dopo (quando l'estimatore time-mux finisce) → **DOPPIO edge** →
+  l'OU aggiorna **due volte**/control-step → diverge da `acc_iidm_open` (che aggiorna una volta), in silenzio.
+  Per **testare** il blocco si sincronizzano tutti i 9 ingressi (params precalcolati, held come i fisici) = l'uso
+  previsto dell'interfaccia (banco: `dmax=0` vs `acc_iidm_open`). Per **comporre** estimatore+controllore sull'FPGA
+  serve un handshake "params pronti" (un `valid` dell'estimatore che triggera il controllore) **non presente nei
+  blocchi attuali** → candidato di design per il sistema in anello (V2I).
+- **Workflow della libreria dopo il riordino (2026-07-27)**: `build_hdl_variants.m` costruisce TUTTI i blocchi
+  Donatello (Champion + LUT{16..512} + ACC_IIDM + ACC_IIDM_M); `reorg_library.m` poi RIMUOVE i singoli assorbiti
+  (Champion, LUT{N}, SLOW/BALANCED/FAST, SP3) lasciando il set-milestone di 8 blocchi. **Ri-eseguire
+  `build_hdl_variants` RI-AGGIUNGE i singoli** → va sempre seguito da `reorg_library`. Il blocco `Donatello_LUT`
+  combinato (popup NLUT) lo costruisce `build_lut_configurable.m` (architettura **splitpipe** attuale, non lo
+  `split` degli studi LUT; bit-exact al riferimento — `run_lut_ref_gate`); i tier li combina `build_tier_configurable.m`.

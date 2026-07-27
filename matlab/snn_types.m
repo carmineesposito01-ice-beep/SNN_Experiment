@@ -17,7 +17,7 @@ function T = snn_types(dt, nfrac)
         'acc',     fi([], true, 6 + f, f), ...    % accumulatore I_input Q5.f (int 5: un tap di delay arriva a ~8)
         'accw',    fi([], true, 13 + f, f + 4), ...% accumulatore LARGO Q8.(f+4): +4 frac per shift po2 esatti
         'raw',     fi([], true, 8 + f, f), ...    % readout LI Q7.f (int 7)
-        'w',       fi([], true, 3 + f, f));       % pesi po2 Q2.f (esatti per f>=5)
+        'w',       fi([], true, 3 + f, f));       % pesi po2 Q2.f (esatti per f>=4: min |w|=2^-4, verif. mp_sens)
     otherwise
       error('snn_types:dt', 'dt deve essere ''double'' o ''fixed''');
   end

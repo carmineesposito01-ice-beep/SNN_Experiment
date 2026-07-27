@@ -5,11 +5,49 @@
 
 ---
 
-## ▶ RIPRESA A FREDDO — LEGGERE QUESTO BLOCCO PER PRIMO (agg. 2026-07-23)
+## ▶ RIPRESA A FREDDO — LEGGERE QUESTO BLOCCO PER PRIMO (agg. 2026-07-27)
 
 > **Ruolo di questo file:** punto d'ingresso + **STATO** del track `Simulink_Importer`. NON è la procedura
 > generale (quella è la skill `session-reprise`). È un **guida ai documenti**: quando dice «leggi X», leggi X —
 > non ricostruire a memoria.
+
+### 🏁 MILESTONE 2026-07-27 — LIBRERIA CONSOLIDATA (8 blocchi puliti, tutti verificati sul dataset)
+> **Checkpoint concettuale del track.** `snn_champions_lib.slx` riordinata da 18 a **8 blocchi**:
+> - **4 Campioni comportamentali** (double, NON-HDL, riferimento): `Donatello` · `Leonardo` · `Michelangelo` · `Raffaello`
+> - **4 blocchi HDL-ready self-contained**: `Donatello_LUT` (**NUOVO** — combinato, popup `NLUT` 16/32/64/128/256/512,
+>   default 64) · `Donatello_Tier` (configurabile tier×nfrac + Avanzata) · `ACC-IIDM` (controllore IIDM R17 standalone,
+>   9 ingressi) · `Donatello_ACC_IIDM_M` (controllore R17 completo SNN+IIDM).
+> - **Rimossi** (assorbiti, `reorg_library.m`): `Donatello_Champion`+`Donatello_LUT{16..512}`→nel LUT combinato ·
+>   `Donatello_SLOW/BALANCED/FAST`→nel Tier · `Donatello_ACC_IIDM` (SP3 nativo, superato da ACC-IIDM+ACC_IIDM_M).
+>
+> **Verifiche — tutte verdi, sul dataset reale:**
+> - **LUT ref gate** (`run_lut_ref_gate`): il LUT combinato (**splitpipe** = architettura attuale, veloce) è
+>   **bit-exact al riferimento** MEX+decode su 6 N × 25 control-step (`dmax=0`) e **discrimina N** (sens. 0.077).
+>   Gli studi LUT usavano `split` (per la precisione, non la velocità); i singoli furono rimossi dopo un
+>   combine-gate iniziale che ne provò l'equivalenza, poi il blocco è stato portato a splitpipe (richiesta utente).
+> - **Test consolidato** (`snn_lib_dataset_test.slx` + `run_lib_dataset_test`): **tutti e 8 PASSANO** — Campioni
+>   max|Δ| vs `ref_params` Python ≤7e-4 · LUT@64/Tier@BAL13 `dmax=0` vs MEX+decode64 · ACC_IIDM_M/ACC-IIDM `dmax=0`
+>   vs `acc_iidm_open`.
+> - **HDL-ready + self-contained** (`run_milestone_hdl_gates`): **5/5 PASS** — Donatello_LUT (N=64 **e** N=16),
+>   Donatello_Tier, Donatello_ACC_IIDM_M (DualPortRAM, 0 err/warn), ACC-IIDM (0 err/warn). `matlab/` fuori dal path.
+> - **Report QC'd** (skill `create-report`): audit avversariale (30+ numeri, **ZERO discrepanze**), 6 fix al generatore
+>   (collisione ToC 10/11, etichetta dataset cut-in→discontinuità, caveat Fmax OOC, `meta'`→metà, docstring, ref
+>   dangling budget), rebuild **deterministico byte-identico**.
+> - **Fix Blocco A** (slider ADV nfrac solo interi, `tier_nfrac_round_cb`) verificato su tutti e 6 gli slider.
+>
+> **FINDING (composizione estimatore→controllore, per V2I)**: comporre `Tier→ACC-IIDM` DAL VIVO dà un **doppio edge**
+> (i 5 params arrivano ~405 clock dopo i 4 fisici) → l'OU (stima a_l) aggiornerebbe due volte/control-step. L'interfaccia
+> a 9 ingressi vuole ingressi **SINCRONI**; per l'anello serve un handshake "params pronti" NON presente nei blocchi →
+> candidato di design. Dettaglio: `HDL_PHASE.md §9`.
+>
+> **Nuovi file:** `build_lut_configurable.m` · `reorg_library.m` · `build_lib_dataset_test.m`+`run_lib_dataset_test.m` ·
+> `run_lut_combine_gate.m` · `run_milestone_hdl_gates.m`. **Workflow libreria:** `build_hdl_variants` (costruisce TUTTO,
+> singoli inclusi) → `reorg_library` (rimuove i singoli assorbiti). Ri-eseguire build_hdl_variants RI-AGGIUNGE i singoli.
+> ✅ **Fmax ACC_IIDM_M — RICONCILIATO + CONFERMATO da ri-sintesi:** la chart usa divisore+radice **sequenziali** =
+> **R17**; la **ri-sintesi OOC 2026-07-27** (Vivado, xc7z020, 125 ns) dà **77,936 MHz · 8387 LUT · 4069 FF · 68 DSP ·
+> 1 BRAM** (collo `st_a_iidm`, 14 liv, 0 errori) — **identica a `hdl_iidm/RESULTS.txt` R17**. Il **9,30 MHz** citato più
+> sotto (SP4, divisore combinatorio) è **superato**. ⚠️ 77,936 è **OOC reg-reg** (non io-timed): il deployabile è inferiore.
+> **Stato git:** modifiche NON committate (commit su richiesta).
 
 ### 🔬 TRACK STUDIO TRADE-OFF (Donatello SNN, Blocco A) — ✅ COMPLETO 2026-07-23 (report consegnato)
 > Track PARALLELO a SP4/Fase B2.0 (stesso branch). **Blocco A CHIUSO** al metro REALE io-timed. Il primo giro
