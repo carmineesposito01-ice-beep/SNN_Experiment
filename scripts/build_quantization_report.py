@@ -1,14 +1,16 @@
-"""build_fpga_phase_b_report.py — REPORT FPGA Fase B (post-sintesi Vivado) — .md + .pdf da sorgente unica.
+"""build_quantization_report.py — Studio di quantizzazione (rete SNN Donatello + controllore IIDM) — .md + .pdf da sorgente unica.
 
-Gemello di scripts/build_fpga_report.py (Fase A, profilazione software pre-silicio). Questo documento
-riporta la VALIDAZIONE post-sintesi del profilo FPGA su Vivado (OOC + SAIF, confidenza alta), livello
-di fedelta' intermedio fra la stima op-count (Fase A) e la misura su silicio (Fase C, predisposta).
+Caratterizza il compromesso di quantizzazione fixed-point del car-following su due meta': il core spiking
+Donatello (nfrac dei tipi interni: sicurezza in anello chiuso, fedelta' dei parametri, costo hardware su
+Zynq-7020) e il controllore ACC-IIDM specchiato (Sezione 9). Include anche l'analisi mixed-precision
+per-campo (Sezione 8).
 
-Grounding: ogni numero proviene da matlab/axi/build/phase_b/results.csv (a sua volta estratto dai .rpt
-Vivado util_*/timing_*/power_*). Nessun numero e' scritto a mano nel testo.
+Grounding: ogni numero proviene dai TSV dello studio — matlab/Quantizzation_Study/{cl,res,acc,sev}_sweep.tsv
+e mp_{sens,res,finalists}.tsv per la rete, matlab/Quantizzation_Study_IIDM/qzi_*.tsv per il controllore
+IIDM. Nessun numero e' scritto a mano nel testo.
 
-Uso:    python scripts/build_fpga_phase_b_report.py
-Output: report/FPGA_PHASE_B_REPORT.{md,pdf}  +  report/figures_phase_b/*
+Uso:    python scripts/build_quantization_report.py
+Output: report/QUANTIZATION_STUDY_REPORT.{md,pdf}  +  report/figures_quant/*
 """
 import os
 import csv
@@ -113,7 +115,7 @@ import re as _re
 _TRUNC_MAP = {
     "fedelta'": 'fedeltà', "idoneita'": 'idoneità', "modalita'": 'modalità',
     "attivita'": 'attività', "capacita'": 'capacità', "entita'": 'entità',
-    "verita'": 'verità', "proprieta'": 'proprietà', "sommita'": 'sommità',
+    "verita'": 'verità', "proprieta'": 'proprietà', "sommita'": 'sommità', "meta'": 'metà',
     "parita'": 'parità', "sparsita'": 'sparsità', "qualita'": 'qualità',
     "unita'": 'unità', "possibilita'": 'possibilità', "difficolta'": 'difficoltà',
     "sensibilita'": 'sensibilità', "quantita'": 'quantità', "velocita'": 'velocità',
@@ -146,7 +148,7 @@ def qacc(nf, k):  return float(QZI_ACC[nf][k])
 def qres(lbl, k): return float(QZI_RES[lbl][k])
 QZI_SAFE  = [nf for nf in QZI_NF if int(float(QZI_CL[nf]['coll_extra'])) == 0]   # [13,8,5]
 QZI_COLL2 = int(float(QZI_CL[2]['coll_extra'])) if 2 in QZI_CL else 0            # 49: a nfrac=2 il c-f rompe
-QZI_MAXD8 = qacc(8, 'maxd_accel')                                               # ~0.81 ~ budget E_iidm@8=0.83
+QZI_MAXD8 = qacc(8, 'maxd_accel')                                               # scarto worst-case accel a 8 bit (~0.81 m/s^2)
 QZI_SEVOK = all(abs(float(QZI_SEV[nf]['max_impact_dv']) - float(QZI_SEV[nf]['oracle_max'])) < 0.2 for nf in QZI_NF)
 R17_FMAX_STD  = qres('r17_standalone', 'Fmax_MHz')                              # 75.63 (IIDM-only)
 R17_FMAX_CTRL = qres('r17_controller', 'Fmax_MHz')                              # 77.936 (controllore)
@@ -339,7 +341,8 @@ def build_doc():
             'qzi_acc_sweep, qzi_sev_sweep, qzi_res}.tsv per il controllore IIDM (Sezione 9). Tutti prodotti '
             'dagli script dello studio; nessun numero e\' scritto a mano nel testo.',
             'Campione: Donatello, il forward deployato del blocco Donatello_Tier. Dataset '
-            'di prova: %d traiettorie su %d scenari canonici, di cui %d con evento di cut-in.' % (N_TRAJ, N_SCEN, N_CUTIN),
+            'di prova: %d traiettorie su %d scenari canonici, di cui %d con discontinuita\' del gap '
+            '(cut-in e cut-out).' % (N_TRAJ, N_SCEN, N_CUTIN),
         ],
     }))
     A(('toc', 'Sommario'))
@@ -392,8 +395,8 @@ def build_doc():
             'sopravvive banalmente anche molto degradati; percio\' la prova usa i %d scenari canonici del '
             'progetto — inseguimento, stop-and-go, frenata forte, cut-in, sinusoidale, e quattro scenari '
             'di coda fra cui il cut-in aggressivo e la frenata di emergenza — replicati su piu\' '
-            'estrazioni di parametri, per un totale di %d traiettorie di cui %d con un vero evento di '
-            'cut-in, modellato come una discontinuita\' del gap.' % (N_SCEN, N_TRAJ, N_CUTIN)))
+            'estrazioni di parametri, per un totale di %d traiettorie di cui %d con discontinuita\' del '
+            'gap (cut-in e cut-out).' % (N_SCEN, N_TRAJ, N_CUTIN)))
     A(('p', 'La seconda scelta e\' l\'**anello chiuso fedele**. La sicurezza si misura simulando l\'ego '
             'guidato dalla rete quantizzata contro il profilo del leader, con il gap tracciato senza '
             'clamp inferiore, cosi\' che una collisione sia rilevabile; l\'evento di cut-in vi e\' '
@@ -668,10 +671,11 @@ def build_doc():
                'nulle a 13/8/5, %d a due bit. Fonte: qzi_cl_sweep.tsv, qzi_acc_sweep.tsv.' % QZI_COLL2)))
     A(('p', 'La **fedelta\'** dell\'accelerazione degrada in modo liscio e monotono al scendere dei bit: '
             'l\'errore normalizzato open-loop passa da %.4f a tredici bit a %.3f a due, e lo scarto '
-            'worst-case sale da %.2f a %.2f m/s². Il valore a otto bit — %.2f m/s² di scarto massimo — '
-            'coincide col **budget di quantizzazione gia\' stabilito** per l\'IIDM (l\'errore in '
-            'accelerazione che la quantizzazione della rete aveva gia\' introdotto a monte): otto bit e\' il '
-            'punto in cui l\'IIDM smette di essere trascurabile rispetto alla rete. E\' lo sweet-spot.'
+            'worst-case sale da %.2f a %.2f m/s². A otto bit lo scarto massimo dell\'accelerazione e\' '
+            'ancora contenuto (%.2f m/s²) e la sicurezza e\' intatta — zero collisioni evitabili, come a '
+            'tredici e a cinque bit — mentre a due bit il car-following si rompe. Otto bit e\' percio\' il '
+            'punto di deploy: resta ben sopra la soglia di rottura osservata a due bit, ed e\' anche la '
+            'precisione a cui sono cablate le ricorrenze del divisore e della radice (sotto). E\' lo sweet-spot.'
             % (qacc(13, 'NRMSE_accel'), qacc(2, 'NRMSE_accel'),
                qacc(13, 'maxd_accel'), qacc(2, 'maxd_accel'), QZI_MAXD8)))
     A(('p', 'La **severita\'** conferma il quadro della rete: sulle traiettorie fisicamente inevitabili, '
@@ -709,6 +713,10 @@ def build_doc():
              '%d' % qres('r17_standalone', 'critpath_liv')],
         ],
     )))
+    A(('callout', 'Le frequenze massime di questa sezione (controllore %.1f MHz, standalone %.1f MHz) sono '
+                  'OOC reg-reg, non io-timed: il valore deployabile e\' materialmente inferiore. Qui conta '
+                  'il rapporto (+%.0f%% sulla baseline, misurata allo stesso metro) e il margine sul passo di '
+                  'controllo, non il valore assoluto.' % (R17_FMAX_CTRL, R17_FMAX_STD, R17_GAIN_PCT)))
     A(('p', 'Il blocco e\' provato bit-esatto rispetto al modello di riferimento in doppia precisione '
             '(errore massimo nullo in streaming) e genera VHDL in modo self-contained. Resta componibile '
             'con qualunque stimatore: riceve i cinque parametri e restituisce l\'accelerazione. In sintesi, '
@@ -730,8 +738,8 @@ def build_doc():
             'di sintesi; le curve di sensibilita\' sono isolate, un campo per volta, e la verifica '
             'congiunta delle interazioni e\' svolta sulla sola configurazione finale.'))
 
-    # --- 10. Riferimenti ---
-    A(('h1', '10. Riferimenti'))
+    # --- 11. Riferimenti ---
+    A(('h1', '11. Riferimenti'))
     A(('table', (
         ['Riferimento', 'Tema'],
         [

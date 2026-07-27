@@ -4,7 +4,7 @@
 
 > Livello di fedeltà: il car-following è da simulazione in anello chiuso provata bit-vicina al motore di riferimento; risorse, potenza e frequenza sono stime Vivado post-implementazione (out-of-context), non misura su silicio.  
 > Fonte dei numeri: matlab/Quantizzation_Study/{cl_sweep, res_sweep, acc_sweep, sev_sweep, mp_sens, mp_finalists, mp_res}.tsv per la rete; matlab/Quantizzation_Study_IIDM/{qzi_cl_sweep, qzi_acc_sweep, qzi_sev_sweep, qzi_res}.tsv per il controllore IIDM (Sezione 9). Tutti prodotti dagli script dello studio; nessun numero è scritto a mano nel testo.  
-> Campione: Donatello, il forward deployato del blocco Donatello_Tier. Dataset di prova: 99 traiettorie su 9 scenari canonici, di cui 33 con evento di cut-in.  
+> Campione: Donatello, il forward deployato del blocco Donatello_Tier. Dataset di prova: 99 traiettorie su 9 scenari canonici, di cui 33 con discontinuità del gap (cut-in e cut-out).  
 
 ---
 
@@ -23,7 +23,7 @@
 | 8. Quantizzazione per-campo (mixed-precision) |
 | 9. Il controllore IIDM: studio specchiato |
 | 10. Limiti residui |
-| 10. Riferimenti |
+| 11. Riferimenti |
 
 
 ## 1. Sintesi
@@ -43,7 +43,7 @@ Un'analisi complementare, campo per campo, raffina il quadro: dei sei tipi in vi
 
 Lo studio di trade-off a monte aveva stabilito che, essendo la frequenza massima un margine enorme, il criterio di progetto rilevante è l'area — lasciare spazio ad altri blocchi sullo stesso dispositivo. La quantizzazione attacca proprio quella leva: meno bit frazionari significano meno logica e meno potenza dinamica, al costo di accuratezza. La domanda che lo studio risolve è fin dove sia lecito spingersi, e cosa fissi davvero il limite.
 
-La valutazione poggia su tre scelte metodologiche, ciascuna volta a evitare una conclusione credibile ma falsa. La prima è il **dataset di prova esaustivo**. Un insieme di sole traiettorie di inseguimento dolce non mette mai il controllore in difficoltà, e vi si sopravvive banalmente anche molto degradati; perciò la prova usa i 9 scenari canonici del progetto — inseguimento, stop-and-go, frenata forte, cut-in, sinusoidale, e quattro scenari di coda fra cui il cut-in aggressivo e la frenata di emergenza — replicati su più estrazioni di parametri, per un totale di 99 traiettorie di cui 33 con un vero evento di cut-in, modellato come una discontinuità del gap.
+La valutazione poggia su tre scelte metodologiche, ciascuna volta a evitare una conclusione credibile ma falsa. La prima è il **dataset di prova esaustivo**. Un insieme di sole traiettorie di inseguimento dolce non mette mai il controllore in difficoltà, e vi si sopravvive banalmente anche molto degradati; perciò la prova usa i 9 scenari canonici del progetto — inseguimento, stop-and-go, frenata forte, cut-in, sinusoidale, e quattro scenari di coda fra cui il cut-in aggressivo e la frenata di emergenza — replicati su più estrazioni di parametri, per un totale di 99 traiettorie di cui 33 con discontinuità del gap (cut-in e cut-out).
 
 La seconda scelta è l'**anello chiuso fedele**. La sicurezza si misura simulando l'ego guidato dalla rete quantizzata contro il profilo del leader, con il gap tracciato senza clamp inferiore, così che una collisione sia rilevabile; l'evento di cut-in vi è iniettato come teletrasporto del gap. Questo anello riproduce il motore canonico del progetto: sui nove scenari, l'oracolo simulato in MATLAB e la funzione di riferimento in Python coincidono passo per passo entro **2.2e-06 m** sul gap, con i medesimi verdetti di collisione. La misura di comportamento è dunque quella vera, non quella di un anello che nasconde le collisioni dietro un clamp.
 
@@ -166,14 +166,14 @@ I sei nfrac per campo sono esposti nel blocco di deploy come **Modalità Avanzat
 
 ## 9. Il controllore IIDM: studio specchiato
 
-La rete è meta' del sistema di car-following; l'altra meta' è il controllore ACC-IIDM che trasforma i cinque parametri stimati in accelerazione. Questa sezione ne caratterizza la quantizzazione con lo **stesso metodo** applicato alla rete, a ruoli invertiti: la rete è congelata a piena precisione e a variare è ora il nfrac dell'IIDM. L'anello chiuso e le metriche sono le stesse; ciò che nella rete si misurava sui cinque parametri, qui si misura sull'accelerazione — l'uscita del controllore.
+La rete è metà del sistema di car-following; l'altra metà è il controllore ACC-IIDM che trasforma i cinque parametri stimati in accelerazione. Questa sezione ne caratterizza la quantizzazione con lo **stesso metodo** applicato alla rete, a ruoli invertiti: la rete è congelata a piena precisione e a variare è ora il nfrac dell'IIDM. L'anello chiuso e le metriche sono le stesse; ciò che nella rete si misurava sui cinque parametri, qui si misura sull'accelerazione — l'uscita del controllore.
 
 La **sicurezza ha un floor diverso da quello della rete**. Fino a cinque bit frazionari il controllore quantizzato non provoca **alcuna collisione aggiuntiva** rispetto all'oracolo; a due bit, invece, il car-following **si rompe** — 49 collisioni evitabili mancate, con passaggi a gap negativo. È una differenza sostanziale rispetto alla rete, sicura fino a due bit: l'IIDM è il pezzo fragile alla precisione estrema, e il suo floor di sicurezza cade fra cinque e due bit.
 
 ![Figura 9.1 — Controllore IIDM al variare del suo nfrac. La curva (asse sinistro) è l'errore normalizzato dell'accelerazione open-loop rispetto al riferimento in doppia precisione; le barre (asse destro) sono le collisioni aggiuntive rispetto all'oracolo — nulle a 13/8/5, 49 a due bit. Fonte: qzi_cl_sweep.tsv, qzi_acc_sweep.tsv.](figures_quant/iidm.png)
 *Figura 9.1 — Controllore IIDM al variare del suo nfrac. La curva (asse sinistro) è l'errore normalizzato dell'accelerazione open-loop rispetto al riferimento in doppia precisione; le barre (asse destro) sono le collisioni aggiuntive rispetto all'oracolo — nulle a 13/8/5, 49 a due bit. Fonte: qzi_cl_sweep.tsv, qzi_acc_sweep.tsv.*
 
-La **fedeltà** dell'accelerazione degrada in modo liscio e monotono al scendere dei bit: l'errore normalizzato open-loop passa da 0.0008 a tredici bit a 0.045 a due, e lo scarto worst-case sale da 0.19 a 5.54 m/s². Il valore a otto bit — 0.81 m/s² di scarto massimo — coincide col **budget di quantizzazione già stabilito** per l'IIDM (l'errore in accelerazione che la quantizzazione della rete aveva già introdotto a monte): otto bit è il punto in cui l'IIDM smette di essere trascurabile rispetto alla rete. È lo sweet-spot.
+La **fedeltà** dell'accelerazione degrada in modo liscio e monotono al scendere dei bit: l'errore normalizzato open-loop passa da 0.0008 a tredici bit a 0.045 a due, e lo scarto worst-case sale da 0.19 a 5.54 m/s². A otto bit lo scarto massimo dell'accelerazione è ancora contenuto (0.81 m/s²) e la sicurezza è intatta — zero collisioni evitabili, come a tredici e a cinque bit — mentre a due bit il car-following si rompe. Otto bit è perciò il punto di deploy: resta ben sopra la soglia di rottura osservata a due bit, ed è anche la precisione a cui sono cablate le ricorrenze del divisore e della radice (sotto). È lo sweet-spot.
 
 La **severità** conferma il quadro della rete: sulle traiettorie fisicamente inevitabili, l'impatto al contatto del controllore quantizzato resta pari a quello dell'oracolo a ogni nfrac — la quantizzazione dell'IIDM non rende i crash inevitabili più violenti. Fonte: qzi_sev_sweep.tsv.
 
@@ -187,7 +187,9 @@ Quell'implementazione è il frutto di una campagna di ottimizzazione a **17 roun
 | controllore R17 (SNN+IIDM) | 77.9 | 8387 | 4069 | 68 | 14 |
 | IIDM standalone R17 (blocco) | 75.6 | 3670 | 1173 | 17 | 15 |
 
-Il blocco è provato bit-esatto rispetto al modello di riferimento in doppia precisione (errore massimo nullo in streaming) e genera VHDL in modo self-contained. Resta componibile con qualunque stimatore: riceve i cinque parametri e restituisce l'accelerazione. In sintesi, il sistema car-following completo — stima (rete) e legge di controllo (IIDM) — è ora caratterizzato in quantizzazione su entrambe le meta'.
+> **Nota.** Le frequenze massime di questa sezione (controllore 77.9 MHz, standalone 75.6 MHz) sono OOC reg-reg, non io-timed: il valore deployabile è materialmente inferiore. Qui conta il rapporto (+397% sulla baseline, misurata allo stesso metro) e il margine sul passo di controllo, non il valore assoluto.
+
+Il blocco è provato bit-esatto rispetto al modello di riferimento in doppia precisione (errore massimo nullo in streaming) e genera VHDL in modo self-contained. Resta componibile con qualunque stimatore: riceve i cinque parametri e restituisce l'accelerazione. In sintesi, il sistema car-following completo — stima (rete) e legge di controllo (IIDM) — è ora caratterizzato in quantizzazione su entrambe le metà.
 
 
 ## 10. Limiti residui
@@ -195,7 +197,7 @@ Il blocco è provato bit-esatto rispetto al modello di riferimento in doppia pre
 Vanno dichiarati quattro limiti. Le curve di risorse, potenza e frequenza sono stime Vivado post-implementazione con vincolo di deploy, non misure su silicio; il loro andamento relativo fra i livelli è affidabile, i valori assoluti attendono la misura su scheda. La caratterizzazione hardware è inoltre condotta su una configurazione di pipeline di riferimento: il ginocchio e le curve di risorsa e potenza sono robusti al profilo scelto — la quantizzazione tocca la logica del core, comune ai profili — mentre il solo valore assoluto di frequenza massima è specifico di quella configurazione. Lo studio varia esclusivamente i bit del core: la quantizzazione degli ingressi è un asse separato, fuori campo. Infine, la caratterizzazione hardware della precisione mista (Sezione 8) poggia su un insieme ridotto di tre configurazioni sintetizzate, non su uno sweep completo per campo — che richiederebbe ore di sintesi; le curve di sensibilità sono isolate, un campo per volta, e la verifica congiunta delle interazioni è svolta sulla sola configurazione finale.
 
 
-## 10. Riferimenti
+## 11. Riferimenti
 
 | Riferimento | Tema |
 |---|---|
