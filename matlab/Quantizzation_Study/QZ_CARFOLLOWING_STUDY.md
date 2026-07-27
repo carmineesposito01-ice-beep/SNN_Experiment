@@ -261,3 +261,27 @@ modificabile per-istanza; sonda `probe_adv`. Approccio A robusto adottato).
 (forward bit-exact @full-precision), `qz_mp_gate_selftest` (detector nei due sensi: accetta @13, rifiuta @2),
 `qz_mp_advanced_gate` (5 gate: Base no-regressione · struttura · ADV≡Base · ADV discrimina · HDL da ADV).
 Dati: `mp_sens.tsv` `mp_finalists.tsv` `mp_res.tsv`. Report: sezione §8 di `QUANTIZATION_STUDY_REPORT`.
+
+## 13. Controllore IIDM: studio NFRAC specchiato (Blocco B)
+
+Studio speculare a quello della rete, a ruoli invertiti: **SNN congelata @13, IIDM che varia**. Isolato in
+`matlab/Quantizzation_Study_IIDM/` (prefisso `qzi_`). Stesse metriche del §4-8, calcolate sull'accelerazione
+(uscita del controllore) invece che sui 5 parametri. Anello fedele riusato (`qz_cl_sim`); step MEX
+`qzi_cl_step_n<f>_mex` (SNN@13 + decode + IIDM@nfrac).
+
+- **Sicurezza** (`qzi_cl_sweep.tsv`): {13,8,5} 0 collisioni extra; **nfrac=2 ROMPE** (49 collisioni evitabili
+  mancate, min_gap<0). Floor di sicurezza IIDM **tra 5 e 2** — diverso dalla rete (sicura fino a 2): l'IIDM è il
+  pezzo fragile alla precisione estrema. → menu del blocco {13,8,5}, il 2 escluso.
+- **Fedeltà open-loop** (`qzi_acc_sweep.tsv`): accel(IIDM@nfrac) vs accel(IIDM double), stessi params. NRMSE
+  0.0008→0.045, max|d| 0.19→5.54 (13→2). max|d|@8 ≈ budget E_iidm@8 (validato: la versione MEX riproduce il punto noto).
+- **Severità** (`qzi_sev_sweep.tsv`): impact_dv piatto ~oracolo a ogni nfrac (come la rete).
+
+**Blocco `ACC-IIDM` (architettura R17, precisione fissa nfrac=8).** L'IIDM veloce NON è parametrico in precisione:
+divisore/radice digit-recurrence hanno larghezze cablate a nfrac=8 → menu-precisione infattibile, blocco a nfrac=8
+fisso (lo sweet-spot). L'architettura è quella della campagna `hdl_iidm/RESULTS.txt` (17 round bit-exact, 15,7→77,9
+MHz +397%), già la chart di `Donatello_ACC_IIDM_M`. Il blocco standalone (`iidm_r17_chart_code`, la chart M **meno
+la SNN**, 5 params in ingresso) sintetizza a **75,6 MHz** allo stesso collo `st_a_iidm` (1 liv di gap dal controllore
+= params dagli ingressi vs decode pipelinato). Ri-ottimizzato per lo standalone in 3 passi (pv-latch, **edge-detect
+da fermo**, no-snapshot): 61,7→75,6 MHz, dmax=0 ad ogni passo. Gate: `run_iidm_r17_func_gate` (dmax=0 vs
+`acc_iidm_open@8`), `run_acc_iidm_gate` (makehdl self-contained). Dati: `qzi_*.tsv` + `qzi_res.tsv`. Report: §9 di
+`QUANTIZATION_STUDY_REPORT`.
