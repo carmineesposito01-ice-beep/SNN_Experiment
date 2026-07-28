@@ -1,4 +1,4 @@
-function info = rtl_gen_dut(blockName, outdir, lang)
+function info = rtl_gen_dut(blockName, outdir, lang, maskParams)
 %RTL_GEN_DUT  Genera l'RTL di un blocco di snn_champions_lib verso `outdir` (persistente), scrive
 %  l'ordine di compilazione (pkg -> leaf -> top) e (VHDL) STAMPA la dichiarazione ENTITY grezza.
 %  lang = 'VHDL' (default) | 'Verilog'. ⚠️ Il controllore ACC-IIDM_M va in **Verilog**: i registri VHDL
@@ -8,6 +8,8 @@ function info = rtl_gen_dut(blockName, outdir, lang)
 %  driven da Constant fixdt(1,32,20): rendono il modello compilabile, non diventano porte.
   here = fileparts(mfilename('fullpath'));
   if nargin < 3 || isempty(lang), lang = 'VHDL'; end
+  if nargin < 4, maskParams = {}; end   % cell {name,value,...}: forza la variante di un Variant Subsystem
+                                        % (es. {'TIER','BALANCED','NFRAC','13'}); default {} = invariato
   ext = 'vhd'; if strcmpi(lang,'Verilog'), ext = 'v'; end
   if nargin < 2 || isempty(outdir)
     outdir = fullfile(here, ['hdlsrc_' lower(regexprep(blockName,'\W','_')) ...
@@ -21,8 +23,10 @@ function info = rtl_gen_dut(blockName, outdir, lang)
   new_system(mdl); load_system(mdl);
   sub = [mdl '/' blockName];
   add_block([lib '/' blockName], sub);
-  nIn  = numel(find_system([lib '/' blockName],'SearchDepth',1,'BlockType','Inport'));
-  nOut = numel(find_system([lib '/' blockName],'SearchDepth',1,'BlockType','Outport'));
+  if ~isempty(maskParams)
+    set_param(sub, maskParams{:});   % seleziona la variante (es. TIER=BALANCED, NFRAC=13) prima di makehdl
+  end
+  pp = get_param(sub,'Ports'); nIn = pp(1); nOut = pp(2);   % robusto ai blocchi MASCHERATI (Tier): find_system non guarda sotto la mask
   vals = {'10','6','2','4'};
   for j = 1:nIn
     add_block('simulink/Sources/Constant', [mdl '/i' num2str(j)], 'Value', vals{min(j,4)}, ...
@@ -34,6 +38,7 @@ function info = rtl_gen_dut(blockName, outdir, lang)
     add_line(mdl, [blockName '/' num2str(j)], ['o' num2str(j) '/1']);
   end
   set_param(mdl,'Solver','FixedStepDiscrete','FixedStep','1','StopTime','10');
+  save_system(mdl, fullfile(tempdir,[mdl '.slx']));      % salva prima dell'update: risolve la variante del Variant Subsystem (Tier)
   set_param(mdl,'SimulationCommand','update');           % compila: rivela errori nella chart
   makehdl(sub, 'TargetLanguage', lang, 'TargetDirectory', outdir, 'GenerateHDLTestBench','off');
 
