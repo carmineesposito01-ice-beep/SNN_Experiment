@@ -36,13 +36,18 @@ nota della SNN (~406 clk) così che i 9 ingressi dell'ACC-IIDM cambino **sincron
 - **Bitstream**: blocco *as-is* (normalize FIXED su FPGA, I/O fisico), uno per harness.
 
 ## Struttura
+> ⚠️ Stato reale: `common/` è popolata da T5; `Harness_SNN/` e `Harness_SNN_IIDM/` sono **scaffold VUOTI**
+> (solo `results/ figures/ bitstream/`) finché non si eseguono T6/T7.
 ```
 FaseB2.0/
-├── common/            → utilità condivise: gen RTL (VHDL/Verilog), export vettori, run xsim, metriche, golden fedeli, deriva
-├── Harness_SNN/       → run + tb + synth(tcl) · results/ · figures/ · bitstream/
-└── Harness_SNN_IIDM/  → run + tb + synth(tcl) · results/ · figures/ · bitstream/
+├── common/            → materiale condiviso.
+│                        ORA: DRIFT.md + drift_chosen.{m,mat} (deriva T5). I golden fedeli
+│                        (acciidm_m_traj, snn_traj_b2, …) vivono in ../matlab/ (riusati, non copiati).
+│                        DA POPOLARE (T6/T7): utilità RTL condivise (gen VHDL/Verilog, export vettori, run xsim, metriche).
+├── Harness_SNN/       → scaffold VUOTO. DA POPOLARE in T6: run + tb + synth(tcl) + README · results/ · figures/ · bitstream/
+└── Harness_SNN_IIDM/  → scaffold VUOTO. DA POPOLARE in T7: run + tb + synth(tcl) + README · results/ · figures/ · bitstream/
 ```
-Ogni harness ha il suo README con i comandi di esecuzione e la mappa dei prodotti.
+Ogni harness **avrà** il suo README con i comandi di esecuzione e la mappa dei prodotti (creato in T6/T7).
 
 ## Ambiente
 - MATLAB: `"C:\Program Files\MATLAB\R2026a\bin\matlab.exe" -batch` — gli script fanno `addpath('../../matlab')` per

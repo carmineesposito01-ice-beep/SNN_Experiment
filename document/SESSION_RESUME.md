@@ -5,7 +5,7 @@
 
 ---
 
-## ▶ RIPRESA A FREDDO — LEGGERE QUESTO BLOCCO PER PRIMO (agg. 2026-07-27)
+## ▶ RIPRESA A FREDDO — LEGGERE QUESTO BLOCCO PER PRIMO (agg. 2026-07-28)
 
 > **Ruolo di questo file:** punto d'ingresso + **STATO** del track `Simulink_Importer`. NON è la procedura
 > generale (quella è la skill `session-reprise`). È un **guida ai documenti**: quando dice «leggi X», leggi X —
@@ -52,6 +52,9 @@
 > ⚠️ **Decisioni prese:** copertura = RTL xsim su sottoinsieme + funzionale full-99 (MEX, bit-identico); bitstream =
 >   blocco as-is (normalize FIXED su FPGA, I/O fisico). Golden per gli harness: **`acciidm_m_traj` è fedele al composto
 >   (usabile)**; `snn_traj_champion` è **stale** (blocco rimosso) → per il bench solo-SNN usare **parità RTL vs blocco reale**.
+> ⚠️ **Nessun piano harness aggiornato:** quelli storici (`docs/superpowers/{specs,plans}/2026-07-1{7,8}-b2.0-2a-*`,
+>   più il design `…-rtl-validation-harness-design.md`) puntano ai blocchi **RIMOSSI** (`Donatello_Champion` /
+>   `ACC_IIDM_M`) → **NON riusarli as-is**: T6/T7 richiedono nuovi brainstorming+piani sui blocchi SCELTI (design-first).
 
 ### 🏁 MILESTONE 2026-07-27 — LIBRERIA CONSOLIDATA (8 blocchi puliti, tutti verificati sul dataset)
 > **Checkpoint concettuale del track.** `snn_champions_lib.slx` riordinata da 18 a **8 blocchi**:
@@ -127,8 +130,7 @@
 > (Champion/LUT/tier); va esteso.
 
 **Repo/posizione:** `D:\Project_MBSE\1.Reti Neurali\Rete_SNN_Test\CF_FSNN\.worktrees\Simulink_Importer`,
-branch **`Simulink_Importer`**. **Tutto committato, NON ancora pushato** (ahead di `origin/Simulink_Importer`; il push si fa solo su richiesta dell'utente). Working tree pulito. ⚠️ File dell'utente da NON toccare né stageare: `closed_loop_demo.slx` e `slblocks.m`
-(tracciati e puliti), `*.mexw64` (gitignorati).
+branch **`Simulink_Importer`**. **Deliverable committati; commit LOCALI NON pushati** (T5 deriva `715b75b7`, checkpoint doc `dd8f7ab4`, + allineamento reprise; ahead di `origin/Simulink_Importer` — `git log --oneline` per il conteggio; il push si fa **solo su richiesta dell'utente**). Working tree: **solo `clockInfo.txt` modificato** (artefatto Vivado rigenerabile, non mio) → non committare. ⚠️ **I `*.mexw64` sono TRACCIATI, NON gitignorati** → **mai `git commit -am`** (spazzerebbe i mex ricompilati dai run); stageare esplicitamente i soli file voluti. File dell'utente da NON toccare né stageare: `closed_loop_demo.slx` e `slblocks.m` (tracciati).
 *(Esistono altri track/worktree — es. `Simulator`, `main`/EventProp — con LORO SESSION_RESUME: questo file vale
 solo per `Simulink_Importer`.)*
 
@@ -157,7 +159,15 @@ ma senza payoff: SNN già 6,3× il cap IIDM). **Controllore validato** con l'SNN
 dell'IIDM (divisore + s_star/sqrt), fixed-point** — la SNN non è più il collo. (2c gate esaustivo full-60k
 resta prima del deploy.)
 
-**AZIONE PENDENTE — 🟢 FASE B2.0 APERTA (2026-07-17): validazione RTL della versione FPGA + report.**
+**🗄️ CRONOLOGIA B2.0 (2026-07-17→18) — SUPERATA dal riordino a T1–T9.** Il piano e le azioni **CORRENTI** sono
+**SOLO** il blocco **▶ FASE B2.0 in cima** + `FaseB2.0/README.md`. Sotto: dettaglio storico dell'evoluzione
+(vecchi harness 2a-M1 su `Donatello_Champion` / 2a-M2 su `ACC_IIDM_M`, studi timing 2b/2d, gate 2c) — **fatti o
+rimpiazzati** (i nuovi harness T6/T7 sono sui blocchi SCELTI `Donatello_Tier@BAL` / `Donatello_SNN_IIDM`). Restano
+**validi come riferimento**: il **backlog**, il box **"Se si torna su SP4 LEGGI PRIMA"** e i **path ambiente**.
+NON agire sulle "azioni" descritte qui sotto. *(Le sezioni **MODI DI LAVORO** e **TONO** che seguono NON sono
+"azioni" e restano PIENAMENTE VALIDE per tutto il track — la canonica è più in basso sotto i marker 🛠️/🎙️.)*
+
+**[storico] FASE B2.0 APERTA (2026-07-17): validazione RTL della versione FPGA + report.**
 Decisa dall'utente. SP4 ha *ottimizzato* il blocco; **B2.0 prova che l'RTL generato funziona davvero** e ne
 scrive il report. La **Fase C** (test sull'FPGA *fisica*) resta separata e in attesa.
 
@@ -524,37 +534,54 @@ quando la scelta è genuinamente dell'utente. **In italiano.** Diretti sui findi
 report è giusto per il motivo sbagliato") senza addolcirli. Checkpoint espliciti sul lavoro lungo. L'utente è
 competente (MBSE/SNN/FPGA): niente spiegazioni base non richieste.
 
-### 📋 PROMPT DI RIPRESA (ATTUALE — agg. 2026-07-23) — guida a LEGGERE i documenti, non un dump.
-> Copia-incolla questo in una chat nuova dopo /clear. (Il vecchio prompt Fase B/C è superato: pending diverse.)
+### 📋 PROMPT DI RIPRESA (ATTUALE — agg. 2026-07-28) — guida a LEGGERE i documenti, non un dump.
+> Copia-incolla questo in una chat nuova dopo /clear. (I prompt più vecchi in coda sono superati.)
 
 ```
 Riprendi il progetto CF_FSNN, track HDL / Simulink_Importer. Non ho contesto in questa chat (post-clear):
 NON chiedermi lo stato — ricostruiscilo dai documenti, non a memoria.
 
 Repo: D:\Project_MBSE\1.Reti Neurali\Rete_SNN_Test\CF_FSNN
-Worktree/branch: .worktrees\Simulink_Importer  (branch Simulink_Importer; commit LOCALI, non ancora pushati)
+Worktree/branch: .worktrees\Simulink_Importer  (branch Simulink_Importer; commit LOCALI non pushati, ahead di origin)
 
-1. git -C ".worktrees\Simulink_Importer" status  e  git log --oneline -8  per lo stato reale (NIENTE pull:
-   i commit sono locali, ahead di origin). Working tree pulito; i file dell'utente da NON toccare sono
-   closed_loop_demo.slx / slblocks.m (tracciati) e *.mexw64 (gitignorati).
-2. Leggi PRIMA document/SESSION_RESUME.md -> blocco "▶ RIPRESA A FREDDO" in CIMA: e' il punto d'ingresso, con
-   lo stato dei DUE track paralleli (stesso branch), le AZIONI pendenti coi puntatori, i MODI DI LAVORO e il
-   TONO. Segui i puntatori — LEGGI i doc, non ricostruire a memoria. Per il track appena chiuso (Studio
-   Trade-off, Blocco A): matlab/study_tradeoff/donatello/RESULTS.md §16 e report/Trade_Off_Study_Parte_A.pdf.
-3. La tua memoria (MEMORY.md + memorie) e' gia' caricata: contesto supplementare, non dipendenza.
+1. POSIZIONATI NEL worktree ed esegui i comandi DA LÌ (bare, NON con -C):
+     cd "D:\Project_MBSE\1.Reti Neurali\Rete_SNN_Test\CF_FSNN\.worktrees\Simulink_Importer"
+     git status   e   git log --oneline -8
+   È da QUESTA cartella che risolvono i path del punto 2 (document/, FaseB2.0/). NIENTE pull: i commit sono
+   locali, ahead di origin (deriva T5, checkpoint doc, allineamento reprise).
+   ⚠️ **NON leggere il `document/SESSION_RESUME.md` del repo-root** `…\CF_FSNN`: quello è un ALTRO worktree su
+   branch `main` (track EventProp), con un file DIVERSO che ha la STESSA prima riga ma NON i blocchi ▶/FASE B2.0.
+   Working tree qui: solo clockInfo.txt (artefatto Vivado rigenerabile, non mio) -> non committare. ATTENZIONE:
+   i *.mexw64 sono TRACCIATI, NON gitignorati -> mai "git commit -am" (spazzerebbe i mex ricompilati); stagearli
+   esplicito. File utente da NON toccare: closed_loop_demo.slx / slblocks.m (tracciati).
+2. Leggi PRIMA document/SESSION_RESUME.md -> blocco "▶ RIPRESA A FREDDO" in CIMA (agg. 2026-07-28), e dentro
+   il sotto-blocco "🔄 FASE B2.0 IN CORSO": è il punto d'ingresso, con lo STATO e le AZIONI pendenti coi
+   puntatori. I MODI DI LAVORO e il TONO stanno nelle sezioni dedicate (marker 🛠️ e 🎙️ in SESSION_RESUME,
+   valide per tutto il track) e in sintesi in fondo a questo prompt. Segui i puntatori — LEGGI i doc, non
+   ricostruire a memoria. Panoramica della fase: FaseB2.0/README.md. Deriva (T5): FaseB2.0/common/DRIFT.md.
+   ⚠️ Le sezioni SOTTO il blocco ▶ (vecchio piano B2.0 2a/2b/2c/2d, "CRONOLOGIA", "STORICO — SUPERATO", e in
+   fondo il track EventProp/main) sono CRONOLOGIA: superate dal riordino T1–T9. Il piano/azioni CORRENTI sono
+   SOLO il blocco FASE B2.0 in cima + FaseB2.0/README.md.
+3. La tua memoria (MEMORY.md + memorie) è già caricata: contesto supplementare, non dipendenza.
 
-Poi, PRIMA di lavorare, dimmi in breve: (a) lo stato dei due track; (b) le AZIONI pendenti — per il BLOCCO A
-(Studio Trade-off, CHIUSO): la SCELTA del candidato SLOW/BAL/FAST per il Blocco B, aperta e da decidere
-(base: report Trade_Off_Study_Parte_A §5-§6 su risorse/potenza per tier + RESULTS §16), piu' i rinviati
-SAIF-power e verifica RTL xsim del candidato; per SP4 / FASE B2.0 (track parallelo APERTO): completare la
-validazione RTL della versione FPGA (harness xsim; 2a-M1/M2 gia' verdi, resta 2c full-60k + pipeline IIDM —
-dettaglio nel blocco "FASE B2.0" di SESSION_RESUME); (c) i modi di
-lavoro e il tono che adotterai. Poi ASPETTA la mia conferma su cosa fare.
+Stato in breve (verifica dai doc): libreria consolidata (8 blocchi milestone 2026-07-27 + il composto
+Donatello_SNN_IIDM aggiunto in T4 = 9 blocchi); Fase B2.0 (validazione RTL pre-FPGA) con
+T1–T5 FATTI e committati — blocco composto scelto Donatello_SNN_IIDM (= Donatello_Tier@BALANCED + ACC-IIDM) +
+deriva open-loop CHIUSA (deploy as-is confermato, FaseB2.0/common/DRIFT.md). PENDENTE = blocco harness T6–T9:
+Harness_SNN (Tier@BAL) e Harness_SNN_IIDM (composto) = RTL+xsim su sottoinsieme + funzionale full-99 (MEX) +
+HDL post-route + bitstream; poi 2 report (create-report) in report/; poi allineamento doc finale. Prossimo = T6.
+⚠️ 1 punto da confermarmi: la deriva open-loop è su test_dataset.mat (60 traj, ha val); l'esaustivo
+test_dataset_exhaustive.mat (99 scenari, NO val) è riservato al car-following full-99 in T6/T7 — confermare la
+divisione o chiedermi l'open-loop anche su val generato dai 99 scenari. Anche: pushare i commit locali? (solo su mia richiesta).
+
+Poi, PRIMA di lavorare, dimmi in breve: (a) lo stato; (b) le AZIONI pendenti (T6–T9, prossimo = T6); (c) i modi
+di lavoro e il tono che adotterai. Poi ASPETTA la mia conferma su cosa fare.
 
 Adotta i MODI DI LAVORO e il TONO di SESSION_RESUME (in sintesi: verifica sul DATASET mai su un caso singolo,
-riportando quanti/quanti; una claim va VERIFICATA non dichiarata; root cause prima del fix; design prima del
-codice via skill superpowers; VHDL mai a mano / core SNN congelato bit-exact; commit conventional SENZA
-Co-Authored-By; tono italiano, deciso, evidence-first, onesto senza overclaiming, con checkpoint sul lavoro lungo).
+riportando quanti/quanti; un cancello che non può fallire non è un cancello — assert + provalo sensibile; una
+claim va VERIFICATA non dichiarata; root cause prima del fix, loop fi lento → MEX; design prima del codice via
+skill superpowers; VHDL mai a mano / core SNN congelato bit-exact; commit conventional SENZA Co-Authored-By;
+tono italiano, deciso, evidence-first, onesto senza overclaiming, con checkpoint sul lavoro lungo).
 ```
 
 ---
@@ -614,7 +641,19 @@ catena 1:1 (4 anelli) in `HDL_PHASE.md §5/§2`.
 
 ---
 
-## 🎯 Stato precedente (2026-06-21 — **EventProp_Study: training a gradiente esatto**)
+---
+
+## ⛔ DA QUI IN GIÙ = TRACK **EventProp / main** (NON Simulink_Importer) — EREDITATO, IGNORARE per QUESTA ripresa
+
+> Questo file nacque come copia dal branch `main` e ne ha ereditato lo **storico del track EventProp/training**.
+> **Non riguarda il track `Simulink_Importer`** (HDL/Simulink) di questa sessione. Lo stato REALE di quel track vive
+> altrove: `document/EVENTPROP_STATUS.md` (master) + il `SESSION_RESUME.md` del branch `main`. Qui è **archeologia
+> inerte** (lasciata per non creare divergenze rischiose al merge); per riprendere QUESTO track fermati al blocco ▶
+> in cima — **niente sotto questa riga è un'azione da eseguire**.
+
+---
+
+## 🎯 [EventProp/main — storico] Stato precedente (2026-06-21 — **EventProp_Study: training a gradiente esatto**)
 
 **Branch corrente**: `EventProp_Study` (da `main`). **`Dynamic_Study` e `Loss_Study` CHIUSI e mergiati in
 `main`, poi eliminati** (locale + remoto). `main` @ `db9fbdb` contiene tutto il lavoro.
