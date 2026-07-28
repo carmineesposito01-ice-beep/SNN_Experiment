@@ -28,26 +28,30 @@
 >   (11 VHDL, DualPortRAM, `align` come entità a sé, 0 errori). Libreria ora **9 blocchi**.
 >   Builder `build_snn_iidm_block.m`, gate `run_snn_iidm_gate.m`.
 >
-> **DA FARE (T5–T9):**
-> - **T5 (deriva) — APPROCCIO NAILED, da eseguire:** ⚠️ `test_dataset_exhaustive.mat` sono **definizioni di scenario**
->   (`v_leader, s_init, v_init, cut_in, gt_params`), NON traiettorie `val` → la deriva è naturalmente **closed-loop**.
->   Infra da RIUSARE: `Quantizzation_Study/qz_cl_sim(traj, stepFun)` disaccoppia il controllore via
->   `stepFun(x_phys, rst) → [params(5), accel]`; `Quantizzation_Study_IIDM/qzi_cl_step` è il **RIFERIMENTO**
->   (`snn_normalize` **FLOAT** → SNN@13 → decode LUT-64 → `acc_iidm_open`@nfrac). **Deriva** = `qz_cl_sim` col
->   **blocco (`local_normalize` FIXED)** vs `qzi_cl_step` (**float**), stesso anello, sulle 99 traj → divergenza
->   accel/gap = risposta a *"si accumula o si smorza?"*. **Da costruire:** `block_stepFun` con `local_normalize`
->   (fixed; è inline in `build_hdl_variants:normalize_code`, va estratto in una funzione callable). Riferimento
->   closed-loop già pronto: `mp_ref13_1_99.mat` (`ref.gap/P/Bcoll`). ⚙️ **Decisione aperta:** deriva **open-loop**
->   (su `val` generato da un giro closed-loop di riferimento, come `characterize_drift` ma su scenari esaustivi)
->   **vs closed-loop-divergence** (nativa al dataset, più significativa). L'esistente `characterize_drift` gira
->   ancora su `test_dataset.mat` (60 traj) open-loop.
+> **T5 (deriva) ✅ FATTO + committato `715b75b7`** — DECISIONE utente: **deriva OPEN-LOOP semplice sui blocchi scelti**
+>   (non la divergenza closed-loop, che era la "complicazione" scartata). Misurata sul **controllore composto scelto
+>   `Donatello_SNN_IIDM`** (`local_normalize` FISSA) vs ideale float, sull'**accel** (grandezza di sicurezza; i 5 param
+>   contano solo a valle via IDM). **Fase 0 (cancello):** golden `acciidm_m_traj` confrontato clock-per-clock col
+>   blocco REALE della libreria → **dmax=0** (il golden È il blocco scelto, non una supposizione). Numeri (60 traj /
+>   60 000 control-step): `|Δaccel|` **max 0.977 · p99 0.188 · mediana 0 · media 0.017** m/s² = **65.8% / 68.9% del
+>   budget E_snn** → la local_normalize fissa NON aggiunge deriva oltre a quella già accettata → **deploy as-is
+>   confermato**. Doc: **`FaseB2.0/common/DRIFT.md`** (+ `drift_chosen.m` + `.mat`). Rigenera:
+>   `matlab -batch "addpath('FaseB2.0/common'); drift_chosen"`.
+>   ⚠️ **Golden stale trovato:** `snn_traj_champion` estrae da `Donatello_Champion` (RIMOSSO nel riordino 8-blocchi) →
+>   **NON usabile**; `acciidm_m_traj` invece è **verificato fedele** al composto (dmax=0, usabile). Deriva sui 5 param
+>   (bench solo-SNN) = **parità RTL bit-exact** in T6, non qui.
+>   ⚠️ **Dataset:** open-loop richiede traiettorie `val` → usato **`test_dataset.mat` (60 traj, con `val`)**. L'esaustivo
+>   `test_dataset_exhaustive.mat` (99 **definizioni di scenario**, senza `val`) è closed-loop-nativo → riservato alla
+>   **copertura car-following full-99 in T6/T7** (non è open-loop-abile senza un giro di riferimento). *(DA CONFERMARE
+>   con l'utente: va bene questa divisione, o vuole l'open-loop anche su `val` generato dai 99 scenari?)*
+>
+> **DA FARE (T6–T9) — ⏸ FERMI QUI su richiesta utente (CHECKPOINT 2026-07-28: doc allineati, prossimo = T6):**
 > - **T6** Harness_SNN (Tier@BAL): RTL+xsim su ~9 traj rappresentative · funzionale full-99 (MEX) · HDL post-route · bitstream.
 > - **T7** Harness_SNN_IIDM (composto): RTL closed-loop · car-following full-99 · HDL · bitstream.
 > - **T8** due report esaustivi (`create-report`) in `report/`. **T9** allineamento doc finale.
 > ⚠️ **Decisioni prese:** copertura = RTL xsim su sottoinsieme + funzionale full-99 (MEX, bit-identico); bitstream =
->   blocco as-is (normalize FIXED su FPGA, I/O fisico). Le utilità RTL esistenti (`rtl_*`, `characterize_drift`,
->   golden) sono in `matlab/` e vanno **adattate ai blocchi scelti** quando si costruiscono gli harness (il vecchio
->   golden `acciidm_m_traj`/`snn_traj_champion` è per blocchi deprecati/rimossi → non trascinarlo stale).
+>   blocco as-is (normalize FIXED su FPGA, I/O fisico). Golden per gli harness: **`acciidm_m_traj` è fedele al composto
+>   (usabile)**; `snn_traj_champion` è **stale** (blocco rimosso) → per il bench solo-SNN usare **parità RTL vs blocco reale**.
 
 ### 🏁 MILESTONE 2026-07-27 — LIBRERIA CONSOLIDATA (8 blocchi puliti, tutti verificati sul dataset)
 > **Checkpoint concettuale del track.** `snn_champions_lib.slx` riordinata da 18 a **8 blocchi**:

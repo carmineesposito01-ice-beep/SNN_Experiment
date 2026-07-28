@@ -404,7 +404,9 @@ Config in `make_hdl.m`: `LoopOptimization='StreamLoops'`, `ConstantMultiplierOpt
     già a 52). Il forward inlinato **== `snn_b2_fsm.m`** (0 diff, non stale). **`run_block_traj_test` lo mascherava
     girando a K=20<52** (lezione §2.1 — gate corto; la sua comparazione vs r16 vale solo fino a K~50, da rivedere).
     Fix: golden **fedele al blocco** `snn_traj_champion` (algoritmo esatto della chart, guidato clock-per-clock a
-    ingresso tenuto), verificato **== blocco** (cross-check dmax=0).
+    ingresso tenuto), verificato **== blocco** (cross-check dmax=0). ⚠️ **[2026-07-28] ORA STALE**: estrae da
+    `Donatello_Champion`, **rimosso** nel riordino 8-blocchi (2026-07-27) → non più usabile; per il bench solo-SNN
+    (T6) usare **parità RTL vs blocco reale** `Donatello_Tier@BALANCED`.
   - ⚠️ **Metrica param:** accuratezza param vs `gt_params` mostra `v0` err ~15 = **identificabilità** (v0 osservabile
     solo a flusso libero; Dynamic_Study), NON RTL. La qualità SNN vera è il **closed-loop (Harness B)**.
 - ✅ **[FASE B2.0-2a M2 — 2026-07-18] Harness B (controllore `Donatello_ACC_IIDM_M`) validato a livello RTL**:
@@ -420,7 +422,14 @@ Config in `make_hdl.m`: `LoopOptimization='StreamLoops'`, `ConstantMultiplierOpt
     [m/s²] = **69% / 66% del budget E_snn**. Cioe' **sparsa** (solo spike-flip) ma con **coda significativa** —
     stesso ordine della quantizzazione che la rete gia' si porta. **Non trascurabile in coda**; e' la differenza
     tra il blocco fisico (local_normalize) e il riferimento software (snn_normalize), da tenere per il confronto MPC.
-    ⏳ Misura CLOSED-LOOP della deriva (si smorza o accumula?) = nota, non ancora fatta.
+    ✅ **[T5 — 2026-07-28] RI-ESEGUITA sul CONTROLLORE SCELTO** `Donatello_SNN_IIDM` (composto, non il deprecato
+    `ACC_IIDM_M`), su **tutto** `test_dataset.mat` (60 traj / **60k** control-step), **open-loop** (decisione utente:
+    deriva semplice, non la divergenza closed-loop). **Fase 0 cross-check:** golden `acciidm_m_traj` == blocco REALE
+    della libreria (streaming Simulink) → **dmax=0**. Numeri **coincidenti** col 2026-07-18 (max 0.9766 · p99 0.1875 ·
+    mediana 0 · media 0.0168 = 65.8% / 68.9% E_snn) → **riproducibile** e ora ancorato al blocco scelto. Committato
+    `715b75b7`, doc `FaseB2.0/common/DRIFT.md`. ⚠️ `snn_traj_champion` (golden 5-param) è **STALE** (estrae da
+    `Donatello_Champion`, **rimosso** nel riordino 8-blocchi) → non usato. Divergenza CLOSED-LOOP (accumula/smorza?)
+    demandata al **car-following full-99 in T7**.
   - **PROSSIMO grande:** report intermedio (checkpoint) → riordino file matlab → 2b (ottimizzazione `tanh`) → 2c.
 - ✅ **[MILESTONE 2026-07-27] Libreria consolidata a 8 blocchi, tutti verificati sul dataset.** Riordino **18→8**
   (4 Campioni double + `Donatello_LUT` combinato + `Donatello_Tier` + `ACC-IIDM` + `Donatello_ACC_IIDM_M`;

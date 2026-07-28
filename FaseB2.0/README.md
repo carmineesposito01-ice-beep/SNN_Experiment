@@ -5,6 +5,10 @@ Ultima fase prima della **Fase C** (FPGA fisica). Obiettivo: dimostrare che il *
 una **caratterizzazione completa** (funzionamento della rete e di rete+car-following) al livello dei report
 in `../report/`.
 
+> **Stato (2026-07-28):** T1–T4 (riordino `matlab/`, struttura `FaseB2.0/`, deprecazione `ACC_IIDM_M`, blocco
+> composto `Donatello_SNN_IIDM`) + **T5 (deriva open-loop → [`common/DRIFT.md`](common/DRIFT.md))** FATTI e committati.
+> ⏸ **Fermi prima del blocco harness (T6–T9)** su richiesta utente. Stato/prossime azioni: `../document/SESSION_RESUME.md`.
+
 ## I due banchi (blocchi SCELTI — per non confondersi)
 | Harness | DUT | Cos'è |
 |---|---|---|
@@ -16,9 +20,13 @@ Il blocco composto `Donatello_SNN_IIDM` unisce la SNN (Tier@BAL) e il **controll
 nota della SNN (~406 clk) così che i 9 ingressi dell'ACC-IIDM cambino **sincroni** → 1 inferenza/control-step
 (il filtro OU aggiorna una volta). Sostituisce il vecchio `Donatello_ACC_IIDM_M`, **DEPRECATO**.
 
-## Dataset
-**L'ultimo generato**: `../matlab/Quantizzation_Study/test_dataset_exhaustive.mat` (99 traiettorie / 9 scenari,
-con cut-in/cut-out), riferimento params `mp_ref13_1_99.mat`.
+## Dataset (due ruoli distinti)
+- **Copertura car-following full-99 (T6/T7)** — `../matlab/Quantizzation_Study/test_dataset_exhaustive.mat`:
+  99 **definizioni di scenario** / 9 famiglie (con cut-in/cut-out), riferimento closed-loop `mp_ref13_1_99.mat`.
+  Sono definizioni (`v_leader, s_init, v_init, cut_in, gt_params`), **non** traiettorie `val` → **closed-loop-native**.
+- **Deriva open-loop (T5, FATTA)** — `../matlab/test_dataset.mat` (60 traiettorie **con `val`**): l'open-loop
+  confronta accel-blocco vs accel-ideale su `val` registrati, quindi serve un dataset con `val` (l'esaustivo non ne ha).
+  Risultato in [`common/DRIFT.md`](common/DRIFT.md).
 
 ## Copertura (RTL mirato, funzionale esaustivo)
 - **RTL (xsim)**: bit-exact su un **sottoinsieme rappresentativo** (~9 traiettorie, 1 per scenario) — xsim sul
