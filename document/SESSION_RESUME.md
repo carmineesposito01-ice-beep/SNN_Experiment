@@ -29,7 +29,18 @@
 >   Builder `build_snn_iidm_block.m`, gate `run_snn_iidm_gate.m`.
 >
 > **DA FARE (T5–T9):**
-> - **T5** deriva (SNN → params · composto → accel) fixed-vs-float-normalize sul dataset esaustivo, documentata.
+> - **T5 (deriva) — APPROCCIO NAILED, da eseguire:** ⚠️ `test_dataset_exhaustive.mat` sono **definizioni di scenario**
+>   (`v_leader, s_init, v_init, cut_in, gt_params`), NON traiettorie `val` → la deriva è naturalmente **closed-loop**.
+>   Infra da RIUSARE: `Quantizzation_Study/qz_cl_sim(traj, stepFun)` disaccoppia il controllore via
+>   `stepFun(x_phys, rst) → [params(5), accel]`; `Quantizzation_Study_IIDM/qzi_cl_step` è il **RIFERIMENTO**
+>   (`snn_normalize` **FLOAT** → SNN@13 → decode LUT-64 → `acc_iidm_open`@nfrac). **Deriva** = `qz_cl_sim` col
+>   **blocco (`local_normalize` FIXED)** vs `qzi_cl_step` (**float**), stesso anello, sulle 99 traj → divergenza
+>   accel/gap = risposta a *"si accumula o si smorza?"*. **Da costruire:** `block_stepFun` con `local_normalize`
+>   (fixed; è inline in `build_hdl_variants:normalize_code`, va estratto in una funzione callable). Riferimento
+>   closed-loop già pronto: `mp_ref13_1_99.mat` (`ref.gap/P/Bcoll`). ⚙️ **Decisione aperta:** deriva **open-loop**
+>   (su `val` generato da un giro closed-loop di riferimento, come `characterize_drift` ma su scenari esaustivi)
+>   **vs closed-loop-divergence** (nativa al dataset, più significativa). L'esistente `characterize_drift` gira
+>   ancora su `test_dataset.mat` (60 traj) open-loop.
 > - **T6** Harness_SNN (Tier@BAL): RTL+xsim su ~9 traj rappresentative · funzionale full-99 (MEX) · HDL post-route · bitstream.
 > - **T7** Harness_SNN_IIDM (composto): RTL closed-loop · car-following full-99 · HDL · bitstream.
 > - **T8** due report esaustivi (`create-report`) in `report/`. **T9** allineamento doc finale.
