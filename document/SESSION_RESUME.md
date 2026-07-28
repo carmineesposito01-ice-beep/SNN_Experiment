@@ -11,6 +11,32 @@
 > generale (quella è la skill `session-reprise`). È un **guida ai documenti**: quando dice «leggi X», leggi X —
 > non ricostruire a memoria.
 
+### ⏸ CHECKPOINT 2026-07-28 (pomeriggio) — T6 AVVIATO poi MESSO IN PAUSA per RIALLINEAMENTO
+> **Leggere PRIMA del blocco T6–T9 sotto (che è superato da questo).** Oggi: brainstorming+spec di T6, spec T6a (RTL) +
+> spec T6b (HW), piano T6a scritto ed **eseguito in gran parte**.
+>
+> **T6a — Harness_SNN, validazione RTL di `Donatello_Tier@BALANCED`: RTL VALIDATO SUL SUBSET (committato+pushato).**
+> T6-EXACT **0/55000** su 11 traiettorie diversificate (RTL==blocco bit-exact) + **sensibile** (1 LSB→mismatch) + **LAT 364**
+> + **metriche stima sui 60** (`v0` max≈15 = identificabilità, gli altri ~1). Golden = **blocco-oracolo**. Struttura:
+> golden in `matlab/` (`tier_block_params.m`, `rtl_gen_dut.m` esteso), utilità in `FaseB2.0/common/` (`rtl_write_vectors.m`,
+> `rtl_run_xsim.sh`), banco in `FaseB2.0/Harness_SNN/` (TB, `run_rtl_validate_tier`, `sensitivity_t6`, `tier_rtl_metrics`,
+> `probe_golden_cost`, README), xsim in `D:/zbd_tier`. Piano+spec: `docs/superpowers/{plans,specs}/2026-07-28-b2.0-t6a-*`.
+> **Full-60 RTL FERMATO su richiesta** (era conferma *deterministica ridondante* del bit-exact già provato sul subset;
+> le metriche sui 60 restano valide per il determinismo). **Doc HDL_PHASE/FaseB2.0-README NON ancora aggiornati** coi numeri.
+>
+> **T6b — HW full-system (utilizzo post-route+BRAM · power SAIF · bitstream PYNQ-Z1 · clock=Fmax · wrapper AXI adattato
+> I/O fisico+`ce_out`): SOLO SPEC scritto** (`docs/superpowers/specs/2026-07-28-b2.0-t6b-*`), **piano NON scritto**.
+>
+> **⚠️ IN PAUSA — DA DISCUTERE ALLA RIPRESA (feedback utente, 2026-07-28):**
+> 1. **Troppe micro-decisioni in corsa** → l'utente ha perso il filo. Alla ripresa: meno cambi d'approccio in esecuzione,
+>    più allineamento a monte.
+> 2. Il piano T6a, benché dettagliato, ha richiesto **4 fix in esecuzione** (variante mascherata→`get_param('Ports')`+save;
+>    compile-order alfabetico→dal log makehdl bottom-up; stato SNN nella DualPortRAM non azzerabile a runtime→**un xsim per
+>    traiettoria**) = **assunzioni HDL riusate da M1/Champion senza verificarle sul Tier** (Variant Subsystem, gerarchia, RAM).
+> **NON riprendere l'esecuzione (T6b, o rifinitura T6a) senza prima concordare il METODO** (verificare le assunzioni HDL
+> con probe MIRATI *prima* di scrivere il piano; piano più incrementale). Il lavoro fatto è valido e salvato; è il *processo*
+> da rivedere.
+
 ### 🔄 FASE B2.0 IN CORSO (agg. 2026-07-28) — validazione RTL + caratterizzazione esaustiva pre-FPGA fisica
 > Ultima fase prima della Fase C. Piano completo + stime in **`FaseB2.0/README.md`**. Cartella dedicata
 > `FaseB2.0/` (common/ · Harness_SNN/ · Harness_SNN_IIDM/).
