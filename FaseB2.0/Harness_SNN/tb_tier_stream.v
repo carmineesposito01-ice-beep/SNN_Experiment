@@ -1,9 +1,11 @@
 `timescale 1ns/1ps
 `include "tier_params.vh"
-// Pilota Donatello_Tier (VHDL) con gli stim, campiona i 5 param a fine control-step vs gold; misura LAT.
-// Nomi porta confermati dall'ENTITY generata (Task 1): s,v,dv,v_l (sfix32_En20) -> v0,T,s0,a,b (sfix21_En13).
+// Pilota Donatello_Tier (VHDL) con gli stim di UNA traiettoria, campiona i 5 param a fine control-step vs gold.
+// UNA traiettoria per simulazione: il runner rifa xsim -R per ogni traiettoria -> la DualPortRAM (stato SNN) e'
+// azzerata all'INIT della simulazione, come il golden che rifa una sim per traiettoria. (Il reset runtime NON
+// azzera la hdl.RAM.) Nomi porta dall'ENTITY: s,v,dv,v_l (sfix32_En20) -> v0,T,s0,a,b (sfix21_En13).
 module tb_tier_stream;
-  localparam integer K    = `KVAL;
+  localparam integer K    = `KVAL;      // control-step di UNA traiettoria
   localparam integer HOLD = `HOLD;      // >= latenza RTL (~364); campiona a fine control-step
   reg clk = 0, reset = 0, clk_enable = 1;
   reg  signed [31:0] s, v, dv, v_l;
@@ -21,9 +23,9 @@ module tb_tier_stream;
 
   initial begin
     $readmemh(`STIMF, stim); $readmemh(`GOLDF, gold);
-    s = stim[0]; v = stim[1]; dv = stim[2]; v_l = stim[3];   // 1o control-step PRIMA del de-assert reset
+    s = stim[0]; v = stim[1]; dv = stim[2]; v_l = stim[3];   // 1o control-step pre-reset-deassert
     reset = 1; repeat (8) @(posedge clk); reset = 0;
-    prev0 = v0; lat = 0;                                     // misura LAT: 1o clock in cui v0 cambia
+    prev0 = v0; lat = 0;
     while (v0 === prev0 && lat < HOLD) begin @(posedge clk); lat = lat + 1; end
     $display("LAT_RTL %0d", lat);
     repeat (HOLD - lat) @(posedge clk);
