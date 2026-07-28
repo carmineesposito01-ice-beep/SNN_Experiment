@@ -11,6 +11,33 @@
 > generale (quella è la skill `session-reprise`). È un **guida ai documenti**: quando dice «leggi X», leggi X —
 > non ricostruire a memoria.
 
+### 🔄 FASE B2.0 IN CORSO (agg. 2026-07-28) — validazione RTL + caratterizzazione esaustiva pre-FPGA fisica
+> Ultima fase prima della Fase C. Piano completo + stime in **`FaseB2.0/README.md`**. Cartella dedicata
+> `FaseB2.0/` (common/ · Harness_SNN/ · Harness_SNN_IIDM/).
+> **Blocchi SCELTI:** SNN = `Donatello_Tier@BALANCED` · SNN+IIDM = **`Donatello_SNN_IIDM`** (composto).
+> **Dataset:** l'ultimo generato = `matlab/Quantizzation_Study/test_dataset_exhaustive.mat` (99 traj / 9 scenari).
+>
+> **FATTO + committato:**
+> - **T1** riordino `matlab/` (12 script morti → `archive/`; README riscritto forward-looking) · **T2** struttura
+>   `FaseB2.0/` — commit `2b665716`.
+> - **T3** `Donatello_ACC_IIDM_M` **DEPRECATO** (description+doc; sostituito dal composto).
+> - **T4** blocco composto **`Donatello_SNN_IIDM`** = `Donatello_Tier@BALANCED` + `align` + `ACC-IIDM` — commit
+>   `9112c006`. Allineamento **ritardo-appaiato** (`align` tiene i 4 fisici finché i 5 params non cambiano, poi li
+>   rilascia sincroni → i 9 ingressi ACC-IIDM cambiano allo stesso clock → 1 inferenza/control-step, OU una volta).
+>   Verificato: **dmax=0** vs `acc_iidm_open` + **1 sola inferenza** su ingresso costante + **HDL self-contained**
+>   (11 VHDL, DualPortRAM, `align` come entità a sé, 0 errori). Libreria ora **9 blocchi**.
+>   Builder `build_snn_iidm_block.m`, gate `run_snn_iidm_gate.m`.
+>
+> **DA FARE (T5–T9):**
+> - **T5** deriva (SNN → params · composto → accel) fixed-vs-float-normalize sul dataset esaustivo, documentata.
+> - **T6** Harness_SNN (Tier@BAL): RTL+xsim su ~9 traj rappresentative · funzionale full-99 (MEX) · HDL post-route · bitstream.
+> - **T7** Harness_SNN_IIDM (composto): RTL closed-loop · car-following full-99 · HDL · bitstream.
+> - **T8** due report esaustivi (`create-report`) in `report/`. **T9** allineamento doc finale.
+> ⚠️ **Decisioni prese:** copertura = RTL xsim su sottoinsieme + funzionale full-99 (MEX, bit-identico); bitstream =
+>   blocco as-is (normalize FIXED su FPGA, I/O fisico). Le utilità RTL esistenti (`rtl_*`, `characterize_drift`,
+>   golden) sono in `matlab/` e vanno **adattate ai blocchi scelti** quando si costruiscono gli harness (il vecchio
+>   golden `acciidm_m_traj`/`snn_traj_champion` è per blocchi deprecati/rimossi → non trascinarlo stale).
+
 ### 🏁 MILESTONE 2026-07-27 — LIBRERIA CONSOLIDATA (8 blocchi puliti, tutti verificati sul dataset)
 > **Checkpoint concettuale del track.** `snn_champions_lib.slx` riordinata da 18 a **8 blocchi**:
 > - **4 Campioni comportamentali** (double, NON-HDL, riferimento): `Donatello` · `Leonardo` · `Michelangelo` · `Raffaello`
