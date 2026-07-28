@@ -40,7 +40,8 @@ function info = rtl_gen_dut(blockName, outdir, lang, maskParams)
   set_param(mdl,'Solver','FixedStepDiscrete','FixedStep','1','StopTime','10');
   save_system(mdl, fullfile(tempdir,[mdl '.slx']));      % salva prima dell'update: risolve la variante del Variant Subsystem (Tier)
   set_param(mdl,'SimulationCommand','update');           % compila: rivela errori nella chart
-  makehdl(sub, 'TargetLanguage', lang, 'TargetDirectory', outdir, 'GenerateHDLTestBench','off');
+  hdllog = evalc("makehdl(sub, 'TargetLanguage', lang, 'TargetDirectory', outdir, 'GenerateHDLTestBench','off');");
+  fprintf('%s\n', hdllog);   % ri-stampa il log di makehdl (evalc lo cattura) -> serve per l'ordine di compilazione
 
   src = dir(fullfile(outdir,'**',['*.' ext]));
   assert(~isempty(src), 'nessun %s generato per %s', lang, blockName);
@@ -53,9 +54,14 @@ function info = rtl_gen_dut(blockName, outdir, lang, maskParams)
 
   % ordine di compilazione: package -> leaf (chart, DualPortRAM) -> top (per Verilog l'ordine e' innocuo)
   names = {src.name};
+  % ordine di compilazione = ordine di GENERAZIONE di HDL Coder (log "Working on ... as X.<ext>"): bottom-up (foglie->top)
+  gen = regexp(hdllog, ['as\s+\S.*?[\\/](\w+)\.' ext], 'tokens');
+  gen = cellfun(@(c) [c{1} '.' ext], gen(:).', 'UniformOutput', false);
+  [~, iu] = unique(gen, 'stable'); gen = gen(iu);         % dedup mantenendo l'ordine
+  gen = gen(ismember(gen, names));                         % solo file realmente presenti
   isPkg = ~cellfun(@isempty, regexp(names, ['_pkg\.' ext '$'], 'once'));
-  isTop = strcmp(names, [blockName '.' ext]);
-  order = [names(isPkg), names(~isPkg & ~isTop), names(isTop)];
+  order = [names(isPkg), gen(~ismember(gen, names(isPkg)))]; % package first, poi ordine di generazione
+  order = [order, names(~ismember(names, order))];          % coda: eventuali file non nel log (fallback)
   fid = fopen(fullfile(folder,'compile_order.txt'),'w'); fprintf(fid,'%s\n', order{:}); fclose(fid);
 
   info = struct('outdir', folder, 'top', blockName, 'lang', lang, 'nIn', nIn, 'nOut', nOut, 'files', {order});
