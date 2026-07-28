@@ -742,7 +742,10 @@ end
 function d = acciidm_m_description(N)
 %ACCIIDM_M_DESCRIPTION  Description del blocco SP4-M-FSM (visibile in Block Properties).
   L = {
-    sprintf('Donatello_ACC_IIDM_M - controllore COMPLETO SNN+IIDM (Donatello LUT-%d), architettura R17.', N)
+    sprintf('Donatello_ACC_IIDM_M - [DEPRECATO] controllore completo SNN+IIDM (Donatello LUT-%d), R17.', N)
+    ''
+    '⚠️ DEPRECATO (Fase B2.0): il controllore deployabile e'' Donatello_SNN_IIDM = Donatello_Tier@BALANCED +'
+    'ACC-IIDM (composti, allineamento a ritardo-appaiato). Questo blocco resta come riferimento storico.'
     ''
     'FUNZIONE: catena stato -> azione in UN blocco. La SNN stima i 5 parametri IDM, l''IIDM li usa per'
     'calcolare l''accelerazione. Ingressi fisici (s,v,dv,v_l) -> accel. Bit-identico a SP3/model (G3/G4).'

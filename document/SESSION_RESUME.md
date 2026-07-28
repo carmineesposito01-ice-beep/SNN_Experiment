@@ -16,7 +16,8 @@
 > - **4 Campioni comportamentali** (double, NON-HDL, riferimento): `Donatello` · `Leonardo` · `Michelangelo` · `Raffaello`
 > - **4 blocchi HDL-ready self-contained**: `Donatello_LUT` (**NUOVO** — combinato, popup `NLUT` 16/32/64/128/256/512,
 >   default 64) · `Donatello_Tier` (configurabile tier×nfrac + Avanzata) · `ACC-IIDM` (controllore IIDM R17 standalone,
->   9 ingressi) · `Donatello_ACC_IIDM_M` (controllore R17 completo SNN+IIDM).
+>   9 ingressi) · `Donatello_ACC_IIDM_M` (controllore R17 completo SNN+IIDM — **DEPRECATO in Fase B2.0**,
+>   sostituito dal composto `Donatello_SNN_IIDM` = Tier@BALANCED + ACC-IIDM, allineamento ritardo-appaiato).
 > - **Rimossi** (assorbiti, `reorg_library.m`): `Donatello_Champion`+`Donatello_LUT{16..512}`→nel LUT combinato ·
 >   `Donatello_SLOW/BALANCED/FAST`→nel Tier · `Donatello_ACC_IIDM` (SP3 nativo, superato da ACC-IIDM+ACC_IIDM_M).
 >
