@@ -4,7 +4,7 @@ function M = tier_rtl_metrics(trajList)
   if nargin<1||isempty(trajList), trajList = 1:60; end
   here = fileparts(mfilename('fullpath')); mroot = fullfile(here,'..','..','matlab'); addpath(mroot);
   ds = load(fullfile(mroot,'test_dataset.mat')); tr = ds.trajectories;
-  P = tier_block_params(trajList, 500);
+  P = tier_golden_cache(trajList);                 % stessa cache usata per i vettori RTL (prova e metriche appaiabili)
   names = {'v0','T','s0','a','b'}; err = [];
   for i = 1:numel(trajList)
     gt = double(tr{trajList(i)}.gt_params(:)).';

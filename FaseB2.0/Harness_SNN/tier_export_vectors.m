@@ -6,7 +6,7 @@ function tier_export_vectors(trajList, tag, outdir)
   addpath(fullfile(here,'..','common'));         % rtl_write_vectors
   ds = load(fullfile(here,'..','..','matlab','test_dataset.mat')); tr = ds.trajectories;
   Tp = numerictype(1,21,13); HOLD = 500;
-  P = tier_block_params(trajList, HOLD);          % golden dall'oracolo (matlab/)
+  P = tier_golden_cache(trajList);                % golden dalla cache condivisa (stessi dati delle metriche)
   stimC = {}; goldC = {};
   for i = 1:numel(trajList)
     stimC{end+1} = fi(double(tr{trajList(i)}.val),1,32,20);  % 4 x Ni %#ok<AGROW>
