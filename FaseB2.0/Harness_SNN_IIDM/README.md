@@ -47,6 +47,18 @@ La validazione RTL è **closed-loop**: l'ego integra e ri-alimenta il DUT. Patte
 (plant == riferimento **senza** RTL, pilotato con la sequenza `accel` del riferimento) che isola i difetti
 d'integrazione **prima** dell'anello live. Da adattare al composto.
 
+## ⚠️ Finding da T6b che tocca l'anello chiuso
+
+**L'edge-trigger salta le inferenze su ingressi ripetuti — misurato sul dataset dei 60 (T6b/M1):**
+**203 control-step su 59 940** (**0,34 %**) hanno i 4 ingressi **bit-identici** al precedente (a `fixdt(1,32,20)`),
+concentrati in **6/60** traiettorie **stop&go** (peggiore: 79 ripetizioni in una sola traiettoria). Su ingressi
+identici il blocco **non rilancia l'inferenza** (`HDL_PHASE §3.1.4`) e tiene i parametri precedenti.
+
+In **open-loop è innocuo** (ingressi uguali ⇒ parametri uguali; provato: `nMismatch = 0/300000`).
+**In ANELLO CHIUSO no**: lì gli ingressi del passo successivo dipendono dall'uscita, quindi un'inferenza non
+rieseguita **si propaga** nella traiettoria. Da verificare esplicitamente in T7, soprattutto negli scenari
+**stop&go / veicolo fermo** dei 99 — è proprio dove il fenomeno si concentra.
+
 ## Probe da fare / già validi
 
 | Probe | Stato per T7 |
