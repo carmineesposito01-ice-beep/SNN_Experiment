@@ -34,6 +34,7 @@ function res = run_rtl_validate_tier(mode, trajList)
   tok = regexp(out, 'RTLRES nMismatch=(\d+) n=(\d+)', 'tokens', 'once');
   assert(~isempty(tok), 'xsim non ha prodotto RTLRES. Output:\n%s', out);
   res = struct('nMismatch',str2double(tok{1}), 'n',str2double(tok{2}), 'K',K1, 'traj',numel(trajList));
+  res.trajListUsed = trajList;   % le metriche girano sugli STESSI dati (prova e metriche appaiabili)
   lt = regexp(out,'LAT_RTL (\d+)','tokens','once'); res.lat = str2double(lt{1});
   % --- LAT ---
   assert(~isempty(lt) && res.lat>0 && res.lat<HOLD, ...
@@ -47,17 +48,4 @@ function res = run_rtl_validate_tier(mode, trajList)
   fprintf('=== T6-EXACT PASSATO [%s]: Donatello_Tier RTL == blocco su %d/%d ===\n', mode, res.n, res.n);
 end
 
-function idx = subset_diverse(mroot)
-% 1 traj per combinazione scenario x profilo + estremi di dv + >=1 con cut-in
-  ds = load(fullfile(mroot,'test_dataset.mat')); tr = ds.trajectories; N = numel(tr);
-  key = strings(N,1); ci = false(N,1); dvmax = zeros(N,1);
-  for t=1:N
-    key(t) = string(tr{t}.scenario)+"|"+string(tr{t}.profile);
-    c = tr{t}.cut_in; ci(t) = any(double(c(:))~=0);
-    v = double(tr{t}.val); dvmax(t) = max(abs(v(3,:)));
-  end
-  [~,ia] = unique(key,'stable'); idx = ia(:).';
-  [~,mx] = max(dvmax); [~,mn] = min(dvmax); idx = unique([idx mx mn]);
-  if ~any(ci(idx)), idx = unique([idx find(ci,1)]); end
-  fprintf('subset diversificato: %d traiettorie -> %s\n', numel(idx), mat2str(idx));
-end
+% subset_diverse vive ora in subset_diverse.m (serve anche a run_harness_snn per scaldare la cache golden)

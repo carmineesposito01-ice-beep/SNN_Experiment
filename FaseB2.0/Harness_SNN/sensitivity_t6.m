@@ -1,4 +1,4 @@
-function sensitivity_t6()
+function nm = sensitivity_t6()
 %SENSITIVITY_T6  Prova di sensibilita di T6-EXACT: 1 LSB corrotto sul golden -> DEVE vedere nMismatch>=1.
 %  File a se (non local function) per essere chiamabile da matlab -batch. Riusa TB/runner/ROOT dell'harness.
   here = fileparts(mfilename('fullpath')); mroot = fullfile(here,'..','..','matlab');
