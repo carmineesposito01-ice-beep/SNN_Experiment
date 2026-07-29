@@ -11,31 +11,35 @@
 > generale (quella è la skill `session-reprise`). È un **guida ai documenti**: quando dice «leggi X», leggi X —
 > non ricostruire a memoria.
 
-### ⏸ CHECKPOINT 2026-07-28 (pomeriggio) — T6 AVVIATO poi MESSO IN PAUSA per RIALLINEAMENTO
-> **Leggere PRIMA del blocco T6–T9 sotto (che è superato da questo).** Oggi: brainstorming+spec di T6, spec T6a (RTL) +
-> spec T6b (HW), piano T6a scritto ed **eseguito in gran parte**.
+### ✅ T6a CHIUSO (2026-07-29) — la SNN è validata a livello RTL sui 60. Prossimo: **T6b (HW)**
+> **Leggere PRIMA del blocco T6–T9 sotto (che è superato da questo).**
 >
-> **T6a — Harness_SNN, validazione RTL di `Donatello_Tier@BALANCED`: RTL VALIDATO SUL SUBSET (committato+pushato).**
-> T6-EXACT **0/55000** su 11 traiettorie diversificate (RTL==blocco bit-exact) + **sensibile** (1 LSB→mismatch) + **LAT 364**
-> + **metriche stima sui 60** (`v0` max≈15 = identificabilità, gli altri ~1). Golden = **blocco-oracolo**. Struttura:
-> golden in `matlab/` (`tier_block_params.m`, `rtl_gen_dut.m` esteso), utilità in `FaseB2.0/common/` (`rtl_write_vectors.m`,
-> `rtl_run_xsim.sh`), banco in `FaseB2.0/Harness_SNN/` (TB, `run_rtl_validate_tier`, `sensitivity_t6`, `tier_rtl_metrics`,
-> `probe_golden_cost`, README), xsim in `D:/zbd_tier`. Piano+spec: `docs/superpowers/{plans,specs}/2026-07-28-b2.0-t6a-*`.
-> **Full-60 RTL FERMATO su richiesta** (era conferma *deterministica ridondante* del bit-exact già provato sul subset;
-> le metriche sui 60 restano valide per il determinismo). **Doc HDL_PHASE/FaseB2.0-README NON ancora aggiornati** coi numeri.
+> **T6a — Harness_SNN, validazione RTL di `Donatello_Tier@BALANCED`: FATTO, sui 60, riproducibile.**
+> **T6-EXACT 0 / 300 000** (60 traj × 1000 control-step × 5 param) = il VHDL generato **è** il blocco, bit-exact.
+> Cancello **provato sensibile** (1 LSB → nMismatch=1) · **LAT 364** clock (= blocco, < HOLD 500) · PORT-TYPE coperto.
+> **Metriche di stima sugli STESSI 60**: `v0` 15.01/13.8 (**identificabilità**, non difetto RTL) · `T` 1.125/0.913 ·
+> `s0` 0.937/0.844 · `a` 0.991/0.892 · `b` 1.003/0.867 (max/p99).
+> **Golden = il BLOCCO stesso** (`matlab/tier_block_params.m`), in cache (`matlab/tier_golden_cache.m`) e **condiviso**
+> da confronto RTL e metriche → stessi identici dati. ⚠️ NON usare il MEX `r16` (non è il blocco) né `snn_traj_champion` (stale).
+> **▶ RILANCIARE TUTTO CON UN COMANDO:** `matlab -sd FaseB2.0/Harness_SNN -batch "run_harness_snn"` (~75 min)
+> → **`FaseB2.0/Harness_SNN/results/RESULTS.md` = LA FONTE DEI NUMERI** (config + cancelli + metriche). Gate rapido di
+> sviluppo: `run_harness_snn('smoke')`. Doc: `Harness_SNN/README.md` · `HDL_PHASE.md` §6/§9 · piano+spec
+> `docs/superpowers/{plans,specs}/2026-07-28-b2.0-t6*`.
 >
-> **T6b — HW full-system (utilizzo post-route+BRAM · power SAIF · bitstream PYNQ-Z1 · clock=Fmax · wrapper AXI adattato
-> I/O fisico+`ce_out`): SOLO SPEC scritto** (`docs/superpowers/specs/2026-07-28-b2.0-t6b-*`), **piano NON scritto**.
+> **T6b — PROSSIMO (HW full-system): spec pronto, piano DA SCRIVERE con approccio probe-first.**
+> Scope deciso: utilizzo post-route **incl. BRAM** · power SAIF · **bitstream PYNQ-Z1** · **clock = Fmax del sistema** ·
+> wrapper AXI adattato (I/O fisico 32b, **buffer+commit** per ingressi sincroni, `ce_out` come done).
+> Spec: `docs/superpowers/specs/2026-07-28-b2.0-t6b-harness-snn-hw-design.md` (§0 = requisiti di metodo, §9 = assunzioni
+> da verificare con **probe PRIMA del piano**: `ce_out` unico impulso? wrapper Verilog su DUT VHDL? board preset PYNQ-Z1
+> in Vivado 2026.1? metodo Fmax sul block design?).
 >
-> **⚠️ IN PAUSA — DA DISCUTERE ALLA RIPRESA (feedback utente, 2026-07-28):**
-> 1. **Troppe micro-decisioni in corsa** → l'utente ha perso il filo. Alla ripresa: meno cambi d'approccio in esecuzione,
->    più allineamento a monte.
-> 2. Il piano T6a, benché dettagliato, ha richiesto **4 fix in esecuzione** (variante mascherata→`get_param('Ports')`+save;
->    compile-order alfabetico→dal log makehdl bottom-up; stato SNN nella DualPortRAM non azzerabile a runtime→**un xsim per
->    traiettoria**) = **assunzioni HDL riusate da M1/Champion senza verificarle sul Tier** (Variant Subsystem, gerarchia, RAM).
-> **NON riprendere l'esecuzione (T6b, o rifinitura T6a) senza prima concordare il METODO** (verificare le assunzioni HDL
-> con probe MIRATI *prima* di scrivere il piano; piano più incrementale). Il lavoro fatto è valido e salvato; è il *processo*
-> da rivedere.
+> **⚠️ REQUISITI DI METODO (vincolanti, appresi qui — vedi `FaseB2.0/README.md` §Requisiti):**
+> **(1)** harness **rilanciabile da UN comando** + numeri in **artefatti su disco** (mai solo in chat);
+> **(2)** **stesso perimetro per prova e metriche** (un subset è solo gate di sviluppo: popolazioni diverse ⇒ numeri
+> non appaiabili ⇒ lo scostamento non è leggibile, nemmeno se è 0) → **golden calcolato una volta**, condiviso;
+> **(3)** **niente ripieghi in corsa** per risparmiare tempo (un job corretto ma lungo si lascia finire);
+> **(4)** **probe-first** sulle assunzioni HDL riusate da casi precedenti — in T6a i pattern di M1/Champion non
+> valevano per il Tier (mask, gerarchia, RAM) → **4 fix in esecuzione**; le lezioni sono in **`HDL_PHASE.md` §9**.
 
 ### 🔄 FASE B2.0 IN CORSO (agg. 2026-07-28) — validazione RTL + caratterizzazione esaustiva pre-FPGA fisica
 > Ultima fase prima della Fase C. Piano completo + stime in **`FaseB2.0/README.md`**. Cartella dedicata

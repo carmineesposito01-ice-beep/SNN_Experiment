@@ -398,6 +398,16 @@ Config in `make_hdl.m`: `LoopOptimization='StreamLoops'`, `ConstantMultiplierOpt
   generato è **bit-exact al blocco Simulink** su 3 traj × 1000 × 5 param (**A-1: 0/15000**), cancello provato
   sensibile (1 LSB → nMismatch=1). Tre implementazioni concordi: blocco == golden MEX == RTL VHDL. Harness in
   `run_rtl_validate`/`rtl_export_vectors`/`tb_champion_stream.v` (commit `c961bc85`).
+- ✅ **[FASE B2.0 T6a — 2026-07-29] Harness_SNN (`Donatello_Tier@BALANCED`) validato a livello RTL, sui 60**: il
+  VHDL generato è **bit-exact al blocco** — **T6-EXACT 0 / 300 000** (60 traiettorie × 1000 control-step × 5 param),
+  cancello **provato sensibile** (1 LSB → nMismatch=1), **latenza RTL 364 clock = latenza blocco** (< HOLD 500),
+  PORT-TYPE coperto. **Accuratezza di stima sugli stessi 60**: `v0` max 15.01 / p99 13.8 (**identificabilità**, non
+  difetto RTL) · `T` 1.125/0.913 · `s0` 0.937/0.844 · `a` 0.991/0.892 · `b` 1.003/0.867.
+  **Golden = il BLOCCO stesso** (oracolo `tier_block_params`, in cache `tier_golden_cache` → prova RTL e metriche
+  sugli **stessi identici dati**); ⚠️ il riferimento MEX `r16` NON è il blocco e `snn_traj_champion` è **stale**.
+  **Rilanciabile con UN comando**: `run_harness_snn` (in `FaseB2.0/Harness_SNN/`, ~75 min) → `results/RESULTS.md`
+  = **fonte dei numeri per i report**. Struttura: golden/gen-HDL in `matlab/`, utilità condivise in
+  `FaseB2.0/common/`, banco in `FaseB2.0/Harness_SNN/`, xsim in `D:/zbd_tier` (work-dir corta). **HW = T6b.**
   - ⚠️ **FINDING (golden):** il riferimento `snn_traj_fixed_r16` **NON è il blocco** — diverge a step ~52. Cause
     misurate: (1) la `local_normalize` **fixed** del blocco (fisico→xn) devia 1 LSB da `snn_normalize` (xn diverge
     a step 85); (2) il blocco pilota il forward a **ingresso tenuto**, `snn_traj_b2` con **zeri** (param divergono
@@ -477,6 +487,27 @@ Config in `make_hdl.m`: `LoopOptimization='StreamLoops'`, `ConstantMultiplierOpt
 6. **Registrazione custom-board PYNQ-Z1** + eventuale ri-profilazione Qm.n.
 
 ## §9 Gotcha / lezioni (FONDAMENTALI — non ri-sbatterci)
+- **⚠️ Generare HDL da un blocco MASCHERATO (Variant Subsystem) — 4 trappole, verificate su `Donatello_Tier` in
+  T6a (2026-07-29).** I pattern che funzionavano per `Donatello_Champion` (chart singola, gerarchia piatta) **NON
+  valgono** per un blocco mascherato e gerarchico. Le quattro, in ordine di scoperta:
+  1. **`find_system` non guarda sotto la mask** → contare gli Inport/Outport così dà numeri sbagliati (ingressi non
+     collegati → *"Simulink is unable to determine sizes and/or types"* dalla chart). Usare **`get_param(blk,'Ports')`**
+     e **`save_system` PRIMA di `set_param(mdl,'SimulationCommand','update')`** (l'update risolve la variante).
+     Per selezionare la variante: `set_param(sub,'TIER','BALANCED','NFRAC','13')` prima di `makehdl`
+     (con `VariantActivationTime='update diagram'` genera **solo** quella).
+  2. **Ordine di compilazione VHDL = BOTTOM-UP, non alfabetico.** Con gerarchia profonda
+     (`Donatello_Tier → VS → BALANCED_n13 → {SNN → DualPortRAM, DEC}`) l'ordine alfabetico fa fallire `xvhdl`
+     (*"'snn' is not compiled in library 'work'"*) e poi `xelab` (*"Module not found"*). L'ordine giusto si legge
+     dal **log di `makehdl`** (`Working on … as X.vhd` è già foglie→top); ordinare per `datenum` **non funziona**
+     (i file hanno timestamp identici).
+  3. **Lo stato SNN vive nella `hdl.RAM` (DualPortRAM): il `reset` a runtime NON la azzera** — solo l'**init di una
+     simulazione**. Conseguenza per i testbench: concatenare più traiettorie in **una** simulazione dà risultati
+     corretti solo per la prima (misurato: 49948/55000 mismatch); serve **una simulazione xsim per traiettoria**
+     (compilare una volta, poi `xsim -R` in loop → costo trascurabile).
+  4. **Fix senza root cause = tempo perso**: il "reset per-traiettoria" è stato applicato *prima* di aver capito (3)
+     e non ha funzionato (4996/10000). Prima il **meccanismo**, poi il fix.
+  **Metodo che ne segue**: prima di scrivere un piano d'implementazione HDL, **verificare con probe mirati** le
+  assunzioni riusate da un caso precedente (il generatore regge il NUOVO blocco? il TB regge mask/gerarchia/stato?).
 - **`log2`/`double` MAI nel datapath**: HDL Coder li sintetizza (via `isnan`/`isinf` → errore). OK **solo su
   COSTANTI nell'header** (foldati, come `sh`). `po2shift` usa `Kfc/Sfc` precalcolati, non `log2` nel loop.
 - **Bug leak-division (RISOLTO):** `V./ld` in fi = divisione con auto-output-type → errore
