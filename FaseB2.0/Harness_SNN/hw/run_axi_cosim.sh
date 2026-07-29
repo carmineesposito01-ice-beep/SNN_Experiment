@@ -12,7 +12,8 @@ rm -rf xsim.dir *.jou *.log *.pb hdl hw; mkdir hdl hw
 cp "$HDLSRC"/*.vhd hdl/
 cp "$HDLSRC/compile_order.txt" hdl/
 cp "$HWDIR"/tier_axi_lite.v "$HWDIR"/tb_tier_axi.v hw/
-printf '`define NSTEP %s\n`define GATEMODE %s\n' "$NSTEP" "$GATEMODE" > axi_params.vh
+# CLKHALF=5 ns (100 MHz): sim COMPORTAMENTALE, il periodo non influenza il risultato (nessun ritardo modellato)
+printf '`define NSTEP %s\n`define GATEMODE %s\n`define CLKHALF 5\n' "$NSTEP" "$GATEMODE" > axi_params.vh
 
 while read -r f; do
   [ -z "$f" ] && continue

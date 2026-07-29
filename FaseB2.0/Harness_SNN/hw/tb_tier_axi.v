@@ -29,7 +29,12 @@ module tb_tier_axi;
     .S_AXI_ARADDR(ARADDR), .S_AXI_ARPROT(3'd0), .S_AXI_ARVALID(ARVALID), .S_AXI_ARREADY(ARREADY),
     .S_AXI_RDATA(RDATA), .S_AXI_RRESP(RRESP), .S_AXI_RVALID(RVALID), .S_AXI_RREADY(RREADY));
 
-  always #5 ACLK = ~ACLK;                     // 100 MHz per la cosim funzionale
+  // Semi-periodo del clock, in ns, da axi_params.vh.
+  // ⚠️ Nella sim COMPORTAMENTALE e' irrilevante (nessun ritardo) -> 5 ns (100 MHz) va bene.
+  //    Nella sim di TIMING (netlist + SDF) NON lo e': va usato il periodo dell'FCLK per cui il design e'
+  //    stato implementato. Pilotare la netlist piu' veloce genera violazioni di setup e risultati sbagliati
+  //    -- che sono la risposta CORRETTA del simulatore a uno stimolo sbagliato, non un difetto del design.
+  always #(`CLKHALF) ACLK = ~ACLK;
 
   task axi_write(input [5:0] a, input [31:0] d);
     begin
@@ -54,16 +59,21 @@ module tb_tier_axi;
     end
   endtask
 
+`ifndef NETLIST_SIM
   // SYNC: conta i fronti del BUS D'INGRESSO COMMITTED del Tier (s_c,v_c,dv_c,vl_c).
   // ⚠️ NON si contano i cambi di v0: e' una stima lenta e due control-step possono dare lo STESSO valore
   //    -> quel contatore SOTTOCONTA e non misura cio' che serve. Cio' che va provato e' che i 4 ingressi
   //    cambino INSIEME: 1 solo fronte del bus per commit (se cambiassero separatamente si vedrebbero >1).
+  // ⚠️ Usa riferimenti GERARCHICI: nella netlist post-place&route quei nomi NON esistono piu' (sintesi/impl
+  //    li rinominano) -> in NETLIST_SIM il blocco si esclude. Il cancello di NETLIST-PAR e' AXI-COSIM, che
+  //    guarda solo le PORTE AXI (black-box) ed e' quindi valido anche sulla netlist; SYNC e' gia' provato a RTL.
   wire [127:0] tin = {dut.s_c, dut.v_c, dut.dv_c, dut.vl_c};
   reg  [127:0] tin_d;
   always @(posedge ACLK) begin
     tin_d <= tin;
     if (ARESETN && tin !== tin_d) ninf <= ninf + 1;
   end
+`endif
 
 `ifdef PROBE_TIMING
   // Probe di timing: misura commit -> cambio uscita -> done, per TARARE LAT_CLK sul dato invece che dedurlo.
@@ -85,7 +95,9 @@ module tb_tier_axi;
     $readmemh("axi_gold.mem", gold);
     nmis = 0; ninf = 0;
     ARESETN = 0; repeat (16) @(posedge ACLK); ARESETN = 1; repeat (4) @(posedge ACLK);
+`ifndef NETLIST_SIM
     prev_v0 = dut.u_tier.v0;
+`endif
     axi_write(6'h10, {30'd0, GATEMODE[0], 1'b0});      // bit1 = clock gating, bit0 = commit basso
     for (k = 0; k < NSTEP; k = k + 1) begin
       axi_write(6'h00, stim[k*4+0]);
@@ -97,6 +109,7 @@ module tb_tier_axi;
       rd = 0;
       while (rd[0] !== 1'b1) axi_read(6'h10);          // poll del done
       // DBG sul primo control-step: separa "il wrapper ha latchato male" da "il path di lettura sbaglia"
+`ifndef NETLIST_SIM
       if (k == 0) begin
         $display("DBG tier_out  v0=%06X T=%06X s0=%06X a=%06X b=%06X",
                  dut.u_tier.v0, dut.u_tier.T, dut.u_tier.s0, dut.u_tier.a, dut.u_tier.b);
@@ -104,6 +117,7 @@ module tb_tier_axi;
         $display("DBG gold       v0=%06X T=%06X s0=%06X a=%06X b=%06X",
                  gold[0], gold[1], gold[2], gold[3], gold[4]);
       end
+`endif
       for (i = 0; i < 5; i = i + 1) begin
         axi_read(6'h14 + i*4);
         if (k == 0) $display("DBG read[%0d]=%06X  gold=%06X", i, rd[20:0], gold[k*5+i]);
