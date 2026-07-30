@@ -557,6 +557,17 @@ Config in `make_hdl.m`: `LoopOptimization='StreamLoops'`, `ConstantMultiplierOpt
      convertito in path Windows (`/tb/dut=x` → `C:/Program Files/Git/tb/dut=x`) — si disattiva con
      `MSYS2_ARG_CONV_EXCL="*"`; e l'`=` **si perde** (stesso motivo per cui le macro del TB si passano via file
      `.vh` e non con `-d NAME=val`).
+  10bis. **Un TB Verilog NON puo' leggere segnali interni di un DUT VHDL: `xelab` CRASHA** (Vivado 2026.1).
+     Sintomo: `ERROR: [XSIM 43-3294] Signal EXCEPTION_ACCESS_VIOLATION received` con stack in
+     `ISIMC::VlogCompiler` — un **crash**, non un errore diagnostico: non dice che cosa non gli piace.
+     Isolato in T7a con tre prove: (A) `-debug typical` crasha uguale ⇒ non e' il livello di debug;
+     (B) lo stesso TB con i riferimenti gerarchici esclusi da un `ifdef` elabora ⇒ la causa sono i
+     riferimenti; (C) lo **stesso** TB su DUT generato in **Verilog** elabora e gira.
+     ⇒ **Se il TB deve leggere segnali interni, generare il DUT in Verilog** (`rtl_gen_dut(...,'Verilog')`),
+     cosi' l'accesso e' Verilog→Verilog. Le porte del top restano identiche nei due linguaggi.
+     *(Conclusione coincidente con l'avviso nel docstring di `rtl_gen_dut` — «il controllore con l'IIDM va
+     in Verilog» — ma per una ragione DIVERSA: la' erano i metavalue a time-0, qui l'accesso gerarchico
+     cross-language.)*
   10. **`add_files` nel Tcl ri-parsa la stringa come LISTA** ⇒ un path con spazi si spezza (*"File or Directory
      'D:/Project_MBSE/1.Reti' does not exist"*). Rimedio: **copiare i sorgenti in una work-dir corta** e usare
      `[list "$dir/$f"]`. Corollario: `write_verilog -mode timesim -sdf_anno true` **incorpora già**
