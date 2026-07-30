@@ -1,3 +1,33 @@
+
+## ▶ RIPRESA 2026-07-31 — T7a fatto, T7b da eseguire
+
+**Stato:** T7a **COMPLETO e verde sui 99** (`FaseB2.0/Harness_SNN_IIDM/results/RESULTS.md`):
+PLANT-PAR 0 · **T7-EXACT 0/58 522** · PARAM-RANGE 0 · **T7-SAFE 0 collisioni aggiuntive**
+(RTL 3, oracolo 3 — inevitabili da cut-in) · 31 metriche/scenario dal motore canonico.
+
+**PRIMA AZIONE — ri-validare, poi T7b.** Il blocco e' cambiato ieri sera (`align` con uscite
+registrate, +14% Fmax, comportamento **bit-identico** verificato su 1 scenario):
+```
+matlab -batch "addpath('FaseB2.0/Harness_SNN_IIDM'); run_harness_snn_iidm('full')"   % ~45 min
+```
+Atteso: gli **stessi** numeri di `RESULTS.md` (il comportamento e' identico). Se differiscono,
+fermarsi: la modifica non e' trasparente come misurato sul singolo scenario.
+
+Poi **T7b** — piano in `docs/superpowers/plans/2026-07-30-b2.0-t7b-harness-snn-iidm-hw.md`,
+con **una correzione da fare**: lo sweep FCLK e' scritto 10–35 MHz sulla base del vecchio 36,4 OOC.
+Ora l'OOC e' **41,5** ⇒ sweep da rifare attorno a **15–40 MHz** (il deployabile io-timed vale ~meta'
+dell'OOC).
+
+**Collo di bottiglia — APERTO e documentato** (`HDL_PHASE.md` §9): il cammino critico attraversa
+ancora `DEC → align → IIDM` (24,1 ns). `align` e' sceso da 32 a 18 celle ma HDL Coder ne
+ricostruisce l'uscita in modo **combinatorio** (`assign sa = sa_1`, sensibilita' su `s`) nonostante
+l'ordinamento nel sorgente. Per spezzarlo serve una tecnica che **garantisca** il registro (Unit
+Delay dentro `align`, non codice MATLAB), **senza** reintrodurre il fronte spurio: i registri devono
+essere inizializzati come i `persistent`, non a zero.
+⚠️ **Cancello obbligatorio di qualunque modifica al confine: `tb_edge_probe.v` deve contare 1 fronte.**
+Un tentativo coi registri ESTERNI dava 61,8 MHz ma **2 fronti** — filtro OU aggiornato due volte:
+piu' veloce e **sbagliato**. Verificare i fronti **prima** delle run lunghe: 2 minuti contro 45.
+
 # SESSION_RESUME.md — Quick context for any new Claude session
 
 > **Scopo**: in 5 minuti capire **dove siamo**, **cosa è stato fatto**, **cosa fare adesso**.
