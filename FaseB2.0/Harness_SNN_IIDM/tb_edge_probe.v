@@ -39,7 +39,7 @@ module tb_edge_probe;
                          dut.pipe5_out1, dut.pipe6_out1, dut.pipe7_out1, dut.pipe8_out1, dut.pipe9_out1};
 `else
   wire [180:0] acc_in = {dut.sa, dut.va, dut.dva, dut.vla,
-                         dut.Tier_v0, dut.Tier_T, dut.Tier_s0, dut.Tier_a, dut.Tier_b};
+                         dut.v0a, dut.Ta, dut.s0a, dut.aa, dut.ba};
 `endif
   reg [180:0] acc_in_d;
 
