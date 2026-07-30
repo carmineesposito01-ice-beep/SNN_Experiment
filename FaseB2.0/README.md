@@ -9,7 +9,10 @@ in `../report/`.
 > (validazione RTL della SNN → [`Harness_SNN/results/RESULTS.md`](Harness_SNN/results/RESULTS.md)) ·
 > **T6b M1–M3** (caratterizzazione HW → [`Harness_SNN/results/RESULTS_HW.md`](Harness_SNN/results/RESULTS_HW.md))
 > FATTI e committati.
-> **In corso: T6b M4** (bitstream PYNQ-Z1 + provenienza) → poi **M5** (entry-point unico + doc). Poi **T7**.
+> ✅ **T6b COMPLETO** (M1–M5). **Prossimo: T7** — `Harness_SNN_IIDM` (capitolato in
+> [`Harness_SNN_IIDM/README.md`](Harness_SNN_IIDM/README.md)): blocco composto + i **99** scenari + metriche di
+> car-following in anello chiuso. Poi **T8** (2 report `create-report`) e **T9** (allineamento doc).
+> **▶ Riesecuzione HW:** `bash Harness_SNN/hw/run_harness_snn_hw.sh [stadio]` (`summary` = numeri in pochi secondi).
 > Stato/azioni: `../document/SESSION_RESUME.md`.
 
 ### Sintesi dei numeri HW (T6b, dettaglio e provenienza in `Harness_SNN/results/RESULTS_HW.md`)
@@ -24,6 +27,7 @@ in `../report/`.
 | Statica del device (pavimento del chip, **separata**) | 0,103 W → 10,3 mJ | misurato |
 | **Clock gating**: clock del Tier fermo (`TC 400→0`), funzionalmente trasparente | attivo | misurato |
 | Guadagno del gating in watt | **2–4×** atteso sulla dinamica | ⚠️ **stima** → Fase C |
+| **Bitstream PYNQ-Z1** @52 MHz (`.bit`/`.hwh`/`.xsa`) | WNS +0,358 = quello dello sweep | prodotto |
 | Worst-case sintetico come bound | ❌ invalidato (era il più basso) → si usa il **max osservato** 0,045 W | — |
 
 ## Requisiti di metodo (vincolanti — appresi in T6a, 2026-07-29)

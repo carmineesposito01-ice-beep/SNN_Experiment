@@ -433,6 +433,14 @@ Config in `make_hdl.m`: `LoopOptimization='StreamLoops'`, `ConstantMultiplierOpt
     risparmio per differenza di corrente a riposo).
   - ⚠️ Il **worst-case sintetico non è un limite superiore** (risultò il *più basso*): si riporta il massimo
     **osservato** fra i 9 workload reali (0,045 W). Il vero regime peggiore richiede uno studio a sé.
+  - **Bitstream PYNQ-Z1** @52 MHz: `.bit` + `.hwh` + `.xsa` in `FaseB2.0/Harness_SNN/bitstream/` (tracciati),
+    **WNS +0,358 identico allo sweep** ⇒ il design flashato È quello caratterizzato; provenienza verificata nel
+    `.hwh` (`BOARD=…pynq-z1…`, `DEVICE=7z020`).
+  - **▶ RIPRODUCIBILITÀ — un comando per stadio:**
+    `bash FaseB2.0/Harness_SNN/hw/run_harness_snn_hw.sh [check|probe|cosim|sweep|netlist|power|bitstream|summary|all]`.
+    `summary` **riestrae i numeri dagli artefatti** (non da costanti nello script) → un rilancio si *confronta* con
+    il documentato. `check` = **cancello di provenienza del DUT** (MD5 dei sorgenti VHDL vs `hw/vhdl_ref.md5`;
+    se il VHDL manca lo rigenera **e rilancia il gate T6a**) — provato sensibile alterando un file.
   - ⚠️ **FINDING (golden):** il riferimento `snn_traj_fixed_r16` **NON è il blocco** — diverge a step ~52. Cause
     misurate: (1) la `local_normalize` **fixed** del blocco (fisico→xn) devia 1 LSB da `snn_normalize` (xn diverge
     a step 85); (2) il blocco pilota il forward a **ingresso tenuto**, `snn_traj_b2` con **zeri** (param divergono

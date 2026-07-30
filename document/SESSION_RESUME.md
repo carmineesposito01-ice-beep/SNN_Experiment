@@ -26,7 +26,7 @@
 > sviluppo: `run_harness_snn('smoke')`. Doc: `Harness_SNN/README.md` · `HDL_PHASE.md` §6/§9 · piano+spec
 > `docs/superpowers/{plans,specs}/2026-07-28-b2.0-t6*`.
 >
-> **T6b — IN CORSO (HW full-system). M1–M3 FATTI (2026-07-30), restano M4 (bitstream) e M5 (entry-point + doc).**
+> **T6b — ✅ COMPLETO (HW full-system, M1–M5, 2026-07-30).**
 > Numeri: **`FaseB2.0/Harness_SNN/results/RESULTS_HW.md`** (fonte per i report) · script `Harness_SNN/hw/` ·
 > probe `Harness_SNN/results/PROBES_T6B.md` · piano `docs/superpowers/plans/2026-07-29-b2.0-t6b-*`.
 > In breve: PS via AXI == blocco **0/300 000** (60 traj, gating ON e OFF) · netlist post-route == blocco
@@ -34,9 +34,20 @@
 > 1 BRAM** · margine sul control-step **≈14 000×** (duty 0,0071 %) · **energia dinamica 0,9 mJ/control-step
 > MISURATA al duty reale** (statica del device 10,3 mJ, tenuta separata) · **clock gating attivo e trasparente**
 > (`TC 400→0`) ma **guadagno non quantificabile** dal tool → **stima 2–4×**, da validare in Fase C con lo stesso
-> bitstream (è un bit di registro). ⚠️ Due voci NON valide: la **composizione lineare** della potenza (invalidata
-> dal cross-check) e il **worst-case sintetico** (non è un bound). **Le 10+4 lezioni in `HDL_PHASE.md` §9 sono
-> obbligatorie per T7/Fase C.**
+> bitstream (è un bit di registro) · **bitstream PYNQ-Z1 prodotto** (`.bit`/`.hwh`/`.xsa`, WNS +0,358 = quello
+> dello sweep ⇒ il flashato è il caratterizzato).
+> **▶ RIESECUZIONE:** `bash FaseB2.0/Harness_SNN/hw/run_harness_snn_hw.sh [check|probe|cosim|sweep|netlist|power|bitstream|summary|all]`
+> — `summary` riestrae i numeri dagli artefatti in secondi; `check` verifica col **checksum** che il DUT sia
+> l'artefatto di T6a (provato sensibile).
+> ⚠️ Due voci NON valide: la **composizione lineare** della potenza (invalidata dal cross-check → si misura al duty
+> reale) e il **worst-case sintetico** (non è un bound). Una **non riuscita**: la sim di *timing* della netlist
+> (la funzionale è verde; il timing lo firma l'STA). **Le 10+4 lezioni in `HDL_PHASE.md` §9 sono obbligatorie per
+> T7/Fase C.**
+>
+> **➡️ PROSSIMO: T7 — `Harness_SNN_IIDM`.** Capitolato già scritto: `FaseB2.0/Harness_SNN_IIDM/README.md`
+> (blocco composto `Donatello_SNN_IIDM` · dataset dei **99** con cut-in aggressivi · **metriche di car-following**
+> in anello chiuso con `qz_safety_metrics.m` · plant-nel-TB da `tb_acciidm_m_closed.v` · ⚠️ latenza del composto
+> **da rimisurare** e costo dei 99 in anello **da misurare** prima di impegnare ore).
 >
 > **[storico] T6b — spec e approccio probe-first:**
 > Scope deciso: utilizzo post-route **incl. BRAM** · power SAIF · **bitstream PYNQ-Z1** · **clock = Fmax del sistema** ·
