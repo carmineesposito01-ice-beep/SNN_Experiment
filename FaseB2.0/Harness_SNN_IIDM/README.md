@@ -1,73 +1,92 @@
-# Harness_SNN_IIDM (Fase B2.0 · T7) — DA FARE
+# Harness_SNN_IIDM (Fase B2.0 · T7a) — anello chiuso RTL + metriche
 
-> **Scaffold + requisiti raccolti il 2026-07-29** (durante T6b, mentre si chiariva la divisione fra i due harness).
-> Nulla è ancora implementato qui: questo README è il **capitolato** di T7, con gli asset già verificati esistenti.
+Valida in RTL il **controllore car-following completo** sui **99 scenari** esaustivi e ne produce le
+**31 metriche** di car-following, calcolate sulle serie **prodotte dall'RTL**.
+
+> **I numeri stanno negli artefatti, non qui:** [`results/RESULTS.md`](results/RESULTS.md) (sintesi),
+> `results/metrics.json` (31 metriche per scenario, RTL e oracolo), `results/t7_results.mat`.
+
+## Esecuzione — un comando
+
+```matlab
+addpath('FaseB2.0/Harness_SNN_IIDM');
+run_harness_snn_iidm('smoke')   % 3 scenari (normale · cut-in · collisione), pochi minuti
+run_harness_snn_iidm('full')    % tutti i 99
+```
+
+Prerequisito, una volta sola (rigenera l'RTL dal blocco):
+```matlab
+addpath('matlab'); rtl_gen_dut('Donatello_SNN_IIDM','C:/t7hdlv','Verilog')
+```
 
 ## DUT
 
-**`Donatello_SNN_IIDM`** (blocco composto della libreria, creato in T4 da `matlab/build_snn_iidm_block.m`):
-`Donatello_Tier@BALANCED` + `align` (ritardo-appaiato) + **`ACC-IIDM` R17** — la versione a **~77,9 MHz OOC**
-(divisore e radice sequenziali; il 9,30 MHz di SP4 è superato). I/O: `s,v,dv,v_l → accel`.
+**`Donatello_SNN_IIDM`** = `Donatello_Tier@BALANCED/nfrac13` (SNN estimatrice) + `align` (ritardo-appaiato)
++ `ACC-IIDM` (R17). I/O: `s,v,dv,v_l → accel`. Latenza **misurata 554 clock**.
 
-⚠️ **NON** è il DUT di T6a/T6b (che è la SNN sola, `Donatello_Tier@BALANCED`).
+⚠️ **Generare in VERILOG, non VHDL.** Il testbench legge i 5 parametri come segnali interni del top, e un
+TB Verilog che accede a segnali interni di un DUT **VHDL** fa **crashare `xelab`**
+(`EXCEPTION_ACCESS_VIOLATION`, `HDL_PHASE` §9.10bis).
 
-## Dataset — i 99, non i 60
+⚠️ **Il composto non si pilota mai con ingressi costanti**: `align` rilascerebbe valori identici a quelli
+tenuti, le sue uscite non cambierebbero e l'ACC non vedrebbe alcun fronte.
 
-**`matlab/Quantizzation_Study/test_dataset_exhaustive.mat`** (99 scenari = 11 config-veicolo × 9 scenari).
-Motivo (deciso dall'utente): scenari **più uniformi** e include i **cut-in aggressivi inevitabili**, quindi è il
-dataset adatto a verificare **tutte** le metriche di car-following. È **closed-loop-native** (nessun `val`) → serve
-l'anello. Riferimento oracolo closed-loop: **`matlab/Quantizzation_Study/mp_ref13_1_99.mat`** ✅ verificato presente.
+## Come si verifica l'anello — due prove che non si sovrappongono
 
-*(I 60 di `test_dataset.mat` sono il dataset di T6a/T6b: hanno `val` e 60 config-veicolo distinte, adatti alla rete sola.)*
-
-## Metriche di car-following — DA VALIDARE TUTTE
-
-Fonti: `report/VALIDATION_REPORT_v3.md` §3/§5 (root, branch `main`) · `report/QUANTIZATION_STUDY_REPORT.md` §4
-(questo worktree — **già girato sui 99**, quindi i numeri saranno confrontabili).
-
-| Metrica | Significato | Fonte |
+| Cancello | Che cosa prova | Come |
 |---|---|---|
-| **collisioni** + **collisioni AGGIUNTIVE vs oracolo** | sicurezza assoluta; *0 extra* = sicura quanto il controllore a conoscenza perfetta | QZ §4 (3 inevitabili da cut-in aggressivo, uguali all'oracolo) |
-| **min_gap** · **min_TTC** | prossimità al pericolo | VAL §5 |
-| **brake margin** · **max DRAC** | margine di frenata (`B_max = 9 m/s²`) e decelerazione richiesta | QZ eq. 4.1 |
-| **TET / TIT** | tempo ed integrale sotto soglia TTC (esposizione) | VAL §3 |
-| **impact Δv / severità** | violenza dell'urto dove è inevitabile (oracolo: 7.69 m/s) | QZ §4 |
-| **rms_jerk** · **frac_iso** | comfort (soglia ISO) | VAL §3/§5 |
-| **head_to_tail_gain** | string stability (<1 = stabile) | VAL §3 |
-| **naturalisticità** (KS su time-gap e jerk) | distanza dalle distribuzioni umane | VAL §4 |
+| **PLANT-PAR** | il plant del TB ≡ `qz_cl_sim` | pilotato con la sequenza `accel` dell'**oracolo**, **senza DUT** |
+| **T7-EXACT** | il DUT ≡ il **blocco** | il blocco ripilotato sugli ingressi che l'RTL ha **davvero ricevuto**, **senza plant** |
 
-**Riuso, non riscrittura:** `matlab/Quantizzation_Study/qz_safety_metrics.m` ✅ verificato presente
-(firma `m = qz_safety_metrics(series, collided, min_gap, impact_dv)`; è la porta di `utils/closed_loop_eval.py`)
-→ stesse metriche dei report pubblicati ⇒ **numeri confrontabili**. Baseline = **oracolo**.
+Plant corretto + DUT corretto ⇒ traiettoria corretta. Le due prove **non condividono** il componente
+verificato dall'altra, quindi non c'è circolarità.
 
-## Conseguenza tecnica: serve il plant nel testbench
+Altri cancelli: **PARAM-RANGE** (i 5 parametri nei limiti del decode), **NO-REPEAT** (parametri mai
+ripetuti ⇒ `align` mai stantio), **T7-SAFE** (0 collisioni **aggiuntive** rispetto all'oracolo — l'unico
+cancello duro sulle metriche).
 
-La validazione RTL è **closed-loop**: l'ego integra e ri-alimenta il DUT. Pattern già collaudato:
-**`matlab/axi/acciidm_m/tb_acciidm_m_closed.v`** ✅ verificato presente, col cancello **PLANT-PAR**
-(plant == riferimento **senza** RTL, pilotato con la sequenza `accel` del riferimento) che isola i difetti
-d'integrazione **prima** dell'anello live. Da adattare al composto.
+Ogni cancello è **provato sensibile** (`sensitivity_t7`), su un solo scenario anche in `'full'`: la
+sensibilità è una proprietà del cancello, non del dataset.
 
-## ⚠️ Finding da T6b che tocca l'anello chiuso
+## ⚠️ Il riferimento del DUT è il BLOCCO, non `acciidm_m_traj`
 
-**L'edge-trigger salta le inferenze su ingressi ripetuti — misurato sul dataset dei 60 (T6b/M1):**
-**203 control-step su 59 940** (**0,34 %**) hanno i 4 ingressi **bit-identici** al precedente (a `fixdt(1,32,20)`),
-concentrati in **6/60** traiettorie **stop&go** (peggiore: 79 ripetizioni in una sola traiettoria). Su ingressi
-identici il blocco **non rilancia l'inferenza** (`HDL_PHASE §3.1.4`) e tiene i parametri precedenti.
+`acciidm_m_traj` è l'estrazione verbatim del blocco **MONOLITICO DEPRECATO** `Donatello_ACC_IIDM_M` e
+**non è equivalente al composto**: **385 scarti su 600** control-step di una traiettoria reale, primo al
+passo 195. L'equivalenza era stata provata solo su 4 control-step (T5) e 6 (P4). Prova decisiva, stessa
+sequenza di ingressi: blocco vs RTL **0**, blocco vs monolitico **385**, RTL vs monolitico **385**.
 
-In **open-loop è innocuo** (ingressi uguali ⇒ parametri uguali; provato: `nMismatch = 0/300000`).
-**In ANELLO CHIUSO no**: lì gli ingressi del passo successivo dipendono dall'uscita, quindi un'inferenza non
-rieseguita **si propaga** nella traiettoria. Da verificare esplicitamente in T7, soprattutto negli scenari
-**stop&go / veicolo fermo** dei 99 — è proprio dove il fenomeno si concentra.
+## Metriche
 
-## Probe da fare / già validi
+Motore **canonico** `utils/closed_loop_eval.all_metrics()` (Python), non riscritto: lo stesso che ha
+prodotto `VALIDATION_REPORT_v3` e `QUANTIZATION_STUDY_REPORT` ⇒ numeri confrontabili per costruzione.
+30 chiavi + `string_stability_gain` = **31**.
 
-| Probe | Stato per T7 |
+☠️ Il contratto è di **9 chiavi** e una fallisce in silenzio: `impact_dv` è letta con
+`traj.get('impact_dv', 0.0)`, quindi ometterla restituisce **0** — «collisione a severità nulla» per una
+collisione reale (valore vero misurato: 5,39 m/s). `t7_metrics.py` **asserisce** tutte e nove.
+
+**Fuori perimetro:** la *naturalisticità* (KS su time-gap e jerk) opera sul modello PyTorch e su una cache
+di guidatori, non su serie di anello chiuso: è coperta a monte da `VALIDATION_REPORT_v3` (T4).
+
+## File
+
+| File | Ruolo |
 |---|---|
-| **latenza del DUT** | ⚠️ **DA RIMISURARE**: i 364 clock sono della **SNN sola**; il composto ha latenza diversa (SNN + `align` + IIDM). Taratura di contatore/campionamento dipende da questa. |
-| **costo simulazione 99 in anello** | ⚠️ **DA MISURARE** prima di impegnare ore (come si fece con `probe_golden_cost` in T6a) |
-| P2 mixed-language · P3 board repoPaths · P4 BD+PS7/FCLK | ✅ **validi** (non dipendono dal DUT) — vedi `../Harness_SNN/results/PROBES_T6B.md` |
+| `run_harness_snn_iidm.m` | **entry-point unico** (`'smoke'` \| `'full'`) |
+| `t7_step_oracle.m` · `t7_oracle_cache.m` | oracolo: `accel` per PLANT-PAR + baseline delle metriche |
+| `t7_export_scenarios.m` | scenari → `.mem` (bit pattern IEEE-754) |
+| `tb_plant_only.v` · `t7_plant_par.m` | PLANT-PAR (plant senza DUT) |
+| `tb_snn_iidm_closed.v` | anello live: plant + DUT + export delle serie |
+| `t7_read_series.m` · `t7_hexread.m` | lettura delle serie (⚠️ `hex2num`, **non** `hex2dec`) |
+| `t7_block_replay.m` · `t7_rtl_validate.m` | riferimento (il blocco) e cancelli |
+| `t7_series_to_mat.m` · `t7_metrics.py` | metriche dal motore canonico |
+| `sensitivity_t7.m` | prove di sensibilità dei cancelli |
+| `../common/rtl_run_plant_par.sh` · `rtl_run_xsim_closed.sh` | runner (work-dir corta, compila una volta) |
 
-## Requisiti di metodo (dalla Fase B2.0, vincolanti)
+## Trappole già pagate
 
-Entry-point **unico** + numeri in **artefatti su disco** · **stesso perimetro** fra prova e metriche riportate ·
-**niente ripieghi in corsa** · **probe-first** sulle assunzioni. Vedi `../README.md` §Requisiti.
+- **`hex2dec` perde precisione oltre 2⁵³** ⇒ distrugge il confronto bit-esatto in modo silenzioso
+  (dava 2241/2400 su un plant corretto). Usare `hex2num` — isolato in `t7_hexread`.
+- **Macro al TB via file `.vh`**, mai `-d NOME=val`: il wrapper Git-Bash→`.bat` mangia l'`=`.
+- **Work-dir senza spazi**: il repo sta sotto `.../1.Reti Neurali/...` e `glob`/`add_files` si spezzano.
+- **Una simulazione xsim per scenario**: lo stato SNN vive nella `hdl.RAM` e si azzera solo all'init.
