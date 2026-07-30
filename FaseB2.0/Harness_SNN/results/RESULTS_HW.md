@@ -286,3 +286,32 @@ Fermando il suo clock si rimuove la quota dominante di quei 7 mW ⇒ dinamica at
 cioè un **fattore ~2–4×** sull'energia dinamica del deployment. **Va verificato in Fase C**, dove la misura è banale
 grazie al progetto scelto: il gating è un **bit di registro**, quindi lo **stesso bitstream** consente di leggere la
 corrente a riposo con bit=0 e bit=1 e ricavare il risparmio per differenza.
+
+---
+
+## M4 — Bitstream PYNQ-Z1 ✅
+
+Sistema completo (PS7 + `tier_axi_lite` + AXI SmartConnect) all'**FCLK deployabile di 52 MHz**, costruito con la
+**stessa procedura** di `build_impl.tcl` ⇒ il design che finisce sul `.bit` è **lo stesso** caratterizzato in M2/M3,
+non una variante ricostruita a parte. Riesecuzione:
+`vivado -mode batch -source hw/bitstream.tcl -tclargs <SRCDIR> <ROOT> 52 <OUTDIR> 6` — costo **9,5 min**.
+
+| Cancello | Esito |
+|---|---|
+| **TIMING** sul run che produce il `.bit` | **WNS = +0,358 ns** ⇒ chiude |
+| **Determinismo** — stesso WNS dello sweep M2 a 52 MHz | **+0,358 = +0,358** ✅ (con `-jobs 6` fisso) |
+| **Artefatti presenti** (`glob` + copia, errore rumoroso se assenti) | `.bit` · `.hwh` · `.xsa` prodotti |
+| **Provenienza** nel `.hwh` | `BOARD="www.digilentinc.com:pynq-z1:part0:1.0"` · `DEVICE="7z020"` · `PACKAGE="clg400"` |
+
+**Artefatti** in `FaseB2.0/Harness_SNN/bitstream/` (tracciati in git, come il bitstream della Fase B):
+
+| File | Dimensione | Uso |
+|---|---|---|
+| `snn_tier_donatello.bit` | 4,05 MB | flash su PYNQ-Z1 |
+| `snn_tier_donatello.hwh` | 138 KB | handoff PYNQ (overlay) |
+| `snn_tier_donatello.xsa` | 1,15 MB | handoff Vitis/XSCT |
+| `timing_bitstream_fclk52.rpt` · `util_bitstream_fclk52.rpt` | — | timing e risorse **del run del bitstream** |
+
+**Pronto per la Fase C.** L'esperimento sul clock gating è immediato e **non richiede un secondo bitstream**: il
+gating è un **bit di registro** (`0x10` bit1), quindi si legge la corrente a riposo con bit=0 e poi bit=1 e si
+ricava il risparmio **per differenza** — è la misura che qui non è ottenibile (§M3.3).
