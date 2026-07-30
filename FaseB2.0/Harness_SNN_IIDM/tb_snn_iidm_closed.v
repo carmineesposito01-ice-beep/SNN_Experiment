@@ -10,7 +10,7 @@
 //   * stato FISICO del plant (s, v, vl, dv) NON quantizzato -> alimenta le metriche
 //   * uscite del DUT (accel, 5 parametri)                   -> il prodotto dell'hardware
 //
-// HOLD deve superare la latenza del composto, MISURATA = 554 clock (probe P1).
+// HOLD deve superare la latenza del composto, MISURATA = 555 clock (554 + 1 del registro di confine).
 // I 5 parametri sono segnali dell'architettura del top (il top espone solo `accel`): leggibili solo
 // in simulazione COMPORTAMENTALE, perche' la netlist post-place&route perde i nomi gerarchici.
 // -----------------------------------------------------------------------------------------------

@@ -587,6 +587,40 @@ Config in `make_hdl.m`: `LoopOptimization='StreamLoops'`, `ConstantMultiplierOpt
   - **Misurare il costo prima di impegnare ore** — regola scritta nel piano e violata una volta (3 traiettorie
     post-route lanciate senza cronometrarne una: 22 min/traiettoria scoperti dopo). Applicata bene altrove
     (probe del golden, punto singolo dello sweep FCLK, pre-flight della run a duty reale).
+  - **☠️ OGNI BLOCCO DICHIARATO «PRESCELTO» DEVE AVERE UNA PROPRIA SINTESI. L'idoneità HDL NON si eredita
+    dai componenti.**
+    **Il fatto:** `Donatello_SNN_IIDM` è stato creato il **2026-07-28** (T4) e dichiarato il controllore
+    prescelto. Dalla sua creazione fino al **2026-07-30 (T7b)** **non è mai stato sintetizzato una volta**:
+    verificato, **zero** occorrenze di quel top in tutti gli script `.tcl` del repo. La sua idoneità era
+    ereditata dai componenti.
+    **Il costo:** il suo cammino critico va dal registro del decoder del Tier, **attraverso `align`**, fino a
+    un registro dentro l'IIDM — **27,5 ns = 36,4 MHz**, contro i ~50 del Tier e i ~78 dell'ACC-IIDM
+    **presi singolarmente**. Un cammino che **nessuno dei due componenti aveva**: l'ha creato la composizione.
+    Rimosso con un registro di pipeline sul confine → **61,8 MHz** (+70 %), e il cammino critico si è spostato
+    **dentro la SNN**, cioè dove deve stare. Costo: +233 FF e +1 clock di latenza (554 → 555); valori
+    invariati (un registro di pipeline sposta i tempi, non i numeri).
+    ⚠️ **Il registro va su TUTTI i rami che devono restare sincroni** (qui 9: 4 fisici allineati + 5
+    parametri). Ritardarne una parte li desincronizza di un clock — che è esattamente il doppio-fronte che
+    `align` esiste per impedire.
+
+    **Perché nessuna verifica precedente poteva vederlo — e perché NON è una scusa:**
+    lo studio di quantizzazione **ha** sintetizzato, ed è per questo che le sue metriche di risorse sono
+    valide: ma ha sintetizzato i **componenti** (`Donatello_Tier`, ACC-IIDM standalone), e quando girava
+    (fino al 2026-07-27) **il composto non esisteva ancora** (creato il 28). T7a, dal canto suo, ha fatto
+    **58 522 confronti bit-esatti tutti verdi**: un cammino combinatorio lungo non altera **un solo bit**,
+    sposta solo i tempi, quindi nessuna verifica funzionale — per quanto esaustiva — può rilevarlo.
+    **La sintesi è l'unico livello che lo vede.**
+
+    ⇒ **REGOLA.** Quando un blocco viene dichiarato prescelto/deployato — e a maggior ragione se è una
+    **composizione** — la sua caratterizzazione va rifatta **su di lui**, non ereditata:
+    1. **sintesi OOC del blocco stesso** (~5 min) al momento della dichiarazione;
+    2. **confronto dell'Fmax col MINIMO di quelle dei componenti**: se è sensibilmente più bassa, il confine
+       fra i componenti non è registrato — è il sintomo, e va inseguito col `report_timing` del cammino
+       critico, che dice **attraverso quali moduli** passa;
+    3. il numero va nella scheda del blocco, così che «prescelto» significhi «caratterizzato», non
+       «assemblato da pezzi caratterizzati».
+    *(Trovato in T7b il 2026-07-30, due fasi dopo la composizione. Con la libreria a 8 blocchi e più
+    versioni dello stesso componente, caratterizzare i pezzi al posto del prescelto non è ammissibile.)*
   - **L'etichetta di qualità di uno strumento non è una prova di qualità.** `RESULTS_HW.md` riportava
     «Confidence = High» come se avallasse i watt; è invece una **soglia di copertura** (>25 % dei nodi interni
     forniti), e il SAIF copriva il **56 %** dei net — il 44 % era stimato dal tool. Il caveat mancava del tutto

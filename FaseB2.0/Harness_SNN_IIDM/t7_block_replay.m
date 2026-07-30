@@ -16,10 +16,11 @@ function A = t7_block_replay(X, hold)
 %  corretto.
 %
 %  X    : 4 x N  [s; v; dv; v_l] quantizzati FLOOR a fixdt(1,32,20)
-%  hold : clock per control-step, DEVE superare la latenza del composto (misurata 554, probe P1)
+%  hold : clock per control-step, DEVE superare la latenza del composto (misurata 555 dopo il
+%         registro di confine; era 554 prima -- il registro aggiunge 1 clock, non altera i valori)
 %  A    : N x 1  accel (Q4.8)
   if nargin < 2 || isempty(hold), hold = 700; end
-  assert(hold > 554, 't7_block_replay: hold=%d non supera la latenza misurata del composto (554)', hold);
+  assert(hold > 555, 't7_block_replay: hold=%d non supera la latenza misurata del composto (555)', hold);
   assert(size(X,1) == 4, 't7_block_replay: X deve essere 4 x N, ricevuto %s', mat2str(size(X)));
   N = size(X,2);
 
