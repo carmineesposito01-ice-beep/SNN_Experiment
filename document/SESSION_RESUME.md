@@ -30,7 +30,7 @@
 > Numeri: **`FaseB2.0/Harness_SNN/results/RESULTS_HW.md`** (fonte per i report) · script `Harness_SNN/hw/` ·
 > probe `Harness_SNN/results/PROBES_T6B.md` · piano `docs/superpowers/plans/2026-07-29-b2.0-t6b-*`.
 > In breve: PS via AXI == blocco **0/300 000** (60 traj, gating ON e OFF) · netlist post-route == blocco
-> **0/15 000** · **FCLK 52 MHz** (WNS +0,358) e limite datapath **58,6 MHz** · **4473 LUT · 3199 FF · 52 DSP ·
+> **0/15 000** · **FCLK 52 MHz** (WNS +0,358) e limite datapath **58,5 MHz** · **4473 LUT · 3199 FF · 52 DSP ·
 > 1 BRAM** · margine sul control-step **≈14 000×** (duty 0,0071 %) · **energia dinamica 0,9 mJ/control-step
 > MISURATA al duty reale** (statica del device 10,3 mJ, tenuta separata) · **clock gating attivo e trasparente**
 > (`TC 400→0`) ma **guadagno non quantificabile** dal tool → **stima 2–4×**, da validare in Fase C con lo stesso

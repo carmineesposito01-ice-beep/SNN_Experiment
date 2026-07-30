@@ -19,7 +19,7 @@ in `../report/`.
 |---|---|---|
 | Params letti dal **PS via AXI** == blocco | **0 / 300 000** (60 traj), gating ON e OFF | misurato |
 | Netlist **post-place&route** == blocco | **0 / 15 000** (3 traj, funcsim) | misurato |
-| **FCLK deployabile** / limite datapath | **52 MHz** (WNS +0,358) / **58,6 MHz** | misurato |
+| **FCLK deployabile** / limite datapath | **52 MHz** (WNS +0,358) / **58,5 MHz** (derivato) | misurato / derivato |
 | Risorse post-route @52 MHz | 4473 LUT · 3199 FF · 52 DSP · **1 BRAM** | misurato |
 | Latenza / margine sul control-step 0,1 s | 7,13 µs / **≈14 000×** (duty 0,0071 %) | derivato |
 | **Energia dinamica per control-step** (duty **reale**) | **0,9 mJ** (0,009 W; 78 % clock tree) | misurato |

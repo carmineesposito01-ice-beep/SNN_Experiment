@@ -88,7 +88,9 @@ Il probe `hw/probe_bd.tcl` ha verificato **prima** di costruire che `S_AXI` foss
 **Due numeri distinti, come da metodo dello slack minimo:**
 - **FCLK deployato = 52 MHz** — il più alto **fra i testati** che chiude (WNS **+0,358 ns**). Il confine sta fra
   52 e 55 (che manca di 0,345 ns); non è stato ristretto oltre perché privo di valore informativo (§M2.2).
-- **Limite del datapath = 58,6 MHz** — da `1/(ritardo minimo)` = `1/17,081 ns`, ottenuto **stringendo** il vincolo.
+- **Limite del datapath = 58,5 MHz** — da `1/(ritardo minimo)` = `1/17,081 ns` = 58,545 MHz, ottenuto
+  **stringendo** il vincolo. È una grandezza **derivata**, letta al punto 60 MHz che *non* chiude (WNS −0,414):
+  `f = 1/(T_vincolo − WNS)`. ⚠️ *Corretto il 2026-07-30: prima riportava 58,6 (arrotondamento per eccesso).*
   Si legge **stringendo, non al crossover WNS=0**: a 30 e 40 MHz il tool si ferma a ~22,4 ns perché ha margine e
   non ottimizza oltre — l'effetto è visibile nella colonna "ritardo ottenuto".
 
@@ -128,9 +130,13 @@ SmartConnect/PS7 resta coperta dall'**STA di sistema** (§M2.1) e, in Fase C, da
 | **Firma del timing** | sistema completo @52 MHz | **STA**: WNS **+0,358 ns** (§M2.1) · OOC: **+0,355 ns** |
 | **Sim di timing** (netlist + SDF) | — | ❌ **non riuscita** (§sotto) |
 
-**N = 3 traiettorie, deciso dal costo MISURATO:** ~22 min/traiettoria (gate-level ≈ **15×** più lento del
-comportamentale) ⇒ le 60 costerebbero **~12 ore**. Le 15 000 comparazioni sono un **cancello di conferma** con N
+**N = 3 traiettorie, deciso dal costo MISURATO:** ~22 min/traiettoria (`netlist_func.log`: 21m52s / 20m41s /
+22m38s, nessun parallelismo) contro **0,77 min/traiettoria** della comportamentale (46 min / 60 traj,
+`axi_cosim_full60.log`) ⇒ gate-level ≈ **29×** più lento ⇒ le 60 costerebbero **~22 ore**.
+Le 15 000 comparazioni sono un **cancello di conferma** con N
 dichiarato; l'**esaustività** resta della cosim comportamentale su **60/60** (300 000 confronti, §M1).
+⚠️ *Corretto il 2026-07-30: prima riportava «≈15× ⇒ ~12 ore» — il 12 era un errore aritmetico (22×60 = 1320 min
+= 22 h) e il 15× non era ricavato dai tempi misurati.*
 Riesecuzione: `bash hw/run_netlist_func.sh <ROOT> <NETLISTDIR> <HWDIR> 1000 3 1 9.615`.
 
 **Sim di timing (SDF): non riuscita, causa nel banco — non nel design.**
@@ -154,8 +160,19 @@ cosa è escluso e cosa resta**.
 
 **Flusso:** SAIF da simulazione **post-implementation FUNZIONALE** (la timing-sim non è utilizzabile, §M2.3) sul
 design **OOC `tier_axi_lite`+Tier** — il PS7 è hard-IP e il suo consumo non appartiene al nostro deployment.
-⚠️ **Caveat dichiarato:** con SAIF funzionale i **glitch non sono catturati** ⇒ la dinamica è **leggermente
-sottostimata**. Tutte le misure hanno **Confidence = High**. `-debug typical` è obbligatorio per il SAIF.
+⚠️ **DUE caveat dichiarati**, entrambi nella direzione della **sottostima**:
+1. **Glitch non catturati** — il SAIF viene da una sim *funzionale* (la timing-sim non è utilizzabile, §M2.3).
+2. **Copertura SAIF = 56 % dei net** — `Design Nets Matched | 56% (6906/12380)`, **identico su tutti i 18 report
+   di potenza** (§1.3 di ogni `power_*.rpt`). Il **44 % dei net è stimato vectorless** dal tool, non misurato.
+   ⚠️ **`Confidence = High` NON è un avallo di accuratezza**: sui nodi interni quell'etichetta scatta con
+   «*User specified more than **25 %** of internal nodes*» — è una soglia di copertura minima, largamente
+   superata qui, non una garanzia sul risultato. *(Aggiunto il 2026-07-30: questo caveat mancava; il solo
+   «Confidence High» era fuorviante.)*
+
+⚠️ **La statica NON viene dal SAIF**: è un modello del dispositivo alle condizioni in testa a ogni report —
+`Process: typical`, `Junction Temperature 26,3 °C`, `Grade: commercial`. Va classificata **stima**, non misura.
+
+`-debug typical` è obbligatorio per il SAIF.
 Riesecuzione: `hw/gen_power_workloads.m` → `hw/run_saif_active.sh` / `hw/run_saif_idle.sh` → `hw/power_report.tcl`.
 
 ### M3.1 — Finestra idle: convergenza verificata (sostituisce un numero scelto a naso)

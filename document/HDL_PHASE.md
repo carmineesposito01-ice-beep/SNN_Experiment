@@ -417,16 +417,21 @@ Config in `make_hdl.m`: `LoopOptimization='StreamLoops'`, `ConstantMultiplierOpt
     non è utilizzabile (causa nel banco: la funcsim verde esclude X-prop/GSR/init-BRAM); la **firma del timing è
     dell'STA**, pulita.
   - **Clock (sweep 6 punti, `-jobs` fisso)**: **FCLK deployabile 52 MHz** (WNS **+0,358 ns**; 55 non chiude a
-    −0,345) e **limite del datapath 58,6 MHz** (ritardo min 17,08 ns **stringendo**, non al crossover WNS=0).
+    −0,345) e **limite del datapath 58,5 MHz** (derivato) (ritardo min 17,08 ns **stringendo**, non al crossover WNS=0).
     ⚠️ io-timed **di sistema**: non confrontabili coi 77,9 MHz OOC dell'`ACC_IIDM_M` né con gli 8 MHz della Fase B.
   - **Risorse post-route (incl. BRAM, il gap dei run OOC)**: **4473 LUT · 3199 FF · 52 DSP · 1 BRAM** @52 MHz;
     area quasi insensibile al vincolo (+3,1 % da 40 a 60 MHz).
   - **Latenza e margine**: 371 clk = **7,13 µs** contro un control-step di **0,1 s** ⇒ margine **≈14 000×**,
     **duty 0,0071 %**. Il clock massimo è una *caratterizzazione*, non la scelta di deployment ottimale.
-  - **Energia (misurata al DUTY REALE**, un control-step intero simulato, 5,2 M cicli, 12 min): dinamica
-    **0,009 W → 0,9 mJ per control-step** (78 % clock tree); statica del device 0,103 W → 10,3 mJ, **tenuta
-    separata**. Serie di convergenza 3,85 %→0,37 %→0,008 % = 0,015→0,010→**0,009 W**. ⚠️ La **composizione
+  - **Energia (misurata al DUTY REALE**, un control-step intero simulato, 5,2 M cicli, 12 min, **gating OFF**):
+    dinamica **0,009 W → 0,9 mJ per control-step** (78 % clock tree) — da leggere come **limite superiore** della
+    dinamica del deployment, che gira a gating ON; statica del device 0,103 W → 10,3 mJ, **tenuta separata** e
+    classificata **stima** (modello `typical`, Tj 26,3 °C — non viene dal SAIF).
+    Serie di convergenza 3,85 %→0,37 %→0,008 % = 0,015→0,010→**0,009 W**. ⚠️ La **composizione
     lineare** `P_att·d + P_idle·(1−d)` è stata **invalidata** dal suo cross-check (§9): si misura al duty reale.
+  - ⚠️ **Copertura del SAIF = 56 % dei net** (`6906/12380`, identico su tutti i 18 report): il 44 % è **stimato
+    vectorless**. E **`Confidence = High` non è un avallo di accuratezza** — sui nodi interni scatta con
+    «>25 % of internal nodes specified», è una soglia di copertura. Citare la copertura accanto ai watt.
   - **Clock gating**: **implementato e provato attivo** (`clk_tier` `TC 400→0` nel SAIF) e **funzionalmente
     trasparente** (0/300 000); ⚠️ il **guadagno in watt NON è quantificabile** con questo flusso (§9) — **stima
     2–4×** sulla dinamica, da **validare in Fase C** (il gating è un **bit di registro**: stesso bitstream,
@@ -571,6 +576,16 @@ Config in `make_hdl.m`: `LoopOptimization='StreamLoops'`, `ConstantMultiplierOpt
   - **Misurare il costo prima di impegnare ore** — regola scritta nel piano e violata una volta (3 traiettorie
     post-route lanciate senza cronometrarne una: 22 min/traiettoria scoperti dopo). Applicata bene altrove
     (probe del golden, punto singolo dello sweep FCLK, pre-flight della run a duty reale).
+  - **L'etichetta di qualità di uno strumento non è una prova di qualità.** `RESULTS_HW.md` riportava
+    «Confidence = High» come se avallasse i watt; è invece una **soglia di copertura** (>25 % dei nodi interni
+    forniti), e il SAIF copriva il **56 %** dei net — il 44 % era stimato dal tool. Il caveat mancava del tutto
+    nella fonte, e da lì era passato nel report. **Leggere che cosa *misura* l'indicatore di qualità**, non
+    accontentarsi del suo valore. *(Trovato dall'audit avversariale del report, 2026-07-30.)*
+  - **L'aritmetica nei documenti di sintesi va RICALCOLATA, non ricopiata.** `RESULTS_HW.md` conteneva
+    «22 min/traj ⇒ ~12 ore per 60» (sono **22 ore**) e un «≈15× più lento» mai ricavato dai tempi misurati
+    (sono **~29×**); e «58,6 MHz» dove `1/17,081 ns` = **58,5**. Tre errori in una riga di prosa, ereditati
+    dal report perché la fonte è considerata affidabile. **Un audit del report deve verificare contro gli
+    artefatti grezzi, non contro il documento di sintesi** — altrimenti conferma l'errore invece di trovarlo.
 - **⚠️ Generare HDL da un blocco MASCHERATO (Variant Subsystem) — 4 trappole, verificate su `Donatello_Tier` in
   T6a (2026-07-29).** I pattern che funzionavano per `Donatello_Champion` (chart singola, gerarchia piatta) **NON
   valgono** per un blocco mascherato e gerarchico. Le quattro, in ordine di scoperta:
