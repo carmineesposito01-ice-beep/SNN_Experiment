@@ -6,10 +6,9 @@ una **caratterizzazione completa** (funzionamento della rete e di rete+car-follo
 in `../report/`.
 
 > **Stato (2026-07-30):** T1–T4 · **T5** (deriva open-loop → [`common/DRIFT.md`](common/DRIFT.md)) · **T6a**
-> (validazione RTL della SNN → [`Harness_SNN/results/RESULTS.md`](Harness_SNN/results/RESULTS.md)) ·
-> **T6b M1–M3** (caratterizzazione HW → [`Harness_SNN/results/RESULTS_HW.md`](Harness_SNN/results/RESULTS_HW.md))
-> FATTI e committati.
-> ✅ **T6b COMPLETO** (M1–M5). **Prossimo: T7** — `Harness_SNN_IIDM` (capitolato in
+> (validazione RTL della SNN → [`Harness_SNN/results/RESULTS.md`](Harness_SNN/results/RESULTS.md)) · ✅ **T6b
+> COMPLETO M1–M5** (caratterizzazione HW → [`Harness_SNN/results/RESULTS_HW.md`](Harness_SNN/results/RESULTS_HW.md))
+> — tutti FATTI e committati. **Prossimo: T7** — `Harness_SNN_IIDM` (capitolato in
 > [`Harness_SNN_IIDM/README.md`](Harness_SNN_IIDM/README.md)): blocco composto + i **99** scenari + metriche di
 > car-following in anello chiuso. Poi **T8** (2 report `create-report`) e **T9** (allineamento doc).
 > **▶ Riesecuzione HW:** `bash Harness_SNN/hw/run_harness_snn_hw.sh [stadio]` (`summary` = numeri in pochi secondi).
@@ -72,19 +71,25 @@ nota della SNN (~406 clk) così che i 9 ingressi dell'ACC-IIDM cambino **sincron
 - **Bitstream**: blocco *as-is* (normalize FIXED su FPGA, I/O fisico), uno per harness.
 
 ## Struttura
-> ⚠️ Stato reale (2026-07-29): `common/` popolata da T5 (deriva) + T6a (utilità RTL condivise); **`Harness_SNN/`
-> è POPOLATA e funzionante** (T6a: entry-point + TB + cancelli + `results/RESULTS.md`); `Harness_SNN_IIDM/` è
-> ancora **scaffold VUOTO** (T7). I golden e il generatore HDL vivono in `../matlab/` (riusati, non copiati).
+> ⚠️ Stato reale (2026-07-30): `common/` popolata da T5 (deriva) + T6a (utilità RTL condivise); **`Harness_SNN/`
+> completa e funzionante** (T6a RTL + **T6b `hw/` hardware**, con `results/RESULTS.md`, `results/RESULTS_HW.md` e
+> `bitstream/`); `Harness_SNN_IIDM/` contiene **il capitolato di T7** (`README.md`), nessun codice. I golden e il
+> generatore HDL vivono in `../matlab/` (riusati, non copiati).
 ```
 FaseB2.0/
 ├── common/            → materiale condiviso.
 │                        ORA: DRIFT.md + drift_chosen.{m,mat} (deriva T5). I golden fedeli
 │                        (acciidm_m_traj, snn_traj_b2, …) vivono in ../matlab/ (riusati, non copiati).
 │                        DA POPOLARE (T6/T7): utilità RTL condivise (gen VHDL/Verilog, export vettori, run xsim, metriche).
-├── Harness_SNN/       → T6a FATTO: run_harness_snn (entry-point, UN comando) + run_rtl_validate_tier +
-│                        sensitivity_t6 + tier_rtl_metrics + tier_export_vectors + subset_diverse +
-│                        tb_tier_stream.v + README · results/RESULTS.md (numeri) · figures/ · bitstream/ (T6b)
-└── Harness_SNN_IIDM/  → scaffold VUOTO. DA POPOLARE in T7: run + tb + synth(tcl) + README · results/ · figures/ · bitstream/
+├── Harness_SNN/       → COMPLETA.
+│   │                    T6a (RTL): run_harness_snn (entry-point) + run_rtl_validate_tier + sensitivity_t6 +
+│   │                    tier_rtl_metrics + tier_export_vectors + subset_diverse + tb_tier_stream.v
+│   ├── hw/            → T6b (HARDWARE): run_harness_snn_hw.sh (ENTRY-POINT a stadi) + tier_axi_lite.v +
+│   │                    tb_tier_axi/tb_power_idle/tb_power_duty + probe_*/bitstream/netlist_*/power_* tcl
+│   ├── results/       → RESULTS.md (T6a) · RESULTS_HW.md (T6b) · PROBES_T6B.md · log
+│   └── bitstream/     → snn_tier_donatello.{bit,hwh,xsa} @52 MHz + timing/utilizzo del run del bitstream
+└── Harness_SNN_IIDM/  → SOLO CAPITOLATO (README.md = requisiti T7: composto + 99 + metriche car-following).
+                         Nessun codice: da implementare in T7.
 ```
 Ogni harness **avrà** il suo README con i comandi di esecuzione e la mappa dei prodotti (creato in T6/T7).
 
