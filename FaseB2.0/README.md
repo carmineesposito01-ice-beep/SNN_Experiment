@@ -5,11 +5,26 @@ Ultima fase prima della **Fase C** (FPGA fisica). Obiettivo: dimostrare che il *
 una **caratterizzazione completa** (funzionamento della rete e di rete+car-following) al livello dei report
 in `../report/`.
 
-> **Stato (2026-07-29):** T1–T4 (riordino `matlab/`, struttura `FaseB2.0/`, deprecazione `ACC_IIDM_M`, blocco
-> composto `Donatello_SNN_IIDM`) + **T5 (deriva open-loop → [`common/DRIFT.md`](common/DRIFT.md))** + **T6a
-> (validazione RTL della SNN → [`Harness_SNN/results/RESULTS.md`](Harness_SNN/results/RESULTS.md))** FATTI e committati.
-> **Prossimo: T6b** (HW: utilizzo post-route+BRAM · power SAIF · bitstream) — spec pronto, piano da scrivere
-> **con approccio probe-first**. Stato/azioni: `../document/SESSION_RESUME.md`.
+> **Stato (2026-07-30):** T1–T4 · **T5** (deriva open-loop → [`common/DRIFT.md`](common/DRIFT.md)) · **T6a**
+> (validazione RTL della SNN → [`Harness_SNN/results/RESULTS.md`](Harness_SNN/results/RESULTS.md)) ·
+> **T6b M1–M3** (caratterizzazione HW → [`Harness_SNN/results/RESULTS_HW.md`](Harness_SNN/results/RESULTS_HW.md))
+> FATTI e committati.
+> **In corso: T6b M4** (bitstream PYNQ-Z1 + provenienza) → poi **M5** (entry-point unico + doc). Poi **T7**.
+> Stato/azioni: `../document/SESSION_RESUME.md`.
+
+### Sintesi dei numeri HW (T6b, dettaglio e provenienza in `Harness_SNN/results/RESULTS_HW.md`)
+| Grandezza | Valore | Natura |
+|---|---|---|
+| Params letti dal **PS via AXI** == blocco | **0 / 300 000** (60 traj), gating ON e OFF | misurato |
+| Netlist **post-place&route** == blocco | **0 / 15 000** (3 traj, funcsim) | misurato |
+| **FCLK deployabile** / limite datapath | **52 MHz** (WNS +0,358) / **58,6 MHz** | misurato |
+| Risorse post-route @52 MHz | 4473 LUT · 3199 FF · 52 DSP · **1 BRAM** | misurato |
+| Latenza / margine sul control-step 0,1 s | 7,13 µs / **≈14 000×** (duty 0,0071 %) | derivato |
+| **Energia dinamica per control-step** (duty **reale**) | **0,9 mJ** (0,009 W; 78 % clock tree) | misurato |
+| Statica del device (pavimento del chip, **separata**) | 0,103 W → 10,3 mJ | misurato |
+| **Clock gating**: clock del Tier fermo (`TC 400→0`), funzionalmente trasparente | attivo | misurato |
+| Guadagno del gating in watt | **2–4×** atteso sulla dinamica | ⚠️ **stima** → Fase C |
+| Worst-case sintetico come bound | ❌ invalidato (era il più basso) → si usa il **max osservato** 0,045 W | — |
 
 ## Requisiti di metodo (vincolanti — appresi in T6a, 2026-07-29)
 1. **Riproducibilità:** ogni harness è **rilanciabile da chiunque con UN comando** e salva i numeri in **artefatti su

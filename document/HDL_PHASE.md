@@ -408,6 +408,31 @@ Config in `make_hdl.m`: `LoopOptimization='StreamLoops'`, `ConstantMultiplierOpt
   **Rilanciabile con UN comando**: `run_harness_snn` (in `FaseB2.0/Harness_SNN/`, ~75 min) → `results/RESULTS.md`
   = **fonte dei numeri per i report**. Struttura: golden/gen-HDL in `matlab/`, utilità condivise in
   `FaseB2.0/common/`, banco in `FaseB2.0/Harness_SNN/`, xsim in `D:/zbd_tier` (work-dir corta). **HW = T6b.**
+- ✅ **[FASE B2.0 T6b — 2026-07-30] Caratterizzazione HARDWARE del sistema (Tier + wrapper AXI4-Lite + Zynq PS7)**
+  — numeri in **`FaseB2.0/Harness_SNN/results/RESULTS_HW.md`** (fonte per i report), script in `Harness_SNN/hw/`:
+  - **Funzionale**: i 5 parametri letti dal **PS via AXI** == blocco, **0/300 000** su 60 traiettorie, **sia** con
+    clock gating attivo **sia** senza; cancello provato sensibile (1 LSB → mismatch). Wrapper: **commit sincrono**
+    (buffer + fronte) e **`done` da contatore 371 clk** (`ce_out` è un clock-enable, §9).
+  - **Netlist post-place&route** == blocco: **0/15 000** (3 traj, funcsim, gating ON). La sim di *timing* con SDF
+    non è utilizzabile (causa nel banco: la funcsim verde esclude X-prop/GSR/init-BRAM); la **firma del timing è
+    dell'STA**, pulita.
+  - **Clock (sweep 6 punti, `-jobs` fisso)**: **FCLK deployabile 52 MHz** (WNS **+0,358 ns**; 55 non chiude a
+    −0,345) e **limite del datapath 58,6 MHz** (ritardo min 17,08 ns **stringendo**, non al crossover WNS=0).
+    ⚠️ io-timed **di sistema**: non confrontabili coi 77,9 MHz OOC dell'`ACC_IIDM_M` né con gli 8 MHz della Fase B.
+  - **Risorse post-route (incl. BRAM, il gap dei run OOC)**: **4473 LUT · 3199 FF · 52 DSP · 1 BRAM** @52 MHz;
+    area quasi insensibile al vincolo (+3,1 % da 40 a 60 MHz).
+  - **Latenza e margine**: 371 clk = **7,13 µs** contro un control-step di **0,1 s** ⇒ margine **≈14 000×**,
+    **duty 0,0071 %**. Il clock massimo è una *caratterizzazione*, non la scelta di deployment ottimale.
+  - **Energia (misurata al DUTY REALE**, un control-step intero simulato, 5,2 M cicli, 12 min): dinamica
+    **0,009 W → 0,9 mJ per control-step** (78 % clock tree); statica del device 0,103 W → 10,3 mJ, **tenuta
+    separata**. Serie di convergenza 3,85 %→0,37 %→0,008 % = 0,015→0,010→**0,009 W**. ⚠️ La **composizione
+    lineare** `P_att·d + P_idle·(1−d)` è stata **invalidata** dal suo cross-check (§9): si misura al duty reale.
+  - **Clock gating**: **implementato e provato attivo** (`clk_tier` `TC 400→0` nel SAIF) e **funzionalmente
+    trasparente** (0/300 000); ⚠️ il **guadagno in watt NON è quantificabile** con questo flusso (§9) — **stima
+    2–4×** sulla dinamica, da **validare in Fase C** (il gating è un **bit di registro**: stesso bitstream,
+    risparmio per differenza di corrente a riposo).
+  - ⚠️ Il **worst-case sintetico non è un limite superiore** (risultò il *più basso*): si riporta il massimo
+    **osservato** fra i 9 workload reali (0,045 W). Il vero regime peggiore richiede uno studio a sé.
   - ⚠️ **FINDING (golden):** il riferimento `snn_traj_fixed_r16` **NON è il blocco** — diverge a step ~52. Cause
     misurate: (1) la `local_normalize` **fixed** del blocco (fisico→xn) devia 1 LSB da `snn_normalize` (xn diverge
     a step 85); (2) il blocco pilota il forward a **ingresso tenuto**, `snn_traj_b2` con **zeri** (param divergono
@@ -487,6 +512,57 @@ Config in `make_hdl.m`: `LoopOptimization='StreamLoops'`, `ConstantMultiplierOpt
 6. **Registrazione custom-board PYNQ-Z1** + eventuale ri-profilazione Qm.n.
 
 ## §9 Gotcha / lezioni (FONDAMENTALI — non ri-sbatterci)
+- **⚠️ WRAPPER AXI + POTENZA + SIM DI NETLIST — 10 trappole verificate in T6b (2026-07-30).** Chi rifà un harness
+  hardware (T7, Fase C) le trova tutte:
+  1. **`ce_out` di HDL Coder è un CLOCK-ENABLE, non un `done`.** Misurato: alto **1500/1500 cicli**. Usarlo come
+     valid fa leggere al PS parametri **non pronti**. Il `done` si fa con un **contatore di latenza** tarato sul
+     valore MISURATO (Tier@BAL: uscita valida a **commit+365**; si latcha a +371 per margine).
+     ⚠️ Latchare *esattamente* alla latenza cattura il valore **precedente** (il non-blocking legge il pre-fronte,
+     e l'uscita si aggiorna su quel fronte): sintomo = **100 % di mismatch** con valori *plausibili*.
+  2. **Il blocco va tenuto IN RESET fino al primo commit.** Senza, all'uscita dal reset gli ingressi passano da
+     indefinito a 0, l'edge-detector vede un fronte e parte un'**inferenza spuria** che avanza lo stato (`hdl.RAM`)
+     e disallinea tutto. Misurato: uscita a cyc 379 con reset a 16 (= 16+364), *prima* del commit. È anche il
+     comportamento corretto in campo: l'acceleratore sta fermo finché il PS non gli dà lavoro.
+  3. **`BUFGCE` in simulazione richiede `glbl` COMPILATO** (`xvlog <vivado>/data/verilog/src/glbl.v`) oltre a
+     `-L unisims_ver`; altrimenti *"'glbl' is not declared"* / *"Cannot find design unit work.glbl"*.
+  4. **La sim di TIMING va girata al clock per cui la netlist è stata IMPLEMENTATA.** Pilotarla più veloce produce
+     violazioni di setup ⇒ risultati sbagliati che sembrano un difetto del design (100 MHz su netlist da 52 MHz →
+     250/250 mismatch). Il periodo deve essere un **parametro esplicito** (`CLKHALF`), non una costante nel TB.
+  5. **`-debug typical` è OBBLIGATORIO per il SAIF.** Con `-debug off`: *"compiled without trace information"* e
+     `open_saif`/`log_saif` **non producono alcun file** — silenziosamente, se non si controlla l'artefatto.
+  6. **`report_power` calcola la potenza dei net di CLOCK dal VINCOLO di frequenza, non dall'attività del SAIF.**
+     ⇒ un clock **gatato** risulta invisibile: gatato e non gatato danno numeri **identici**. Verificato anche in
+     negativo: imporre `set_switching_activity -toggle_rate 0` sui net del clock **non cambia nulla**.
+     Il gating si prova guardando i **conteggi nel SAIF** (`clk_tier`: `TC 400 → TC 0`), non il sommario.
+  7. **La potenza NON compone linearmente fra fasi.** `P_media ≠ P_att·d + P_idle·(1−d)`: misurato 0,015 W contro
+     0,0094 W composti a duty 3,85 %, con lo scarto **localizzato sui DSP** (probabile dipendenza dalla *static
+     probability*, non solo dal toggle rate). **Rimedio: misurare al duty REALE** simulando un control-step intero
+     (5,2 M cicli ≈ 12 min) — l'anomalia svanisce e il numero è diretto, senza formule.
+  8. **La netlist post-place&route PERDE i nomi gerarchici interni**: i riferimenti `dut.u_x.segnale` nel TB vanno
+     esclusi con un `ifdef` per la sim di netlist. I cancelli black-box (sulle sole porte) restano validi.
+  9. **Git-Bash → wrapper `.bat`: due mutilazioni degli argomenti.** Un argomento che inizia con `/` viene
+     convertito in path Windows (`/tb/dut=x` → `C:/Program Files/Git/tb/dut=x`) — si disattiva con
+     `MSYS2_ARG_CONV_EXCL="*"`; e l'`=` **si perde** (stesso motivo per cui le macro del TB si passano via file
+     `.vh` e non con `-d NAME=val`).
+  10. **`add_files` nel Tcl ri-parsa la stringa come LISTA** ⇒ un path con spazi si spezza (*"File or Directory
+     'D:/Project_MBSE/1.Reti' does not exist"*). Rimedio: **copiare i sorgenti in una work-dir corta** e usare
+     `[list "$dir/$f"]`. Corollario: `write_verilog -mode timesim -sdf_anno true` **incorpora già**
+     `$sdf_annotate` nella netlist → **niente `-sdfmax`**, basta che l'SDF sia nella dir da cui gira xsim.
+- **⚠️ LEZIONI DI PROCESSO da T6b (2026-07-30) — costate un ciclo ciascuna, valgono per ogni harness:**
+  - **Negli script di verifica NON si filtra l'output diagnostico del testbench.** Tre volte in una milestone ho
+    perso un giro per `> /dev/null`, per una variabile catturata e mai stampata, e per un `grep` limitato a
+    `ERROR|FATAL`: scrivo il filtro pensando al caso VERDE, mentre serve nel caso ROSSO. Si limita la lunghezza
+    (`head -20`), non il contenuto.
+  - **Un cancello verifica l'ARTEFATTO, non una proxy.** Il mio runner stampava «idle raggiunto» 3 volte su 3
+    mentre **nessun SAIF veniva creato**: controllava una riga di log invece dell'esistenza del file. Da lì si
+    sarebbero generati report di potenza da SAIF inesistenti, con Vivado che ricade su stime *vectorless* e numeri
+    perfettamente plausibili.
+  - **Per diagnosticare, guardare i VALORI che discriminano, non indizi indiretti.** La prima ipotesi
+    (off-by-one) era supportata da una misura di *timing* compatibile con essa **e con altre**: la correzione non
+    cambiò nulla. Il dump di `letto / latch / uscita-DUT / golden` separò le due cause reali in un colpo.
+  - **Misurare il costo prima di impegnare ore** — regola scritta nel piano e violata una volta (3 traiettorie
+    post-route lanciate senza cronometrarne una: 22 min/traiettoria scoperti dopo). Applicata bene altrove
+    (probe del golden, punto singolo dello sweep FCLK, pre-flight della run a duty reale).
 - **⚠️ Generare HDL da un blocco MASCHERATO (Variant Subsystem) — 4 trappole, verificate su `Donatello_Tier` in
   T6a (2026-07-29).** I pattern che funzionavano per `Donatello_Champion` (chart singola, gerarchia piatta) **NON
   valgono** per un blocco mascherato e gerarchico. Le quattro, in ordine di scoperta:

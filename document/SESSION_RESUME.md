@@ -26,7 +26,19 @@
 > sviluppo: `run_harness_snn('smoke')`. Doc: `Harness_SNN/README.md` · `HDL_PHASE.md` §6/§9 · piano+spec
 > `docs/superpowers/{plans,specs}/2026-07-28-b2.0-t6*`.
 >
-> **T6b — PROSSIMO (HW full-system): spec pronto, piano DA SCRIVERE con approccio probe-first.**
+> **T6b — IN CORSO (HW full-system). M1–M3 FATTI (2026-07-30), restano M4 (bitstream) e M5 (entry-point + doc).**
+> Numeri: **`FaseB2.0/Harness_SNN/results/RESULTS_HW.md`** (fonte per i report) · script `Harness_SNN/hw/` ·
+> probe `Harness_SNN/results/PROBES_T6B.md` · piano `docs/superpowers/plans/2026-07-29-b2.0-t6b-*`.
+> In breve: PS via AXI == blocco **0/300 000** (60 traj, gating ON e OFF) · netlist post-route == blocco
+> **0/15 000** · **FCLK 52 MHz** (WNS +0,358) e limite datapath **58,6 MHz** · **4473 LUT · 3199 FF · 52 DSP ·
+> 1 BRAM** · margine sul control-step **≈14 000×** (duty 0,0071 %) · **energia dinamica 0,9 mJ/control-step
+> MISURATA al duty reale** (statica del device 10,3 mJ, tenuta separata) · **clock gating attivo e trasparente**
+> (`TC 400→0`) ma **guadagno non quantificabile** dal tool → **stima 2–4×**, da validare in Fase C con lo stesso
+> bitstream (è un bit di registro). ⚠️ Due voci NON valide: la **composizione lineare** della potenza (invalidata
+> dal cross-check) e il **worst-case sintetico** (non è un bound). **Le 10+4 lezioni in `HDL_PHASE.md` §9 sono
+> obbligatorie per T7/Fase C.**
+>
+> **[storico] T6b — spec e approccio probe-first:**
 > Scope deciso: utilizzo post-route **incl. BRAM** · power SAIF · **bitstream PYNQ-Z1** · **clock = Fmax del sistema** ·
 > wrapper AXI adattato (I/O fisico 32b, **buffer+commit** per ingressi sincroni, `ce_out` come done).
 > Spec: `docs/superpowers/specs/2026-07-28-b2.0-t6b-harness-snn-hw-design.md` (§0 = requisiti di metodo, §9 = assunzioni
