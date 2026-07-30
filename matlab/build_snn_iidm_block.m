@@ -33,10 +33,11 @@ function build_snn_iidm_block()
   for j=1:4, add_line(sub,[in{j} '/1'],['align/' num2str(j)],'autorouting','on'); end        % fisici -> align 1-4
   for j=1:5, add_line(sub,['Tier/' num2str(j)],['align/' num2str(j+4)],'autorouting','on'); end % params -> align 5-9
 
-  % --- controllore: ACC-IIDM (9 in: fisici appaiati 1-4 + params 5-9) ---
+  % --- controllore: ACC-IIDM: TUTTI E NOVE gli ingressi vengono da align, che li emette REGISTRATI ---
+  %  I params NON vanno piu' direttamente dal Tier all'ACC: passano da align come i fisici, cosi'
+  %  l'uscita di align e' l'unico confine e il cammino combinatorio Tier->ACC e' spezzato.
   add_block([lib '/ACC-IIDM'],[sub '/ACC']);
-  for j=1:4, add_line(sub,['align/' num2str(j)],['ACC/' num2str(j)],'autorouting','on'); end   % appaiati -> ACC 1-4
-  for j=1:5, add_line(sub,['Tier/' num2str(j)],['ACC/' num2str(j+4)],'autorouting','on'); end   % params  -> ACC 5-9
+  for j=1:9, add_line(sub,['align/' num2str(j)],['ACC/' num2str(j)],'autorouting','on'); end
   add_line(sub,'ACC/1','accel/1','autorouting','on');
 
   % CANCELLO: il blocco deve avere le porte di clock. Senza questa asserzione il costruttore stampa
@@ -54,19 +55,42 @@ function build_snn_iidm_block()
 end
 
 function code=align_code()
-  L={ 'function [sa,va,dva,vla] = align(s,v,dv,vl, v0,T,s0,a,b)'
+% ALIGN — ritardo-appaiato, uscite REGISTRATE (tutte e nove).
+%
+%  L'ORDINE delle due sezioni e' la cosa che conta, ed e' il punto in cui la versione precedente
+%  sbagliava: emettendo DOPO l'aggiornamento (`if cambiato, sh=s; end; sa=sh;`) il valore nuovo passa
+%  fuori nello STESSO ciclo, e HDL Coder realizza l'uscita come MULTIPLEXER COMBINATORIO
+%  (`sa = cambiato ? s : sh_reg`). L'uscita sembra registrata e non lo e': e' il passante attraverso
+%  cui corre il cammino critico DEC_reg -> params -> comparatore -> mux -> ACC -> IIDM_reg,
+%  27,5 ns = 36,4 MHz, contro i ~50 del Tier e i ~78 dell'ACC presi singolarmente.
+%
+%  Emettendo PRIMA e aggiornando DOPO, l'uscita e' un registro vero e il cammino si spezza.
+%  Escono TUTTI E NOVE i segnali (4 fisici + 5 params): ritardarne una parte li desincronizzerebbe
+%  di un clock, cioe' il doppio-fronte che questo blocco esiste per impedire.
+%
+%  ⚠️ CANCELLO OBBLIGATORIO: `tb_edge_probe.v` deve contare **1** fronte agli ingressi dell'ACC nel
+%     primo control-step. Un tentativo precedente (registri di pipe ESTERNI) ne produsse **2** - i
+%     registri partivano da zero al reset e si caricavano al ciclo 1 - e il filtro OU dell'ACC veniva
+%     aggiornato due volte: piu' veloce e SBAGLIATO. Il conteggio dei fronti si verifica PRIMA di
+%     qualunque validazione lunga.
+  L={ 'function [sa,va,dva,vla, v0a,Ta,s0a,aa,ba] = align(s,v,dv,vl, v0,T,s0,a,b)'
       '%#codegen'
-      '% Ritardo-appaiato: tiene i 4 fisici finche'' i params (dalla SNN) non cambiano, poi li rilascia'
-      '% INSIEME ai params -> i 9 ingressi ACC-IIDM cambiano sincroni (1 inferenza/control-step, OU una volta).'
-      '  persistent sh vh dh vlh v0p Tp s0p ap bp started'
+      '% Ritardo-appaiato con USCITE REGISTRATE: emette i valori dei registri, POI li aggiorna per il'
+      '% ciclo successivo. Emettere prima di aggiornare rende l''uscita un REGISTRO e non un mux'
+      '% combinatorio -> spezza il cammino Tier->ACC. Escono tutti e 9 i segnali, sincroni.'
+      '  persistent sh vh dh vlh v0h Th s0h ah bh v0p Tp s0p ap bp started'
       '  if isempty(started)'
-      '    sh=s; vh=v; dh=dv; vlh=vl; v0p=v0; Tp=T; s0p=s0; ap=a; bp=b; started=true;'
-      '  end'
-      '  if v0~=v0p || T~=Tp || s0~=s0p || a~=ap || b~=bp   % params nuovi -> SNN ha finito -> rilascia appaiato'
       '    sh=s; vh=v; dh=dv; vlh=vl;'
+      '    v0h=v0; Th=T; s0h=s0; ah=a; bh=b;'
+      '    v0p=v0; Tp=T; s0p=s0; ap=a; bp=b; started=true;'
+      '  end'
+      '  sa=sh; va=vh; dva=dh; vla=vlh;              % 1) EMETTE i valori registrati'
+      '  v0a=v0h; Ta=Th; s0a=s0h; aa=ah; ba=bh;'
+      '  if v0~=v0p || T~=Tp || s0~=s0p || a~=ap || b~=bp   % 2) AGGIORNA per il ciclo successivo'
+      '    sh=s; vh=v; dh=dv; vlh=vl;'
+      '    v0h=v0; Th=T; s0h=s0; ah=a; bh=b;'
       '  end'
       '  v0p=v0; Tp=T; s0p=s0; ap=a; bp=b;'
-      '  sa=sh; va=vh; dva=dh; vla=vlh;'
       'end' };
   code=strjoin(L,newline);
 end
