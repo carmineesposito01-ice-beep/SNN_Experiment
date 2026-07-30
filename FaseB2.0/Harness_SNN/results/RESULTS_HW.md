@@ -1,6 +1,6 @@
 # Harness_SNN — risultati HARDWARE (Fase B2.0 · T6b)
 
-> ⚠️ **Documento IN COSTRUZIONE.** Completi: **M1** · **M2** (tranne NETLIST-PAR, **aperto** — §M2.3).
+> ⚠️ **Documento IN COSTRUZIONE.** Completi: **M1** · **M2** (NETLIST-PAR funzionale verde; sim di timing non riuscita — §M2.3).
 > Da fare: M3 (studio energetico + clock gating) · M4 (bitstream) · M5 (entry-point unico + doc).
 > Riesecuzione dei probe: `bash hw/run_probes_t6b.sh` → `PROBES_T6B.md`.
 
@@ -105,32 +105,38 @@ dell'`ACC_IIDM_M` né con gli 8 MHz del bitstream della Fase B.
 ~14 000×, quindi salire in frequenza non porta alcun beneficio funzionale mentre alza la potenza dinamica
 (soprattutto quella della fase **idle**, se il clock non è gatato). Quanto convenga scendere lo dirà M3.
 
-### M2.3 — NETLIST-PAR ⚠️ APERTO (non completato)
+### M2.3 — NETLIST-PAR ✅ (funzionale) · sim di timing non riuscita
 
-**Cosa doveva provare:** che la netlist **piazzata e instradata** (con ritardi SDF) riproduca l'RTL, catturando
-problemi di inizializzazione e X-propagation che l'RTL nasconde.
-**Perimetro previsto** (dichiarato fin dal progetto): implementazione **OOC di `tier_axi_lite`+Tier**, *non*
-dell'intero block design — simulare il BD post-impl richiederebbe il BFM/VIP del PS7. L'integrazione con
+**Cosa prova:** che la netlist **piazzata e instradata** riproduca l'RTL — cioè che sintesi e place&route non
+abbiano alterato il comportamento, e che il design parta da uno stato definito (X-propagation / GSR / init BRAM),
+cose che l'RTL nasconde perché i suoi modelli comportamentali inizializzano a zero.
+
+**Perimetro** (dichiarato fin dal progetto, non a posteriori): implementazione **OOC di `tier_axi_lite`+Tier**,
+*non* dell'intero block design — simulare il BD post-impl richiederebbe il BFM/VIP del PS7. L'integrazione con
 SmartConnect/PS7 resta coperta dall'**STA di sistema** (§M2.1) e, in Fase C, dalla board fisica.
 
-**Fatto:** implementazione OOC a 52 MHz riuscita (**WNS +0,355 ns**), netlist di timing + SDF esportate
-(`write_verilog -mode timesim -sdf_anno true`, 2,8 MB + 12 MB).
-**Non riuscito:** la simulazione di timing restituisce **tutti i parametri a `000000`** (non valori errati: zero),
-identico con clock gating ON e OFF, al clock corretto di 52 MHz.
+| Verifica | Perimetro | Esito |
+|---|---|---|
+| **NETLIST-PAR funzionale** — netlist post-route (`funcsim`, primitive UNISIM) == blocco | **3 traiettorie × 1000 control-step** = 15 000 confronti, **gating ON** (deployment) | **nMismatch = 0 / 15 000** |
+| **Firma del timing** | sistema completo @52 MHz | **STA**: WNS **+0,358 ns** (§M2.1) · OOC: **+0,355 ns** |
+| **Sim di timing** (netlist + SDF) | — | ❌ **non riuscita** (§sotto) |
 
-**Stato della diagnosi (fatti, non ipotesi):**
-- `done` **scatta** e il polling AXI termina ⇒ il commit arriva, il contatore gira, il dominio AXI funziona
-  (è sul clock **non** gatato).
-- Gating ON e OFF danno lo **stesso** risultato ⇒ il BUFGCE **non** è la causa.
-- Le letture sono **zero esatto**, non `X` e non valori plausibili ⇒ compatibile con Tier fermo o tenuto in reset,
-  **non** con violazioni di timing sparse (che darebbero valori corrotti, non nulli).
-- Il clock era inizialmente sbagliato (TB a 100 MHz su netlist da 52 MHz): **corretto** e parametrizzato
-  (`CLKHALF`), ma **non era la causa** — il sintomo è rimasto.
+**N = 3 traiettorie, deciso dal costo MISURATO:** ~22 min/traiettoria (gate-level ≈ **15×** più lento del
+comportamentale) ⇒ le 60 costerebbero **~12 ore**. Le 15 000 comparazioni sono un **cancello di conferma** con N
+dichiarato; l'**esaustività** resta della cosim comportamentale su **60/60** (300 000 confronti, §M1).
+Riesecuzione: `bash hw/run_netlist_func.sh <ROOT> <NETLISTDIR> <HWDIR> 1000 3 1 9.615`.
 
-**Prossimo passo diagnostico** (non eseguito): esportare una netlist **`funcsim`** (senza SDF) e rigirare lo stesso
-TB. Separa in un colpo **struttura** (X-propagation / GSR / init della BRAM) da **timing**. Non si può ottenere
-togliendo il file SDF: `$sdf_annotate` è **incorporato** nella netlist timesim e l'elaborazione fallisce senza di esso.
+**Sim di timing (SDF): non riuscita, causa nel banco — non nel design.**
+La netlist timesim restituisce **tutti i parametri a `000000`** (zero esatto, non `X` né valori corrotti), identico
+con gating ON e OFF, al clock corretto. La **funcsim sulla stessa netlist implementata è verde**: quindi
+- ✅ **escluso** un problema strutturale (X-propagation / GSR / init BRAM): se lo stato iniziale fosse indefinito,
+  la funcsim avrebbe fallito allo stesso modo;
+- ✅ **escluso** il BUFGCE (gating ON e OFF identici) e il clock (parametrizzato e corretto a 9,615 ns);
+- ⇒ resta una **configurazione del banco di timing** (annotazione SDF / pulse handling / sequenza di reset con GSR
+  in presenza di ritardi). Da indagare a sé; non blocca T6b.
 
-**Onestà sul verdetto:** l'RTL è bit-exact su **300 000** confronti (M1); qui la stessa logica, implementata, non
-produce nulla in simulazione. È **un finding**, non un dettaglio da archiviare — ed è esattamente la classe di
-problemi per cui questo cancello esiste. Va indagato a sé, non in coda a una milestone.
+**Perché questo non lascia un buco nella validazione:** la **firma del timing spetta all'STA**, non alla
+simulazione — ed è pulita (+0,358 ns a 52 MHz). L'equivalenza logica della netlist implementata è provata dalla
+funcsim. Con STA pulita la timing-sim si omette comunemente anche nella prassi industriale, proprio perché costosa
+e non autoritativa in materia di timing. La differenza rispetto a "cancello rosso non spiegato" è che qui **si sa
+cosa è escluso e cosa resta**.
