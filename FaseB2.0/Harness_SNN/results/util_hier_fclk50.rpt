@@ -1,0 +1,53 @@
+Copyright 1986-2022 Xilinx, Inc. All Rights Reserved. Copyright 2022-2026 Advanced Micro Devices, Inc. All Rights Reserved.
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+| Tool Version : Vivado v.2026.1 (win64) Build 6511674 Tue Jun 16 11:02:23 MDT 2026
+| Date         : Thu Jul 30 13:52:18 2026
+| Host         : AX16PRO running 64-bit major release  (build 9200)
+| Command      : report_utilization -hierarchical -file {D:/Project_MBSE/1.Reti Neurali/Rete_SNN_Test/CF_FSNN/.worktrees/Simulink_Importer/FaseB2.0/Harness_SNN/hw/../results/util_hier_fclk50.rpt}
+| Design       : sys_wrapper
+| Device       : xc7z020clg400-1
+| Speed File   : -1
+| Design State : Routed
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+Utilization Design Information
+
+Table of Contents
+-----------------
+1. Utilization by Hierarchy
+
+1. Utilization by Hierarchy
+---------------------------
+
++--------------------------------------------------+-------------------------------------------------------------------------------------------------+------------+------------+---------+------+------+--------+--------+------------+
+|                     Instance                     |                                              Module                                             | Total LUTs | Logic LUTs | LUTRAMs | SRLs |  FFs | RAMB36 | RAMB18 | DSP Blocks |
++--------------------------------------------------+-------------------------------------------------------------------------------------------------+------------+------------+---------+------+------+--------+--------+------------+
+| sys_wrapper                                      |                                                                                           (top) |       4476 |       4416 |       0 |   60 | 3199 |      0 |      2 |         52 |
+|   sys_i                                          |                                                                                             sys |       4476 |       4416 |       0 |   60 | 3199 |      0 |      2 |         52 |
+|     tier0                                        |                                                                                     sys_tier0_0 |       4107 |       4107 |       0 |    0 | 2740 |      0 |      2 |         52 |
+|       inst                                       |                                                                       sys_tier0_0_tier_axi_lite |       4107 |       4107 |       0 |    0 | 2740 |      0 |      2 |         52 |
+|         (inst)                                   |                                                                       sys_tier0_0_tier_axi_lite |        128 |        128 |       0 |    0 |  393 |      0 |      0 |          0 |
+|         u_tier                                   |                                                                      sys_tier0_0_Donatello_Tier |       3979 |       3979 |       0 |    0 | 2347 |      0 |      2 |         52 |
+|           u_VS                                   |                                                                                  sys_tier0_0_VS |       3979 |       3979 |       0 |    0 | 2347 |      0 |      2 |         52 |
+|             u_BALANCED_n13                       |                                                                        sys_tier0_0_BALANCED_n13 |       3979 |       3979 |       0 |    0 | 2347 |      0 |      2 |         52 |
+|               u_DEC                              |                                                                                 sys_tier0_0_DEC |        932 |        932 |       0 |    0 |  402 |      0 |      0 |         16 |
+|               u_SNN                              |                                                                                 sys_tier0_0_SNN |       3048 |       3048 |       0 |    0 | 1945 |      0 |      2 |         36 |
+|                 (u_SNN)                          |                                                                                 sys_tier0_0_SNN |       3006 |       3006 |       0 |    0 | 1945 |      0 |      0 |         36 |
+|     ps7_axi_periph                               |                                                                            sys_ps7_axi_periph_0 |        352 |        293 |       0 |   59 |  426 |      0 |      0 |          0 |
+|       s00_couplers                               |                                                                         s00_couplers_imp_96U3NV |        352 |        293 |       0 |   59 |  426 |      0 |      0 |          0 |
+|         auto_pc                                  |                                                                sys_ps7_axi_periph_imp_auto_pc_0 |        352 |        293 |       0 |   59 |  426 |      0 |      0 |          0 |
+|           inst                                   |          sys_ps7_axi_periph_imp_auto_pc_0_axi_protocol_converter_v2_1_38_axi_protocol_converter |        352 |        293 |       0 |   59 |  426 |      0 |      0 |          0 |
+|             gen_axilite.gen_b2s_conv.axilite_b2s |                             sys_ps7_axi_periph_imp_auto_pc_0_axi_protocol_converter_v2_1_38_b2s |        352 |        293 |       0 |   59 |  426 |      0 |      0 |          0 |
+|               WR.aw_channel_0                    |                  sys_ps7_axi_periph_imp_auto_pc_0_axi_protocol_converter_v2_1_38_b2s_aw_channel |         70 |         70 |       0 |    0 |   74 |      0 |      0 |          0 |
+|                 cmd_translator_0                 |              sys_ps7_axi_periph_imp_auto_pc_0_axi_protocol_converter_v2_1_38_b2s_cmd_translator |         31 |         31 |       0 |    0 |   56 |      0 |      0 |          0 |
+|               RD.ar_channel_0                    |                  sys_ps7_axi_periph_imp_auto_pc_0_axi_protocol_converter_v2_1_38_b2s_ar_channel |         59 |         59 |       0 |    0 |   70 |      0 |      0 |          0 |
+|                 cmd_translator_0                 |            sys_ps7_axi_periph_imp_auto_pc_0_axi_protocol_converter_v2_1_38_b2s_cmd_translator_1 |         31 |         31 |       0 |    0 |   56 |      0 |      0 |          0 |
+|               RD.r_channel_0                     |                   sys_ps7_axi_periph_imp_auto_pc_0_axi_protocol_converter_v2_1_38_b2s_r_channel |         59 |         14 |       0 |   45 |   24 |      0 |      0 |          0 |
+|               SI_REG                             |                  sys_ps7_axi_periph_imp_auto_pc_0_axi_register_slice_v2_1_37_axi_register_slice |        135 |        135 |       0 |    0 |  240 |      0 |      0 |          0 |
+|                 ar.ar_pipe                       |                 sys_ps7_axi_periph_imp_auto_pc_0_axi_register_slice_v2_1_37_axic_register_slice |         47 |         47 |       0 |    0 |   58 |      0 |      0 |          0 |
+|                 aw.aw_pipe                       |               sys_ps7_axi_periph_imp_auto_pc_0_axi_register_slice_v2_1_37_axic_register_slice_0 |         51 |         51 |       0 |    0 |   60 |      0 |      0 |          0 |
+|                 r.r_pipe                         | sys_ps7_axi_periph_imp_auto_pc_0_axi_register_slice_v2_1_37_axic_register_slice__parameterized2 |         27 |         27 |       0 |    0 |   92 |      0 |      0 |          0 |
++--------------------------------------------------+-------------------------------------------------------------------------------------------------+------------+------------+---------+------+------+--------+--------+------------+
+* Note: The sum of lower-level cells may be larger than their parent cells total, due to cross-hierarchy LUT combining
+
+
