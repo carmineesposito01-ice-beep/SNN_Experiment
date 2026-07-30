@@ -1,0 +1,4 @@
+# Cache del golden: rigenerabile da t7_golden_cache (~190 min sui 99), pesante, non versionata.
+# La CONFIGURAZIONE con cui e' stata calcolata sta dentro il .mat: se cambia, si ricalcola da sola.
+results/golden_t7.mat
+results/series.mat
