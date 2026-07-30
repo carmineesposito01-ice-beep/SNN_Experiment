@@ -1,8 +1,15 @@
 # Harness_SNN — risultati HARDWARE (Fase B2.0 · T6b)
 
-> ⚠️ **Documento IN COSTRUZIONE.** Completi: **M1** · **M2** (NETLIST-PAR funzionale verde; sim di timing non riuscita — §M2.3).
-> Completo anche **M3** (misure valide; composizione energetica NON validata — §M3.4). Da fare: M4 (bitstream) · M5 (entry-point + doc).
-> Riesecuzione dei probe: `bash hw/run_probes_t6b.sh` → `PROBES_T6B.md`.
+> ✅ **T6b COMPLETO** — M1 (wrapper AXI + cosim) · M2 (clock, risorse, netlist) · M3 (energia + clock gating) ·
+> M4 (bitstream) · M5 (entry-point).
+>
+> **▶ RIESECUZIONE — un comando per stadio:** `bash hw/run_harness_snn_hw.sh [check|probe|cosim|sweep|netlist|power|bitstream|summary|all]`
+> · `summary` riestrae i numeri dagli artefatti in pochi secondi · `check` verifica che il DUT sia l'artefatto di T6a.
+>
+> **Due voci NON valide, dichiarate:** il **guadagno del clock gating in watt** (non quantificabile da
+> `report_power`, §M3.3 → stima 2–4×, da validare in Fase C) e il **worst-case sintetico** come limite superiore
+> (§M3.2). Una voce **non riuscita**: la sim di **timing** della netlist (§M2.3; la funzionale è verde e la firma
+> del timing è dell'STA).
 
 **DUT:** `Donatello_Tier` @ TIER=BALANCED, NFRAC=13 — **lo stesso artefatto VHDL** validato bit-exact in T6a
 (`matlab/hdlsrc_donatello_tier/rtlgen_mdl/`), avvolto nel wrapper AXI4-Lite `hw/tier_axi_lite.v`.
@@ -315,3 +322,42 @@ non una variante ricostruita a parte. Riesecuzione:
 **Pronto per la Fase C.** L'esperimento sul clock gating è immediato e **non richiede un secondo bitstream**: il
 gating è un **bit di registro** (`0x10` bit1), quindi si legge la corrente a riposo con bit=0 e poi bit=1 e si
 ricava il risparmio **per differenza** — è la misura che qui non è ottenibile (§M3.3).
+
+---
+
+## M5 — Riproducibilità: entry-point unico ✅
+
+**`hw/run_harness_snn_hw.sh [stadio]`** orchestra l'intera catena hardware. Stadi selezionabili perché il giro
+completo dura ore e serve poterne rilanciare uno solo:
+
+| Stadio | Cosa fa | Costo misurato |
+|---|---|---|
+| `check` | **provenienza del DUT** (§sotto) + sincronizza i sorgenti nella work-dir corta | secondi |
+| `probe` | le 4 assunzioni HW (`ce_out` · mixed-language · board · BD/FCLK) | ~15 min |
+| `cosim` | AXI-COSIM full-60, gating ON | ~50 min |
+| `sweep` | FCLK 30/40/50/52/55/60 → WNS + risorse post-route | ~10 min/punto |
+| `netlist` | impl OOC + funcsim: netlist post-route == blocco | ~22 min/traiettoria |
+| `power` | 9 workload + worst · idle gatata/non · **duty REALE** · SAIF→potenza | ~45 min |
+| `bitstream` | `.bit` + `.hwh` + `.xsa` @52 MHz | ~10 min |
+| `summary` | **riestrae i valori chiave dagli artefatti** e li stampa | secondi |
+| `all` | tutta la catena in sequenza | ore |
+
+**Nessuna copia sincronizzata a mano dei numeri.** `summary` legge i valori **dagli artefatti su disco** (log e
+report), non da costanti nello script: un rilancio si **confronta** con quanto documentato invece di duplicarlo.
+`RESULTS_HW.md` resta l'**unica fonte** dei numeri *interpretati* (con natura misurato/derivato/stima e caveat),
+perché quella è analisi, non dato. Un valore assente viene dichiarato "assente", mai inventato.
+
+### Cancello di provenienza del DUT (`check`)
+
+Il VHDL caratterizzato **deve** essere l'artefatto validato in T6a. Il cancello:
+- se il VHDL **manca** → lo rigenera **e rilancia il gate T6a** (non si caratterizza in hardware un RTL non validato);
+- se è **presente** → confronta l'**MD5 dei sorgenti** con quello registrato (`hw/vhdl_ref.md5` =
+  `dea2709dec57416cde9a22762d17afe0`) e in caso di differenza **blocca**, indicando di ri-caratterizzare.
+
+**Provato sensibile** (non solo "passa"): aggiungendo una riga a `DEC.vhd` il checksum diventa `307c5e6c…` e il
+cancello lo segnala; ripristinato il file, torna verde.
+⚠️ **Difetto trovato e corretto nel cancello stesso**: la prima versione usava `cat $(ls "$dir"/*.vhd)` — la
+command substitution **spezza sugli spazi** e il path del repo contiene `1.Reti Neurali`, quindi `cat` non leggeva
+nulla e `md5sum` restituiva l'hash della **stringa vuota**, dichiarando successo. Ora si usa il glob diretto e
+c'è un assert esplicito contro quell'hash. È lo stesso difetto — *un controllo che passa senza verificare* — che
+questo harness ha incontrato tre volte (§M1, §M3.1) e che è ora regola in `HDL_PHASE §9`.
