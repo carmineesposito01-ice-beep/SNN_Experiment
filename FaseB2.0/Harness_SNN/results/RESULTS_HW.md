@@ -228,9 +228,10 @@ La discrepanza è **localizzata sui DSP**: consumano il 40 % del valore attivo p
 probability* dei segnali, non solo dal *toggle rate*; in idle gli ingressi dei DSP mantengono gli ultimi valori
 calcolati, che nel modello non equivale a "spento" ⇒ la potenza **non compone linearmente** fra fasi.
 
-➡️ **Conseguenza: l'energia per control-step al duty reale NON viene riportata.** Era il deliverable principale di
-M3 e la formula su cui poggiava è stata invalidata dal suo stesso cancello di verifica. Senza questo cross-check
-avrei pubblicato energie (e un guadagno del gating) basate su una composizione sbagliata: numeri plausibili e falsi.
+➡️ **Conseguenza: la composizione lineare è ABBANDONATA.** Era la strada prevista per l'energia al duty reale, e il
+suo stesso cancello di verifica l'ha invalidata: senza questo cross-check avrei pubblicato energie (e un guadagno
+del gating) basate su una formula sbagliata — numeri plausibili e falsi.
+✅ **Risolto in §M3.6 misurando DIRETTAMENTE al duty reale**, senza comporre.
 
 ### M3.5 — Cosa resta solido di M3
 
@@ -240,6 +241,48 @@ avrei pubblicato energie (e un guadagno del gating) basate su una composizione s
 | Potenza idle (clock libero): **0,008 W**, di cui **7 mW clock tree** | **misurato** |
 | Statica del device: **0,103 W** — pavimento del chip, **tenuta separata** dal costo del design | **misurato** |
 | Il clock gating **ferma completamente** il clock del Tier (`TC 400→0`) | **misurato (SAIF)** |
-| Guadagno del gating in watt/joule | ❌ **non quantificabile** con questo flusso |
-| Energia per control-step al duty reale | ❌ **non pubblicabile** (composizione invalidata da M3.4) |
+| Guadagno del gating: **stima 2–4×** sulla dinamica, da validare in Fase C | **stima dichiarata** (§M3.6) |
+| **Energia dinamica per control-step: 0,9 mJ** (duty reale, misurata direttamente) | **misurato** (§M3.6) |
 | Il worst sintetico come limite superiore | ❌ **invalidato** (è il più basso) |
+
+### M3.6 — ✅ Energia al DUTY REALE: misurata direttamente (niente composizione)
+
+Poiché la composizione lineare è invalida (§M3.4), il control-step **reale** è stato **simulato per intero**:
+1 control-step = **416 clk attivi + 5 199 584 clk di idle** = 5,2 M cicli = **0,1 s a 52 MHz** ⇒ duty **0,008 %**.
+SAIF su tutta la finestra, gating **OFF** (il caso in cui *tutte* le componenti sono modellate correttamente: col
+gating il tool non vedrebbe la riduzione del clock, §M3.3, e restituirebbe lo stesso numero fingendo di misurarla).
+Riesecuzione: `hw/tb_power_duty.v` con `IDLECYC=5199584` → `hw/power_report.tcl`. Costo reale: **12 min**.
+
+**Serie di convergenza — tre punti, non un valore isolato:**
+
+| duty | cicli di idle | Dinamica [W] | DSPs [W] | Signals [W] |
+|---|---|---|---|---|
+| 3,85 % | 10 000 | 0,015 | 0,004 | 0,002 |
+| 0,37 % | 100 000 | 0,010 | — | — |
+| **0,008 % (REALE)** | **5 199 584** | **0,009** | **<0,001** | **<0,001** |
+| *idle puro (riferimento)* | — | *0,008* | *<0,001* | *<0,001* |
+
+➡️ **La potenza converge al valore di idle** al ridursi del duty, come fisicamente deve essere: al control-step vero
+la fase attiva è il 0,008 % del tempo e la sua quota è trascurabile. **L'anomalia sui DSP di §M3.4 svanisce**
+(0,004 → <0,001): era un effetto **dipendente dal duty**, non un offset fisso — motivo per cui la composizione
+lineare sbagliava e la misura diretta no.
+
+**Energia per control-step (misurata, duty reale, gating OFF), Confidence High:**
+
+| Voce | Potenza | Energia per control-step (0,1 s) |
+|---|---|---|
+| **Dinamica — il costo del NOSTRO design** | **0,009 W** | **≈ 0,9 mJ** |
+| di cui clock tree | 0,007 W (78 %) | ≈ 0,7 mJ |
+| Statica del device — pavimento del chip | 0,103 W | ≈ 10,3 mJ |
+| Totale on-chip | 0,111 W | ≈ 11,1 mJ |
+
+⚠️ Le due voci **non vanno sommate in un unico numero senza dirlo**: la statica è del dispositivo (c'è anche a
+design spento), la dinamica è ciò che aggiunge il deployment. La dinamica è l'**8 %** del totale — coerente col
+finding della Fase B (statica ~92 %).
+
+**Stima del guadagno del clock gating** (⚠️ **stima**, non misura — il tool non la produce, §M3.3): il **78 %** della
+dinamica è clock tree, e il Tier — la parte gatata — ospita ≈2 900 dei 3 199 FF, **tutti** i 52 DSP e l'unica BRAM.
+Fermando il suo clock si rimuove la quota dominante di quei 7 mW ⇒ dinamica attesa nell'ordine di **2–4 mW**,
+cioè un **fattore ~2–4×** sull'energia dinamica del deployment. **Va verificato in Fase C**, dove la misura è banale
+grazie al progetto scelto: il gating è un **bit di registro**, quindi lo **stesso bitstream** consente di leggere la
+corrente a riposo con bit=0 e bit=1 e ricavare il risparmio per differenza.

@@ -1,15 +1,21 @@
 `timescale 1ns/1ps
-`include "axi_params.vh"      // `define GATEMODE · `define CLKHALF · `define NSTEP · `define IDLECYC
-// T6b · M3 — CROSS-CHECK della composizione: control-step realistici a duty RIDOTTO (inferenza + idle vero),
-// con SAIF su TUTTA la finestra. Serve a PROVARE la formula
-//     E_step = P_attiva*t_attivo + P_idle*t_idle
-// confrontando l'energia MISURATA a duty noto con quella COMPOSTA dalle P_attiva/P_idle misurate separatamente.
-// Non si simula il duty reale (0,0071% => ~5 M clock per control-step): il costo e' dato dal CLOCK, non dal
-// tempo simulato, e a duty ridotto (idle di `IDLECYC clock) la verifica e' equivalente e affordable.
+`include "axi_params.vh"      // `define GATEMODE · `define CLKHALF · `define NSTEP · `define IDLECYC [· `define HB]
+// T6b · M3 — potenza a DUTY CYCLE CONTROLLATO: control-step realistici (inferenza + idle vero), SAIF su tutta
+// la finestra. Con IDLECYC = 5.199.629 e 52 MHz riproduce il DUTY REALE (control-step 0,1 s, duty 0,0071%)
+// e misura l'energia DIRETTAMENTE, senza comporre (la composizione lineare e' stata invalidata: vedi §M3.4).
+//
+// Il costo di simulazione e' dato dal CLOCK (sorgente di eventi), non dal tempo simulato: 5,2 M cicli per
+// control-step. Per questo il TB emette un HEARTBEAT: su run di ore, non avere visibilita' del progresso e'
+// inaccettabile (non si distingue "lento" da "bloccato").
 module tb_power_duty;
   localparam integer GATEMODE = `GATEMODE;
   localparam integer NSTEP    = `NSTEP;
   localparam integer IDLECYC  = `IDLECYC;
+`ifdef HB
+  localparam integer HBEAT    = `HB;         // ogni quanti cicli di idle stampare il progresso
+`else
+  localparam integer HBEAT    = 500000;
+`endif
   reg ACLK = 0, ARESETN = 0;
   reg  [5:0]  AWADDR = 0, ARADDR = 0;
   reg  AWVALID = 0, WVALID = 0, ARVALID = 0, RREADY = 0, BREADY = 1;
@@ -19,7 +25,7 @@ module tb_power_duty;
   wire [1:0] BRESP, RRESP;
   wire [31:0] RDATA;
   reg  [31:0] rd;
-  integer k;
+  integer k, c;
   reg  [31:0] stim [0:NSTEP*4-1];
 
   tier_axi_lite dut (
@@ -49,6 +55,10 @@ module tb_power_duty;
   endtask
 
   initial begin
+    // ECO DEI PARAMETRI: verifica che i define siano arrivati come interi (un IDLECYC troncato invaliderebbe
+    // il duty cycle e quindi TUTTA la misura, in modo silenzioso).
+    $display("DUTY-CFG NSTEP=%0d IDLECYC=%0d GATEMODE=%0d CLKHALF=%0s HBEAT=%0d",
+             NSTEP, IDLECYC, GATEMODE, "`CLKHALF", HBEAT);
     $readmemh("axi_stim.mem", stim);
     ARESETN = 0; repeat (16) @(posedge ACLK); ARESETN = 1; repeat (4) @(posedge ACLK);
     axi_write(6'h10, {30'd0, GATEMODE[0], 1'b0});
@@ -62,8 +72,14 @@ module tb_power_duty;
       axi_write(6'h10, {30'd0, GATEMODE[0], 1'b1});   // COMMIT
       rd = 0;
       while (rd[0] !== 1'b1) axi_read(6'h10);          // attende done (fase ATTIVA)
-      repeat (IDLECYC) @(posedge ACLK);                // fase IDLE vera
+      $display("DUTY-ACT step=%0d done t=%0t", k, $time);
+      for (c = 0; c < IDLECYC; c = c + 1) begin        // fase IDLE vera
+        @(posedge ACLK);
+        if ((c % HBEAT) == 0 && c > 0)
+          $display("DUTY-HB step=%0d idle=%0d/%0d t=%0t", k, c, IDLECYC, $time);
+      end
     end
     $display("DUTY-DONE steps=%0d idle=%0d", NSTEP, IDLECYC);
+    $finish;
   end
 endmodule
