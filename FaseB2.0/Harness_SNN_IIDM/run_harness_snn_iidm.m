@@ -82,40 +82,6 @@ function run_harness_snn_iidm(mode)
   mins = toc(t0)/60;
   save(fullfile(resdir,'t7_results.mat'), 'V', 'S', 'nPP', 'idx', 'mode', ...
        'K', 'HOLD_RTL', 'HOLD_BLK', 'mins');
-  write_results_md(here, mode, idx, V, S, nPP, HOLD_RTL, HOLD_BLK, mins);
+  t7_write_results(here, mode, idx, V, S, nPP, HOLD_RTL, HOLD_BLK, mins);
   fprintf('\nFATTO (%s, %.1f min). Numeri in results/RESULTS.md\n', mode, mins);
-end
-
-function write_results_md(here, mode, idx, V, S, nPP, HOLD_RTL, HOLD_BLK, mins)
-  f = fopen(fullfile(here,'results','RESULTS.md'),'w');
-  fprintf(f, '# T7a — Harness_SNN_IIDM: anello chiuso RTL + metriche\n\n');
-  fprintf(f, '> Rigenerabile con `run_harness_snn_iidm(''%s'')` — %.1f min.\n', mode, mins);
-  fprintf(f, '> DUT **`Donatello_SNN_IIDM`** (Tier@BALANCED + align + ACC-IIDM R17), generato in\n');
-  fprintf(f, '> **Verilog**, %d scenari x 600 control-step. `HOLD_RTL`=%d, `HOLD_BLK`=%d (latenza misurata 554).\n\n', ...
-          numel(idx), HOLD_RTL, HOLD_BLK);
-
-  fprintf(f, '## Cancelli\n\n| Cancello | Che cosa prova | Perimetro | Esito |\n|---|---|---|---|\n');
-  fprintf(f, '| **PLANT-PAR** | plant del TB == `qz_cl_sim`, **senza DUT** | %d scenari | **%d disallineamenti** |\n', numel(idx), nPP);
-  fprintf(f, '| **T7-EXACT** | RTL == **BLOCCO** sugli ingressi ricevuti | %d confronti | **%d disallineamenti** |\n', V.nTot, V.nExact);
-  fprintf(f, '| PARAM-RANGE | i 5 parametri nei limiti del decode | %d control-step | **%d fuori dominio** |\n', V.nTot, V.nRange);
-  fprintf(f, '| NO-REPEAT | i parametri non si ripetono (`align` mai stantio) | %d control-step | **%d ripetizioni** |\n', V.nTot, V.nRep);
-  fprintf(f, '| **T7-SAFE** | collisioni AGGIUNTIVE vs oracolo | %d scenari | **%d extra** |\n\n', numel(idx), S.coll_extra);
-
-  fprintf(f, 'PLANT-PAR e T7-EXACT **non condividono** il componente che l''altro verifica: il primo gira\n');
-  fprintf(f, 'senza DUT, il secondo senza plant. Insieme coprono l''anello senza circolarita''.\n\n');
-
-  fprintf(f, '## Sicurezza\n\nCollisioni: RTL **%d**, oracolo **%d** su %d scenari — **%d aggiuntive**.\n', ...
-          S.coll_rtl, S.coll_oracolo, S.n_scenari, S.coll_extra);
-  fprintf(f, 'Le collisioni presenti anche nell''oracolo sono **inevitabili** (cut-in aggressivo):\n');
-  fprintf(f, 'un controllore a conoscenza perfetta le subisce ugualmente.\n\n');
-
-  fprintf(f, '## Metriche\n\n**%d metriche per scenario**, dal motore canonico `utils/closed_loop_eval`\n', S.n_metriche);
-  fprintf(f, '(lo stesso di VALIDATION_REPORT_v3 e QUANTIZATION_STUDY_REPORT) calcolate sulle serie\n');
-  fprintf(f, '**prodotte dall''RTL**, non dal blocco. Dettaglio per scenario: `results/metrics.json`.\n\n');
-  fprintf(f, '## Riferimento del DUT\n\n');
-  fprintf(f, 'Il riferimento e'' il **blocco composto**, ripilotato sugli ingressi che l''RTL ha\n');
-  fprintf(f, 'effettivamente ricevuto. Il golden monolitico `acciidm_m_traj` **non e'' utilizzabile**:\n');
-  fprintf(f, 'e'' l''estrazione del blocco DEPRECATO `Donatello_ACC_IIDM_M` e diverge dal composto\n');
-  fprintf(f, '(385 scarti su 600 control-step, misurato il 2026-07-30).\n');
-  fclose(f);
 end

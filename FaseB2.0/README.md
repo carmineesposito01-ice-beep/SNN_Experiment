@@ -8,9 +8,26 @@ in `../report/`.
 > **Stato (2026-07-30):** T1–T4 · **T5** (deriva open-loop → [`common/DRIFT.md`](common/DRIFT.md)) · **T6a**
 > (validazione RTL della SNN → [`Harness_SNN/results/RESULTS.md`](Harness_SNN/results/RESULTS.md)) · ✅ **T6b
 > COMPLETO M1–M5** (caratterizzazione HW → [`Harness_SNN/results/RESULTS_HW.md`](Harness_SNN/results/RESULTS_HW.md))
-> — tutti FATTI e committati. **Prossimo: T7** — `Harness_SNN_IIDM` (capitolato in
-> [`Harness_SNN_IIDM/README.md`](Harness_SNN_IIDM/README.md)): blocco composto + i **99** scenari + metriche di
-> car-following in anello chiuso. Poi **T8** (2 report `create-report`) e **T9** (allineamento doc).
+> · ✅ **T7a COMPLETO sui 99** (anello chiuso RTL + metriche →
+> [`Harness_SNN_IIDM/results/RESULTS.md`](Harness_SNN_IIDM/results/RESULTS.md)) — tutti FATTI e committati.
+> **Prossimo: T7b** (hardware del composto: FCLK, risorse, potenza, bitstream), poi **T8** (2 report
+> `create-report`) e **T9** (allineamento doc).
+> **▶ Riesecuzione T7a:** `run_harness_snn_iidm('full')` (43 min) — prerequisito
+> `rtl_gen_dut('Donatello_SNN_IIDM','C:/t7hdlv','Verilog')`.
+
+### Sintesi dei numeri T7a (dettaglio in `Harness_SNN_IIDM/results/RESULTS.md`)
+| Grandezza | Valore | Natura |
+|---|---|---|
+| **RTL == BLOCCO** in anello chiuso (T7-EXACT) | **0 / 58 522** su **99 scenari** | misurato |
+| Plant del TB == `qz_cl_sim` (PLANT-PAR, **senza DUT**) | **0** su 99 scenari | misurato |
+| **Collisioni AGGIUNTIVE vs oracolo** (T7-SAFE) | **0** (RTL 3, oracolo 3 — inevitabili da cut-in) | misurato |
+| Parametri fuori dai limiti del decode | **0 / 58 522** | misurato |
+| Metriche per scenario (motore canonico Python) | **31**, dalle serie **prodotte dall'RTL** | misurato |
+| ⚠️ `align` congela l'accel a parametri ripetuti | **26,5 %** dei passi, **100 %** con accel ferma | diagnostica |
+| Impatto del congelamento sulla sicurezza | `min_ttc` 0,97× · `max_DRAC` 1,07× vs oracolo | misurato |
+
+⚠️ Il riferimento del DUT è il **blocco composto**, non `acciidm_m_traj`: quest'ultimo è l'estrazione del
+blocco **DEPRECATO** `Donatello_ACC_IIDM_M` e **diverge dal composto** (385 scarti su 600 control-step).
 > **▶ Riesecuzione HW:** `bash Harness_SNN/hw/run_harness_snn_hw.sh [stadio]` (`summary` = numeri in pochi secondi).
 > Stato/azioni: `../document/SESSION_RESUME.md`.
 
