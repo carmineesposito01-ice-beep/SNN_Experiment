@@ -1,7 +1,7 @@
 # Harness_SNN — risultati HARDWARE (Fase B2.0 · T6b)
 
 > ⚠️ **Documento IN COSTRUZIONE.** Completi: **M1** · **M2** (NETLIST-PAR funzionale verde; sim di timing non riuscita — §M2.3).
-> Da fare: M3 (studio energetico + clock gating) · M4 (bitstream) · M5 (entry-point unico + doc).
+> Completo anche **M3** (misure valide; composizione energetica NON validata — §M3.4). Da fare: M4 (bitstream) · M5 (entry-point + doc).
 > Riesecuzione dei probe: `bash hw/run_probes_t6b.sh` → `PROBES_T6B.md`.
 
 **DUT:** `Donatello_Tier` @ TIER=BALANCED, NFRAC=13 — **lo stesso artefatto VHDL** validato bit-exact in T6a
@@ -60,7 +60,7 @@ Li ha presi il confronto **bit-exact contro un golden indipendente**, non un'isp
 
 ---
 
-## M2 — Sistema, clock e risorse reali ✅ (NETLIST-PAR aperto)
+## M2 — Sistema, clock e risorse reali ✅
 
 **Sistema implementato:** Zynq **PS7** (board preset `www.digilentinc.com:pynq-z1:part0:1.0`) + `tier_axi_lite`
 (module reference) + AXI SmartConnect su `M_AXI_GP0`. Riesecuzione: `bash hw/run_impl_sweep.sh "<lista FCLK>"`.
@@ -140,3 +140,106 @@ simulazione — ed è pulita (+0,358 ns a 52 MHz). L'equivalenza logica della ne
 funcsim. Con STA pulita la timing-sim si omette comunemente anche nella prassi industriale, proprio perché costosa
 e non autoritativa in materia di timing. La differenza rispetto a "cancello rosso non spiegato" è che qui **si sa
 cosa è escluso e cosa resta**.
+
+---
+
+## M3 — Studio energetico e clock gating ⚠️ (misure valide · composizione NON validata)
+
+**Flusso:** SAIF da simulazione **post-implementation FUNZIONALE** (la timing-sim non è utilizzabile, §M2.3) sul
+design **OOC `tier_axi_lite`+Tier** — il PS7 è hard-IP e il suo consumo non appartiene al nostro deployment.
+⚠️ **Caveat dichiarato:** con SAIF funzionale i **glitch non sono catturati** ⇒ la dinamica è **leggermente
+sottostimata**. Tutte le misure hanno **Confidence = High**. `-debug typical` è obbligatorio per il SAIF.
+Riesecuzione: `hw/gen_power_workloads.m` → `hw/run_saif_active.sh` / `hw/run_saif_idle.sh` → `hw/power_report.tcl`.
+
+### M3.1 — Finestra idle: convergenza verificata (sostituisce un numero scelto a naso)
+
+| Finestra | total | dynamic | static | Confidence |
+|---|---|---|---|---|
+| 200 cicli | 0,111 W | 0,008 W | 0,103 W | High |
+| 1000 cicli | 0,111 W | 0,008 W | 0,103 W | High |
+| 5000 cicli | 0,111 W | 0,008 W | 0,103 W | High |
+
+Valori **identici** ⇒ l'idle è **stazionario** e la finestra di **200 cicli** basta. Il probe ha anche **verificato la
+premessa**: il design *è* davvero fermo in idle (se avesse avuto FSM/contatori attivi, il valore non si sarebbe
+stabilizzato) — non era garantito, ed è la condizione perché il clock gating abbia qualcosa da spegnere.
+
+### M3.2 — Fase attiva: 9 workload reali + 1 sintetico (duty ~100%)
+
+Un workload per **combinazione scenario×profilo** (sono **9**), 50 control-step ciascuno, **gating ON**
+(configurazione di deployment). Ogni run vale anche come conferma funzionale: **`nMismatch = 0 / 250`** su tutti e 9.
+
+| Workload | Dinamica [W] | | Workload | Dinamica [W] |
+|---|---|---|---|---|
+| wl1 | 0,042 | | wl6 `mixed\|sinusoidal` (traj 8) | 0,043 |
+| wl2 | 0,045 | | wl7 `truck\|constant` (traj 9) | 0,043 |
+| wl3 | 0,043 | | wl8 `highway\|constant` (traj 15) | 0,044 |
+| wl4 | 0,044 | | wl9 `urban\|stop_and_go` (traj 39) | 0,042 |
+| wl5 | 0,044 | | **wl10 worst sintetico** | **0,041** |
+
+**Dispersione fra i 9 reali: 0,042–0,045 W (≈7%)** ⇒ la potenza attiva è **poco sensibile al regime di guida**.
+Breakdown tipico (wl1): Clocks 0,008 · Slice Logic 0,009 · Signals 0,012 · BRAM 0,002 · DSP 0,010.
+
+⚠️ **Il "worst" sintetico NON è un limite superiore: è il più BASSO di tutti (0,041 W).** Il controllo che avevo
+predisposto per validarlo **è fallito**: gli ingressi ad alto firing scelti (gap 2 m, `dv` −15, `v` 35, con
+alternanza per garantire il fronte) **non** massimizzano la commutazione. **Non va usato come bound**; il vero
+massimo osservato è un workload reale (wl2, 0,045 W). Trovare il regime peggiore richiederebbe uno studio a sé.
+
+### M3.3 — Clock gating: FUNZIONA (misurato), ma il guadagno non è quantificabile con questo flusso
+
+| Livello di osservazione | Esito |
+|---|---|
+| `report_power` (sommario) | idle gatata **0,008 W** = idle non gatata **0,008 W** → *sembra* «il gating non serve» |
+| **SAIF, conteggi di commutazione** | `clk_tier`: **TC 400 → TC 0**, T1 → 0 (tenuto basso per tutta la finestra) |
+| `gate_mode` nel SAIF | g0 basso · g1 alto ⇒ il bit di registro comanda correttamente |
+
+➡️ **Il clock del Tier si ferma completamente quando il gating è attivo — misurato nell'artefatto.**
+La causa dell'apparente non-effetto è un **limite dello strumento**: `report_power` deriva la potenza dei net di
+**clock dal VINCOLO di frequenza** (`aclk` 19,2 ns), non dall'attività del SAIF. Verificato anche in negativo:
+imporre `set_switching_activity -toggle_rate 0` sugli 8 net `clk_tier` **non cambia il risultato**
+(`0,008 → 0,008`, `Clocks 0,007 → 0,007`).
+
+**Conseguenza onesta:** il gating **è implementato e agisce**, ma **il suo guadagno in watt non è misurabile con
+questo flusso**. Elementi di contesto (misurati): l'idle dinamica è **8 mW** di cui **7 mW di clock tree**, e il
+Tier ospita la quasi totalità dei registri (≈2 900 dei 3 199 FF), tutti i 52 DSP e l'unica BRAM ⇒ la quota
+gatabile è la parte dominante di quei 7 mW. Un numero preciso richiede un flusso diverso (es. misura su board in
+Fase C, o modello di potenza che accetti attività per-net sui clock). **Nessuna stima viene qui spacciata per misura.**
+
+### M3.4 — Cross-check della composizione: ❌ FALLITO (e ha impedito di pubblicare numeri sbagliati)
+
+Simulati 5 control-step a **duty ridotto reale** (371 clk attivi + **10 000 clk di idle** ciascuno ⇒ duty **3,85 %**),
+SAIF su tutta la finestra, e confronto fra energia **misurata** e **composta** dalle P misurate separatamente:
+
+```
+P_composta = 0,0435 · 0,0385 + 0,008 · 0,9615 ≈ 0,0094 W
+P_MISURATA = 0,015 W                            ⇒ la composizione SOTTOSTIMA di ~1,6×
+```
+
+| Componente | idle | attiva | duty-mix **misurata** | composizione lineare |
+|---|---|---|---|---|
+| Clocks | 0,007 | 0,008 | 0,007 | ~0,007 ✅ |
+| Slice Logic | <0,001 | 0,009 | 0,001 | ~0,0005 |
+| Signals | <0,001 | 0,012 | 0,002 | ~0,0005 ⚠️ |
+| BRAM | 0,001 | 0,002 | 0,001 | ~0,001 ✅ |
+| **DSPs** | <0,001 | 0,010 | **0,004** | **~0,0005** ❌ (8×) |
+| **Dinamica** | **0,008** | **0,042** | **0,015** | **0,0094** |
+
+La discrepanza è **localizzata sui DSP**: consumano il 40 % del valore attivo pur essendo attivi il 3,85 % del tempo.
+**Ipotesi** (dichiarata come tale, non verificata): il modello di potenza di Vivado dipende anche dalla *static
+probability* dei segnali, non solo dal *toggle rate*; in idle gli ingressi dei DSP mantengono gli ultimi valori
+calcolati, che nel modello non equivale a "spento" ⇒ la potenza **non compone linearmente** fra fasi.
+
+➡️ **Conseguenza: l'energia per control-step al duty reale NON viene riportata.** Era il deliverable principale di
+M3 e la formula su cui poggiava è stata invalidata dal suo stesso cancello di verifica. Senza questo cross-check
+avrei pubblicato energie (e un guadagno del gating) basate su una composizione sbagliata: numeri plausibili e falsi.
+
+### M3.5 — Cosa resta solido di M3
+
+| Risultato | Natura |
+|---|---|
+| Potenza attiva per i 9 workload reali: **0,042–0,045 W** (disp. ~7 %), Confidence High | **misurato** |
+| Potenza idle (clock libero): **0,008 W**, di cui **7 mW clock tree** | **misurato** |
+| Statica del device: **0,103 W** — pavimento del chip, **tenuta separata** dal costo del design | **misurato** |
+| Il clock gating **ferma completamente** il clock del Tier (`TC 400→0`) | **misurato (SAIF)** |
+| Guadagno del gating in watt/joule | ❌ **non quantificabile** con questo flusso |
+| Energia per control-step al duty reale | ❌ **non pubblicabile** (composizione invalidata da M3.4) |
+| Il worst sintetico come limite superiore | ❌ **invalidato** (è il più basso) |
