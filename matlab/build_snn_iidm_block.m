@@ -33,27 +33,20 @@ function build_snn_iidm_block()
   for j=1:4, add_line(sub,[in{j} '/1'],['align/' num2str(j)],'autorouting','on'); end        % fisici -> align 1-4
   for j=1:5, add_line(sub,['Tier/' num2str(j)],['align/' num2str(j+4)],'autorouting','on'); end % params -> align 5-9
 
-  % --- REGISTRO DI CONFINE (pipe): rompe il cammino combinatorio Tier -> align -> ACC ---
-  %  Senza, il cammino critico va dal registro del decoder del Tier, attraverso align, fino a un registro
-  %  dentro l'IIDM: 27,5 ns = 36,4 MHz, contro i ~50 del Tier e i ~78 dell'ACC-IIDM presi SINGOLARMENTE.
-  %  E' un cammino che NESSUNO dei due blocchi aveva: lo crea la composizione (HDL_PHASE §9).
-  %
-  %  ⚠️ Il registro va su TUTTI E NOVE i rami, non solo sui 4 fisici: i params raggiungono l'ACC per via
-  %     diretta, e ritardarne solo una parte li desincronizzerebbe di un clock dai fisici allineati --
-  %     cioe' proprio il doppio-fronte che `align` esiste per impedire.
-  %  I params che alimentano il RILEVAMENTO in align restano diretti (non ritardati): align confronta a t,
-  %  rilascia i fisici a t, e il registro consegna fisici+params insieme all'ACC a t+1. Sincroni.
-  %  Costo: +1 clock di latenza (554 -> 555). I VALORI non cambiano: e' un registro di pipeline.
-  for j=1:9
-    add_block('simulink/Discrete/Unit Delay', [sub '/pipe' num2str(j)], 'SampleTime','1');
-  end
-  for j=1:4, add_line(sub,['align/' num2str(j)],['pipe' num2str(j)   '/1'],'autorouting','on'); end
-  for j=1:5, add_line(sub,['Tier/'  num2str(j)],['pipe' num2str(j+4) '/1'],'autorouting','on'); end
-
-  % --- controllore: ACC-IIDM (9 in: fisici appaiati 1-4 + params 5-9), a valle del registro ---
+  % --- controllore: ACC-IIDM (9 in: fisici appaiati 1-4 + params 5-9) ---
   add_block([lib '/ACC-IIDM'],[sub '/ACC']);
-  for j=1:9, add_line(sub,['pipe' num2str(j) '/1'],['ACC/' num2str(j)],'autorouting','on'); end
+  for j=1:4, add_line(sub,['align/' num2str(j)],['ACC/' num2str(j)],'autorouting','on'); end   % appaiati -> ACC 1-4
+  for j=1:5, add_line(sub,['Tier/' num2str(j)],['ACC/' num2str(j+4)],'autorouting','on'); end   % params  -> ACC 5-9
   add_line(sub,'ACC/1','accel/1','autorouting','on');
+
+  % CANCELLO: il blocco deve avere le porte di clock. Senza questa asserzione il costruttore stampa
+  % "OK" anche quando produce un GUSCIO combinatorio con l'uscita a massa -- successo dichiarato su un
+  % artefatto vuoto. (Successo davvero verificato: 2026-07-30, dopo che era accaduto.)
+  set_param(lib,'EnableLBRepository','on'); save_system(lib,libfile);
+  p = get_param(sub,'Ports');
+  assert(p(1) == 4 && p(2) == 1, 'porte del composto errate: in=%d out=%d (attese 4/1)', p(1), p(2));
+  lines = find_system(sub,'SearchDepth',1,'LookUnderMasks','all','FollowLinks','on','FindAll','on','Type','line');
+  assert(numel(lines) >= 18, 'collegamenti insufficienti nel composto: %d (attesi >=18)', numel(lines));
 
   try, Simulink.BlockDiagram.arrangeSystem(sub); catch ME, warning('arrange: %s', ME.message); end
   set_param(lib,'EnableLBRepository','on'); save_system(lib,libfile); close_system(lib,0);
