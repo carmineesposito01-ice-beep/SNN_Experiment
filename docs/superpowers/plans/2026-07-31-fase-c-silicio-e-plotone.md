@@ -36,38 +36,149 @@ il motore canonico `utils/closed_loop_eval.py` · gli artefatti già validati di
 
 ## Struttura dei file
 
+`FaseC/` sta **di primo livello, sorella di `FaseB2.0/`** — non dentro. La Fase C non è un harness della
+Fase B2.0: ne consuma gli artefatti, e nidificarla sarebbe debito strutturale al primo file.
+
+Tre regole di collocazione, che valgono per ogni file aggiunto in seguito:
+
+1. **La logica sta in `phase_c/`, importabile.** Le facciate (script, notebook) stanno fuori e non
+   contengono logica propria — altrimenti il cancello di parità del Task 11 non può essere verde.
+2. **I numeri vivono solo in `results/`.** Mai nella chat, mai in una cella del notebook, mai in un
+   commento. Un numero senza artefatto non è un risultato.
+3. **Un file di test per modulo**, con lo stesso nome. `phase_c/c1_functional.py` → `tests/test_c1.py`.
+
 ```
-FaseB2.0/FaseC/
-  phase_c/
+FaseC/                          <- di primo livello, sorella di FaseB2.0/
+  README.md                     cosa c'e', come si esegue, in che ordine
+  RUNBOOK.md                    procedura con la scheda accesa (Task 12)
+  pytest.ini                    rende `phase_c` importabile da qualunque cwd
+  run_phase_c.sh                FACCIATA 1 - a stadi, l'entry-point
+  c_frontend_parity.py          il cancello fra le due facciate
+
+  phase_c/                      LA LOGICA - tutto qui, importabile da entrambe le facciate
     __init__.py
-    regmap.py           mappe registri e conversioni di formato (UNICO posto)
-    driver.py           SnnIidmDriver, SnnTierDriver  (sopra overlay o mock)
-    mock_overlay.py     finge la board; risponde coi golden di T7a
-    c0_liveness.py      scrittura/rilettura sui registri
-    c1_functional.py    replay dei 99 scenari, bit-esatto
-    c2_closedloop.py    PLANT-PAR del PS, poi anello chiuso
-    plant_ps.py         port 1:1 di qz_cl_sim
-    c3_power.py         differenziale randomizzato + Tj
-    xadc.py             lettura Tj e tensioni
-    platoon.py          P1/P2/P3 sopra simulate_platoon
-    artifacts.py        scrittura/lettura artefatti con provenienza
-  tests/
-    test_regmap.py  test_driver.py  test_c0.py  test_c1.py
-    test_c2.py  test_c3.py  test_platoon.py  test_mock_negative.py
-  run_phase_c.sh        facciata a stadi
-  phase_c.ipynb         facciata interattiva (solo chiamate + grafici)
-  c_frontend_parity.py  cancello di parità fra le facciate
-  results/              artefatti
-  RUNBOOK.md            cosa fare quando la board è accendibile
+    regmap.py       mappe registri e conversioni di formato (UNICO posto)
+    driver.py       SnnIidmDriver, SnnTierDriver (sopra overlay reale o mock)
+    mock_overlay.py finge la scheda; risponde coi golden di T7a
+    artifacts.py    scrittura/lettura artefatti con provenienza
+    params.py       caricamento dei gt_params dal dataset          (Task 9a)
+    cli.py          entry-point condiviso dalle DUE facciate       (Task 11)
+    plots.py        grafici: accelerazione vs traiettoria          (Task 11)
+    c0_liveness.py  il bus risponde e i registri ritengono
+    c1_functional.py replay dei 99 scenari, bit-esatto
+    c2_closedloop.py PLANT-PAR del PS, poi anello chiuso
+    plant_ps.py     port 1:1 di qz_cl_sim
+    c3_power.py     differenziale randomizzato + Tj
+    xadc.py         lettura Tj e tensioni
+    platoon.py      P1/P2/P3 sopra simulate_platoon
+
+  tests/            un file per modulo, piu' conftest.py (fixture dei golden)
+  hw/               script Vivado: sonda risorse del plotone (Task 10)
+  notebook/
+    phase_c.ipynb   FACCIATA 2 - interattiva: solo chiamate a phase_c.cli + grafici
+  results/          ARTEFATTI - l'unico posto in cui vivono i numeri
 ```
 
 ---
 
 # PARTE I — Eseguibile ADESSO, senza scheda
 
+## Task 0: lo scheletro, e il cancello che lo tiene riproducibile
+
+**Files:** Create `FaseC/{README.md,pytest.ini}`, `FaseC/phase_c/__init__.py` · Test `FaseC/tests/test_layout.py`
+
+Non è burocrazia: «riproducibile» significa che **gira uguale da qualunque directory**. Se `phase_c` è
+importabile solo con la cwd giusta, la facciata-script e la facciata-notebook divergeranno per un motivo
+che non ha niente a che vedere con la Fase C — e il cancello di parità del Task 11 diventerà rumore.
+
+- [ ] **Step 1: test che fallisce**
+
+```python
+# FaseC/tests/test_layout.py
+"""Cancello di riproducibilita': il pacchetto si importa e gli artefatti hanno dove andare.
+
+Sembra banale. Non lo e': se `phase_c` e' importabile solo dalla cwd giusta, le due facciate
+divergeranno per un motivo che non c'entra con la Fase C.
+"""
+import os
+import phase_c
+
+FASEC = os.path.dirname(os.path.dirname(os.path.abspath(phase_c.__file__)))
+
+def test_il_pacchetto_si_importa_e_dichiara_dove_e():
+    assert os.path.basename(FASEC) == 'FaseC'
+    assert phase_c.ROOT == FASEC
+
+def test_results_esiste_ed_e_scrivibile():
+    d = phase_c.RESULTS
+    assert os.path.isdir(d)
+    p = os.path.join(d, '.write_probe')
+    open(p, 'w').write('x'); os.remove(p)
+
+def test_i_golden_di_t7a_sono_raggiungibili():
+    """Se i golden non ci sono, meta' del piano non e' eseguibile: meglio saperlo ORA."""
+    assert os.path.isfile(os.path.join(phase_c.T7_WORK, 'axi_gold_1.mem')), \
+        'golden di T7a assenti in %s -- impostare T7_WORK' % phase_c.T7_WORK
+```
+
+- [ ] **Step 2: eseguire e vederlo fallire**
+
+Run: `cd FaseC && python -m pytest tests/test_layout.py -v`
+Atteso: FAIL — `ModuleNotFoundError: No module named 'phase_c'`
+
+- [ ] **Step 3: creare lo scheletro**
+
+```python
+# FaseC/phase_c/__init__.py
+"""Fase C - validazione su silicio e chiusura mesoscopica.
+
+La LOGICA vive qui ed e' importabile; le facciate (run_phase_c.sh, notebook/phase_c.ipynb)
+stanno fuori e non contengono logica propria. I numeri vivono solo in results/.
+"""
+import os
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+RESULTS = os.path.join(ROOT, 'results')
+# Radice del progetto: FaseC/ e' sorella di FaseB2.0/, utils/, champions/, ...
+PROJECT = os.path.dirname(ROOT)
+# Artefatti di T7a (golden bit-esatti). Sovrascrivibile per postazione.
+T7_WORK = os.environ.get('T7_WORK', 'C:/t7bw')
+
+os.makedirs(RESULTS, exist_ok=True)
+```
+
+```ini
+# FaseC/pytest.ini
+[pytest]
+# rootdir = FaseC/: rende `phase_c` importabile da qualunque cwd, che e' cio' che
+# permette alle due facciate di eseguire LO STESSO codice.
+testpaths = tests
+pythonpath = .
+```
+
+- [ ] **Step 4: eseguire e vederlo passare**
+
+Run: `cd FaseC && python -m pytest tests/test_layout.py -v`
+Atteso: PASS, 3 test. **Se il terzo fallisce, fermarsi**: senza i golden di T7a i Task 2/6 non sono
+eseguibili, e va deciso dove stanno prima di proseguire.
+
+- [ ] **Step 5: il README, che dice l'ordine**
+
+`FaseC/README.md` contiene: le tre regole di collocazione (sopra), la tabella delle costanti misurate
+(da non riderivare), l'ordine di esecuzione degli stadi, e **quali task girano senza scheda**.
+
+- [ ] **Step 6: commit**
+
+```bash
+git add FaseC/README.md FaseC/pytest.ini FaseC/phase_c/__init__.py FaseC/tests/test_layout.py
+git commit -m "feat(fase-c): scheletro di FaseC/ e cancello di riproducibilita' dell'import"
+```
+
+---
+
 ## Task 1: `regmap.py` — un solo posto per formati e indirizzi
 
-**Files:** Create `FaseB2.0/FaseC/phase_c/regmap.py` · Test `FaseB2.0/FaseC/tests/test_regmap.py`
+**Files:** Create `FaseC/phase_c/regmap.py` · Test `FaseC/tests/test_regmap.py`
 
 Il formato numerico al confine è il **guasto numero uno** del bring-up (§7 spec): produce risultati
 plausibili, non un crash. Sta quindi in un unico modulo, con test propri.
@@ -75,7 +186,7 @@ plausibili, non un crash. Sta quindi in un unico modulo, con test propri.
 - [ ] **Step 1: test che fallisce**
 
 ```python
-# FaseB2.0/FaseC/tests/test_regmap.py
+# FaseC/tests/test_regmap.py
 import pytest
 from phase_c.regmap import to_fix, from_fix, IIDM, TIER
 
@@ -104,13 +215,13 @@ def test_mappa_registri_snn_ha_cinque_uscite():
 
 - [ ] **Step 2: eseguire e vederlo fallire**
 
-Run: `cd FaseB2.0/FaseC && python -m pytest tests/test_regmap.py -v`
+Run: `cd FaseC && python -m pytest tests/test_regmap.py -v`
 Atteso: FAIL — `ModuleNotFoundError: No module named 'phase_c.regmap'`
 
 - [ ] **Step 3: implementazione minima**
 
 ```python
-# FaseB2.0/FaseC/phase_c/regmap.py
+# FaseC/phase_c/regmap.py
 """Formati e mappe registri. UNICO posto in cui vivono.
 
 Il formato al confine e' il guasto n.1 del bring-up: sbagliato, produce risultati PLAUSIBILI
@@ -167,7 +278,7 @@ ACCEL_NFRAC, ACCEL_NBITS = 8, 13
 
 - [ ] **Step 4: eseguire e vederlo passare**
 
-Run: `cd FaseB2.0/FaseC && python -m pytest tests/test_regmap.py -v`
+Run: `cd FaseC && python -m pytest tests/test_regmap.py -v`
 Atteso: PASS, 5 test
 
 - [ ] **Step 5: cancello di dominio provato in negativo**
@@ -184,7 +295,7 @@ Run: `python -m pytest tests/test_regmap.py -v` · Atteso: PASS, 6 test
 - [ ] **Step 6: commit**
 
 ```bash
-git add FaseB2.0/FaseC/phase_c/regmap.py FaseB2.0/FaseC/tests/test_regmap.py
+git add FaseC/phase_c/regmap.py FaseC/tests/test_regmap.py
 git commit -m "feat(fase-c): regmap - formati e indirizzi in un solo posto, con cancello di dominio"
 ```
 
@@ -200,7 +311,7 @@ non e' un extra: e' la ragione per cui il mock e' credibile.
 - [ ] **Step 1: test che fallisce — il mock deve riprodurre il golden E poterlo tradire**
 
 ```python
-# FaseB2.0/FaseC/tests/test_mock_negative.py
+# FaseC/tests/test_mock_negative.py
 import pytest
 from phase_c.mock_overlay import MockOverlay
 from phase_c.driver import SnnIidmDriver
@@ -226,7 +337,7 @@ Run: `python -m pytest tests/test_mock_negative.py -v` · Atteso: FAIL — modul
 - [ ] **Step 3: implementare mock e fixture**
 
 ```python
-# FaseB2.0/FaseC/phase_c/mock_overlay.py
+# FaseC/phase_c/mock_overlay.py
 """Overlay finto: stessa interfaccia di PYNQ (write/read su MMIO), risposte dai golden di T7a.
 
 `inject_at`/`inject_delta` esistono per PROVARE I CANCELLI IN NEGATIVO. Senza, il mock
@@ -264,7 +375,7 @@ class MockOverlay:
 ```
 
 ```python
-# FaseB2.0/FaseC/tests/conftest.py
+# FaseC/tests/conftest.py
 import pytest, io, os
 from dataclasses import dataclass
 from phase_c.regmap import from_fix, ACCEL_NFRAC, ACCEL_NBITS
@@ -295,7 +406,7 @@ Run: `python -m pytest tests/test_mock_negative.py -v` · Atteso: PASS, 2 test
 - [ ] **Step 5: commit**
 
 ```bash
-git add FaseB2.0/FaseC/phase_c/mock_overlay.py FaseB2.0/FaseC/tests/{conftest.py,test_mock_negative.py}
+git add FaseC/phase_c/mock_overlay.py FaseC/tests/{conftest.py,test_mock_negative.py}
 git commit -m "feat(fase-c): mock dell'overlay, con iniezione d'errore per provare i cancelli in negativo"
 ```
 
@@ -308,7 +419,7 @@ git commit -m "feat(fase-c): mock dell'overlay, con iniezione d'errore per prova
 - [ ] **Step 1: test che fallisce**
 
 ```python
-# FaseB2.0/FaseC/tests/test_driver.py
+# FaseC/tests/test_driver.py
 import pytest
 from phase_c.driver import SnnIidmDriver, SnnTierDriver, DoneTimeout
 from phase_c.mock_overlay import MockOverlay
@@ -343,7 +454,7 @@ Run: `python -m pytest tests/test_driver.py -v` · Atteso: FAIL — modulo assen
 - [ ] **Step 3: implementare**
 
 ```python
-# FaseB2.0/FaseC/phase_c/driver.py
+# FaseC/phase_c/driver.py
 """Driver: scrive i 4 ingressi, da' UN commit, attende `done`, legge l'uscita.
 
 Il commit e' un FRONTE, non un livello (il wrapper fa `commit = slv_reg4[0] & ~reg4_d0`).
@@ -405,7 +516,7 @@ Run: `python -m pytest tests/test_driver.py -v` · Atteso: PASS, 3 test
 - [ ] **Step 5: commit**
 
 ```bash
-git add FaseB2.0/FaseC/phase_c/driver.py FaseB2.0/FaseC/tests/test_driver.py
+git add FaseC/phase_c/driver.py FaseC/tests/test_driver.py
 git commit -m "feat(fase-c): driver AXI per composto e SNN, con commit a fronte e timeout su done"
 ```
 
@@ -421,7 +532,7 @@ essere **separabili**, non sparsi nel file.
 - [ ] **Step 1: test che fallisce**
 
 ```python
-# FaseB2.0/FaseC/tests/test_artifacts.py
+# FaseC/tests/test_artifacts.py
 import json
 from phase_c.artifacts import write, read, stable_view
 
@@ -447,7 +558,7 @@ Run: `python -m pytest tests/test_artifacts.py -v` · Atteso: FAIL — modulo as
 - [ ] **Step 3: implementare**
 
 ```python
-# FaseB2.0/FaseC/phase_c/artifacts.py
+# FaseC/phase_c/artifacts.py
 """Artefatti con provenienza. `stable_view` isola cio' che le due facciate DEVONO condividere.
 
 Senza questa separazione il cancello di parita' fallirebbe sempre (l'orario differisce) e
@@ -484,7 +595,7 @@ Run: `python -m pytest tests/test_artifacts.py -v` · Atteso: PASS, 2 test
 - [ ] **Step 5: commit**
 
 ```bash
-git add FaseB2.0/FaseC/phase_c/artifacts.py FaseB2.0/FaseC/tests/test_artifacts.py
+git add FaseC/phase_c/artifacts.py FaseC/tests/test_artifacts.py
 git commit -m "feat(fase-c): artefatti con provenienza e vista stabile per il cancello di parita'"
 ```
 
@@ -500,7 +611,7 @@ ne ha uno, ma i quattro registri d'ingresso sono leggibili: **scrittura con rile
 - [ ] **Step 1: test che fallisce**
 
 ```python
-# FaseB2.0/FaseC/tests/test_c0.py
+# FaseC/tests/test_c0.py
 import pytest
 from phase_c.c0_liveness import run_c0, C0Failure
 from phase_c.mock_overlay import MockOverlay
@@ -524,7 +635,7 @@ Run: `python -m pytest tests/test_c0.py -v` · Atteso: FAIL — modulo assente
 - [ ] **Step 3: implementare**
 
 ```python
-# FaseB2.0/FaseC/phase_c/c0_liveness.py
+# FaseC/phase_c/c0_liveness.py
 """C0 - il bus risponde e i registri ritengono. PRIMA di qualunque inferenza.
 
 Un bus muto scoperto a meta' campagna e' tempo perso; scoperto qui costa 200 ms.
@@ -563,7 +674,7 @@ Run: `python -m pytest tests/test_c0.py -v` · Atteso: PASS, 2 test
 - [ ] **Step 5: commit**
 
 ```bash
-git add FaseB2.0/FaseC/phase_c/c0_liveness.py FaseB2.0/FaseC/tests/test_c0.py
+git add FaseC/phase_c/c0_liveness.py FaseC/tests/test_c0.py
 git commit -m "feat(fase-c): C0 vita del bus - scrittura/rilettura con pattern che trovano incollature e corti"
 ```
 
@@ -576,7 +687,7 @@ git commit -m "feat(fase-c): C0 vita del bus - scrittura/rilettura con pattern c
 - [ ] **Step 1: test che fallisce**
 
 ```python
-# FaseB2.0/FaseC/tests/test_c1.py
+# FaseC/tests/test_c1.py
 import pytest
 from phase_c.c1_functional import run_c1, diagnose
 from phase_c.mock_overlay import MockOverlay
@@ -604,7 +715,7 @@ Run: `python -m pytest tests/test_c1.py -v` · Atteso: FAIL — modulo assente
 - [ ] **Step 3: implementare**
 
 ```python
-# FaseB2.0/FaseC/phase_c/c1_functional.py
+# FaseC/phase_c/c1_functional.py
 """C1 - il silicio riproduce la simulazione, BIT-ESATTO.
 
 Non 'entro tolleranza': T7a ha provato l'RTL bit-esatto al blocco su 58 522 confronti, e il
@@ -676,7 +787,7 @@ Run: `python -m pytest tests/test_c1.py -v` · Atteso: PASS, 3 test
 - [ ] **Step 5: commit**
 
 ```bash
-git add FaseB2.0/FaseC/phase_c/c1_functional.py FaseB2.0/FaseC/tests/test_c1.py
+git add FaseC/phase_c/c1_functional.py FaseC/tests/test_c1.py
 git commit -m "feat(fase-c): C1 bit-esatto sui 99 scenari, con scaletta diagnostica ordinata per sintomo"
 ```
 
@@ -692,7 +803,7 @@ In C2 il plant gira sul processore: se differisce di un ULP dal riferimento, le 
 - [ ] **Step 1: test che fallisce**
 
 ```python
-# FaseB2.0/FaseC/tests/test_c2.py
+# FaseC/tests/test_c2.py
 import pytest, numpy as np
 from phase_c.plant_ps import plant_par, step_plant
 from phase_c.c2_closedloop import run_c2, PlantParFailure
@@ -725,7 +836,7 @@ Run: `python -m pytest tests/test_c2.py -v` · Atteso: FAIL — moduli assenti
 - [ ] **Step 3: implementare — port 1:1 del riferimento**
 
 ```python
-# FaseB2.0/FaseC/phase_c/plant_ps.py
+# FaseC/phase_c/plant_ps.py
 """Plant sul processore: port 1:1 di qz_cl_sim. NESSUNA logica nuova.
 
 ⚠️ L'ordine di update non e' libero: si calcola PRIMA la nuova velocita', POI il gap con la
@@ -755,7 +866,7 @@ def plant_par(accel_sequences, ref_series, tol=0.0):
 ```
 
 ```python
-# FaseB2.0/FaseC/phase_c/c2_closedloop.py
+# FaseC/phase_c/c2_closedloop.py
 """C2 - anello chiuso col plant sul processore. Parte SOLO se il PLANT-PAR e' verde."""
 from .plant_ps import step_plant
 from .regmap import to_fix
@@ -796,7 +907,7 @@ Run: `python -m pytest tests/test_c2.py -v` · Atteso: PASS, 3 test
 - [ ] **Step 5: commit**
 
 ```bash
-git add FaseB2.0/FaseC/phase_c/{plant_ps.py,c2_closedloop.py} FaseB2.0/FaseC/tests/test_c2.py
+git add FaseC/phase_c/{plant_ps.py,c2_closedloop.py} FaseC/tests/test_c2.py
 git commit -m "feat(fase-c): C2 anello chiuso, che RIFIUTA di partire se il PLANT-PAR del PS e' rosso"
 ```
 
@@ -811,7 +922,7 @@ Le tre condizioni della §2.1 della spec sono **codice**, non raccomandazioni.
 - [ ] **Step 1: test che fallisce**
 
 ```python
-# FaseB2.0/FaseC/tests/test_c3.py
+# FaseC/tests/test_c3.py
 import pytest
 from phase_c.c3_power import plan_sequence, aggregate, ThermalReject
 
@@ -848,7 +959,7 @@ Run: `python -m pytest tests/test_c3.py -v` · Atteso: FAIL — modulo assente
 - [ ] **Step 3: implementare**
 
 ```python
-# FaseB2.0/FaseC/phase_c/xadc.py
+# FaseC/phase_c/xadc.py
 """XADC (UG480): temperatura di giunzione e tensioni dei rail. NON la corrente.
 
 Serve a rendere CREDIBILE la misura di potenza, non a farla: la dispersione e' esponenziale
@@ -869,7 +980,7 @@ def read_vccint(mmio):
 ```
 
 ```python
-# FaseB2.0/FaseC/phase_c/c3_power.py
+# FaseC/phase_c/c3_power.py
 """C3 - potenza differenziale total-board.
 
 Il PL e' 114 mW su 1,5-2,5 W di scheda: invisibile in assoluto. Ma il numero non e' assoluto:
@@ -930,113 +1041,256 @@ Run: `python -m pytest tests/test_c3.py -v` · Atteso: PASS, 4 test
 - [ ] **Step 5: commit**
 
 ```bash
-git add FaseB2.0/FaseC/phase_c/{xadc.py,c3_power.py} FaseB2.0/FaseC/tests/test_c3.py
+git add FaseC/phase_c/{xadc.py,c3_power.py} FaseC/tests/test_c3.py
 git commit -m "feat(fase-c): C3 potenza differenziale - ordine randomizzato, Tj come cancello, distribuzione"
 ```
 
 ---
 
-## Task 9: P1 — plotone in simulazione, il numero mesoscopico vero
+## Task 8bis: `params.py` — i parametri veri e il campione, da UN posto
+
+**Files:** Create `phase_c/params.py` · Test `tests/test_params.py`
+
+Il Task 9 mette il **nostro controllore** nell'anello del plotone: gli servono il campione addestrato e i
+`gt_params` dello scenario. Nessuno dei due si ricarica a mano: esiste gia' un caricatore canonico nel
+progetto e questo modulo lo avvolge, non lo riscrive.
+
+- [ ] **Step 1: trovare il caricatore canonico, NON inventarlo**
+
+Run: `grep -rn "def load_champion\|torch.load\|state_dict" --include=*.py utils/ core/ scripts/ | head -20`
+Atteso: la funzione che gli altri studi usano gia' per caricare un `champions/*/`. **Se non esiste un
+punto unico, fermarsi e dirlo** — duplicare il caricamento e' la prima copia sincronizzata a mano.
+
+- [ ] **Step 2: test che fallisce**
+
+```python
+# FaseC/tests/test_params.py
+import pytest, numpy as np
+from phase_c.params import load_gt_params, load_champion, CHAMPION
+
+def test_gt_params_sono_cinque_e_positivi():
+    p = load_gt_params(0)
+    assert p.shape == (5,)
+    assert np.all(p > 0), 'v0,T,s0,a,b devono essere tutti positivi'
+
+def test_scenari_diversi_hanno_parametri_diversi():
+    """Se tutti gli scenari dessero gli stessi parametri, P1 misurerebbe UN caso ripetuto."""
+    ps = np.array([load_gt_params(i) for i in range(5)])
+    assert not np.allclose(ps[0], ps[1:]), 'i gt_params non variano fra scenari'
+
+def test_il_campione_e_quello_montato_in_hardware():
+    """Il plotone deve girare col BALANCED, cioe' con la rete che sta nel bitstream."""
+    assert 'R33_C2_A1_T12_fix' in CHAMPION or 'BALANCED' in CHAMPION
+    m = load_champion()
+    assert hasattr(m, 'reset_state'), 'il modello deve esporre reset_state (lo usa simulate)'
+```
+
+- [ ] **Step 3: eseguire e vederlo fallire**
+
+Run: `cd FaseC && python -m pytest tests/test_params.py -v`
+Atteso: FAIL — `ModuleNotFoundError: No module named 'phase_c.params'`
+
+- [ ] **Step 4: implementare, avvolgendo il caricatore trovato allo Step 1**
+
+```python
+# FaseC/phase_c/params.py
+"""Parametri veri e campione addestrato. Avvolge il caricatore canonico, non lo duplica.
+
+Il campione e' quello che sta nel bitstream: il plotone deve misurare la rete DEPLOYATA,
+non un'altra. La costante CHAMPION e' l'unico posto in cui il nome vive.
+"""
+import os
+import numpy as np
+import scipy.io as sio
+
+from . import PROJECT
+
+CHAMPION = 'R33_C2_A1_T12_fix'                       # il BALANCED montato nel composto
+DATASET = os.path.join(PROJECT, 'data', 'test_dataset_exhaustive.mat')
+
+_ds = None
+
+
+def _dataset():
+    global _ds
+    if _ds is None:
+        if not os.path.isfile(DATASET):
+            raise FileNotFoundError('dataset assente: %s' % DATASET)
+        _ds = sio.loadmat(DATASET)
+    return _ds
+
+
+def load_gt_params(i):
+    """Parametri veri [v0, T, s0, a, b] dello scenario i."""
+    return np.asarray(_dataset()['gt_params'][i], dtype=np.float64).ravel()
+
+
+def n_scenarios():
+    return int(_dataset()['gt_params'].shape[0])
+
+
+def load_champion(name=CHAMPION, device='cpu'):
+    """Il campione addestrato, dal caricatore canonico del progetto (Step 1)."""
+    from utils.model_io import load_champion as _load     # sostituire col nome reale
+    return _load(name, device=device)
+```
+
+- [ ] **Step 5: eseguire e vederlo passare**
+
+Run: `cd FaseC && python -m pytest tests/test_params.py -v`
+Atteso: PASS, 3 test
+
+- [ ] **Step 6: commit**
+
+```bash
+git add FaseC/phase_c/params.py FaseC/tests/test_params.py
+git commit -m "feat(fase-c): params - gt_params e campione da un solo posto, avvolgendo il caricatore canonico"
+```
+
+---
+
+## Task 9: P1 — plotone in simulazione, col NOSTRO controllore nell'anello
 
 **Files:** Create `phase_c/platoon.py` · Test `tests/test_platoon.py` · Artefatto `results/P1_platoon.json`
 
-**Questo task non dipende dalla scheda e chiude un limite dichiarato**: la string stability riportata nei
-report è, testualmente nel motore canonico, *«un proxy LOCALE = il caso N=1»*.
+**Non dipende dalla scheda e chiude un limite dichiarato**: la string stability nei report di B2.0 e', nel
+motore canonico stesso, *un proxy LOCALE = il caso N=1*. Il numero mesoscopico vero non e' mai entrato nei
+report.
+
+> ⚠️ **Correzione verificata prima dell'esecuzione.** Nel progetto esistono **due** `simulate_platoon`:
+>
+> | Modulo | Firma | Cosa mette nell'anello |
+> |---|---|---|
+> | `utils/closed_loop_eval.py` | `simulate_platoon(params_list, leader_v)` | chiama `simulate(None, ...)` → **l'ORACOLO analitico**. Il modello e' cablato a `None`: non c'e' modo di passarcelo. |
+> | `utils/platoon_eval.py` | `simulate_platoon(model, params_gt, n_vehicles, v_leader_profile)` | **il modello che gli passi** — il nostro controllore. |
+>
+> Va usato il **secondo**. Il primo avrebbe misurato la string stability dell'IDM analitico e l'avremmo
+> attribuita al controllore: conclusione dalla forma giusta, premessa sbagliata. Le metriche stanno in
+> `platoon_metrics` (non `platoon_string_metrics`), e la chiave `gain_max` **non esiste**: quelle vere sono
+> `head_to_tail_gain`, `max_amplification`, `string_stable_headtail`, piu' sicurezza (`min_ttc_platoon`,
+> `min_gap_platoon`, `collided`) e comfort (`rms_accel_mean`, `rms_jerk_mean`).
 
 - [ ] **Step 1: test che fallisce**
 
 ```python
-# FaseB2.0/FaseC/tests/test_platoon.py
-import pytest, numpy as np
-from phase_c.platoon import run_p1
+# FaseC/tests/test_platoon.py
+import pytest, inspect
+from phase_c import platoon
 
-def test_p1_produce_il_guadagno_per_ogni_N():
-    r = run_p1(n_vehicles=(2, 4, 8), n_scenarios=3, seed=0)
-    assert set(r['per_N']) == {2, 4, 8}
-    for N in (2, 4, 8):
-        assert 'gain_median' in r['per_N'][N] and 'gain_p99' in r['per_N'][N]
+def test_p1_produce_le_metriche_REALI_per_ogni_N():
+    r = platoon.run_p1(n_vehicles=(2, 4), n_scenarios=2, seed=0)
+    assert set(r['per_N']) == {2, 4}
+    for N in (2, 4):
+        v = r['per_N'][N]
+        for k in ('head_to_tail_median', 'head_to_tail_p99', 'max_amplification_p99',
+                  'n_string_stable', 'n_collided', 'min_ttc_min', 'n'):
+            assert k in v, 'metrica %r assente' % k
 
-def test_p1_dichiara_se_il_plotone_AMPLIFICA():
-    r = run_p1(n_vehicles=(4,), n_scenarios=3, seed=0)
+def test_p1_dichiara_la_stabilita_sulla_CODA_non_sulla_mediana():
+    """Nella sicurezza conta la coda: la mediana cancella proprio i casi che contano."""
+    r = platoon.run_p1(n_vehicles=(4,), n_scenarios=2, seed=0)
     v = r['per_N'][4]
-    assert v['string_stable'] == (v['gain_p99'] < 1.0)
+    assert v['string_stable'] == (v['head_to_tail_p99'] <= 1.0)
 
-def test_p1_NON_riusa_il_proxy_locale():
-    """Deve chiamare simulate_platoon, non string_stability_gain."""
-    import inspect
-    from phase_c import platoon
+def test_p1_usa_il_modulo_CHE_ACCETTA_IL_MODELLO():
+    """Il rischio vero: misurare l'oracolo analitico e attribuirlo al controllore."""
     src = inspect.getsource(platoon)
-    assert 'simulate_platoon' in src and 'string_stability_gain' not in src
+    assert 'platoon_eval' in src, 'deve usare utils.platoon_eval (accetta il modello)'
+    assert 'closed_loop_eval import simulate_platoon' not in src, \
+        'utils.closed_loop_eval.simulate_platoon cabla model=None: misurerebbe l\'oracolo'
 ```
 
 - [ ] **Step 2: eseguire e vederlo fallire**
 
-Run: `python -m pytest tests/test_platoon.py -v` · Atteso: FAIL — modulo assente
+Run: `cd FaseC && python -m pytest tests/test_platoon.py -v`
+Atteso: FAIL — `ModuleNotFoundError: No module named 'phase_c.platoon'`
 
 - [ ] **Step 3: implementare**
 
 ```python
-# FaseB2.0/FaseC/phase_c/platoon.py
-"""Filone C - plotone. Chiude il proxy dichiarato nel motore canonico.
+# FaseC/phase_c/platoon.py
+"""Filone C - plotone. Chiude il proxy N=1 dichiarato nei report di B2.0.
 
-L'infrastruttura ESISTE gia' e non era mai stata usata: simulate_platoon,
-platoon_string_metrics, transfer_gain_fft. La string stability e' una proprieta' della LEGGE
-DI CONTROLLO: poiche' l'RTL e' bit-esatto al blocco, il numero non cambia sul silicio. P3
-risponde alla domanda di DEPLOYMENT, che e' diversa.
+Usa utils.platoon_eval (che ACCETTA il modello), non utils.closed_loop_eval (che cabla
+model=None e simulerebbe l'oracolo analitico).
+
+La string stability e' una proprieta' della LEGGE DI CONTROLLO: poiche' l'RTL e' bit-esatto
+al blocco, il numero non cambia sul silicio. P3 risponde alla domanda di DEPLOYMENT, diversa.
 """
 import os, sys
 import numpy as np
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..'))
-from utils.closed_loop_eval import simulate_platoon, platoon_string_metrics, transfer_gain_fft
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+from utils.platoon_eval import simulate_platoon, platoon_metrics
+
+from .params import load_champion, load_gt_params, n_scenarios
+from . import artifacts
+
+DT = 0.1
 
 
-def _leader_profile(L=600, dt=0.1, seed=0, amp=1.5, f=0.08):
-    t = np.arange(L) * dt
+def leader_profile(L=600, seed=0, amp=1.5, f=0.08, base=22.0):
+    """Perturbazione sinusoidale sul leader: e' cio' che il plotone deve NON amplificare."""
+    t = np.arange(L) * DT
     rng = np.random.default_rng(seed)
-    return 22.0 + amp * np.sin(2 * np.pi * f * t) + 0.05 * rng.standard_normal(L)
+    return base + amp * np.sin(2 * np.pi * f * t) + 0.05 * rng.standard_normal(L)
 
 
-def run_p1(n_vehicles=(2, 4, 8, 16), n_scenarios=10, seed=0, params_source=None):
-    from phase_c.params import load_gt_params            # parametri veri del dataset
-    out = {'per_N': {}, 'n_scenarios': n_scenarios}
+def _pct(xs, q):
+    s = sorted(xs)
+    return s[min(len(s) - 1, int(q * len(s)))]
+
+
+def run_p1(n_vehicles=(2, 4, 8, 16), n_scenarios_=10, seed=0, model=None, n_scenarios=None):
+    n_sc = n_scenarios if n_scenarios is not None else n_scenarios_
+    mdl = model if model is not None else load_champion()
+    out = {'per_N': {}, 'n_scenarios': n_sc, 'seed': seed}
     for N in n_vehicles:
-        gains = []
-        for i in range(n_scenarios):
-            params = params_source(i, N) if params_source else load_gt_params(i, N)
-            lead = _leader_profile(seed=seed * 1000 + i)
-            res = simulate_platoon(params, lead)
-            m = platoon_string_metrics(res['v_profiles'])
-            gains.append(float(m['gain_max']))
-        g = sorted(gains)
+        h2t, amp, stable, coll, ttc = [], [], 0, 0, []
+        for i in range(n_sc):
+            pgt = load_gt_params(i)
+            lead = leader_profile(seed=seed * 1000 + i)
+            rec = simulate_platoon(mdl, pgt, N, lead)
+            m = platoon_metrics(rec)
+            h2t.append(float(m['head_to_tail_gain']))
+            amp.append(float(m['max_amplification']))
+            stable += int(bool(m['string_stable_headtail']))
+            coll += int(bool(m['collided']))
+            ttc.append(float(m['min_ttc_platoon']))
         out['per_N'][N] = dict(
-            gain_median=g[len(g) // 2], gain_p99=g[min(len(g) - 1, int(0.99 * len(g)))],
-            gain_max=g[-1], n=len(g),
-            string_stable=g[min(len(g) - 1, int(0.99 * len(g)))] < 1.0)
+            head_to_tail_median=_pct(h2t, 0.5), head_to_tail_p99=_pct(h2t, 0.99),
+            head_to_tail_max=max(h2t), max_amplification_p99=_pct(amp, 0.99),
+            n_string_stable=stable, n_collided=coll,
+            min_ttc_min=min(ttc), n=n_sc,
+            # la stabilita' si dichiara sulla CODA: la mediana cancella i casi che contano
+            string_stable=_pct(h2t, 0.99) <= 1.0)
     return out
 ```
 
 - [ ] **Step 4: eseguire e vederlo passare**
 
-Run: `python -m pytest tests/test_platoon.py -v` · Atteso: PASS, 3 test
+Run: `cd FaseC && python -m pytest tests/test_platoon.py -v`
+Atteso: PASS, 3 test
 
-- [ ] **Step 5: eseguire davvero P1 e salvare l'artefatto**
+- [ ] **Step 5: eseguire P1 davvero e salvare l'artefatto**
 
-Run: `cd FaseB2.0/FaseC && python -m phase_c.platoon --p1 --out results/P1_platoon.json`
-Atteso: JSON con `per_N` per N = 2, 4, 8, 16 e la dichiarazione `string_stable` per ciascuno.
+Run: `cd FaseC && python -m phase_c.cli --stage p1 --frontend script`
+Atteso: `results/P1_platoon.json` con `per_N` per N = 2, 4, 8, 16 sui 99 scenari, ciascuno con
+mediana/p99/max di `head_to_tail`, quanti scenari string-stable su quanti, collisioni e TTC minimo.
 
 - [ ] **Step 6: commit**
 
 ```bash
-git add FaseB2.0/FaseC/phase_c/platoon.py FaseB2.0/FaseC/tests/test_platoon.py FaseB2.0/FaseC/results/P1_platoon.json
-git commit -m "feat(fase-c): P1 - string stability VERA del plotone, al posto del proxy N=1"
+git add FaseC/phase_c/platoon.py FaseC/tests/test_platoon.py FaseC/results/P1_platoon.json
+git commit -m "feat(fase-c): P1 - string stability VERA del plotone col controllore nell'anello"
 ```
 
 ---
 
+
 ## Task 10: P3-sonda — la curva risorse si misura
 
-**Files:** Create `FaseB2.0/FaseC/hw/probe_resources.sh`, `hw/probe_resources.tcl` · Artefatto `results/P3_resources.json`
+**Files:** Create `FaseC/hw/probe_resources.sh`, `hw/probe_resources.tcl` · Artefatto `results/P3_resources.json`
 
 Non dipende dalla scheda: è sintesi. Il vincolo è il DSP (69 su 220 → 3 istanze); forzare i moltiplicatori in
 fabric (`-max_dsp`) può ribilanciare, ma un 25×18 costa centinaia di LUT. **La curva non è nota.**
@@ -1044,7 +1298,7 @@ fabric (`-max_dsp`) può ribilanciare, ma un 25×18 costa centinaia di LUT. **La
 - [ ] **Step 1: cancello preliminare, PRIMA di ~10 min per punto**
 
 ```bash
-# FaseB2.0/FaseC/hw/probe_resources.sh
+# FaseC/hw/probe_resources.sh
 set -u
 SRC="C:/t7bimpl/src"
 nv=$(ls "$SRC"/*.v 2>/dev/null | wc -l)
@@ -1078,7 +1332,7 @@ Atteso: `results/P3_resources.json` + la riga `N massimo che entra = <n>, a max_
 - [ ] **Step 5: commit**
 
 ```bash
-git add FaseB2.0/FaseC/hw/ FaseB2.0/FaseC/results/P3_resources.json FaseB2.0/FaseC/results/P3_probe.log
+git add FaseC/hw/ FaseC/results/P3_resources.json FaseC/results/P3_probe.log
 git commit -m "feat(fase-c): sonda risorse per il plotone - curva LUT/DSP misurata, non stimata"
 ```
 
@@ -1091,7 +1345,7 @@ git commit -m "feat(fase-c): sonda risorse per il plotone - curva LUT/DSP misura
 - [ ] **Step 1: test che fallisce**
 
 ```python
-# FaseB2.0/FaseC/tests/test_parity.py
+# FaseC/tests/test_parity.py
 import pytest, json
 from c_frontend_parity import compare
 
@@ -1117,7 +1371,7 @@ Run: `python -m pytest tests/test_parity.py -v` · Atteso: FAIL — modulo assen
 - [ ] **Step 3: implementare il cancello**
 
 ```python
-# FaseB2.0/FaseC/c_frontend_parity.py
+# FaseC/c_frontend_parity.py
 """Le due facciate, sullo stesso stato della scheda, devono produrre artefatti IDENTICI.
 
 Se divergono, una delle due contiene logica propria: e' un difetto, non una curiosita'.
@@ -1150,7 +1404,7 @@ Run: `python -m pytest tests/test_parity.py -v` · Atteso: PASS, 2 test
 - [ ] **Step 5: la facciata a stadi**
 
 ```bash
-# FaseB2.0/FaseC/run_phase_c.sh
+# FaseC/run_phase_c.sh
 set -u
 STAGE="${1:-summary}"
 case "$STAGE" in
@@ -1182,7 +1436,7 @@ fine campagna.
 - [ ] **Step 8: commit**
 
 ```bash
-git add FaseB2.0/FaseC/{run_phase_c.sh,phase_c.ipynb,c_frontend_parity.py} FaseB2.0/FaseC/tests/test_parity.py
+git add FaseC/{run_phase_c.sh,phase_c.ipynb,c_frontend_parity.py} FaseC/tests/test_parity.py
 git commit -m "feat(fase-c): due facciate sopra gli stessi moduli, con cancello di parita' e esecuzione headless"
 ```
 
@@ -1192,7 +1446,7 @@ git commit -m "feat(fase-c): due facciate sopra gli stessi moduli, con cancello 
 
 ## Task 12: RUNBOOK e sequenza di accensione
 
-**Files:** Create `FaseB2.0/FaseC/RUNBOOK.md`
+**Files:** Create `FaseC/RUNBOOK.md`
 
 - [ ] **Step 1: scrivere il runbook**
 
@@ -1209,7 +1463,7 @@ per 60 s) · sequenza **sorteggiata** da `plan_sequence(seed=<dichiarato>)` · a
 - [ ] **Step 3: commit**
 
 ```bash
-git add FaseB2.0/FaseC/RUNBOOK.md
+git add FaseC/RUNBOOK.md
 git commit -m "docs(fase-c): runbook di accensione, con la procedura di misura e cosa fare a ogni cancello rosso"
 ```
 
