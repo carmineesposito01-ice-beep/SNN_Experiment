@@ -161,10 +161,50 @@ Sui **99 scenari** del dataset esaustivo, 600 passi di controllo ciascuno, i can
 
 Le 3 collisioni osservate sono le **stesse** per l'RTL e per l'oracolo: derivano da manovre di inserimento aggressive presenti nel dataset, non dall'implementazione. Il cancello di sicurezza non chiede che non ci siano collisioni, chiede che **l'hardware non ne aggiunga**.
 
+La campagna completa — 99 scenari, 600 passi di controllo ciascuno, una simulazione per scenario — dura **60 minuti**.
+
 
 ### 4.2 Metriche dal motore canonico
 
 Per ciascuno dei 99 scenari sono calcolate **31 metriche** di comportamento e sicurezza. Il punto metodologico è che le metriche non provengono da una simulazione separata: sono calcolate sulle **serie prodotte dall'RTL** durante la validazione, con lo **stesso** motore di valutazione usato per il modello di riferimento. Prova e metrica insistono così sullo stesso perimetro.
+
+La tabella che segue riporta **tutte e 31** le metriche, aggregate sui 99 scenari. La regola di aggregazione è dichiarata per famiglia e **non è la mediana**: sulla sicurezza conta la coda, e una mediana su 99 scenari cancellerebbe proprio lo scenario peggiore, che è l'unico che interessa. Per le grandezze di tipo *minimo* si riporta il minimo, per quelle di tipo *massimo* e per le frazioni di violazione il massimo, per le restanti la media.
+
+| Metrica | Aggregazione | RTL | Oracolo | RTL / oracolo |
+|---|---|---|---|---|
+| TED_drac | massimo (caso peggiore) | 1.300 | 1.300 | 1.000 |
+| TET | massimo (caso peggiore) | 1.100 | 1.200 | 0.917 |
+| TID_drac | massimo (caso peggiore) | 26.303 | 819.268 | 0.032 |
+| TIT | massimo (caso peggiore) | 1.277 | 1.333 | 0.958 |
+| brake_margin_min | minimo (caso peggiore) | -3.790 | -3.877 | 0.978 |
+| collided | somma | 3 | 3 | 1.000 |
+| cpi | media | 0.000858 | 0.000873 | 0.983 |
+| energy_proxy | media | 52.914 | 63.327 | 0.836 |
+| frac_accel_iso_viol | massimo (caso peggiore) | 0 | 0 | — |
+| frac_decel_iso_viol | massimo (caso peggiore) | 0.055 | 0.060 | 0.917 |
+| frac_drac_critical | massimo (caso peggiore) | 0.026 | 0.026 | 1.000 |
+| frac_jerk_uncomf | massimo (caso peggiore) | 0.290 | 0.554 | 0.524 |
+| frac_ttc_below_1.0 | massimo (caso peggiore) | 1 | 1 | 1.000 |
+| frac_ttc_below_1.5 | massimo (caso peggiore) | 1 | 1 | 1.000 |
+| frac_ttc_below_2.0 | massimo (caso peggiore) | 1 | 1 | 1.000 |
+| frac_ttc_below_3.0 | massimo (caso peggiore) | 1 | 1 | 1.000 |
+| impact_dv | massimo (caso peggiore) | 7.632 | 7.688 | 0.993 |
+| max_DRAC | massimo (caso peggiore) | 165.334 | 8.08e+03 | 0.020 |
+| max_abs_jerk | massimo (caso peggiore) | 90.625 | 90 | 1.007 |
+| max_decel | massimo (caso peggiore) | 9 | 9 | 1.000 |
+| mean_T_pred | media | 1.400 | 1.249 | 1.121 |
+| mean_abs_dv_ss | media | 0.982 | 0.923 | 1.064 |
+| mean_abs_gap_err_ss | media | 4.675 | 4.093 | 1.142 |
+| mean_time_gap | media | 2.266 | 2.085 | 1.087 |
+| min_gap | minimo (caso peggiore) | -0.387 | -0.536 | 0.721 |
+| min_time_headway | minimo (caso peggiore) | 0.0068 | 0.000156 | 43.743 |
+| min_ttc | minimo (caso peggiore) | 0.017 | 0.000389 | 44.889 |
+| rms_accel | media | 0.800 | 0.844 | 0.949 |
+| rms_gap_error | media | 9.442 | 8.374 | 1.127 |
+| rms_jerk | media | 1.989 | 1.804 | 1.102 |
+| string_stability | media | 0.767 | 0.787 | 0.974 |
+
+> **Nota.** Su alcune metriche il rapporto è molto lontano da uno. **Non è un segnale sulla qualità dell'implementazione**: il caso peggiore su tutti gli scenari è dominato dai 3 che **collidono**, dove il tempo alla collisione tende a zero e la decelerazione richiesta diverge — per l'RTL **e** per l'oracolo, che collidono negli **stessi** scenari. In quel regime il rapporto smette di misurare l'implementazione e misura la patologia dello scenario. Il confronto discriminante è quello del §4.3.
 
 ![Due metriche di sicurezza, RTL contro oracolo, uno scenario per punto. La diagonale è l'uguaglianza. Gli scostamenti sono la conseguenza del comportamento descritto in §4.3, non di un errore di calcolo: l'equivalenza bit-esatta è già stabilita dal cancello T7-EXACT.](figures_harness_snn_iidm/safety.png)
 *Due metriche di sicurezza, RTL contro oracolo, uno scenario per punto. La diagonale è l'uguaglianza. Gli scostamenti sono la conseguenza del comportamento descritto in §4.3, non di un errore di calcolo: l'equivalenza bit-esatta è già stabilita dal cancello T7-EXACT.*
@@ -179,6 +219,17 @@ Il blocco è **sensibile al fronte**: riparte quando i suoi ingressi cambiano. Q
 | Passi di controllo con i cinque parametri ripetuti | 15 494 su 58 522 (**26.5 %**) |
 | Frazione di quelli in cui l'accelerazione resta ferma | 100 % |
 | Collisioni aggiuntive che ne derivano | 0 |
+
+L'impatto sulla sicurezza si misura confrontando RTL e oracolo **sui soli scenari che hanno subito congelamenti** (46 su 99): è li' che l'effetto, se c'è, deve manifestarsi. Il confronto è fatto sul rapporto delle mediane.
+
+| Metrica | RTL | Oracolo | Rapporto |
+|---|---|---|---|
+| min_ttc | 1.802 | 1.844 | **0.977** |
+| max_DRAC | 2.149 | 2.008 | **1.070** |
+| min_gap | 2.578 | 2.319 | **1.112** |
+| min_time_headway | 1.384 | 1.512 | **0.915** |
+
+Gli scostamenti sono di pochi punti percentuali e **di segno opposto fra loro** — il tempo alla collisione peggiora dello 2 %, la distanza minima **migliora** dell'11 % — il che indica una perturbazione, non una degradazione sistematica. E le collisioni aggiuntive restano **0**.
 
 > **Nota.** È una **diagnostica**, non un difetto: l'RTL riproduce il blocco esattamente (T7-EXACT è 0), quindi il comportamento è quello progettato. Va però conosciuto, perché a valle si traduce in un'accelerazione che si aggiorna meno spesso di quanto il control-step suggerirebbe. L'effetto sulle metriche di sicurezza è quantificato in §4.2 e **non produce collisioni aggiuntive**.
 
@@ -212,6 +263,12 @@ L'ultimo tratto è fra il Verilog e la **netlist piazzata e instradata**: la ret
 | Costo rispetto alla simulazione comportamentale | **44×** (misurato su questo progetto) |
 | Costo che avrebbero i 99 scenari completi | ≈ 28 ore |
 
+| Scenario | Passi | Disallineamenti | Durata | s / passo |
+|---|---|---|---|---|
+| 1 | 600 | **0** | 16 m 31 s (include compilazione) | 1.65 |
+| 4 | 600 | **0** | 15 m 43 s | 1.57 |
+| 9 | 307 | **0** | 10 m 15 s | 2.00 |
+
 Il sottoinsieme è **dichiarato in anticipo** e comprende uno scenario che **collide**, cioè con la serie più corta: è il caso che aveva scoperto un difetto del banco durante lo sviluppo, quando il confronto leggeva oltre la fine dei dati di riferimento. Il totale atteso — 1 507 confronti — era stato dichiarato **prima** della esecuzione, e torna: se non fosse tornato, un esito di zero disallineamenti non sarebbe stato credibile, perché un banco che confronta meno passi del previsto produce zero disallineamenti proprio perché **non guarda**.
 
 > **Nota.** Questo cancello è un **conferma su N dichiarato**, non la base di una metrica: con 28 ore di costo per la copertura completa, l'estensione a tutti gli scenari è stata esclusa **sul costo misurato**, e il limite è scritto qui invece che taciuto.
@@ -226,6 +283,17 @@ La frequenza di un progetto su FPGA non è un numero solo. Sono due, e confonder
 
 ![Slack peggiore in funzione della frequenza **ottenuta**. Il punto più alto che chiude è la frequenza deployabile; il limite del cammino critico si legge invece al punto più stretto, dove il vincolo forza lo strumento a ottimizzare al massimo, anche se lì il timing non chiude.](figures_harness_snn_iidm/fclk.png)
 *Slack peggiore in funzione della frequenza **ottenuta**. Il punto più alto che chiude è la frequenza deployabile; il limite del cammino critico si legge invece al punto più stretto, dove il vincolo forza lo strumento a ottimizzare al massimo, anche se lì il timing non chiude.*
+
+| Chiesta [MHz] | Ottenuta [MHz] | Periodo [ns] | WNS [ns] | WHS [ns] | LUT | FF | Chiude |
+|---|---|---|---|---|---|---|---|
+| 15 | 15.152 | 65.998 | +30.749 | +0.022 | 8416 | 4556 | si |
+| 20 | 20.000 | 50.000 | +16.097 | +0.052 | 8405 | 4556 | si |
+| 25 | 25.000 | 40.000 | +9.519 | +0.037 | 8412 | 4556 | si |
+| 30 | 30.303 | 33.000 | +2.764 | +0.045 | 8408 | 4556 | si |
+| 35 | 34.484 | 28.999 | +1.008 | +0.026 | 8404 | 4556 | si |
+| 40 | 40.000 | 25.000 | +0.022 | +0.033 | 8453 | 4556 | si |
+| 45 | 45.455 | 22.000 | -2.470 | +0.048 | 8483 | 4560 | **no** |
+| 50 | 50.000 | 20.000 | -4.355 | +0.023 | 8503 | 4562 | **no** |
 
 | Grandezza | Valore | Natura |
 |---|---|---|
@@ -258,6 +326,18 @@ La stessa logica può essere implementata **da sola** — fuori dal contesto del
 
 La risorsa più impegnata è il DSP, al 31.4 %; nessuna è vicina alla saturazione. La ripartizione interna mostra dove finisce l'area, e in particolare quanto costa la correttezza discussa in §2.2.
 
+| Istanza | Ruolo | LUT | FF | DSP | RAMB18 |
+|---|---|---|---|---|---|
+| `sys_wrapper` | sistema completo | 8453 | 4556 | 69 | 2 |
+| `tier0` | IP AXI (wrapper + blocco) | 8084 | 4097 | 69 | 2 |
+| `u_dut` | **il blocco composto** | 7974 | 3794 | 69 | 2 |
+| `u_Tier` | └ SNN Tier@BAL/n13 | 4077 | 2442 | 52 | 2 |
+| `u_SNN` |   └ rete a spike | 2735 | 2045 | 36 | 2 |
+| `u_DEC` |   └ decodifica del readout | 950 | 397 | 16 | 0 |
+| `u_ACC` | └ controllore ACC-IIDM | 3032 | 1100 | 17 | 0 |
+| `u_align` | └ allineamento | 876 | 252 | 0 | 0 |
+| `ps7_axi_periph` | convertitore di protocollo (contorno) | 352 | 426 | 0 | 0 |
+
 ![Ripartizione delle risorse dentro il blocco, dopo place&route. Il blocco di allineamento non è logica gratuita: costa 876 LUT, il 11 % del blocco. È il prezzo di **una sola** inferenza per passo di controllo, cioè della correttezza del filtro interno.](figures_harness_snn_iidm/hier.png)
 *Ripartizione delle risorse dentro il blocco, dopo place&route. Il blocco di allineamento non è logica gratuita: costa 876 LUT, il 11 % del blocco. È il prezzo di **una sola** inferenza per passo di controllo, cioè della correttezza del filtro interno.*
 
@@ -289,6 +369,14 @@ Un passo di controllo non dura quanto la latenza del blocco: ci sono anche le sc
 
 Perché una misura di potenza in inattività abbia senso, l'inattività deve essere uno stato **stazionario**: se il circuito avesse macchine a stati o contatori attivi, il valore dipenderebbe dalla finestra di osservazione. La verifica è stata fatta su tre finestre di ampiezza crescente.
 
+| Finestra [cicli] | Commutazioni (TC) | TC / ciclo |
+|---|---|---|
+| 200 | 5200 | **26.0** |
+| 1000 | 26000 | **26.0** |
+| 5000 | 130000 | **26.0** |
+
+Il rapporto è identico sulle tre finestre, che differiscono di un fattore 25. Con il gating attivo scende a **2.0** commutazioni per ciclo: è la misura del §8.
+
 ![Tre letture che il sommario dei watt non permette. A sinistra: il numero di commutazioni per ciclo è **costante** su tre finestre che differiscono di un fattore 25, il che prova la stazionarietà. Al centro: il gating riduce la commutazione di 13 volte. A destra: gli otto carichi reali differiscono del 2.9 % in commutazione. Nessuna delle tre è visibile nei watt arrotondati.](figures_harness_snn_iidm/toggle.png)
 *Tre letture che il sommario dei watt non permette. A sinistra: il numero di commutazioni per ciclo è **costante** su tre finestre che differiscono di un fattore 25, il che prova la stazionarietà. Al centro: il gating riduce la commutazione di 13 volte. A destra: gli otto carichi reali differiscono del 2.9 % in commutazione. Nessuna delle tre è visibile nei watt arrotondati.*
 
@@ -298,6 +386,17 @@ Perché una misura di potenza in inattività abbia senso, l'inattività deve ess
 ### 7.3 Gli otto carichi reali
 
 La fase attiva è stata misurata su **8 carichi reali**, uno per ciascuna combinazione di regime di guida e presenza di manovra di inserimento presente nel dataset. Sono otto e non nove: le combinazioni popolate sono state **enumerate**, non assunte. Ogni esecuzione della misura energetica ha anche confermato l'equivalenza funzionale sul proprio carico.
+
+| Carico | Regime | Dinamica [W] | Commutazioni (TC) | Disallineamenti |
+|---|---|---|---|---|
+| wl1 | highway / senza inserimento | 0.026 | 44252587 | **0** |
+| wl4 | highway / con inserimento | 0.026 | 43954392 | **0** |
+| wl28 | urban / senza inserimento | 0.026 | 43017937 | **0** |
+| wl31 | urban / con inserimento | 0.026 | 42973956 | **0** |
+| wl55 | truck / senza inserimento | 0.026 | 44189478 | **0** |
+| wl58 | truck / con inserimento | 0.026 | 43916965 | **0** |
+| wl73 | mixed / senza inserimento | 0.026 | 43492426 | **0** |
+| wl76 | mixed / con inserimento | 0.026 | 43201080 | **0** |
 
 | Grandezza | Valore |
 |---|---|

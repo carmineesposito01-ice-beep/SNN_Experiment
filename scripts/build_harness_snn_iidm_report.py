@@ -78,6 +78,7 @@ T7A_NTOT   = int(_V.nTot)                 # confronti totali
 T7A_NRANGE = int(_V.nRange)               # PARAM-RANGE: parametri fuori dai limiti del decode
 T7A_NREP   = int(_V.nRep)                 # NO-REPEAT: control-step coi 5 parametri ripetuti
 T7A_NPP    = int(_M['nPP'])               # PLANT-PAR: disallineamenti plant TB vs qz_cl_sim
+T7A_MINS   = float(_M['mins'])            # durata della run completa, in minuti
 
 # --- T7a: metriche dal motore canonico --------------------------------------
 _S = MET['_summary']
@@ -416,6 +417,81 @@ def fig_safety():
     p = os.path.join(FIGDIR, 'safety.png'); fig.savefig(p, dpi=150, bbox_inches='tight', facecolor='white')
     plt.close(fig); return p
 
+# ---------------------------------------------------------------------------
+# AGGREGAZIONE DELLE 31 METRICHE
+# La statistica deve calzare il fenomeno: sulla sicurezza conta la CODA, non il centro. Una mediana su
+# 99 scenari cancellerebbe proprio lo scenario peggiore, che e' l'unico che interessa. La regola e'
+# quindi esplicita per famiglia, e viene DICHIARATA nel report accanto alla tabella.
+# ---------------------------------------------------------------------------
+import numpy as _np
+
+
+def _agg_rule(name):
+    if name.startswith('min_') or name.endswith('_min'):
+        return 'min', "minimo (caso peggiore)"
+    if name.startswith('max_') or name.startswith('frac_'):
+        return 'max', "massimo (caso peggiore)"
+    if name in ('TET', 'TIT', 'TED_drac', 'TID_drac', 'impact_dv'):
+        return 'max', "massimo (caso peggiore)"
+    if name == 'collided':
+        return 'sum', "somma"
+    return 'mean', "media"
+
+
+def _scen_num(k):
+    return int(_re.sub(r'\D', '', k))
+
+
+def metric_rows():
+    """Per ogni metrica: aggregato RTL, aggregato oracolo, rapporto. Da metrics.json, 99 scenari."""
+    rtl, ora = MET['RTL'], MET['ORA']
+    names = sorted(k for k in rtl[list(rtl)[0]] if k != 'N')   # 'N' e' un contatore, non una metrica
+    out = []
+    for nm in names:
+        how, _lab = _agg_rule(nm)
+        def agg(d):
+            vals = [d[k][nm] for k in d
+                    if d[k].get(nm) is not None
+                    and not (isinstance(d[k][nm], float) and d[k][nm] != d[k][nm])
+                    and abs(d[k][nm]) != float('inf')]
+            if not vals:
+                return None
+            return {'min': min, 'max': max, 'sum': sum}.get(how, lambda v: sum(v) / len(v))(vals)
+        a_, b_ = agg(rtl), agg(ora)
+        r = (a_ / b_) if (a_ is not None and b_ not in (None, 0)) else None
+        out.append((nm, how, a_, b_, r))
+    return out
+
+
+def freeze_impact():
+    """Impatto del congelamento: rapporto delle MEDIANE fra RTL e oracolo, sui SOLI scenari congelati.
+
+    Non il caso peggiore su tutti i 99: li' il valore e' dominato dai 3 scenari che COLLIDONO, dove il
+    tempo alla collisione tende a zero e la decelerazione richiesta diverge per ENTRAMBI, e il rapporto
+    smette di misurare l'implementazione. E' anche la statistica dei due valori citati in RESULTS.md,
+    che li' erano scritti come COSTANTI: qui sono ricalcolati dai dati (e coincidono)."""
+    rtl, ora = MET['RTL'], MET['ORA']
+    ks = sorted(rtl, key=_scen_num)
+    rep = set(int(x) for x in _np.atleast_1d(_V.repScen))
+    fro = [k for k in ks if _scen_num(k) in rep]
+    def med(v):
+        v = sorted(x for x in v if x is not None and x == x and abs(x) != float('inf'))
+        return v[len(v) // 2] if v else float('nan')
+    out = {}
+    for nm in ('min_ttc', 'max_DRAC', 'min_gap', 'min_time_headway'):
+        a_, b_ = med([rtl[k][nm] for k in fro]), med([ora[k][nm] for k in fro])
+        out[nm] = (a_, b_, (a_ / b_) if b_ else float('nan'))
+    return len(fro), len(ks) - len(fro), out
+
+
+def _fmt(v):
+    if v is None:
+        return "\u2014"
+    if abs(v) >= 1000 or (v and abs(v) < 0.01):
+        return '%.3g' % v
+    return ('%.0f' if float(v).is_integer() else '%.3f') % v
+
+
 # ============================================================================
 # CONTENUTO
 # ============================================================================
@@ -586,12 +662,31 @@ def build_doc():
     A(('p', 'Le %d collisioni osservate sono le **stesse** per l\'RTL e per l\'oracolo: derivano da manovre di '
             'inserimento aggressive presenti nel dataset, non dall\'implementazione. Il cancello di sicurezza '
             'non chiede che non ci siano collisioni, chiede che **l\'hardware non ne aggiunga**.' % COLL_RTL))
+    A(('p', "La campagna completa \u2014 %d scenari, %d passi di controllo ciascuno, una simulazione "
+            "per scenario \u2014 dura **%.0f minuti**." % (MET_NSCEN, T7A_K, T7A_MINS)))
     A(('h2', '4.2 Metriche dal motore canonico'))
     A(('p', 'Per ciascuno dei %d scenari sono calcolate **%d metriche** di comportamento e sicurezza. Il punto '
             'metodologico è che le metriche non provengono da una simulazione separata: sono calcolate sulle '
             '**serie prodotte dall\'RTL** durante la validazione, con lo **stesso** motore di valutazione usato '
             'per il modello di riferimento. Prova e metrica insistono così sullo stesso perimetro.'
             % (MET_NSCEN, MET_NMETR)))
+    nfro, nnf, fi = freeze_impact()
+    A(('p', "La tabella che segue riporta **tutte e %d** le metriche, aggregate sui %d scenari. La regola "
+            "di aggregazione e' dichiarata per famiglia e **non e' la mediana**: sulla sicurezza conta la "
+            "coda, e una mediana su 99 scenari cancellerebbe proprio lo scenario peggiore, che e' l'unico "
+            "che interessa. Per le grandezze di tipo *minimo* si riporta il minimo, per quelle di tipo "
+            "*massimo* e per le frazioni di violazione il massimo, per le restanti la media."
+            % (MET_NMETR, MET_NSCEN)))
+    A(('table', (['Metrica', 'Aggregazione', 'RTL', 'Oracolo', 'RTL / oracolo'],
+                 [[nm, _agg_rule(nm)[1], _fmt(a), _fmt(b), ('%.3f' % r) if r is not None else "\u2014"]
+                  for nm, how, a, b, r in metric_rows()])))
+    A(('callout', "Su alcune metriche il rapporto e' molto lontano da uno. **Non e' un segnale sulla "
+                  "qualita' dell'implementazione**: il caso peggiore su tutti gli scenari e' dominato dai "
+                  "%d che **collidono**, dove il tempo alla collisione tende a zero e la decelerazione "
+                  "richiesta diverge \u2014 per l'RTL **e** per l'oracolo, che collidono negli **stessi** "
+                  "scenari. In quel regime il rapporto smette di misurare l'implementazione e misura la "
+                  "patologia dello scenario. Il confronto discriminante e' quello del \u00a74.3."
+                  % COLL_RTL))
     A(('img', (fig_safety(), 'Due metriche di sicurezza, RTL contro oracolo, uno scenario per punto. La '
                              'diagonale è l\'uguaglianza. Gli scostamenti sono la conseguenza del '
                              'comportamento descritto in §4.3, non di un errore di calcolo: l\'equivalenza '
@@ -606,6 +701,16 @@ def build_doc():
         ['Frazione di quelli in cui l\'accelerazione resta ferma', '100 %'],
         ['Collisioni aggiuntive che ne derivano', '%d' % COLL_EXTRA],
     ])))
+    A(('p', "L'impatto sulla sicurezza si misura confrontando RTL e oracolo **sui soli scenari che "
+            "hanno subito congelamenti** (%d su %d): e' li' che l'effetto, se c'e', deve manifestarsi. "
+            "Il confronto e' fatto sul rapporto delle mediane." % (nfro, nfro + nnf)))
+    A(('table', (['Metrica', 'RTL', 'Oracolo', 'Rapporto'],
+                 [[nm, '%.3f' % a, '%.3f' % b, '**%.3f**' % r] for nm, (a, b, r) in fi.items()])))
+    A(('p', "Gli scostamenti sono di pochi punti percentuali e **di segno opposto fra loro** \u2014 il "
+            "tempo alla collisione peggiora dello %.0f %%, la distanza minima **migliora** dell'%.0f %% "
+            "\u2014 il che indica una perturbazione, non una degradazione sistematica. E le collisioni "
+            "aggiuntive restano **%d**."
+            % (100 * (1 - fi['min_ttc'][2]), 100 * (fi['min_gap'][2] - 1), COLL_EXTRA)))
     A(('callout', 'È una **diagnostica**, non un difetto: l\'RTL riproduce il blocco esattamente (T7-EXACT è '
                   '%d), quindi il comportamento è quello progettato. Va però conosciuto, perché a valle si '
                   'traduce in un\'accelerazione che si aggiorna meno spesso di quanto il control-step '
@@ -643,6 +748,11 @@ def build_doc():
         ['Costo rispetto alla simulazione comportamentale', '**%.0f×** (misurato su questo progetto)' % NL_RATIO],
         ['Costo che avrebbero i %d scenari completi' % MET_NSCEN, '≈ %.0f ore' % NL_FULL_H],
     ])))
+    A(('table', (['Scenario', 'Passi', 'Disallineamenti', 'Durata', 's / passo'],
+                 [[str(r['sc']), str(r['n']), '**%d**' % r['nmis'],
+                   '%d m %02d s%s' % (r['dur_s'] // 60, r['dur_s'] % 60,
+                                      " (include compilazione)" if r['include_compile'] else ''),
+                   '%.2f' % r['s_per_step']] for r in NL['per_scenario']])))
     A(('p', 'Il sottoinsieme è **dichiarato in anticipo** e comprende uno scenario che **collide**, cioè con la '
             'serie più corta: è il caso che aveva scoperto un difetto del banco durante lo sviluppo, quando il '
             'confronto leggeva oltre la fine dei dati di riferimento. Il totale atteso — %s confronti — era '
@@ -662,6 +772,11 @@ def build_doc():
                            'chiude è la frequenza deployabile; il limite del cammino critico si legge invece '
                            'al punto più stretto, dove il vincolo forza lo strumento a ottimizzare al massimo, '
                            'anche se lì il timing non chiude.')))
+    A(('table', (['Chiesta [MHz]', 'Ottenuta [MHz]', 'Periodo [ns]', 'WNS [ns]', 'WHS [ns]',
+                  'LUT', 'FF', 'Chiude'],
+                 [['%d' % p['req'], '%.3f' % p['mhz'], '%.3f' % (1000.0 / p['mhz']),
+                   '%+.3f' % p['wns'], '%+.3f' % p['whs'], str(p['lut']), str(p['ff']),
+                   "si" if p['wns'] >= 0 else '**no**'] for p in PTS])))
     A(('table', (['Grandezza', 'Valore', 'Natura'], [
         ['Frequenza deployabile', '%g MHz (WNS %+.3f ns, WHS %+.3f ns)' % (FCLK, WNS, WHS),
          'misurato: il più alto fra i provati che chiude'],
@@ -703,6 +818,14 @@ def build_doc():
     A(('p', 'La risorsa più impegnata è il DSP, al %.1f %%; nessuna è vicina alla saturazione. La ripartizione '
             'interna mostra dove finisce l\'area, e in particolare quanto costa la correttezza discussa in '
             '§2.2.' % UTIL['dsp_pct']))
+    _HN = [('sys_wrapper', "sistema completo"), ('tier0', "IP AXI (wrapper + blocco)"),
+           ('u_dut', "**il blocco composto**"), ('u_Tier', "\u2514 SNN Tier@BAL/n13"),
+           ('u_SNN', "\u2003\u2003\u2514 rete a spike"), ('u_DEC', "\u2003\u2003\u2514 decodifica del readout"),
+           ('u_ACC', "\u2514 controllore ACC-IIDM"), ('u_align', "\u2514 allineamento"),
+           ('ps7_axi_periph', "convertitore di protocollo (contorno)")]
+    A(('table', (['Istanza', 'Ruolo', 'LUT', 'FF', 'DSP', 'RAMB18'],
+                 [['`%s`' % k, lab, str(HIER[k]['lut']), str(HIER[k]['ff']),
+                   str(HIER[k]['dsp']), str(HIER[k]['rb18'])] for k, lab in _HN if k in HIER])))
     A(('img', (fig_hier(), 'Ripartizione delle risorse dentro il blocco, dopo place&route. Il blocco di '
                            'allineamento non è logica gratuita: costa %d LUT, il %.0f %% del blocco. È il '
                            'prezzo di **una sola** inferenza per passo di controllo, cioè della correttezza '
@@ -734,6 +857,11 @@ def build_doc():
     A(('p', 'Perché una misura di potenza in inattività abbia senso, l\'inattività deve essere uno stato '
             '**stazionario**: se il circuito avesse macchine a stati o contatori attivi, il valore dipenderebbe '
             'dalla finestra di osservazione. La verifica è stata fatta su tre finestre di ampiezza crescente.'))
+    A(('table', (['Finestra [cicli]', 'Commutazioni (TC)', 'TC / ciclo'],
+                 [[str(w), str(ST['idle_g0_w%d' % w]['tc']),
+                   '**%.1f**' % (ST['idle_g0_w%d' % w]['tc'] / float(w))] for w in (200, 1000, 5000)])))
+    A(('p', "Il rapporto e' identico sulle tre finestre, che differiscono di un fattore 25. Con il gating "
+            "attivo scende a **%.1f** commutazioni per ciclo: e' la misura del §8." % TC_IDLE_G))
     A(('img', (fig_toggle(), 'Tre letture che il sommario dei watt non permette. A sinistra: il numero di '
                              'commutazioni per ciclo è **costante** su tre finestre che differiscono di un '
                              'fattore 25, il che prova la stazionarietà. Al centro: il gating riduce la '
@@ -749,6 +877,13 @@ def build_doc():
             'di guida e presenza di manovra di inserimento presente nel dataset. Sono otto e non nove: le '
             'combinazioni popolate sono state **enumerate**, non assunte. Ogni esecuzione della misura '
             'energetica ha anche confermato l\'equivalenza funzionale sul proprio carico.' % len(WLS)))
+    _LAB = {1: "highway / senza inserimento", 4: "highway / con inserimento",
+            28: "urban / senza inserimento", 31: "urban / con inserimento",
+            55: "truck / senza inserimento", 58: "truck / con inserimento",
+            73: "mixed / senza inserimento", 76: "mixed / con inserimento"}
+    A(('table', (['Carico', 'Regime', 'Dinamica [W]', 'Commutazioni (TC)', 'Disallineamenti'],
+                 [['wl%d' % i, _LAB.get(i, "\u2014"), '%.3f' % P_ACT,
+                   str(ST['act_g1_wl%d' % i]['tc']), '**0**'] for i in WLS])))
     A(('table', (['Grandezza', 'Valore'], [
         ['Potenza dinamica in inattività', '%.3f W' % P_IDLE],
         ['Potenza dinamica mentre calcola', '%.3f W' % P_ACT],
@@ -984,7 +1119,12 @@ def render_pdf(doc, outpath):
                              borderColor=colors.HexColor('#9bb8d8'), borderWidth=0.6, spaceBefore=4, spaceAfter=10)
     def esc(s):
         s = norm_it(str(s)).replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
-        s = re.sub(r'(?<!\w)\*\*(\S(?:.*?\S)?)\*\*', r'<b>\1</b>', s)
+        # ATTENZIONE: `\S` puo' essere esso stesso un ASTERISCO. Con `\S(?:.*?\S)?` il gruppo si
+        #    mangia il delimitatore di chiusura e va a chiudere su quello della coppia SUCCESSIVA,
+        #    mandando in grassetto il testo in mezzo e lasciando gli asterischi letterali nel PDF.
+        #    Trovato nell'ispezione VISIVA, non da un controllo sul testo: era in ENTRAMBI i report.
+        #    Qui il contenuto non puo' contenere `**` per costruzione.
+        s = re.sub(r'(?<!\w)\*\*((?:(?!\*\*).)+?)\*\*', r'<b>\1</b>', s)
         # Spazio INSECABILE fra un numero e la sua unita': impedisce che l'a-capo separi
         # "25" da "%" o "+0.358" da "ns". Solo nel PDF: il .md resta con spazi normali.
         return re.sub(r'(\d)\s+(%|mW|mJ|MHz|GHz|kHz|ns|µs|ms|LUT|FF|DSP|BRAM|W|V|°C|pt|bit)(?![\w])',

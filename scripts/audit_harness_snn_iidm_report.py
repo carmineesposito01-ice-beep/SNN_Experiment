@@ -171,6 +171,58 @@ checked += 1
 if re.search(r'%\.[0-9]+[fd]|%\s?[ds]\b', doc):
     bad.append('%-46s specificatori di formato non sostituiti nel testo' % 'formattazione')
 
+
+# ============================================================================
+# COPERTURA — la direzione opposta, ed e' quella in cui stavano i buchi.
+# I controlli qui sopra verificano che ogni numero DEL REPORT corrisponda alla fonte. Non dicono nulla
+# su cio' che nelle fonti c'e' e nel report NON e' arrivato: la lista di cio' che si controlla e', per
+# costruzione, il posto dove i buchi non stanno. Questa sezione enumera le fonti e pretende che il
+# report ne parli. Ha trovato, alla prima esecuzione: le 31 metriche assenti (c'era solo il conteggio),
+# la tabella dello sweep, meta' della gerarchia delle risorse, le durate per scenario della netlist.
+# ============================================================================
+def cover(label, ok, what):
+    global checked
+    checked += 1
+    if not ok:
+        bad.append('%-46s COPERTURA: %s' % (label, what))
+
+
+# ogni punto dello sweep, non solo quello deployabile
+for _p in SW['points']:
+    cover('copertura sweep %d MHz' % _p['req'], ('%.3f' % _p['mhz']) in flat,
+          'il punto a %d MHz non compare: la tabella dello sweep e\' incompleta' % _p['req'])
+
+# ogni istanza della gerarchia delle risorse
+for _k, _v in SW['hier'].items():
+    cover('copertura gerarchia %s' % _k, str(_v['lut']) in flat_nospace,
+          'l\'istanza %s (%d LUT) non compare nella ripartizione delle risorse' % (_k, _v['lut']))
+
+# ogni metrica calcolata: il nome deve comparire (i valori sono nella tabella)
+_names = [k for k in MET['RTL'][list(MET['RTL'])[0]] if k != 'N']
+_miss = [n for n in _names if n not in doc]
+cover('copertura delle %d metriche' % len(_names), not _miss,
+      '%d metriche calcolate non compaiono nel report: %s' % (len(_miss), _miss[:6]))
+
+# ogni scenario della netlist, con la sua durata
+for _r in NL.get('per_scenario', []):
+    cover('copertura netlist scenario %d' % _r['sc'],
+          ('%d m %02d s' % (_r['dur_s'] // 60, _r['dur_s'] % 60)) in flat,
+          'la durata dello scenario %d non compare' % _r['sc'])
+
+# ogni carico energetico, col proprio conteggio di commutazioni
+for _i in PP['workloads']:
+    cover('copertura carico wl%d' % _i, str(ST['act_g1_wl%d' % _i]['tc']) in flat_nospace,
+          'le commutazioni del carico wl%d non compaiono' % _i)
+
+# le tre finestre di idle
+for _w in (200, 1000, 5000):
+    cover('copertura finestra idle %d' % _w, str(ST['idle_g0_w%d' % _w]['tc']) in flat_nospace,
+          'la finestra di idle da %d cicli non compare' % _w)
+
+# la durata della campagna T7a
+cover('copertura durata della campagna', ('%.0f minuti' % float(M['mins'])) in flat,
+      'la durata della campagna (%.0f min) non e\' riportata' % float(M['mins']))
+
 # ---- esito --------------------------------------------------------------------
 print('AUDIT — %d controlli su %s' % (checked, os.path.basename(MD)))
 if bad:

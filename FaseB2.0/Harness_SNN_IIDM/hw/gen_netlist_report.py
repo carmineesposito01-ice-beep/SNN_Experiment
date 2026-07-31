@@ -141,6 +141,10 @@ import json
 json.dump({
     'nmismatch': NM, 'n': N, 'nscen': NS,
     'scenari': [r['sc'] for r in runs],
+    # per-scenario: servono a chi cita il costo, e finora vivevano SOLO nel markdown generato
+    'per_scenario': [{'sc': r['sc'], 'n': r['n'], 'nmis': r['nm'], 'dur_s': r['dur'],
+                      's_per_step': round(r['dur'] / r['n'], 3), 'include_compile': r['first']}
+                     for r in runs],
     'wall_s': T, 's_per_step': round(sp_avg, 3),
     'gate_level_ratio': round(ratio, 1), 'beh_s_per_step': round(BEH_S_PER_STEP, 4),
     'full99_hours': round(full_h, 1),

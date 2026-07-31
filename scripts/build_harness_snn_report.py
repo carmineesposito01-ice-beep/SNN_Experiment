@@ -989,7 +989,12 @@ def render_pdf(doc, outpath):
                              borderColor=colors.HexColor('#9bb8d8'), borderWidth=0.6, spaceBefore=4, spaceAfter=10)
     def esc(s):
         s = norm_it(str(s)).replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
-        s = re.sub(r'(?<!\w)\*\*(\S(?:.*?\S)?)\*\*', r'<b>\1</b>', s)
+        # ATTENZIONE: `\S` puo' essere esso stesso un ASTERISCO. Con `\S(?:.*?\S)?` il gruppo si
+        #    mangia il delimitatore di chiusura e va a chiudere su quello della coppia SUCCESSIVA,
+        #    mandando in grassetto il testo in mezzo e lasciando gli asterischi letterali nel PDF.
+        #    Trovato nell'ispezione VISIVA, non da un controllo sul testo: era in ENTRAMBI i report.
+        #    Qui il contenuto non puo' contenere `**` per costruzione.
+        s = re.sub(r'(?<!\w)\*\*((?:(?!\*\*).)+?)\*\*', r'<b>\1</b>', s)
         # Spazio INSECABILE fra un numero e la sua unita': impedisce che l'a-capo separi
         # "25" da "%" o "+0.358" da "ns". Solo nel PDF: il .md resta con spazi normali.
         return re.sub(r'(\d)\s+(%|mW|mJ|MHz|GHz|kHz|ns|µs|ms|LUT|FF|DSP|BRAM|W|V|°C|pt|bit)(?![\w])',
