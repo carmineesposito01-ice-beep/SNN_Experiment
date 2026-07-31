@@ -12,7 +12,11 @@ in `../report/`.
 > [`Harness_SNN_IIDM/results/RESULTS.md`](Harness_SNN_IIDM/results/RESULTS.md)) · ✅ **T7b COMPLETO**
 > (hardware del composto → [`Harness_SNN_IIDM/results/RESULTS_HW.md`](Harness_SNN_IIDM/results/RESULTS_HW.md))
 > — tutti FATTI e committati.
-> **Prossimo: T8** (2 report `create-report`), poi **T9** (allineamento doc).
+> **T8 COMPLETO**: i due report sono in `../report/` — [`B2_0_HARNESS_SNN_REPORT`](../report/B2_0_HARNESS_SNN_REPORT.pdf)
+> (T6, SNN da sola) e [`B2_0_HARNESS_SNN_IIDM_REPORT`](../report/B2_0_HARNESS_SNN_IIDM_REPORT.pdf) (T7, composto).
+> Entrambi **generati** da script che leggono gli artefatti, con audit a 89 controlli in DUE direzioni
+> (ogni numero del report torna alla fonte **e** ogni grandezza delle fonti e' arrivata nel report).
+> **Prossimo: Fase C** (FPGA fisica).
 > **▶ Riesecuzione T7a:** `run_harness_snn_iidm('full')` (43 min) — prerequisito
 > `rtl_gen_dut('Donatello_SNN_IIDM','C:/t7hdlv','Verilog')`.
 > **▶ Riesecuzione HW T7b:** `bash Harness_SNN_IIDM/hw/run_harness_snniidm_hw.sh [stadio]`

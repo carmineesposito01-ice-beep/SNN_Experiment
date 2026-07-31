@@ -1,5 +1,5 @@
 
-## ▶ RIPRESA — T7b **COMPLETO**. Prossimo: **T8** (i due report `create-report`)
+## ▶ RIPRESA — Fase B2.0 **CHIUSA** (T7b + T8). Prossimo: **Fase C** (FPGA fisica)
 
 **T7b chiuso il 2026-07-31.** Tutto committato, albero pulito, nessun job lasciato girare.
 
@@ -23,11 +23,28 @@ firma md5 dei sorgenti con `results/src.sig` e **blocca** gli stadi di calcolo s
 | Bitstream @40 MHz | `.bit`/`.hwh`/`.xsa`, WNS **e** utilizzo **identici** allo sweep | `bitstream/` |
 | **Sintesi** | tutti i numeri con la loro **natura** (misurato/derivato/stima/prodotto) | **`results/RESULTS_HW.md`** |
 
-### PROSSIMO: T8 — i due report `create-report`
+### T8 — i due report, CHIUSI
 
-Uno per **Harness_SNN** (T6a+T6b) — **gia' fatto**, `report/B2_0_HARNESS_SNN_REPORT.{md,pdf}` — e uno per
-**Harness_SNN_IIDM** (T7a+T7b), **da fare**. Fonti per il secondo: i 5 `.md` in
-`Harness_SNN_IIDM/results/` + i `.rpt`/`.log` grezzi accanto. Poi **T9** (allineamento doc finale).
+| Report | Contenuto | Pagine |
+|---|---|---|
+| `report/B2_0_HARNESS_SNN_REPORT.{md,pdf}` | T6a+T6b — la SNN da sola | 22 |
+| `report/B2_0_HARNESS_SNN_IIDM_REPORT.{md,pdf}` | T7a+T7b — il composto | 26 |
+
+Entrambi **generati** (`scripts/build_harness_snn*_report.py`), mai scritti a mano. Il secondo LEGGE
+gli artefatti a macchina (`t7_results.mat` via scipy + 5 JSON), quindi report e artefatto non possono
+divergere. **Audit** `scripts/audit_harness_snn_iidm_report.py`: **89 controlli in DUE direzioni** —
+ogni numero del report torna alla fonte, **e** ogni grandezza delle fonti e' arrivata nel report.
+Rigenerazione + confronto md5 copre il caso "numero corrotto a valle". Provato in negativo.
+
+**Se si toccano gli artefatti**: rigenerare i report e rilanciare l'audit. Se un numero cambia alla
+fonte, l'audit lo dice; se manca una sezione, pure.
+
+### PROSSIMO: Fase C — FPGA fisica
+
+Il bitstream e i file di consegna sono in `FaseB2.0/Harness_SNN_IIDM/bitstream/`, con WNS e utilizzo
+**identici** a quelli caratterizzati (cancello automatico). Cio' che la Fase C deve chiudere e'
+elencato nei limiti dichiarati dei due report: il guadagno in watt del clock gating, il caso peggiore
+energetico, il comportamento su silicio.
 
 ### Cose IMPARATE, da non ri-scoprire (dettaglio completo in `HDL_PHASE.md` §9 "T7b")
 
