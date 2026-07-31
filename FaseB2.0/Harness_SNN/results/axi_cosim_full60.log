@@ -1,0 +1,12 @@
+START 16:22:37
+    59    60
+
+GOLDEN-DONE 16:23:13
+=== FULL-60 gating OFF ===
+AXI-COSIM-TOT nMismatch=0 n=300000
+SYNC-TOT inferenze=59797 attese=60000
+OFF-DONE 17:09:38
+=== FULL-60 gating ON (deployment) ===
+AXI-COSIM-TOT nMismatch=0 n=300000
+SYNC-TOT inferenze=59797 attese=60000
+ON-DONE 18:00:57

@@ -1,0 +1,202 @@
+=== HARNESS_SNN [full]  Donatello_Tier@BALANCED ===
+tier_golden_cache: cache MISS (config o traiettorie diverse) -> ricalcolo
+tier_block_params: latenza BAL misurata = 364 clock (edge-trigger OK)
+tier_golden_cache: calcolato 60 traj in 7.3 min (lat=364) -> D:\Project_MBSE\1.Reti Neurali\Rete_SNN_Test\CF_FSNN\.worktrees\Simulink_Importer\matlab\golden_tier_bal.mat
+tier_golden_cache: cache HIT (1 traj) <- D:\Project_MBSE\1.Reti Neurali\Rete_SNN_Test\CF_FSNN\.worktrees\Simulink_Importer\matlab\golden_tier_bal.mat
+rtl_write_vectors: 1000 control-step (stim 4x, gold 5x) -> D:/zbd_tier
+tier_export_vectors: 1000 control-step su 1 traiettorie -> D:/zbd_tier
+tier_golden_cache: cache HIT (1 traj) <- D:\Project_MBSE\1.Reti Neurali\Rete_SNN_Test\CF_FSNN\.worktrees\Simulink_Importer\matlab\golden_tier_bal.mat
+rtl_write_vectors: 1000 control-step (stim 4x, gold 5x) -> D:/zbd_tier
+tier_export_vectors: 1000 control-step su 1 traiettorie -> D:/zbd_tier
+tier_golden_cache: cache HIT (1 traj) <- D:\Project_MBSE\1.Reti Neurali\Rete_SNN_Test\CF_FSNN\.worktrees\Simulink_Importer\matlab\golden_tier_bal.mat
+rtl_write_vectors: 1000 control-step (stim 4x, gold 5x) -> D:/zbd_tier
+tier_export_vectors: 1000 control-step su 1 traiettorie -> D:/zbd_tier
+tier_golden_cache: cache HIT (1 traj) <- D:\Project_MBSE\1.Reti Neurali\Rete_SNN_Test\CF_FSNN\.worktrees\Simulink_Importer\matlab\golden_tier_bal.mat
+rtl_write_vectors: 1000 control-step (stim 4x, gold 5x) -> D:/zbd_tier
+tier_export_vectors: 1000 control-step su 1 traiettorie -> D:/zbd_tier
+tier_golden_cache: cache HIT (1 traj) <- D:\Project_MBSE\1.Reti Neurali\Rete_SNN_Test\CF_FSNN\.worktrees\Simulink_Importer\matlab\golden_tier_bal.mat
+rtl_write_vectors: 1000 control-step (stim 4x, gold 5x) -> D:/zbd_tier
+tier_export_vectors: 1000 control-step su 1 traiettorie -> D:/zbd_tier
+tier_golden_cache: cache HIT (1 traj) <- D:\Project_MBSE\1.Reti Neurali\Rete_SNN_Test\CF_FSNN\.worktrees\Simulink_Importer\matlab\golden_tier_bal.mat
+rtl_write_vectors: 1000 control-step (stim 4x, gold 5x) -> D:/zbd_tier
+tier_export_vectors: 1000 control-step su 1 traiettorie -> D:/zbd_tier
+tier_golden_cache: cache HIT (1 traj) <- D:\Project_MBSE\1.Reti Neurali\Rete_SNN_Test\CF_FSNN\.worktrees\Simulink_Importer\matlab\golden_tier_bal.mat
+rtl_write_vectors: 1000 control-step (stim 4x, gold 5x) -> D:/zbd_tier
+tier_export_vectors: 1000 control-step su 1 traiettorie -> D:/zbd_tier
+tier_golden_cache: cache HIT (1 traj) <- D:\Project_MBSE\1.Reti Neurali\Rete_SNN_Test\CF_FSNN\.worktrees\Simulink_Importer\matlab\golden_tier_bal.mat
+rtl_write_vectors: 1000 control-step (stim 4x, gold 5x) -> D:/zbd_tier
+tier_export_vectors: 1000 control-step su 1 traiettorie -> D:/zbd_tier
+tier_golden_cache: cache HIT (1 traj) <- D:\Project_MBSE\1.Reti Neurali\Rete_SNN_Test\CF_FSNN\.worktrees\Simulink_Importer\matlab\golden_tier_bal.mat
+rtl_write_vectors: 1000 control-step (stim 4x, gold 5x) -> D:/zbd_tier
+tier_export_vectors: 1000 control-step su 1 traiettorie -> D:/zbd_tier
+tier_golden_cache: cache HIT (1 traj) <- D:\Project_MBSE\1.Reti Neurali\Rete_SNN_Test\CF_FSNN\.worktrees\Simulink_Importer\matlab\golden_tier_bal.mat
+rtl_write_vectors: 1000 control-step (stim 4x, gold 5x) -> D:/zbd_tier
+tier_export_vectors: 1000 control-step su 1 traiettorie -> D:/zbd_tier
+tier_golden_cache: cache HIT (1 traj) <- D:\Project_MBSE\1.Reti Neurali\Rete_SNN_Test\CF_FSNN\.worktrees\Simulink_Importer\matlab\golden_tier_bal.mat
+rtl_write_vectors: 1000 control-step (stim 4x, gold 5x) -> D:/zbd_tier
+tier_export_vectors: 1000 control-step su 1 traiettorie -> D:/zbd_tier
+tier_golden_cache: cache HIT (1 traj) <- D:\Project_MBSE\1.Reti Neurali\Rete_SNN_Test\CF_FSNN\.worktrees\Simulink_Importer\matlab\golden_tier_bal.mat
+rtl_write_vectors: 1000 control-step (stim 4x, gold 5x) -> D:/zbd_tier
+tier_export_vectors: 1000 control-step su 1 traiettorie -> D:/zbd_tier
+tier_golden_cache: cache HIT (1 traj) <- D:\Project_MBSE\1.Reti Neurali\Rete_SNN_Test\CF_FSNN\.worktrees\Simulink_Importer\matlab\golden_tier_bal.mat
+rtl_write_vectors: 1000 control-step (stim 4x, gold 5x) -> D:/zbd_tier
+tier_export_vectors: 1000 control-step su 1 traiettorie -> D:/zbd_tier
+tier_golden_cache: cache HIT (1 traj) <- D:\Project_MBSE\1.Reti Neurali\Rete_SNN_Test\CF_FSNN\.worktrees\Simulink_Importer\matlab\golden_tier_bal.mat
+rtl_write_vectors: 1000 control-step (stim 4x, gold 5x) -> D:/zbd_tier
+tier_export_vectors: 1000 control-step su 1 traiettorie -> D:/zbd_tier
+tier_golden_cache: cache HIT (1 traj) <- D:\Project_MBSE\1.Reti Neurali\Rete_SNN_Test\CF_FSNN\.worktrees\Simulink_Importer\matlab\golden_tier_bal.mat
+rtl_write_vectors: 1000 control-step (stim 4x, gold 5x) -> D:/zbd_tier
+tier_export_vectors: 1000 control-step su 1 traiettorie -> D:/zbd_tier
+tier_golden_cache: cache HIT (1 traj) <- D:\Project_MBSE\1.Reti Neurali\Rete_SNN_Test\CF_FSNN\.worktrees\Simulink_Importer\matlab\golden_tier_bal.mat
+rtl_write_vectors: 1000 control-step (stim 4x, gold 5x) -> D:/zbd_tier
+tier_export_vectors: 1000 control-step su 1 traiettorie -> D:/zbd_tier
+tier_golden_cache: cache HIT (1 traj) <- D:\Project_MBSE\1.Reti Neurali\Rete_SNN_Test\CF_FSNN\.worktrees\Simulink_Importer\matlab\golden_tier_bal.mat
+rtl_write_vectors: 1000 control-step (stim 4x, gold 5x) -> D:/zbd_tier
+tier_export_vectors: 1000 control-step su 1 traiettorie -> D:/zbd_tier
+tier_golden_cache: cache HIT (1 traj) <- D:\Project_MBSE\1.Reti Neurali\Rete_SNN_Test\CF_FSNN\.worktrees\Simulink_Importer\matlab\golden_tier_bal.mat
+rtl_write_vectors: 1000 control-step (stim 4x, gold 5x) -> D:/zbd_tier
+tier_export_vectors: 1000 control-step su 1 traiettorie -> D:/zbd_tier
+tier_golden_cache: cache HIT (1 traj) <- D:\Project_MBSE\1.Reti Neurali\Rete_SNN_Test\CF_FSNN\.worktrees\Simulink_Importer\matlab\golden_tier_bal.mat
+rtl_write_vectors: 1000 control-step (stim 4x, gold 5x) -> D:/zbd_tier
+tier_export_vectors: 1000 control-step su 1 traiettorie -> D:/zbd_tier
+tier_golden_cache: cache HIT (1 traj) <- D:\Project_MBSE\1.Reti Neurali\Rete_SNN_Test\CF_FSNN\.worktrees\Simulink_Importer\matlab\golden_tier_bal.mat
+rtl_write_vectors: 1000 control-step (stim 4x, gold 5x) -> D:/zbd_tier
+tier_export_vectors: 1000 control-step su 1 traiettorie -> D:/zbd_tier
+tier_golden_cache: cache HIT (1 traj) <- D:\Project_MBSE\1.Reti Neurali\Rete_SNN_Test\CF_FSNN\.worktrees\Simulink_Importer\matlab\golden_tier_bal.mat
+rtl_write_vectors: 1000 control-step (stim 4x, gold 5x) -> D:/zbd_tier
+tier_export_vectors: 1000 control-step su 1 traiettorie -> D:/zbd_tier
+tier_golden_cache: cache HIT (1 traj) <- D:\Project_MBSE\1.Reti Neurali\Rete_SNN_Test\CF_FSNN\.worktrees\Simulink_Importer\matlab\golden_tier_bal.mat
+rtl_write_vectors: 1000 control-step (stim 4x, gold 5x) -> D:/zbd_tier
+tier_export_vectors: 1000 control-step su 1 traiettorie -> D:/zbd_tier
+tier_golden_cache: cache HIT (1 traj) <- D:\Project_MBSE\1.Reti Neurali\Rete_SNN_Test\CF_FSNN\.worktrees\Simulink_Importer\matlab\golden_tier_bal.mat
+rtl_write_vectors: 1000 control-step (stim 4x, gold 5x) -> D:/zbd_tier
+tier_export_vectors: 1000 control-step su 1 traiettorie -> D:/zbd_tier
+tier_golden_cache: cache HIT (1 traj) <- D:\Project_MBSE\1.Reti Neurali\Rete_SNN_Test\CF_FSNN\.worktrees\Simulink_Importer\matlab\golden_tier_bal.mat
+rtl_write_vectors: 1000 control-step (stim 4x, gold 5x) -> D:/zbd_tier
+tier_export_vectors: 1000 control-step su 1 traiettorie -> D:/zbd_tier
+tier_golden_cache: cache HIT (1 traj) <- D:\Project_MBSE\1.Reti Neurali\Rete_SNN_Test\CF_FSNN\.worktrees\Simulink_Importer\matlab\golden_tier_bal.mat
+rtl_write_vectors: 1000 control-step (stim 4x, gold 5x) -> D:/zbd_tier
+tier_export_vectors: 1000 control-step su 1 traiettorie -> D:/zbd_tier
+tier_golden_cache: cache HIT (1 traj) <- D:\Project_MBSE\1.Reti Neurali\Rete_SNN_Test\CF_FSNN\.worktrees\Simulink_Importer\matlab\golden_tier_bal.mat
+rtl_write_vectors: 1000 control-step (stim 4x, gold 5x) -> D:/zbd_tier
+tier_export_vectors: 1000 control-step su 1 traiettorie -> D:/zbd_tier
+tier_golden_cache: cache HIT (1 traj) <- D:\Project_MBSE\1.Reti Neurali\Rete_SNN_Test\CF_FSNN\.worktrees\Simulink_Importer\matlab\golden_tier_bal.mat
+rtl_write_vectors: 1000 control-step (stim 4x, gold 5x) -> D:/zbd_tier
+tier_export_vectors: 1000 control-step su 1 traiettorie -> D:/zbd_tier
+tier_golden_cache: cache HIT (1 traj) <- D:\Project_MBSE\1.Reti Neurali\Rete_SNN_Test\CF_FSNN\.worktrees\Simulink_Importer\matlab\golden_tier_bal.mat
+rtl_write_vectors: 1000 control-step (stim 4x, gold 5x) -> D:/zbd_tier
+tier_export_vectors: 1000 control-step su 1 traiettorie -> D:/zbd_tier
+tier_golden_cache: cache HIT (1 traj) <- D:\Project_MBSE\1.Reti Neurali\Rete_SNN_Test\CF_FSNN\.worktrees\Simulink_Importer\matlab\golden_tier_bal.mat
+rtl_write_vectors: 1000 control-step (stim 4x, gold 5x) -> D:/zbd_tier
+tier_export_vectors: 1000 control-step su 1 traiettorie -> D:/zbd_tier
+tier_golden_cache: cache HIT (1 traj) <- D:\Project_MBSE\1.Reti Neurali\Rete_SNN_Test\CF_FSNN\.worktrees\Simulink_Importer\matlab\golden_tier_bal.mat
+rtl_write_vectors: 1000 control-step (stim 4x, gold 5x) -> D:/zbd_tier
+tier_export_vectors: 1000 control-step su 1 traiettorie -> D:/zbd_tier
+tier_golden_cache: cache HIT (1 traj) <- D:\Project_MBSE\1.Reti Neurali\Rete_SNN_Test\CF_FSNN\.worktrees\Simulink_Importer\matlab\golden_tier_bal.mat
+rtl_write_vectors: 1000 control-step (stim 4x, gold 5x) -> D:/zbd_tier
+tier_export_vectors: 1000 control-step su 1 traiettorie -> D:/zbd_tier
+tier_golden_cache: cache HIT (1 traj) <- D:\Project_MBSE\1.Reti Neurali\Rete_SNN_Test\CF_FSNN\.worktrees\Simulink_Importer\matlab\golden_tier_bal.mat
+rtl_write_vectors: 1000 control-step (stim 4x, gold 5x) -> D:/zbd_tier
+tier_export_vectors: 1000 control-step su 1 traiettorie -> D:/zbd_tier
+tier_golden_cache: cache HIT (1 traj) <- D:\Project_MBSE\1.Reti Neurali\Rete_SNN_Test\CF_FSNN\.worktrees\Simulink_Importer\matlab\golden_tier_bal.mat
+rtl_write_vectors: 1000 control-step (stim 4x, gold 5x) -> D:/zbd_tier
+tier_export_vectors: 1000 control-step su 1 traiettorie -> D:/zbd_tier
+tier_golden_cache: cache HIT (1 traj) <- D:\Project_MBSE\1.Reti Neurali\Rete_SNN_Test\CF_FSNN\.worktrees\Simulink_Importer\matlab\golden_tier_bal.mat
+rtl_write_vectors: 1000 control-step (stim 4x, gold 5x) -> D:/zbd_tier
+tier_export_vectors: 1000 control-step su 1 traiettorie -> D:/zbd_tier
+tier_golden_cache: cache HIT (1 traj) <- D:\Project_MBSE\1.Reti Neurali\Rete_SNN_Test\CF_FSNN\.worktrees\Simulink_Importer\matlab\golden_tier_bal.mat
+rtl_write_vectors: 1000 control-step (stim 4x, gold 5x) -> D:/zbd_tier
+tier_export_vectors: 1000 control-step su 1 traiettorie -> D:/zbd_tier
+tier_golden_cache: cache HIT (1 traj) <- D:\Project_MBSE\1.Reti Neurali\Rete_SNN_Test\CF_FSNN\.worktrees\Simulink_Importer\matlab\golden_tier_bal.mat
+rtl_write_vectors: 1000 control-step (stim 4x, gold 5x) -> D:/zbd_tier
+tier_export_vectors: 1000 control-step su 1 traiettorie -> D:/zbd_tier
+tier_golden_cache: cache HIT (1 traj) <- D:\Project_MBSE\1.Reti Neurali\Rete_SNN_Test\CF_FSNN\.worktrees\Simulink_Importer\matlab\golden_tier_bal.mat
+rtl_write_vectors: 1000 control-step (stim 4x, gold 5x) -> D:/zbd_tier
+tier_export_vectors: 1000 control-step su 1 traiettorie -> D:/zbd_tier
+tier_golden_cache: cache HIT (1 traj) <- D:\Project_MBSE\1.Reti Neurali\Rete_SNN_Test\CF_FSNN\.worktrees\Simulink_Importer\matlab\golden_tier_bal.mat
+rtl_write_vectors: 1000 control-step (stim 4x, gold 5x) -> D:/zbd_tier
+tier_export_vectors: 1000 control-step su 1 traiettorie -> D:/zbd_tier
+tier_golden_cache: cache HIT (1 traj) <- D:\Project_MBSE\1.Reti Neurali\Rete_SNN_Test\CF_FSNN\.worktrees\Simulink_Importer\matlab\golden_tier_bal.mat
+rtl_write_vectors: 1000 control-step (stim 4x, gold 5x) -> D:/zbd_tier
+tier_export_vectors: 1000 control-step su 1 traiettorie -> D:/zbd_tier
+tier_golden_cache: cache HIT (1 traj) <- D:\Project_MBSE\1.Reti Neurali\Rete_SNN_Test\CF_FSNN\.worktrees\Simulink_Importer\matlab\golden_tier_bal.mat
+rtl_write_vectors: 1000 control-step (stim 4x, gold 5x) -> D:/zbd_tier
+tier_export_vectors: 1000 control-step su 1 traiettorie -> D:/zbd_tier
+tier_golden_cache: cache HIT (1 traj) <- D:\Project_MBSE\1.Reti Neurali\Rete_SNN_Test\CF_FSNN\.worktrees\Simulink_Importer\matlab\golden_tier_bal.mat
+rtl_write_vectors: 1000 control-step (stim 4x, gold 5x) -> D:/zbd_tier
+tier_export_vectors: 1000 control-step su 1 traiettorie -> D:/zbd_tier
+tier_golden_cache: cache HIT (1 traj) <- D:\Project_MBSE\1.Reti Neurali\Rete_SNN_Test\CF_FSNN\.worktrees\Simulink_Importer\matlab\golden_tier_bal.mat
+rtl_write_vectors: 1000 control-step (stim 4x, gold 5x) -> D:/zbd_tier
+tier_export_vectors: 1000 control-step su 1 traiettorie -> D:/zbd_tier
+tier_golden_cache: cache HIT (1 traj) <- D:\Project_MBSE\1.Reti Neurali\Rete_SNN_Test\CF_FSNN\.worktrees\Simulink_Importer\matlab\golden_tier_bal.mat
+rtl_write_vectors: 1000 control-step (stim 4x, gold 5x) -> D:/zbd_tier
+tier_export_vectors: 1000 control-step su 1 traiettorie -> D:/zbd_tier
+tier_golden_cache: cache HIT (1 traj) <- D:\Project_MBSE\1.Reti Neurali\Rete_SNN_Test\CF_FSNN\.worktrees\Simulink_Importer\matlab\golden_tier_bal.mat
+rtl_write_vectors: 1000 control-step (stim 4x, gold 5x) -> D:/zbd_tier
+tier_export_vectors: 1000 control-step su 1 traiettorie -> D:/zbd_tier
+tier_golden_cache: cache HIT (1 traj) <- D:\Project_MBSE\1.Reti Neurali\Rete_SNN_Test\CF_FSNN\.worktrees\Simulink_Importer\matlab\golden_tier_bal.mat
+rtl_write_vectors: 1000 control-step (stim 4x, gold 5x) -> D:/zbd_tier
+tier_export_vectors: 1000 control-step su 1 traiettorie -> D:/zbd_tier
+tier_golden_cache: cache HIT (1 traj) <- D:\Project_MBSE\1.Reti Neurali\Rete_SNN_Test\CF_FSNN\.worktrees\Simulink_Importer\matlab\golden_tier_bal.mat
+rtl_write_vectors: 1000 control-step (stim 4x, gold 5x) -> D:/zbd_tier
+tier_export_vectors: 1000 control-step su 1 traiettorie -> D:/zbd_tier
+tier_golden_cache: cache HIT (1 traj) <- D:\Project_MBSE\1.Reti Neurali\Rete_SNN_Test\CF_FSNN\.worktrees\Simulink_Importer\matlab\golden_tier_bal.mat
+rtl_write_vectors: 1000 control-step (stim 4x, gold 5x) -> D:/zbd_tier
+tier_export_vectors: 1000 control-step su 1 traiettorie -> D:/zbd_tier
+tier_golden_cache: cache HIT (1 traj) <- D:\Project_MBSE\1.Reti Neurali\Rete_SNN_Test\CF_FSNN\.worktrees\Simulink_Importer\matlab\golden_tier_bal.mat
+rtl_write_vectors: 1000 control-step (stim 4x, gold 5x) -> D:/zbd_tier
+tier_export_vectors: 1000 control-step su 1 traiettorie -> D:/zbd_tier
+tier_golden_cache: cache HIT (1 traj) <- D:\Project_MBSE\1.Reti Neurali\Rete_SNN_Test\CF_FSNN\.worktrees\Simulink_Importer\matlab\golden_tier_bal.mat
+rtl_write_vectors: 1000 control-step (stim 4x, gold 5x) -> D:/zbd_tier
+tier_export_vectors: 1000 control-step su 1 traiettorie -> D:/zbd_tier
+tier_golden_cache: cache HIT (1 traj) <- D:\Project_MBSE\1.Reti Neurali\Rete_SNN_Test\CF_FSNN\.worktrees\Simulink_Importer\matlab\golden_tier_bal.mat
+rtl_write_vectors: 1000 control-step (stim 4x, gold 5x) -> D:/zbd_tier
+tier_export_vectors: 1000 control-step su 1 traiettorie -> D:/zbd_tier
+tier_golden_cache: cache HIT (1 traj) <- D:\Project_MBSE\1.Reti Neurali\Rete_SNN_Test\CF_FSNN\.worktrees\Simulink_Importer\matlab\golden_tier_bal.mat
+rtl_write_vectors: 1000 control-step (stim 4x, gold 5x) -> D:/zbd_tier
+tier_export_vectors: 1000 control-step su 1 traiettorie -> D:/zbd_tier
+tier_golden_cache: cache HIT (1 traj) <- D:\Project_MBSE\1.Reti Neurali\Rete_SNN_Test\CF_FSNN\.worktrees\Simulink_Importer\matlab\golden_tier_bal.mat
+rtl_write_vectors: 1000 control-step (stim 4x, gold 5x) -> D:/zbd_tier
+tier_export_vectors: 1000 control-step su 1 traiettorie -> D:/zbd_tier
+tier_golden_cache: cache HIT (1 traj) <- D:\Project_MBSE\1.Reti Neurali\Rete_SNN_Test\CF_FSNN\.worktrees\Simulink_Importer\matlab\golden_tier_bal.mat
+rtl_write_vectors: 1000 control-step (stim 4x, gold 5x) -> D:/zbd_tier
+tier_export_vectors: 1000 control-step su 1 traiettorie -> D:/zbd_tier
+tier_golden_cache: cache HIT (1 traj) <- D:\Project_MBSE\1.Reti Neurali\Rete_SNN_Test\CF_FSNN\.worktrees\Simulink_Importer\matlab\golden_tier_bal.mat
+rtl_write_vectors: 1000 control-step (stim 4x, gold 5x) -> D:/zbd_tier
+tier_export_vectors: 1000 control-step su 1 traiettorie -> D:/zbd_tier
+tier_golden_cache: cache HIT (1 traj) <- D:\Project_MBSE\1.Reti Neurali\Rete_SNN_Test\CF_FSNN\.worktrees\Simulink_Importer\matlab\golden_tier_bal.mat
+rtl_write_vectors: 1000 control-step (stim 4x, gold 5x) -> D:/zbd_tier
+tier_export_vectors: 1000 control-step su 1 traiettorie -> D:/zbd_tier
+tier_golden_cache: cache HIT (1 traj) <- D:\Project_MBSE\1.Reti Neurali\Rete_SNN_Test\CF_FSNN\.worktrees\Simulink_Importer\matlab\golden_tier_bal.mat
+rtl_write_vectors: 1000 control-step (stim 4x, gold 5x) -> D:/zbd_tier
+tier_export_vectors: 1000 control-step su 1 traiettorie -> D:/zbd_tier
+tier_golden_cache: cache HIT (1 traj) <- D:\Project_MBSE\1.Reti Neurali\Rete_SNN_Test\CF_FSNN\.worktrees\Simulink_Importer\matlab\golden_tier_bal.mat
+rtl_write_vectors: 1000 control-step (stim 4x, gold 5x) -> D:/zbd_tier
+tier_export_vectors: 1000 control-step su 1 traiettorie -> D:/zbd_tier
+tier_golden_cache: cache HIT (1 traj) <- D:\Project_MBSE\1.Reti Neurali\Rete_SNN_Test\CF_FSNN\.worktrees\Simulink_Importer\matlab\golden_tier_bal.mat
+rtl_write_vectors: 1000 control-step (stim 4x, gold 5x) -> D:/zbd_tier
+tier_export_vectors: 1000 control-step su 1 traiettorie -> D:/zbd_tier
+tier_golden_cache: cache HIT (1 traj) <- D:\Project_MBSE\1.Reti Neurali\Rete_SNN_Test\CF_FSNN\.worktrees\Simulink_Importer\matlab\golden_tier_bal.mat
+rtl_write_vectors: 1000 control-step (stim 4x, gold 5x) -> D:/zbd_tier
+tier_export_vectors: 1000 control-step su 1 traiettorie -> D:/zbd_tier
+tier_golden_cache: cache HIT (1 traj) <- D:\Project_MBSE\1.Reti Neurali\Rete_SNN_Test\CF_FSNN\.worktrees\Simulink_Importer\matlab\golden_tier_bal.mat
+rtl_write_vectors: 1000 control-step (stim 4x, gold 5x) -> D:/zbd_tier
+tier_export_vectors: 1000 control-step su 1 traiettorie -> D:/zbd_tier
+LAT: latenza RTL misurata = 364 clock (< HOLD=500) OK
+T6-EXACT [full]: nMismatch = 0 / 300000  (60 traj x 1000 control-step x 5 param; lat=364)
+=== T6-EXACT PASSATO [full]: Donatello_Tier RTL == blocco su 300000/300000 ===
+tier_golden_cache: cache HIT (1 traj) <- D:\Project_MBSE\1.Reti Neurali\Rete_SNN_Test\CF_FSNN\.worktrees\Simulink_Importer\matlab\golden_tier_bal.mat
+rtl_write_vectors: 1000 control-step (stim 4x, gold 5x) -> D:/zbd_tier
+tier_export_vectors: 1000 control-step su 1 traiettorie -> D:/zbd_tier
+=== SENSIBILITA T6-EXACT OK: 1 LSB corrotto -> nMismatch=1 ===
+tier_golden_cache: cache HIT (60 traj) <- D:\Project_MBSE\1.Reti Neurali\Rete_SNN_Test\CF_FSNN\.worktrees\Simulink_Importer\matlab\golden_tier_bal.mat
+Accuratezza stima param (versione FPGA == blocco, 60000 control-step):
+  v0   max=15.01  p99=13.8
+  T    max=1.125  p99=0.9127
+  s0   max=0.9368  p99=0.8435
+  a    max=0.9908  p99=0.892
+  b    max=1.003  p99=0.867
+NOTA: v0 alto = identificabilita (v0 osservabile a flusso libero), non difetto RTL.
+
+=== HARNESS_SNN COMPLETATO in 74.6 min -> results/ ===
+FULL60_OK nMismatch=0/300000 traj=60 sens=1

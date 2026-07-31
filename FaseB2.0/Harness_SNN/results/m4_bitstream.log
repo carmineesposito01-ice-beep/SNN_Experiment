@@ -1,0 +1,9 @@
+M4 START 13:25:03
+BIT board_part: www.digilentinc.com:pynq-z1:part0:1.0
+BIT FCLK impostato: 52 MHz
+BIT WNS=0.358
+BIT_OK: D:/Project_MBSE/1.Reti Neurali/Rete_SNN_Test/CF_FSNN/.worktrees/Simulink_Importer/FaseB2.0/Harness_SNN/bitstream/snn_tier_donatello.bit
+HWH_OK: D:/Project_MBSE/1.Reti Neurali/Rete_SNN_Test/CF_FSNN/.worktrees/Simulink_Importer/FaseB2.0/Harness_SNN/bitstream/snn_tier_donatello.hwh
+XSA_OK: D:/Project_MBSE/1.Reti Neurali/Rete_SNN_Test/CF_FSNN/.worktrees/Simulink_Importer/FaseB2.0/Harness_SNN/bitstream/snn_tier_donatello.xsa
+BIT-DONE
+M4 END 13:34:36

@@ -1,0 +1,391 @@
+INFO: [Common 17-3922] A valid Vivado Design Suite BASIC license has been detected. Your current license is active and will expire on 10-jul-2027.
+
+****** Vivado v2026.1 (64-bit)
+  **** SW Build 6511674 on Tue Jun 16 11:02:23 MDT 2026
+  **** IP Build 6504888 on Tue Jun 09 09:05:25 MDT 2026
+  **** SharedData Build 6501428 on Mon Jun 08 17:34:18 MDT 2026
+  **** Start of session at: Thu Jul 30 12:08:04 2026
+    ** Copyright 1986-2022 Xilinx, Inc. All Rights Reserved.
+    ** Copyright 2022-2026 Advanced Micro Devices, Inc. All Rights Reserved.
+
+source power_report.tcl -notrace
+INFO: [filemgmt 56-3] Default IP Output Path : Could not find the directory 'D:/zbd_tier_hw/np_impl/np.gen/sources_1'.
+Scanning sources...
+Finished scanning sources
+WARNING: [Project 1-5713] Board part '' set for the project  is not found. BoardPart property will be unset. Please select board from latest repo build 
+open_project: Time (s): cpu = 00:00:17 ; elapsed = 00:00:12 . Memory (MB): peak = 583.875 ; gain = 268.730
+INFO: [Device 21-403] Loading part xc7z020clg400-1
+Netlist sorting complete. Time (s): cpu = 00:00:00 ; elapsed = 00:00:00.048 . Memory (MB): peak = 827.395 ; gain = 0.000
+INFO: [Netlist 29-17] Analyzing 727 Unisim elements for replacement
+INFO: [Netlist 29-28] Unisim Transformation completed in 0 CPU seconds
+INFO: [Project 1-479] Netlist was created with Vivado 2026.1
+INFO: [Project 1-570] Preparing netlist for logic optimization
+Read ShapeDB Complete: Time (s): cpu = 00:00:00 ; elapsed = 00:00:00.031 . Memory (MB): peak = 932.477 ; gain = 1.676
+INFO: [Timing 38-478] Restoring timing data from binary archive.
+INFO: [Timing 38-479] Binary timing data restore complete.
+INFO: [Project 1-856] Restoring constraints from binary archive.
+INFO: [Project 1-853] Binary constraint restore complete.
+INFO: [Designutils 20-5722] Start Reading Physical Databases.
+Reading placement.
+Read Netlist Cache: Time (s): cpu = 00:00:00 ; elapsed = 00:00:00.017 . Memory (MB): peak = 1541.438 ; gain = 0.000
+Reading placer database...
+Read Device Cache: Time (s): cpu = 00:00:00 ; elapsed = 00:00:00.019 . Memory (MB): peak = 1541.438 ; gain = 0.000
+Read PlaceDB: Time (s): cpu = 00:00:00 ; elapsed = 00:00:00 . Memory (MB): peak = 1541.438 ; gain = 0.000
+Read placeStorage: Time (s): cpu = 00:00:00 ; elapsed = 00:00:00.344 . Memory (MB): peak = 1558.305 ; gain = 16.867
+Read PulsedLatchDB: Time (s): cpu = 00:00:00 ; elapsed = 00:00:00 . Memory (MB): peak = 1558.305 ; gain = 0.000
+Reading routing.
+Read RouteStorage: Time (s): cpu = 00:00:00 ; elapsed = 00:00:00.183 . Memory (MB): peak = 1558.305 ; gain = 0.000
+Read Physdb Files: Time (s): cpu = 00:00:00 ; elapsed = 00:00:00.593 . Memory (MB): peak = 1558.305 ; gain = 16.867
+Restored from archive | CPU: 0.000000 secs | Memory: 0.000000 MB |
+Finished XDEF File Restore: Time (s): cpu = 00:00:00 ; elapsed = 00:00:00.669 . Memory (MB): peak = 1558.305 ; gain = 18.859
+Netlist sorting complete. Time (s): cpu = 00:00:00 ; elapsed = 00:00:00.005 . Memory (MB): peak = 1558.305 ; gain = 0.000
+INFO: [Project 1-111] Unisim Transformation Summary:
+No Unisim elements were transformed.
+
+open_run: Time (s): cpu = 00:00:16 ; elapsed = 00:00:19 . Memory (MB): peak = 1558.305 ; gain = 974.430
+===== POWER REPORT =====
+INFO: [Power 33-167] Parsing SAIF file D:/zbd_tier_hw/saif_act_g1_wl1.saif
+WARNING: [Power 33-334] Simulation is not consistent with clock constraints on net clk_tier. Please check the clocks defined using create_clock command and simulation clock used to generate the SAIF and make sure they are same.
+WARNING: [Power 33-334] Simulation is not consistent with clock constraints on net u_tier/clk_tier. Please check the clocks defined using create_clock command and simulation clock used to generate the SAIF and make sure they are same.
+WARNING: [Power 33-334] Simulation is not consistent with clock constraints on net u_tier/u_VS/clk_tier. Please check the clocks defined using create_clock command and simulation clock used to generate the SAIF and make sure they are same.
+WARNING: [Power 33-334] Simulation is not consistent with clock constraints on net u_tier/u_VS/u_BALANCED_n13/clk_tier. Please check the clocks defined using create_clock command and simulation clock used to generate the SAIF and make sure they are same.
+WARNING: [Power 33-334] Simulation is not consistent with clock constraints on net u_tier/u_VS/u_BALANCED_n13/u_DEC/clk_tier. Please check the clocks defined using create_clock command and simulation clock used to generate the SAIF and make sure they are same.
+WARNING: [Power 33-334] Simulation is not consistent with clock constraints on net u_tier/u_VS/u_BALANCED_n13/u_SNN/clk_tier. Please check the clocks defined using create_clock command and simulation clock used to generate the SAIF and make sure they are same.
+WARNING: [Power 33-334] Simulation is not consistent with clock constraints on net u_tier/u_VS/u_BALANCED_n13/u_SNN/u_dualPortRam/clk_tier. Please check the clocks defined using create_clock command and simulation clock used to generate the SAIF and make sure they are same.
+WARNING: [Power 33-334] Simulation is not consistent with clock constraints on net u_tier/u_VS/u_BALANCED_n13/u_SNN/u_dualPortRam_generic/clk_tier. Please check the clocks defined using create_clock command and simulation clock used to generate the SAIF and make sure they are same.
+WARNING: [Power 33-330] Read_saif is trying to annotate activities on clock net and this will be ignored. Users shall manually specify clock net frequency using sdc timing constraints(e.g. create_clock)
+INFO: [Power 33-177] SAIF annotation done from file D:/zbd_tier_hw/saif_act_g1_wl1.saif
+INFO: [Power 33-26] Design nets matched = 6906 of 12380
+Command: report_power -file {D:/Project_MBSE/1.Reti Neurali/Rete_SNN_Test/CF_FSNN/.worktrees/Simulink_Importer/FaseB2.0/Harness_SNN/results/power_saif_act_g1_wl1.rpt}
+56% of nets annotated
+Doing probabilistic computation for the remaining nets
+
+WARNING: [Timing 38-242] The property HD.CLK_SRC of clock port "S_AXI_ACLK" is not set. In out-of-context mode, this prevents timing estimation for clock delay/skew
+Resolution: Set the HD.CLK_SRC property of the out-of-context port to the location of the clock buffer instance in the top-level design
+WARNING: [Power 33-410] u_gate : User defined Switching Activity setting is ignored on global clock buffers. Use set_case_analysis instead to constrain Clock Enable pin. Please ignore this message if desired set_case_analysis is already set.
+WARNING: [Power 33-410] u_gate : User defined Switching Activity setting is ignored on global clock buffers. Use set_case_analysis instead to constrain Clock Enable pin. Please ignore this message if desired set_case_analysis is already set.
+15 Infos, 13 Warnings, 0 Critical Warnings and 0 Errors encountered.
+report_power completed successfully
+report_power: Time (s): cpu = 00:00:08 ; elapsed = 00:00:05 . Memory (MB): peak = 1609.914 ; gain = 51.609
+Command: report_power -return_string
+56% of nets annotated
+Doing probabilistic computation for the remaining nets
+
+WARNING: [Power 33-410] u_gate : User defined Switching Activity setting is ignored on global clock buffers. Use set_case_analysis instead to constrain Clock Enable pin. Please ignore this message if desired set_case_analysis is already set.
+WARNING: [Power 33-410] u_gate : User defined Switching Activity setting is ignored on global clock buffers. Use set_case_analysis instead to constrain Clock Enable pin. Please ignore this message if desired set_case_analysis is already set.
+15 Infos, 15 Warnings, 0 Critical Warnings and 0 Errors encountered.
+report_power completed successfully
+PW saif_act_g1_wl1  total=0.145  dynamic=0.042  static=0.103  confidence=High
+INFO: [Power 33-167] Parsing SAIF file D:/zbd_tier_hw/saif_act_g1_wl2.saif
+WARNING: [Power 33-334] Simulation is not consistent with clock constraints on net clk_tier. Please check the clocks defined using create_clock command and simulation clock used to generate the SAIF and make sure they are same.
+WARNING: [Power 33-334] Simulation is not consistent with clock constraints on net u_tier/clk_tier. Please check the clocks defined using create_clock command and simulation clock used to generate the SAIF and make sure they are same.
+WARNING: [Power 33-334] Simulation is not consistent with clock constraints on net u_tier/u_VS/clk_tier. Please check the clocks defined using create_clock command and simulation clock used to generate the SAIF and make sure they are same.
+WARNING: [Power 33-334] Simulation is not consistent with clock constraints on net u_tier/u_VS/u_BALANCED_n13/clk_tier. Please check the clocks defined using create_clock command and simulation clock used to generate the SAIF and make sure they are same.
+WARNING: [Power 33-334] Simulation is not consistent with clock constraints on net u_tier/u_VS/u_BALANCED_n13/u_DEC/clk_tier. Please check the clocks defined using create_clock command and simulation clock used to generate the SAIF and make sure they are same.
+WARNING: [Power 33-334] Simulation is not consistent with clock constraints on net u_tier/u_VS/u_BALANCED_n13/u_SNN/clk_tier. Please check the clocks defined using create_clock command and simulation clock used to generate the SAIF and make sure they are same.
+WARNING: [Power 33-334] Simulation is not consistent with clock constraints on net u_tier/u_VS/u_BALANCED_n13/u_SNN/u_dualPortRam/clk_tier. Please check the clocks defined using create_clock command and simulation clock used to generate the SAIF and make sure they are same.
+WARNING: [Power 33-334] Simulation is not consistent with clock constraints on net u_tier/u_VS/u_BALANCED_n13/u_SNN/u_dualPortRam_generic/clk_tier. Please check the clocks defined using create_clock command and simulation clock used to generate the SAIF and make sure they are same.
+WARNING: [Power 33-330] Read_saif is trying to annotate activities on clock net and this will be ignored. Users shall manually specify clock net frequency using sdc timing constraints(e.g. create_clock)
+INFO: [Power 33-177] SAIF annotation done from file D:/zbd_tier_hw/saif_act_g1_wl2.saif
+INFO: [Power 33-26] Design nets matched = 6906 of 12380
+Command: report_power -file {D:/Project_MBSE/1.Reti Neurali/Rete_SNN_Test/CF_FSNN/.worktrees/Simulink_Importer/FaseB2.0/Harness_SNN/results/power_saif_act_g1_wl2.rpt}
+56% of nets annotated
+Doing probabilistic computation for the remaining nets
+
+WARNING: [Power 33-410] u_gate : User defined Switching Activity setting is ignored on global clock buffers. Use set_case_analysis instead to constrain Clock Enable pin. Please ignore this message if desired set_case_analysis is already set.
+WARNING: [Power 33-410] u_gate : User defined Switching Activity setting is ignored on global clock buffers. Use set_case_analysis instead to constrain Clock Enable pin. Please ignore this message if desired set_case_analysis is already set.
+18 Infos, 26 Warnings, 0 Critical Warnings and 0 Errors encountered.
+report_power completed successfully
+Command: report_power -return_string
+56% of nets annotated
+Doing probabilistic computation for the remaining nets
+
+WARNING: [Power 33-410] u_gate : User defined Switching Activity setting is ignored on global clock buffers. Use set_case_analysis instead to constrain Clock Enable pin. Please ignore this message if desired set_case_analysis is already set.
+WARNING: [Power 33-410] u_gate : User defined Switching Activity setting is ignored on global clock buffers. Use set_case_analysis instead to constrain Clock Enable pin. Please ignore this message if desired set_case_analysis is already set.
+18 Infos, 28 Warnings, 0 Critical Warnings and 0 Errors encountered.
+report_power completed successfully
+PW saif_act_g1_wl2  total=0.148  dynamic=0.045  static=0.103  confidence=High
+INFO: [Power 33-167] Parsing SAIF file D:/zbd_tier_hw/saif_act_g1_wl3.saif
+WARNING: [Power 33-334] Simulation is not consistent with clock constraints on net clk_tier. Please check the clocks defined using create_clock command and simulation clock used to generate the SAIF and make sure they are same.
+WARNING: [Power 33-334] Simulation is not consistent with clock constraints on net u_tier/clk_tier. Please check the clocks defined using create_clock command and simulation clock used to generate the SAIF and make sure they are same.
+WARNING: [Power 33-334] Simulation is not consistent with clock constraints on net u_tier/u_VS/clk_tier. Please check the clocks defined using create_clock command and simulation clock used to generate the SAIF and make sure they are same.
+WARNING: [Power 33-334] Simulation is not consistent with clock constraints on net u_tier/u_VS/u_BALANCED_n13/clk_tier. Please check the clocks defined using create_clock command and simulation clock used to generate the SAIF and make sure they are same.
+WARNING: [Power 33-334] Simulation is not consistent with clock constraints on net u_tier/u_VS/u_BALANCED_n13/u_DEC/clk_tier. Please check the clocks defined using create_clock command and simulation clock used to generate the SAIF and make sure they are same.
+WARNING: [Power 33-334] Simulation is not consistent with clock constraints on net u_tier/u_VS/u_BALANCED_n13/u_SNN/clk_tier. Please check the clocks defined using create_clock command and simulation clock used to generate the SAIF and make sure they are same.
+WARNING: [Power 33-334] Simulation is not consistent with clock constraints on net u_tier/u_VS/u_BALANCED_n13/u_SNN/u_dualPortRam/clk_tier. Please check the clocks defined using create_clock command and simulation clock used to generate the SAIF and make sure they are same.
+WARNING: [Power 33-334] Simulation is not consistent with clock constraints on net u_tier/u_VS/u_BALANCED_n13/u_SNN/u_dualPortRam_generic/clk_tier. Please check the clocks defined using create_clock command and simulation clock used to generate the SAIF and make sure they are same.
+WARNING: [Power 33-330] Read_saif is trying to annotate activities on clock net and this will be ignored. Users shall manually specify clock net frequency using sdc timing constraints(e.g. create_clock)
+INFO: [Power 33-177] SAIF annotation done from file D:/zbd_tier_hw/saif_act_g1_wl3.saif
+INFO: [Power 33-26] Design nets matched = 6906 of 12380
+Command: report_power -file {D:/Project_MBSE/1.Reti Neurali/Rete_SNN_Test/CF_FSNN/.worktrees/Simulink_Importer/FaseB2.0/Harness_SNN/results/power_saif_act_g1_wl3.rpt}
+56% of nets annotated
+Doing probabilistic computation for the remaining nets
+
+WARNING: [Power 33-410] u_gate : User defined Switching Activity setting is ignored on global clock buffers. Use set_case_analysis instead to constrain Clock Enable pin. Please ignore this message if desired set_case_analysis is already set.
+WARNING: [Power 33-410] u_gate : User defined Switching Activity setting is ignored on global clock buffers. Use set_case_analysis instead to constrain Clock Enable pin. Please ignore this message if desired set_case_analysis is already set.
+21 Infos, 39 Warnings, 0 Critical Warnings and 0 Errors encountered.
+report_power completed successfully
+Command: report_power -return_string
+56% of nets annotated
+Doing probabilistic computation for the remaining nets
+
+WARNING: [Power 33-410] u_gate : User defined Switching Activity setting is ignored on global clock buffers. Use set_case_analysis instead to constrain Clock Enable pin. Please ignore this message if desired set_case_analysis is already set.
+WARNING: [Power 33-410] u_gate : User defined Switching Activity setting is ignored on global clock buffers. Use set_case_analysis instead to constrain Clock Enable pin. Please ignore this message if desired set_case_analysis is already set.
+21 Infos, 41 Warnings, 0 Critical Warnings and 0 Errors encountered.
+report_power completed successfully
+PW saif_act_g1_wl3  total=0.146  dynamic=0.043  static=0.103  confidence=High
+INFO: [Power 33-167] Parsing SAIF file D:/zbd_tier_hw/saif_act_g1_wl4.saif
+WARNING: [Power 33-334] Simulation is not consistent with clock constraints on net clk_tier. Please check the clocks defined using create_clock command and simulation clock used to generate the SAIF and make sure they are same.
+WARNING: [Power 33-334] Simulation is not consistent with clock constraints on net u_tier/clk_tier. Please check the clocks defined using create_clock command and simulation clock used to generate the SAIF and make sure they are same.
+WARNING: [Power 33-334] Simulation is not consistent with clock constraints on net u_tier/u_VS/clk_tier. Please check the clocks defined using create_clock command and simulation clock used to generate the SAIF and make sure they are same.
+WARNING: [Power 33-334] Simulation is not consistent with clock constraints on net u_tier/u_VS/u_BALANCED_n13/clk_tier. Please check the clocks defined using create_clock command and simulation clock used to generate the SAIF and make sure they are same.
+WARNING: [Power 33-334] Simulation is not consistent with clock constraints on net u_tier/u_VS/u_BALANCED_n13/u_DEC/clk_tier. Please check the clocks defined using create_clock command and simulation clock used to generate the SAIF and make sure they are same.
+WARNING: [Power 33-334] Simulation is not consistent with clock constraints on net u_tier/u_VS/u_BALANCED_n13/u_SNN/clk_tier. Please check the clocks defined using create_clock command and simulation clock used to generate the SAIF and make sure they are same.
+WARNING: [Power 33-334] Simulation is not consistent with clock constraints on net u_tier/u_VS/u_BALANCED_n13/u_SNN/u_dualPortRam/clk_tier. Please check the clocks defined using create_clock command and simulation clock used to generate the SAIF and make sure they are same.
+WARNING: [Power 33-334] Simulation is not consistent with clock constraints on net u_tier/u_VS/u_BALANCED_n13/u_SNN/u_dualPortRam_generic/clk_tier. Please check the clocks defined using create_clock command and simulation clock used to generate the SAIF and make sure they are same.
+WARNING: [Power 33-330] Read_saif is trying to annotate activities on clock net and this will be ignored. Users shall manually specify clock net frequency using sdc timing constraints(e.g. create_clock)
+INFO: [Power 33-177] SAIF annotation done from file D:/zbd_tier_hw/saif_act_g1_wl4.saif
+INFO: [Power 33-26] Design nets matched = 6906 of 12380
+Command: report_power -file {D:/Project_MBSE/1.Reti Neurali/Rete_SNN_Test/CF_FSNN/.worktrees/Simulink_Importer/FaseB2.0/Harness_SNN/results/power_saif_act_g1_wl4.rpt}
+56% of nets annotated
+Doing probabilistic computation for the remaining nets
+
+WARNING: [Power 33-410] u_gate : User defined Switching Activity setting is ignored on global clock buffers. Use set_case_analysis instead to constrain Clock Enable pin. Please ignore this message if desired set_case_analysis is already set.
+WARNING: [Power 33-410] u_gate : User defined Switching Activity setting is ignored on global clock buffers. Use set_case_analysis instead to constrain Clock Enable pin. Please ignore this message if desired set_case_analysis is already set.
+24 Infos, 52 Warnings, 0 Critical Warnings and 0 Errors encountered.
+report_power completed successfully
+Command: report_power -return_string
+56% of nets annotated
+Doing probabilistic computation for the remaining nets
+
+WARNING: [Power 33-410] u_gate : User defined Switching Activity setting is ignored on global clock buffers. Use set_case_analysis instead to constrain Clock Enable pin. Please ignore this message if desired set_case_analysis is already set.
+WARNING: [Power 33-410] u_gate : User defined Switching Activity setting is ignored on global clock buffers. Use set_case_analysis instead to constrain Clock Enable pin. Please ignore this message if desired set_case_analysis is already set.
+24 Infos, 54 Warnings, 0 Critical Warnings and 0 Errors encountered.
+report_power completed successfully
+PW saif_act_g1_wl4  total=0.148  dynamic=0.044  static=0.103  confidence=High
+INFO: [Power 33-167] Parsing SAIF file D:/zbd_tier_hw/saif_act_g1_wl5.saif
+WARNING: [Power 33-334] Simulation is not consistent with clock constraints on net clk_tier. Please check the clocks defined using create_clock command and simulation clock used to generate the SAIF and make sure they are same.
+WARNING: [Power 33-334] Simulation is not consistent with clock constraints on net u_tier/clk_tier. Please check the clocks defined using create_clock command and simulation clock used to generate the SAIF and make sure they are same.
+WARNING: [Power 33-334] Simulation is not consistent with clock constraints on net u_tier/u_VS/clk_tier. Please check the clocks defined using create_clock command and simulation clock used to generate the SAIF and make sure they are same.
+WARNING: [Power 33-334] Simulation is not consistent with clock constraints on net u_tier/u_VS/u_BALANCED_n13/clk_tier. Please check the clocks defined using create_clock command and simulation clock used to generate the SAIF and make sure they are same.
+WARNING: [Power 33-334] Simulation is not consistent with clock constraints on net u_tier/u_VS/u_BALANCED_n13/u_DEC/clk_tier. Please check the clocks defined using create_clock command and simulation clock used to generate the SAIF and make sure they are same.
+WARNING: [Power 33-334] Simulation is not consistent with clock constraints on net u_tier/u_VS/u_BALANCED_n13/u_SNN/clk_tier. Please check the clocks defined using create_clock command and simulation clock used to generate the SAIF and make sure they are same.
+WARNING: [Power 33-334] Simulation is not consistent with clock constraints on net u_tier/u_VS/u_BALANCED_n13/u_SNN/u_dualPortRam/clk_tier. Please check the clocks defined using create_clock command and simulation clock used to generate the SAIF and make sure they are same.
+WARNING: [Power 33-334] Simulation is not consistent with clock constraints on net u_tier/u_VS/u_BALANCED_n13/u_SNN/u_dualPortRam_generic/clk_tier. Please check the clocks defined using create_clock command and simulation clock used to generate the SAIF and make sure they are same.
+WARNING: [Power 33-330] Read_saif is trying to annotate activities on clock net and this will be ignored. Users shall manually specify clock net frequency using sdc timing constraints(e.g. create_clock)
+INFO: [Power 33-177] SAIF annotation done from file D:/zbd_tier_hw/saif_act_g1_wl5.saif
+INFO: [Power 33-26] Design nets matched = 6906 of 12380
+Command: report_power -file {D:/Project_MBSE/1.Reti Neurali/Rete_SNN_Test/CF_FSNN/.worktrees/Simulink_Importer/FaseB2.0/Harness_SNN/results/power_saif_act_g1_wl5.rpt}
+56% of nets annotated
+Doing probabilistic computation for the remaining nets
+
+WARNING: [Power 33-410] u_gate : User defined Switching Activity setting is ignored on global clock buffers. Use set_case_analysis instead to constrain Clock Enable pin. Please ignore this message if desired set_case_analysis is already set.
+WARNING: [Power 33-410] u_gate : User defined Switching Activity setting is ignored on global clock buffers. Use set_case_analysis instead to constrain Clock Enable pin. Please ignore this message if desired set_case_analysis is already set.
+27 Infos, 65 Warnings, 0 Critical Warnings and 0 Errors encountered.
+report_power completed successfully
+Command: report_power -return_string
+56% of nets annotated
+Doing probabilistic computation for the remaining nets
+
+WARNING: [Power 33-410] u_gate : User defined Switching Activity setting is ignored on global clock buffers. Use set_case_analysis instead to constrain Clock Enable pin. Please ignore this message if desired set_case_analysis is already set.
+WARNING: [Power 33-410] u_gate : User defined Switching Activity setting is ignored on global clock buffers. Use set_case_analysis instead to constrain Clock Enable pin. Please ignore this message if desired set_case_analysis is already set.
+27 Infos, 67 Warnings, 0 Critical Warnings and 0 Errors encountered.
+report_power completed successfully
+PW saif_act_g1_wl5  total=0.147  dynamic=0.044  static=0.103  confidence=High
+INFO: [Power 33-167] Parsing SAIF file D:/zbd_tier_hw/saif_act_g1_wl6.saif
+WARNING: [Power 33-334] Simulation is not consistent with clock constraints on net clk_tier. Please check the clocks defined using create_clock command and simulation clock used to generate the SAIF and make sure they are same.
+WARNING: [Power 33-334] Simulation is not consistent with clock constraints on net u_tier/clk_tier. Please check the clocks defined using create_clock command and simulation clock used to generate the SAIF and make sure they are same.
+WARNING: [Power 33-334] Simulation is not consistent with clock constraints on net u_tier/u_VS/clk_tier. Please check the clocks defined using create_clock command and simulation clock used to generate the SAIF and make sure they are same.
+WARNING: [Power 33-334] Simulation is not consistent with clock constraints on net u_tier/u_VS/u_BALANCED_n13/clk_tier. Please check the clocks defined using create_clock command and simulation clock used to generate the SAIF and make sure they are same.
+WARNING: [Power 33-334] Simulation is not consistent with clock constraints on net u_tier/u_VS/u_BALANCED_n13/u_DEC/clk_tier. Please check the clocks defined using create_clock command and simulation clock used to generate the SAIF and make sure they are same.
+WARNING: [Power 33-334] Simulation is not consistent with clock constraints on net u_tier/u_VS/u_BALANCED_n13/u_SNN/clk_tier. Please check the clocks defined using create_clock command and simulation clock used to generate the SAIF and make sure they are same.
+WARNING: [Power 33-334] Simulation is not consistent with clock constraints on net u_tier/u_VS/u_BALANCED_n13/u_SNN/u_dualPortRam/clk_tier. Please check the clocks defined using create_clock command and simulation clock used to generate the SAIF and make sure they are same.
+WARNING: [Power 33-334] Simulation is not consistent with clock constraints on net u_tier/u_VS/u_BALANCED_n13/u_SNN/u_dualPortRam_generic/clk_tier. Please check the clocks defined using create_clock command and simulation clock used to generate the SAIF and make sure they are same.
+WARNING: [Power 33-330] Read_saif is trying to annotate activities on clock net and this will be ignored. Users shall manually specify clock net frequency using sdc timing constraints(e.g. create_clock)
+INFO: [Power 33-177] SAIF annotation done from file D:/zbd_tier_hw/saif_act_g1_wl6.saif
+INFO: [Power 33-26] Design nets matched = 6906 of 12380
+Command: report_power -file {D:/Project_MBSE/1.Reti Neurali/Rete_SNN_Test/CF_FSNN/.worktrees/Simulink_Importer/FaseB2.0/Harness_SNN/results/power_saif_act_g1_wl6.rpt}
+56% of nets annotated
+Doing probabilistic computation for the remaining nets
+
+WARNING: [Power 33-410] u_gate : User defined Switching Activity setting is ignored on global clock buffers. Use set_case_analysis instead to constrain Clock Enable pin. Please ignore this message if desired set_case_analysis is already set.
+WARNING: [Power 33-410] u_gate : User defined Switching Activity setting is ignored on global clock buffers. Use set_case_analysis instead to constrain Clock Enable pin. Please ignore this message if desired set_case_analysis is already set.
+30 Infos, 78 Warnings, 0 Critical Warnings and 0 Errors encountered.
+report_power completed successfully
+Command: report_power -return_string
+56% of nets annotated
+Doing probabilistic computation for the remaining nets
+
+WARNING: [Power 33-410] u_gate : User defined Switching Activity setting is ignored on global clock buffers. Use set_case_analysis instead to constrain Clock Enable pin. Please ignore this message if desired set_case_analysis is already set.
+WARNING: [Power 33-410] u_gate : User defined Switching Activity setting is ignored on global clock buffers. Use set_case_analysis instead to constrain Clock Enable pin. Please ignore this message if desired set_case_analysis is already set.
+30 Infos, 80 Warnings, 0 Critical Warnings and 0 Errors encountered.
+report_power completed successfully
+PW saif_act_g1_wl6  total=0.146  dynamic=0.043  static=0.103  confidence=High
+INFO: [Power 33-167] Parsing SAIF file D:/zbd_tier_hw/saif_act_g1_wl7.saif
+WARNING: [Power 33-334] Simulation is not consistent with clock constraints on net clk_tier. Please check the clocks defined using create_clock command and simulation clock used to generate the SAIF and make sure they are same.
+WARNING: [Power 33-334] Simulation is not consistent with clock constraints on net u_tier/clk_tier. Please check the clocks defined using create_clock command and simulation clock used to generate the SAIF and make sure they are same.
+WARNING: [Power 33-334] Simulation is not consistent with clock constraints on net u_tier/u_VS/clk_tier. Please check the clocks defined using create_clock command and simulation clock used to generate the SAIF and make sure they are same.
+WARNING: [Power 33-334] Simulation is not consistent with clock constraints on net u_tier/u_VS/u_BALANCED_n13/clk_tier. Please check the clocks defined using create_clock command and simulation clock used to generate the SAIF and make sure they are same.
+WARNING: [Power 33-334] Simulation is not consistent with clock constraints on net u_tier/u_VS/u_BALANCED_n13/u_DEC/clk_tier. Please check the clocks defined using create_clock command and simulation clock used to generate the SAIF and make sure they are same.
+WARNING: [Power 33-334] Simulation is not consistent with clock constraints on net u_tier/u_VS/u_BALANCED_n13/u_SNN/clk_tier. Please check the clocks defined using create_clock command and simulation clock used to generate the SAIF and make sure they are same.
+WARNING: [Power 33-334] Simulation is not consistent with clock constraints on net u_tier/u_VS/u_BALANCED_n13/u_SNN/u_dualPortRam/clk_tier. Please check the clocks defined using create_clock command and simulation clock used to generate the SAIF and make sure they are same.
+WARNING: [Power 33-334] Simulation is not consistent with clock constraints on net u_tier/u_VS/u_BALANCED_n13/u_SNN/u_dualPortRam_generic/clk_tier. Please check the clocks defined using create_clock command and simulation clock used to generate the SAIF and make sure they are same.
+WARNING: [Power 33-330] Read_saif is trying to annotate activities on clock net and this will be ignored. Users shall manually specify clock net frequency using sdc timing constraints(e.g. create_clock)
+INFO: [Power 33-177] SAIF annotation done from file D:/zbd_tier_hw/saif_act_g1_wl7.saif
+INFO: [Power 33-26] Design nets matched = 6906 of 12380
+Command: report_power -file {D:/Project_MBSE/1.Reti Neurali/Rete_SNN_Test/CF_FSNN/.worktrees/Simulink_Importer/FaseB2.0/Harness_SNN/results/power_saif_act_g1_wl7.rpt}
+56% of nets annotated
+Doing probabilistic computation for the remaining nets
+
+WARNING: [Power 33-410] u_gate : User defined Switching Activity setting is ignored on global clock buffers. Use set_case_analysis instead to constrain Clock Enable pin. Please ignore this message if desired set_case_analysis is already set.
+WARNING: [Power 33-410] u_gate : User defined Switching Activity setting is ignored on global clock buffers. Use set_case_analysis instead to constrain Clock Enable pin. Please ignore this message if desired set_case_analysis is already set.
+33 Infos, 91 Warnings, 0 Critical Warnings and 0 Errors encountered.
+report_power completed successfully
+Command: report_power -return_string
+56% of nets annotated
+Doing probabilistic computation for the remaining nets
+
+WARNING: [Power 33-410] u_gate : User defined Switching Activity setting is ignored on global clock buffers. Use set_case_analysis instead to constrain Clock Enable pin. Please ignore this message if desired set_case_analysis is already set.
+WARNING: [Power 33-410] u_gate : User defined Switching Activity setting is ignored on global clock buffers. Use set_case_analysis instead to constrain Clock Enable pin. Please ignore this message if desired set_case_analysis is already set.
+33 Infos, 93 Warnings, 0 Critical Warnings and 0 Errors encountered.
+report_power completed successfully
+PW saif_act_g1_wl7  total=0.147  dynamic=0.043  static=0.103  confidence=High
+INFO: [Power 33-167] Parsing SAIF file D:/zbd_tier_hw/saif_act_g1_wl8.saif
+WARNING: [Power 33-334] Simulation is not consistent with clock constraints on net clk_tier. Please check the clocks defined using create_clock command and simulation clock used to generate the SAIF and make sure they are same.
+WARNING: [Power 33-334] Simulation is not consistent with clock constraints on net u_tier/clk_tier. Please check the clocks defined using create_clock command and simulation clock used to generate the SAIF and make sure they are same.
+WARNING: [Power 33-334] Simulation is not consistent with clock constraints on net u_tier/u_VS/clk_tier. Please check the clocks defined using create_clock command and simulation clock used to generate the SAIF and make sure they are same.
+WARNING: [Power 33-334] Simulation is not consistent with clock constraints on net u_tier/u_VS/u_BALANCED_n13/clk_tier. Please check the clocks defined using create_clock command and simulation clock used to generate the SAIF and make sure they are same.
+WARNING: [Power 33-334] Simulation is not consistent with clock constraints on net u_tier/u_VS/u_BALANCED_n13/u_DEC/clk_tier. Please check the clocks defined using create_clock command and simulation clock used to generate the SAIF and make sure they are same.
+WARNING: [Power 33-334] Simulation is not consistent with clock constraints on net u_tier/u_VS/u_BALANCED_n13/u_SNN/clk_tier. Please check the clocks defined using create_clock command and simulation clock used to generate the SAIF and make sure they are same.
+WARNING: [Power 33-334] Simulation is not consistent with clock constraints on net u_tier/u_VS/u_BALANCED_n13/u_SNN/u_dualPortRam/clk_tier. Please check the clocks defined using create_clock command and simulation clock used to generate the SAIF and make sure they are same.
+WARNING: [Power 33-334] Simulation is not consistent with clock constraints on net u_tier/u_VS/u_BALANCED_n13/u_SNN/u_dualPortRam_generic/clk_tier. Please check the clocks defined using create_clock command and simulation clock used to generate the SAIF and make sure they are same.
+WARNING: [Power 33-330] Read_saif is trying to annotate activities on clock net and this will be ignored. Users shall manually specify clock net frequency using sdc timing constraints(e.g. create_clock)
+INFO: [Power 33-177] SAIF annotation done from file D:/zbd_tier_hw/saif_act_g1_wl8.saif
+INFO: [Power 33-26] Design nets matched = 6906 of 12380
+Command: report_power -file {D:/Project_MBSE/1.Reti Neurali/Rete_SNN_Test/CF_FSNN/.worktrees/Simulink_Importer/FaseB2.0/Harness_SNN/results/power_saif_act_g1_wl8.rpt}
+56% of nets annotated
+Doing probabilistic computation for the remaining nets
+
+WARNING: [Power 33-410] u_gate : User defined Switching Activity setting is ignored on global clock buffers. Use set_case_analysis instead to constrain Clock Enable pin. Please ignore this message if desired set_case_analysis is already set.
+WARNING: [Power 33-410] u_gate : User defined Switching Activity setting is ignored on global clock buffers. Use set_case_analysis instead to constrain Clock Enable pin. Please ignore this message if desired set_case_analysis is already set.
+36 Infos, 104 Warnings, 0 Critical Warnings and 0 Errors encountered.
+report_power completed successfully
+Command: report_power -return_string
+56% of nets annotated
+Doing probabilistic computation for the remaining nets
+
+WARNING: [Power 33-410] u_gate : User defined Switching Activity setting is ignored on global clock buffers. Use set_case_analysis instead to constrain Clock Enable pin. Please ignore this message if desired set_case_analysis is already set.
+WARNING: [Power 33-410] u_gate : User defined Switching Activity setting is ignored on global clock buffers. Use set_case_analysis instead to constrain Clock Enable pin. Please ignore this message if desired set_case_analysis is already set.
+36 Infos, 106 Warnings, 0 Critical Warnings and 0 Errors encountered.
+report_power completed successfully
+PW saif_act_g1_wl8  total=0.147  dynamic=0.044  static=0.103  confidence=High
+INFO: [Power 33-167] Parsing SAIF file D:/zbd_tier_hw/saif_act_g1_wl9.saif
+WARNING: [Power 33-334] Simulation is not consistent with clock constraints on net clk_tier. Please check the clocks defined using create_clock command and simulation clock used to generate the SAIF and make sure they are same.
+WARNING: [Power 33-334] Simulation is not consistent with clock constraints on net u_tier/clk_tier. Please check the clocks defined using create_clock command and simulation clock used to generate the SAIF and make sure they are same.
+WARNING: [Power 33-334] Simulation is not consistent with clock constraints on net u_tier/u_VS/clk_tier. Please check the clocks defined using create_clock command and simulation clock used to generate the SAIF and make sure they are same.
+WARNING: [Power 33-334] Simulation is not consistent with clock constraints on net u_tier/u_VS/u_BALANCED_n13/clk_tier. Please check the clocks defined using create_clock command and simulation clock used to generate the SAIF and make sure they are same.
+WARNING: [Power 33-334] Simulation is not consistent with clock constraints on net u_tier/u_VS/u_BALANCED_n13/u_DEC/clk_tier. Please check the clocks defined using create_clock command and simulation clock used to generate the SAIF and make sure they are same.
+WARNING: [Power 33-334] Simulation is not consistent with clock constraints on net u_tier/u_VS/u_BALANCED_n13/u_SNN/clk_tier. Please check the clocks defined using create_clock command and simulation clock used to generate the SAIF and make sure they are same.
+WARNING: [Power 33-334] Simulation is not consistent with clock constraints on net u_tier/u_VS/u_BALANCED_n13/u_SNN/u_dualPortRam/clk_tier. Please check the clocks defined using create_clock command and simulation clock used to generate the SAIF and make sure they are same.
+WARNING: [Power 33-334] Simulation is not consistent with clock constraints on net u_tier/u_VS/u_BALANCED_n13/u_SNN/u_dualPortRam_generic/clk_tier. Please check the clocks defined using create_clock command and simulation clock used to generate the SAIF and make sure they are same.
+WARNING: [Power 33-330] Read_saif is trying to annotate activities on clock net and this will be ignored. Users shall manually specify clock net frequency using sdc timing constraints(e.g. create_clock)
+INFO: [Power 33-177] SAIF annotation done from file D:/zbd_tier_hw/saif_act_g1_wl9.saif
+INFO: [Power 33-26] Design nets matched = 6906 of 12380
+Command: report_power -file {D:/Project_MBSE/1.Reti Neurali/Rete_SNN_Test/CF_FSNN/.worktrees/Simulink_Importer/FaseB2.0/Harness_SNN/results/power_saif_act_g1_wl9.rpt}
+56% of nets annotated
+Doing probabilistic computation for the remaining nets
+
+WARNING: [Power 33-410] u_gate : User defined Switching Activity setting is ignored on global clock buffers. Use set_case_analysis instead to constrain Clock Enable pin. Please ignore this message if desired set_case_analysis is already set.
+WARNING: [Power 33-410] u_gate : User defined Switching Activity setting is ignored on global clock buffers. Use set_case_analysis instead to constrain Clock Enable pin. Please ignore this message if desired set_case_analysis is already set.
+39 Infos, 117 Warnings, 0 Critical Warnings and 0 Errors encountered.
+report_power completed successfully
+Command: report_power -return_string
+56% of nets annotated
+Doing probabilistic computation for the remaining nets
+
+WARNING: [Power 33-410] u_gate : User defined Switching Activity setting is ignored on global clock buffers. Use set_case_analysis instead to constrain Clock Enable pin. Please ignore this message if desired set_case_analysis is already set.
+WARNING: [Power 33-410] u_gate : User defined Switching Activity setting is ignored on global clock buffers. Use set_case_analysis instead to constrain Clock Enable pin. Please ignore this message if desired set_case_analysis is already set.
+39 Infos, 119 Warnings, 0 Critical Warnings and 0 Errors encountered.
+report_power completed successfully
+PW saif_act_g1_wl9  total=0.145  dynamic=0.042  static=0.103  confidence=High
+INFO: [Power 33-167] Parsing SAIF file D:/zbd_tier_hw/saif_act_g1_wl10.saif
+WARNING: [Power 33-334] Simulation is not consistent with clock constraints on net clk_tier. Please check the clocks defined using create_clock command and simulation clock used to generate the SAIF and make sure they are same.
+WARNING: [Power 33-334] Simulation is not consistent with clock constraints on net u_tier/clk_tier. Please check the clocks defined using create_clock command and simulation clock used to generate the SAIF and make sure they are same.
+WARNING: [Power 33-334] Simulation is not consistent with clock constraints on net u_tier/u_VS/clk_tier. Please check the clocks defined using create_clock command and simulation clock used to generate the SAIF and make sure they are same.
+WARNING: [Power 33-334] Simulation is not consistent with clock constraints on net u_tier/u_VS/u_BALANCED_n13/clk_tier. Please check the clocks defined using create_clock command and simulation clock used to generate the SAIF and make sure they are same.
+WARNING: [Power 33-334] Simulation is not consistent with clock constraints on net u_tier/u_VS/u_BALANCED_n13/u_DEC/clk_tier. Please check the clocks defined using create_clock command and simulation clock used to generate the SAIF and make sure they are same.
+WARNING: [Power 33-334] Simulation is not consistent with clock constraints on net u_tier/u_VS/u_BALANCED_n13/u_SNN/clk_tier. Please check the clocks defined using create_clock command and simulation clock used to generate the SAIF and make sure they are same.
+WARNING: [Power 33-334] Simulation is not consistent with clock constraints on net u_tier/u_VS/u_BALANCED_n13/u_SNN/u_dualPortRam/clk_tier. Please check the clocks defined using create_clock command and simulation clock used to generate the SAIF and make sure they are same.
+WARNING: [Power 33-334] Simulation is not consistent with clock constraints on net u_tier/u_VS/u_BALANCED_n13/u_SNN/u_dualPortRam_generic/clk_tier. Please check the clocks defined using create_clock command and simulation clock used to generate the SAIF and make sure they are same.
+WARNING: [Power 33-330] Read_saif is trying to annotate activities on clock net and this will be ignored. Users shall manually specify clock net frequency using sdc timing constraints(e.g. create_clock)
+INFO: [Power 33-177] SAIF annotation done from file D:/zbd_tier_hw/saif_act_g1_wl10.saif
+INFO: [Power 33-26] Design nets matched = 6906 of 12380
+Command: report_power -file {D:/Project_MBSE/1.Reti Neurali/Rete_SNN_Test/CF_FSNN/.worktrees/Simulink_Importer/FaseB2.0/Harness_SNN/results/power_saif_act_g1_wl10.rpt}
+56% of nets annotated
+Doing probabilistic computation for the remaining nets
+
+WARNING: [Power 33-410] u_gate : User defined Switching Activity setting is ignored on global clock buffers. Use set_case_analysis instead to constrain Clock Enable pin. Please ignore this message if desired set_case_analysis is already set.
+WARNING: [Power 33-410] u_gate : User defined Switching Activity setting is ignored on global clock buffers. Use set_case_analysis instead to constrain Clock Enable pin. Please ignore this message if desired set_case_analysis is already set.
+42 Infos, 130 Warnings, 0 Critical Warnings and 0 Errors encountered.
+report_power completed successfully
+Command: report_power -return_string
+56% of nets annotated
+Doing probabilistic computation for the remaining nets
+
+WARNING: [Power 33-410] u_gate : User defined Switching Activity setting is ignored on global clock buffers. Use set_case_analysis instead to constrain Clock Enable pin. Please ignore this message if desired set_case_analysis is already set.
+WARNING: [Power 33-410] u_gate : User defined Switching Activity setting is ignored on global clock buffers. Use set_case_analysis instead to constrain Clock Enable pin. Please ignore this message if desired set_case_analysis is already set.
+42 Infos, 132 Warnings, 0 Critical Warnings and 0 Errors encountered.
+report_power completed successfully
+PW saif_act_g1_wl10  total=0.144  dynamic=0.041  static=0.103  confidence=High
+INFO: [Power 33-167] Parsing SAIF file D:/zbd_tier_hw/saif_idle_g0_w200.saif
+WARNING: [Power 33-330] Read_saif is trying to annotate activities on clock net and this will be ignored. Users shall manually specify clock net frequency using sdc timing constraints(e.g. create_clock)
+INFO: [Power 33-177] SAIF annotation done from file D:/zbd_tier_hw/saif_idle_g0_w200.saif
+INFO: [Power 33-26] Design nets matched = 6906 of 12380
+Command: report_power -file {D:/Project_MBSE/1.Reti Neurali/Rete_SNN_Test/CF_FSNN/.worktrees/Simulink_Importer/FaseB2.0/Harness_SNN/results/power_saif_idle_g0_w200.rpt}
+56% of nets annotated
+Doing probabilistic computation for the remaining nets
+
+WARNING: [Power 33-410] u_gate : User defined Switching Activity setting is ignored on global clock buffers. Use set_case_analysis instead to constrain Clock Enable pin. Please ignore this message if desired set_case_analysis is already set.
+WARNING: [Power 33-410] u_gate : User defined Switching Activity setting is ignored on global clock buffers. Use set_case_analysis instead to constrain Clock Enable pin. Please ignore this message if desired set_case_analysis is already set.
+45 Infos, 135 Warnings, 0 Critical Warnings and 0 Errors encountered.
+report_power completed successfully
+Command: report_power -return_string
+56% of nets annotated
+Doing probabilistic computation for the remaining nets
+
+WARNING: [Power 33-410] u_gate : User defined Switching Activity setting is ignored on global clock buffers. Use set_case_analysis instead to constrain Clock Enable pin. Please ignore this message if desired set_case_analysis is already set.
+WARNING: [Power 33-410] u_gate : User defined Switching Activity setting is ignored on global clock buffers. Use set_case_analysis instead to constrain Clock Enable pin. Please ignore this message if desired set_case_analysis is already set.
+45 Infos, 137 Warnings, 0 Critical Warnings and 0 Errors encountered.
+report_power completed successfully
+PW saif_idle_g0_w200  total=0.111  dynamic=0.008  static=0.103  confidence=High
+INFO: [Power 33-167] Parsing SAIF file D:/zbd_tier_hw/saif_idle_g1_w200.saif
+WARNING: [Power 33-334] Simulation is not consistent with clock constraints on net clk_tier. Please check the clocks defined using create_clock command and simulation clock used to generate the SAIF and make sure they are same.
+WARNING: [Power 33-334] Simulation is not consistent with clock constraints on net u_tier/clk_tier. Please check the clocks defined using create_clock command and simulation clock used to generate the SAIF and make sure they are same.
+WARNING: [Power 33-334] Simulation is not consistent with clock constraints on net u_tier/u_VS/clk_tier. Please check the clocks defined using create_clock command and simulation clock used to generate the SAIF and make sure they are same.
+WARNING: [Power 33-334] Simulation is not consistent with clock constraints on net u_tier/u_VS/u_BALANCED_n13/clk_tier. Please check the clocks defined using create_clock command and simulation clock used to generate the SAIF and make sure they are same.
+WARNING: [Power 33-334] Simulation is not consistent with clock constraints on net u_tier/u_VS/u_BALANCED_n13/u_DEC/clk_tier. Please check the clocks defined using create_clock command and simulation clock used to generate the SAIF and make sure they are same.
+WARNING: [Power 33-334] Simulation is not consistent with clock constraints on net u_tier/u_VS/u_BALANCED_n13/u_SNN/clk_tier. Please check the clocks defined using create_clock command and simulation clock used to generate the SAIF and make sure they are same.
+WARNING: [Power 33-334] Simulation is not consistent with clock constraints on net u_tier/u_VS/u_BALANCED_n13/u_SNN/u_dualPortRam/clk_tier. Please check the clocks defined using create_clock command and simulation clock used to generate the SAIF and make sure they are same.
+WARNING: [Power 33-334] Simulation is not consistent with clock constraints on net u_tier/u_VS/u_BALANCED_n13/u_SNN/u_dualPortRam_generic/clk_tier. Please check the clocks defined using create_clock command and simulation clock used to generate the SAIF and make sure they are same.
+WARNING: [Power 33-330] Read_saif is trying to annotate activities on clock net and this will be ignored. Users shall manually specify clock net frequency using sdc timing constraints(e.g. create_clock)
+INFO: [Power 33-177] SAIF annotation done from file D:/zbd_tier_hw/saif_idle_g1_w200.saif
+INFO: [Power 33-26] Design nets matched = 6906 of 12380
+Command: report_power -file {D:/Project_MBSE/1.Reti Neurali/Rete_SNN_Test/CF_FSNN/.worktrees/Simulink_Importer/FaseB2.0/Harness_SNN/results/power_saif_idle_g1_w200.rpt}
+56% of nets annotated
+Doing probabilistic computation for the remaining nets
+
+WARNING: [Power 33-410] u_gate : User defined Switching Activity setting is ignored on global clock buffers. Use set_case_analysis instead to constrain Clock Enable pin. Please ignore this message if desired set_case_analysis is already set.
+WARNING: [Power 33-410] u_gate : User defined Switching Activity setting is ignored on global clock buffers. Use set_case_analysis instead to constrain Clock Enable pin. Please ignore this message if desired set_case_analysis is already set.
+48 Infos, 148 Warnings, 0 Critical Warnings and 0 Errors encountered.
+report_power completed successfully
+Command: report_power -return_string
+56% of nets annotated
+Doing probabilistic computation for the remaining nets
+
+WARNING: [Power 33-410] u_gate : User defined Switching Activity setting is ignored on global clock buffers. Use set_case_analysis instead to constrain Clock Enable pin. Please ignore this message if desired set_case_analysis is already set.
+WARNING: [Power 33-410] u_gate : User defined Switching Activity setting is ignored on global clock buffers. Use set_case_analysis instead to constrain Clock Enable pin. Please ignore this message if desired set_case_analysis is already set.
+48 Infos, 150 Warnings, 0 Critical Warnings and 0 Errors encountered.
+report_power completed successfully
+PW saif_idle_g1_w200  total=0.111  dynamic=0.008  static=0.103  confidence=High
+===== POWER REPORT FINE =====
+INFO: [Common 17-206] Exiting Vivado at Thu Jul 30 12:09:46 2026...

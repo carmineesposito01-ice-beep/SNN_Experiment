@@ -1,0 +1,12 @@
+=== FASE 1/2 · SALTATA: netlist gia' presente e con la firma dei sorgenti attuali  [18:43:59] ===
+  firma: 5ae2eee67a715714e21545247e1acd9b-fclk40
+  netlist: 150396 righe
+=== FASE 2/2 · funcsim sul sottoinsieme [1 4 9]  [18:43:59] ===
+DBG read = 0000  gold = 0000
+  scenario 1: nMismatch=0 / 600  [19:00:30]
+DBG read = 000e  gold = 000e
+  scenario 4: nMismatch=0 / 600  [19:16:13]
+DBG read = 000e  gold = 000e
+  scenario 9: nMismatch=0 / 307  [19:26:28]
+NETLIST-FUNC-TOT nMismatch=0 n=1507 nscen=3
+=== FINE  [19:26:28] ===
