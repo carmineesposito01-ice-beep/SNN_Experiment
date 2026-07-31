@@ -1,22 +1,64 @@
 
-## ▶ RIPRESA 2026-07-31 — T7a fatto, T7b da eseguire
+## ▶ RIPRESA 2026-08-01 — T7b a meta': sweep e cosim FATTI, netlist/energia/bitstream DA FARE
 
-**Stato:** T7a **COMPLETO e verde sui 99** (`FaseB2.0/Harness_SNN_IIDM/results/RESULTS.md`):
-PLANT-PAR 0 · **T7-EXACT 0/58 522** · PARAM-RANGE 0 · **T7-SAFE 0 collisioni aggiuntive**
-(RTL 3, oracolo 3 — inevitabili da cut-in) · 31 metriche/scenario dal motore canonico.
+**Interrotto il 2026-07-31 alle 16:20 su richiesta (fine giornata), non per un problema.**
+Nessun job lasciato girare: processi Vivado/xsim chiusi, albero git pulito.
 
-**PRIMA AZIONE — ri-validare, poi T7b.** Il blocco e' cambiato ieri sera (`align` con uscite
-registrate, +14% Fmax, comportamento **bit-identico** verificato su 1 scenario):
+### Cosa e' FATTO (committato, con artefatti su disco)
+
+| | Esito | Artefatto |
+|---|---|---|
+| T7a sui 99 | **verde**, ri-validato dopo il cambio di `align` (3168 metriche, **0 diverse**) | `Harness_SNN_IIDM/results/RESULTS.md` |
+| Cosim AXI sui 99 | **0 / 58 522** in **entrambi** i modi di gating | `results/COSIM_AXI.md` |
+| **Sweep FCLK** (8 punti) | **deployabile 40 MHz** (misurata, WNS +0,022 · WHS +0,033) · **limite 41,1 MHz** (derivata) | `results/SWEEP_FCLK.md` + 24 `.rpt` grezzi |
+| Risorse post-route @40 MHz | gerarchia fino a SNN/DEC/align; LUT 15,9% · FF 4,3% · DSP 31,4% · BRAM 0,7% | idem |
+| Netlist funcsim | **esportata** (150 396 righe), impl OOC fatta | `C:/t7bnl/netlist/` (fuori repo) |
+
+### PRIMA AZIONE — riprendere la netlist (era in corso quando ci siamo fermati)
+
 ```
-matlab -batch "addpath('FaseB2.0/Harness_SNN_IIDM'); run_harness_snn_iidm('full')"   % ~45 min
+bash FaseB2.0/Harness_SNN_IIDM/hw/run_netlist.sh
 ```
-Atteso: gli **stessi** numeri di `RESULTS.md` (il comportamento e' identico). Se differiscono,
-fermarsi: la modifica non e' trasparente come misurato sul singolo scenario.
+La **fase 1 (impl OOC, ~10 min) viene SALTATA**: c'e' un cancello di provenienza sulla firma dei
+sorgenti (`C:/t7bnl/netlist/src.sig`), gia' scritta e verificata. Provato in tutte e tre le direzioni:
+salta se combacia, ricostruisce se la firma differisce **o** se la netlist manca. Con `NETLIST_DRYRUN=1`
+stampa la decisione senza lanciare Vivado.
+Parte quindi direttamente la **fase 2**: funcsim sul sottoinsieme **DICHIARATO [1, 4, 9]** (9 collide,
+N=307 — e' lo scenario che aveva scoperto il difetto di `axi_len`).
+**Totale atteso, dichiarato in anticipo: 600 + 600 + 307 = 1507 confronti, nMismatch = 0.**
+Costo: **~80 min** — stima da T6b (~22 min/traiettoria) scalata per 560/371 clock/passo. **Non e'
+ancora misurata su T7b**: il primo scenario che completa la trasforma in misura.
 
-Poi **T7b** — piano in `docs/superpowers/plans/2026-07-30-b2.0-t7b-harness-snn-iidm-hw.md`,
-con **una correzione da fare**: lo sweep FCLK e' scritto 10–35 MHz sulla base del vecchio 36,4 OOC.
-Ora l'OOC e' **41,5** ⇒ sweep da rifare attorno a **15–40 MHz** (il deployabile io-timed vale ~meta'
-dell'OOC).
+### Poi, nell'ordine
+
+1. **Energia** — `bash FaseB2.0/Harness_SNN_IIDM/hw/run_power.sh` (predisposto, **mai eseguito**).
+   Quattro passi: P0 finestra attiva *derivata dal banco* · P1 idle (convergenza 200/1000/5000 +
+   gating) · P2 **8 carichi reali** · P3 **duty REALE** · P4 `report_power`.
+   ⚠️ **P3 e' l'incognita di costo**: un control-step intero = **4 000 000 di clock**. In idle il
+   simulatore ha pochi eventi e va molto piu' veloce, ma **quanto non e' noto**: la forbice va da
+   ~13 min a >2 h. **Misurare il rate con una run corta (`IDLECYC` piccolo) PRIMA di lanciare**, e
+   se risulta proibitivo portare la scelta all'utente invece di ridurre di propria iniziativa —
+   il duty non composto e' il punto stesso di quel passo.
+2. **Bitstream** @40 MHz + entry-point a stadi + `RESULTS_HW.md` scritto da script (~25 min).
+3. **Documentazione** (`FaseB2.0/README.md`, `HDL_PHASE.md` §6, questo file) — poi **T8**: i due report.
+
+### Due cose IMPARATE il 2026-07-31, da non ri-scoprire
+
+- **Il PS7 QUANTIZZA la frequenza richiesta** (15→15,152 · 30→30,303 · 35→34,484 · 45→45,455 MHz).
+  Il periodo **non** e' `1000/f_richiesta`: va letto dalla tabella dei clock del `report_timing`.
+  Una tabella costruita sull'assunzione aveva 4 righe sbagliate su 8.
+- **OOC e sistema sono perimetri DIVERSI e i numeri non si scambiano.** Lo stesso circuito a 40 MHz
+  **chiude nel sistema** (+0,022) e **non chiude in OOC** (−0,194). Un numero OOC non e' una capacita'
+  del progetto. ⚠️ Ne segue che la frase "il deployabile io-timed vale ~meta' dell'OOC", scritta qui
+  ieri, **non vale su questo blocco**: quella regolarita' del Tier valeva perche' il collo stava al
+  confine d'ingresso, e dopo la correzione di `align` non ci sta piu'.
+
+### Numeri da NON riderivare
+
+`LAT_CLK` = 560 · inferenza+controllo = **555 clock** · control-step 0,1 s = **4 000 000 clock @40 MHz**
+⇒ margine **7207×**, duty **0,0139 %**. Formato ingressi **En20**, uscita `accel` **sfix13_En8**.
+Mappa registri AXI: `0x00–0x0C` ingressi · `0x10` controllo (bit0 commit, bit1 gating) e `done` in
+lettura · `0x14` accel.
 
 **Collo di bottiglia — APERTO e documentato** (`HDL_PHASE.md` §9): il cammino critico attraversa
 ancora `DEC → align → IIDM` (24,1 ns). `align` e' sceso da 32 a 18 celle ma HDL Coder ne

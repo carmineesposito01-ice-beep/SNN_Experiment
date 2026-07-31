@@ -32,12 +32,37 @@ for i in $SCEN; do
   done
 done
 
-echo "=== FASE 1/2 · impl OOC @${FCLK} MHz + export funcsim  [$(date +%H:%M:%S)] ==="
-"$VIV/vivado.bat" -mode batch -notrace -nojournal -nolog \
-  -source "$HERE/netlist_par.tcl" -tclargs "$SRC" "$ROOT" "$FCLK" "$OUT" 6 2>&1 \
-  | grep -E "^(NETLIST|ERROR:)" | head -20
-[ -s "$ROOT/netlist/snniidm_axi_lite_func.v" ] \
-  || { echo "NETLIST-ABORT: export funcsim NON prodotto -- niente fase 2"; exit 1; }
+# ---- CANCELLO DI PROVENIENZA: la fase 1 si rifa' solo se serve ----
+# netlist_par.tcl CANCELLA la work-dir, quindi un rilancio rifarebbe ~10 minuti di implementazione anche
+# quando la netlist esistente e' gia' quella giusta. Il criterio NON e' "il file esiste" -- sarebbe il modo
+# di simulare in silenzio una netlist stantia: e' la FIRMA dei sorgenti che l'hanno prodotta.
+# Forma a INTEGRITA' DEL FILE, non rigenera-e-confronta: makehdl non e' deterministico sui nomi temporanei
+# interni, quindi un confronto per rigenerazione fallirebbe sempre (accertato in T7b).
+SIG="$(cat "$SRC"/*.v "$SRC/compile_order.txt" | md5sum | cut -d' ' -f1)-fclk${FCLK}"
+STAMP="$ROOT/netlist/src.sig"
+if [ -s "$ROOT/netlist/snniidm_axi_lite_func.v" ] && [ -f "$STAMP" ] && [ "$(cat "$STAMP")" = "$SIG" ]; then
+  echo "=== FASE 1/2 · SALTATA: netlist gia' presente e con la firma dei sorgenti attuali  [$(date +%H:%M:%S)] ==="
+  echo "  firma: $SIG"
+  SKIP1=1
+else
+  # Il motivo va detto ESATTO: "firma diversa" quando manca solo la netlist manderebbe a cercare
+  # una modifica ai sorgenti che non c'e' stata.
+  if   [ ! -s "$ROOT/netlist/snniidm_axi_lite_func.v" ]; then echo "  motivo: netlist assente o vuota"
+  elif [ ! -f "$STAMP" ];                                then echo "  motivo: firma dei sorgenti mai registrata"
+  else echo "  motivo: firma diversa -- attesa $SIG, trovata $(cat "$STAMP")"; fi
+  echo "=== FASE 1/2 · impl OOC @${FCLK} MHz + export funcsim  [$(date +%H:%M:%S)] ==="
+  SKIP1=0
+fi
+[ "${NETLIST_DRYRUN:-0}" = "1" ] && { echo "DRYRUN: fase1_saltata=$SKIP1"; exit 0; }
+
+if [ "$SKIP1" = "0" ]; then
+  "$VIV/vivado.bat" -mode batch -notrace -nojournal -nolog \
+    -source "$HERE/netlist_par.tcl" -tclargs "$SRC" "$ROOT" "$FCLK" "$OUT" 6 2>&1 \
+    | grep -E "^(NETLIST|ERROR:)" | head -20
+  [ -s "$ROOT/netlist/snniidm_axi_lite_func.v" ] \
+    || { echo "NETLIST-ABORT: export funcsim NON prodotto -- niente fase 2"; exit 1; }
+  printf '%s' "$SIG" > "$STAMP"      # la firma si scrive DOPO l'export riuscito, mai prima
+fi
 echo "  netlist: $(wc -l < "$ROOT/netlist/snniidm_axi_lite_func.v") righe"
 
 echo "=== FASE 2/2 · funcsim sul sottoinsieme [$SCEN]  [$(date +%H:%M:%S)] ==="
