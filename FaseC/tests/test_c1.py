@@ -26,9 +26,37 @@ class _Corto:
 
 def test_c1_verde_su_piu_scenari(golden_pochi):
     corti = [_Corto(g, 40) for g in golden_pochi]
-    r = run_c1(SnnIidmDriver(MockOverlay(golden=corti[0])), corti[:1])
-    assert r['bit_esatto'] and r['nmismatch'] == 0 and r['n'] == 40
-    assert r['per_scenario'][0]['nmismatch'] == 0
+    r = run_c1(SnnIidmDriver(MockOverlay(golden=corti)), corti)
+    assert r['bit_esatto'] and r['nmismatch'] == 0
+    assert r['n'] == 120 and r['n_scenari'] == 3
+    assert all(s['nmismatch'] == 0 for s in r['per_scenario'])
+
+
+def test_SENZA_reset_fra_scenari_il_replay_NON_combacia(golden_pochi):
+    """Il vincolo e' dell'hardware, non una precauzione: `started` si alza al primo commit e
+    non torna basso senza reset AXI, quindi lo stato della rete resta quello dello scenario
+    precedente. Ogni golden pero' e' stato prodotto con la rete azzerata a k=1 di QUEL scenario.
+
+    Se questo test diventasse verde, vorrebbe dire che il reset non serve -- e allora sarebbe
+    il modello a essere sbagliato, non il vincolo."""
+    corti = [_Corto(g, 40) for g in golden_pochi]
+    ov = MockOverlay(golden=corti)
+    buono = run_c1(SnnIidmDriver(ov), corti, reset_between=True)
+    assert buono['bit_esatto']
+
+    ov2 = MockOverlay(golden=corti)
+    cattivo = run_c1(SnnIidmDriver(ov2), corti, reset_between=False)
+    assert not cattivo['bit_esatto'], 'senza reset il replay combacia: il modello e\' sbagliato'
+    assert cattivo['per_scenario'][0]['nmismatch'] == 0, 'il PRIMO scenario deve restare pulito'
+    assert cattivo['per_scenario'][1]['nmismatch'] > 0, 'la contaminazione parte dal secondo'
+
+
+def test_reset_dut_su_un_overlay_che_non_lo_espone_e_esplicito(golden_scen1):
+    class SenzaReset:
+        write = staticmethod(lambda *a: None)
+        read = staticmethod(lambda *a: 1)
+    with pytest.raises(NotImplementedError, match='reset_dut'):
+        SnnIidmDriver(SenzaReset()).reset_dut()
 
 
 def test_c1_ROSSO_a_UN_LSB(golden_scen1):

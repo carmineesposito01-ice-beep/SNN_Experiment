@@ -62,11 +62,17 @@ def diagnose(first, n, nmismatch, ratios=None):
     return ['%s -> %s. Guardare: %s' % t for t in ordinati]
 
 
-def run_c1(driver, goldens, max_report=20):
+def run_c1(driver, goldens, max_report=20, reset_between=True):
     """Replay degli scenari sugli ingressi REGISTRATI, confronto bit-esatto.
 
     Ingressi registrati, non rigenerati: cosi' C1 misura l'acceleratore e nient'altro. Se il
     plant girasse qui dentro, una sua divergenza si presenterebbe come un errore del silicio.
+
+    `reset_between=True` NON e' una precauzione, e' un vincolo dell'hardware: nel wrapper
+    `started` si alza al primo commit e non torna basso senza reset AXI, quindi lo stato della
+    rete non e' azzerabile dai registri. Ogni golden pero' e' stato prodotto con la rete
+    azzerata all'inizio di QUEL scenario. `False` esiste solo per PROVARE che il vincolo e'
+    reale -- non usarlo per misurare.
     """
     n = nmis = 0
     first = None
@@ -75,6 +81,8 @@ def run_c1(driver, goldens, max_report=20):
     campioni = []
 
     for g in goldens:
+        if reset_between:
+            driver.reset_dut(g.idx)
         s_n = s_mis = 0
         for k, (stim, exp) in enumerate(zip(g.stim, g.gold)):
             got = driver.infer(*stim)

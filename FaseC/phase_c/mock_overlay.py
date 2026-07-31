@@ -18,14 +18,32 @@ class MockOverlay:
     """
 
     def __init__(self, golden, regmap=IIDM, inject_at=None, inject_delta=0.0):
-        self.g = golden
+        gs = golden if isinstance(golden, (list, tuple)) else [golden]
+        self._per_idx = {g.idx: g for g in gs}
+        self.g = gs[0]
         self.m = regmap
         self.inject_at = inject_at
         self.inject_delta = inject_delta
         self.regs = {a: 0 for a in tuple(regmap.INPUTS) + tuple(regmap.OUTPUTS)}
         self.k = 0                      # quante inferenze sono state eseguite
+        self.contaminato = False        # lo stato e uscito dal perimetro dello scenario
         self._ctrl_w = 0                # cio' che e' stato SCRITTO su CTRL
         self._done = 0                  # cio' che si legge da CTRL: percorso DIVERSO
+        self._prev_commit = 0
+
+    def reset_dut(self, scenario=None):
+        """Equivalente del reset AXI: azzera lo stato e riparte dal primo campione.
+
+        Su hardware corrisponde a `overlay.download()`. Qui riproduce l'effetto che conta:
+        senza, il replay prosegue con lo stato lasciato dallo scenario precedente.
+        """
+        if scenario is not None:
+            if scenario not in self._per_idx:
+                raise KeyError('scenario %r non caricato nel mock' % scenario)
+            self.g = self._per_idx[scenario]
+        self.k = 0
+        self.contaminato = False
+        self._done = 0
         self._prev_commit = 0
 
     # --- interfaccia MMIO di PYNQ ---------------------------------------------------------
@@ -56,10 +74,16 @@ class MockOverlay:
 
     # --- il "calcolo" ----------------------------------------------------------------------
     def _step(self):
-        if self.k >= len(self.g.gold):
-            raise IndexError('richiesta inferenza %d ma lo scenario ne ha %d'
-                             % (self.k + 1, len(self.g.gold)))
-        v = self.g.gold[self.k]
+        n = len(self.g.gold)
+        if self.k >= n:
+            # L'hardware non solleva eccezioni: con lo stato contaminato continua a produrre
+            # valori PLAUSIBILI e sbagliati, ed e' il modo peggiore di fallire. Modellare qui
+            # un IndexError darebbe un errore rumoroso dove la realta' ne da' uno silenzioso,
+            # e il cancello proverebbe la cosa sbagliata.
+            self.contaminato = True
+            v = self.g.gold[self.k % n]
+        else:
+            v = self.g.gold[self.k]
         if self.inject_at is not None and self.k == self.inject_at:
             v = v + self.inject_delta
         raw = to_fix(v, ACCEL_NFRAC, ACCEL_NBITS)

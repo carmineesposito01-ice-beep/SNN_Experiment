@@ -27,6 +27,28 @@ class _Base:
         self._ctrl_base = (1 << GATING_BIT) if gating else 0
         self.ov.write(self.regmap.CTRL, self._ctrl_base)
 
+    def reset_dut(self, scenario=None):
+        """Riporta l'acceleratore allo stato iniziale. OBBLIGATORIO a ogni nuovo scenario.
+
+        Vincolo dell'hardware, non una precauzione: nel wrapper
+        `dut_rst = ~S_AXI_ARESETN | ~started`, e `started` si alza al PRIMO commit e non torna
+        piu' basso se non con un reset AXI. Lo stato interno della rete (hdl.RAM) non e' quindi
+        azzerabile dalla mappa registri.
+
+        Ogni golden e' stato prodotto con la rete azzerata a k=1 di QUEL scenario (qz_cl_sim
+        chiama stepFun(..., k==1)). Concatenare due scenari senza reset fa partire il secondo
+        con lo stato lasciato dal primo: le uscite restano plausibili e non combaciano piu'.
+        Su PYNQ il reset e' `overlay.download()`; qui si delega all'overlay.
+        """
+        if not hasattr(self.ov, 'reset_dut'):
+            raise NotImplementedError(
+                'l\'overlay %s non espone reset_dut(). Senza, gli scenari dal secondo in poi '
+                'partono con lo stato del precedente e C1 non puo\' essere bit-esatto.'
+                % type(self.ov).__name__)
+        self.ov.reset_dut(scenario)
+        self._prev_commit = 0
+        self.ov.write(self.regmap.CTRL, self._ctrl_base)
+
     def _write_inputs(self, s, v, dv, vl):
         for addr, raw in zip(self.regmap.INPUTS, (s, v, dv, vl)):
             self.ov.write(addr, raw)
