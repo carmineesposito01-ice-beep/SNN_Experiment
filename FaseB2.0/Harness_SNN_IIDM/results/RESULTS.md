@@ -1,6 +1,6 @@
 # T7a — Harness_SNN_IIDM: anello chiuso RTL + metriche
 
-> Rigenerabile con `run_harness_snn_iidm('full')` — 43.4 min.
+> Rigenerabile con `run_harness_snn_iidm('full')` — 60.3 min.
 > DUT **`Donatello_SNN_IIDM`** (Tier@BALANCED + align + ACC-IIDM R17), generato in
 > **Verilog**, 99 scenari x 600 control-step. `HOLD_RTL`=600, `HOLD_BLK`=700 (latenza misurata 554).
 
