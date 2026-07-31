@@ -40,12 +40,25 @@ EOF
   #    questo script controllava solo "IDLE-READY" e stampava "idle raggiunto" mentre NESSUN saif veniva creato
   #    (xelab era -debug off). Un controllo su una proxy assolve un fallimento reale.
   SF="saif_idle_g${GATEMODE}_w${W}.saif"
-  if [ -s "$SF" ]; then
+  # ⚠️ IL SAIF ESISTE ANCHE SE LA FINESTRA E' NEL POSTO SBAGLIATO. Il preludio `run 60 us` e' fisso e
+  #    ereditato: se l'inferenza durasse piu' a lungo (T7b: 555 clk contro i 371 del Tier, piu' il polling
+  #    del done), la finestra cadrebbe sulla fase ATTIVA e misurerebbe la potenza sbagliata -- producendo
+  #    un file regolare e un numero credibile. Si verifica quindi che il banco abbia DICHIARATO l'idle.
+  nrdy=$(grep -ac "IDLE-READY" ps_sim_${W}.out 2>/dev/null || echo 0)
+  if [ -s "$SF" ] && [ "$nrdy" -ge 1 ]; then
     SZ=$(stat -c%s "$SF" 2>/dev/null || echo "?")
     echo "  finestra ${W} cicli (${WNS} ns): SAIF OK (${SZ} byte) -> $SF"
+  elif [ ! -s "$SF" ]; then
+    echo "  finestra ${W} cicli (${WNS} ns): SAIF ASSENTE/VUOTO"
+    grep -iaE "^ERROR|not.*trace|without trace" ps_sim_${W}.out | head -3
+    bad=1
   else
-    echo "  finestra ${W} cicli (${WNS} ns): ❌ SAIF ASSENTE/VUOTO"
-    grep -iE "^ERROR|not.*trace|without trace" ps_sim_${W}.out | head -3
+    echo "  finestra ${W} cicli (${WNS} ns): SAIF prodotto ma IDLE MAI RAGGIUNTO nel preludio"
+    echo "    -> la finestra NON e' sull'idle: il numero sarebbe credibile e sbagliato. Allungare il preludio."
+    bad=1
   fi
 done
+# La convergenza fra finestre (200/1000/5000 identiche) e' la PROVA che la regione e' stazionaria;
+# questo cancello copre il caso in cui la finestra non sia nemmeno nella regione giusta.
+[ "${bad:-0}" = "0" ] || { echo "SAIF-IDLE-FALLITO gating=$GATEMODE"; exit 1; }
 echo "SAIF-IDLE-DONE gating=$GATEMODE"

@@ -57,8 +57,29 @@ cp "$WORK/axi_stim_1.mem" axi_stim.mem
 TR=$(grep -ao "DUTY-READY t=[0-9]*" "$WORK/p0/p0.out" | head -1 | sed 's/.*t=//')
 TA=$(grep -ao "DUTY-ACT step=0 done t=[0-9]*" "$WORK/p0/p0.out" | head -1 | sed 's/.*t=//')
 [ -n "${TR:-}" ] && [ -n "${TA:-}" ] || { echo "POWER-ABORT: P0 non ha prodotto i marcatori"; tail -20 "$WORK/p0/p0.out"; exit 1; }
-# I tempi sono in ps (timescale 1ns/1ps); un periodo = 2*CLKHALF ns
-ACT_CLK=$(python -c "print(int(round((${TA}-${TR})/1000.0/(2*${CLKHALF}))))")
+# L'UNITA' DI %0t NON SI ASSUME: dipende da $timeformat, il cui default e' legato alla precisione del
+# simulatore e non e' garantito fra versioni. Assumere "ps" e sbagliare darebbe una finestra attiva 1000x
+# piu' piccola: IDLECYC cambierebbe dello 0,014% (invisibile) e il duty verrebbe stampato 0,0000%.
+# Si provano quindi ENTRAMBE le letture e si tiene quella PLAUSIBILE.
+# Le due non possono essere plausibili INSIEME: separazione 1000x contro una finestra larga 50x
+# (servirebbe d>=1e7 e d<=5e5 insieme). Quindi il ramo di rifiuto significa sempre e solo
+# "NESSUNA lettura plausibile" -- e va detto cosi', non "ambiguo": un messaggio che nomina la causa
+# sbagliata manda a cercare nel posto sbagliato.
+ACT_CLK=$(python -c "
+d = ${TA} - ${TR}; per = 2*${CLKHALF}
+cand = {'ps': d/1000.0/per, 'ns': d/per}
+ok = {u: round(v) for u, v in cand.items() if 400 <= v <= 20000}   # un control-step: 555 di latenza + AXI
+if len(ok) != 1:
+    print('NONPLAUSIBILE d=%d ps->%.3f ns->%.3f' % (d, cand['ps'], cand['ns'])); raise SystemExit(0)
+u, v = next(iter(ok.items())); print('%d %s' % (v, u))
+" )
+case "$ACT_CLK" in
+  NONPLAUSIBILE*) echo "POWER-ABORT: finestra attiva fuori da ogni lettura sensata -- $ACT_CLK"
+                  echo "  (attesi ~555 clock di latenza + protocollo AXI; controllare i marcatori del banco)"; exit 1 ;;
+esac
+TUNIT="${ACT_CLK##* }"; ACT_CLK="${ACT_CLK%% *}"
+case "$ACT_CLK" in ''|*[!0-9]*) echo "POWER-ABORT: finestra attiva non numerica: '$ACT_CLK'"; exit 1 ;; esac
+echo "  unita' di \$time DEDOTTA dai valori: ${TUNIT}"
 TOT_CLK=$(python -c "print(int(round(${CTRL_STEP_S}*${FCLK}*1e6)))")
 IDLECYC=$((TOT_CLK - ACT_CLK))
 DUTY=$(python -c "print('%.4f' % (100.0*${ACT_CLK}/${TOT_CLK}))")
@@ -89,6 +110,11 @@ cp "$WORK/axi_stim_1.mem" axi_stim.mem
 "$VIV/xelab.bat" -debug typical -L unisims_ver -relax tb_power_duty glbl -s snapDUTY > pd_el.out 2>&1 \
   || { echo "POWER-ABORT: xelab duty"; tail -20 pd_el.out; exit 1; }
 SFD="$WORK/saif_duty_g1.saif"; rm -f "$SFD"
+# FINESTRA SAIF = TUTTA la simulazione (apertura a ~t0), NON dopo un preludio a tempo fisso.
+# T6b usava `run 2 us` prima di aprire: a 40 MHz sono 80 clock, mentre il banco raggiunge DUTY-READY
+# a ~25 (reset 20 + le scritture AXI) -- quel preludio taglierebbe ~55 clock DENTRO la fase attiva,
+# cioe' proprio la parte che consuma. Aprendo da subito si includono invece i ~20 clock di reset su
+# 4.000.000 (0,0005%): trascurabili, e nulla dell'attivo viene perso.
 cat > sim_duty.tcl <<EOF
 run 1 ns
 open_saif "$SFD"
