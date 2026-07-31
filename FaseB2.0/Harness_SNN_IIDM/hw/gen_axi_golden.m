@@ -39,6 +39,10 @@ function n = gen_axi_golden(outdir, seriesdir, idx, checkBlock)
 
     wr(fullfile(outdir, sprintf('axi_stim_%d.mem', j)), Xi(:), 8);
     wr(fullfile(outdir, sprintf('axi_gold_%d.mem', j)), Ai(:), 4);
+    % lunghezza EFFETTIVA: gli scenari che collidono sono troncati (N < 600) e il banco
+    % deve fermarsi a N, non leggere oltre la fine del golden.
+    fl = fopen(fullfile(outdir, sprintf('axi_len_%d.mem', j)),'w');
+    fprintf(fl, '%08X\n', N); fclose(fl);
     n = n + 1;
   end
   fprintf('gen_axi_golden: %d scenari -> %s (verifica sul blocco: %d)\n', n, outdir, checkBlock);

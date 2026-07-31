@@ -26,6 +26,7 @@ miss=0
 for ((i=1; i<=NSCEN; i++)); do
   [ -s "axi_stim_$i.mem" ] || { echo "manca axi_stim_$i.mem"; miss=1; }
   [ -s "axi_gold_$i.mem" ] || { echo "manca axi_gold_$i.mem"; miss=1; }
+  [ -s "axi_len_$i.mem" ]  || { echo "manca axi_len_$i.mem";  miss=1; }
 done
 [ $miss -eq 0 ] || { echo "COSIM-ABORT: stimoli/golden incompleti"; exit 1; }
 
@@ -44,7 +45,7 @@ done
 
 tot=0; nmis=0
 for ((i=1; i<=NSCEN; i++)); do
-  cp "axi_stim_$i.mem" axi_stim.mem; cp "axi_gold_$i.mem" axi_gold.mem
+  cp "axi_stim_$i.mem" axi_stim.mem; cp "axi_gold_$i.mem" axi_gold.mem; cp "axi_len_$i.mem" axi_len.mem
   "$VIV/xsim.bat" "cosim_g$GM" -R > "cos_${GM}_$i.log" 2>&1
   line=$(grep -ao "AXI-COSIM nMismatch=[0-9]* n=[0-9]*" "cos_${GM}_$i.log" | head -1)
   [ -n "$line" ] || { echo "SCENARIO $i (gm=$GM): nessun risultato"; tail -30 "cos_${GM}_$i.log"; exit 1; }

@@ -20,7 +20,8 @@ module tb_snniidm_axi;
   wire [31:0] RDATA;
   reg  [31:0] stim [0:NSTEP*4-1];
   reg  [12:0] gold [0:NSTEP-1];               // UNA accel per control-step
-  integer k, nmis;
+  reg  [31:0] lenm [0:0];
+  integer k, nmis, nrun;
   reg [31:0] rd;
 
   snniidm_axi_lite dut (
@@ -63,11 +64,19 @@ module tb_snniidm_axi;
   initial begin
     $readmemh("axi_stim.mem", stim);
     $readmemh("axi_gold.mem", gold);
+    // ⚠️ Gli scenari che COLLIDONO hanno la serie TRONCATA (N < NSTEP): il golden ha solo N valori.
+    //    Eseguire NSTEP passi fissi farebbe leggere memoria NON INIZIALIZZATA oltre N, producendo
+    //    disallineamenti che non sono del DUT ma del banco. Il numero di passi si legge a runtime.
+    $readmemh("axi_len.mem", lenm);
+    nrun = lenm[0];
+    if (nrun < 1 || nrun > NSTEP) begin
+      $display("TB-FATAL: axi_len.mem = %0d, fuori da [1,%0d]", nrun, NSTEP); $finish;
+    end
     nmis = 0;
     ARESETN = 0; repeat (16) @(posedge ACLK); ARESETN = 1; repeat (4) @(posedge ACLK);
 
     axi_write(6'h10, {30'd0, GATEMODE[0], 1'b0});      // bit1 = clock gating, bit0 = commit basso
-    for (k = 0; k < NSTEP; k = k + 1) begin
+    for (k = 0; k < nrun; k = k + 1) begin
       axi_write(6'h00, stim[k*4+0]);
       axi_write(6'h04, stim[k*4+1]);
       axi_write(6'h08, stim[k*4+2]);
@@ -91,7 +100,7 @@ module tb_snniidm_axi;
       if (rd[12:0] !== gold[k]) nmis = nmis + 1;
     end
 
-    $display("AXI-COSIM nMismatch=%0d n=%0d gatemode=%0d", nmis, NSTEP, GATEMODE);
+    $display("AXI-COSIM nMismatch=%0d n=%0d gatemode=%0d", nmis, nrun, GATEMODE);
     $finish;
   end
 endmodule
