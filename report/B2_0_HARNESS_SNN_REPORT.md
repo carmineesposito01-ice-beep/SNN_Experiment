@@ -17,8 +17,9 @@
 | 1. Sintesi |
 | 2. Oggetto, perimetro e catena di fiducia |
 | 2.1 Il blocco sotto esame |
-| 2.2 Cosa è dentro e cosa è fuori |
-| 2.3 La catena di fiducia: il riferimento è il blocco stesso |
+| 2.2 La rete, la variante e la quantizzazione |
+| 2.3 Cosa è dentro e cosa è fuori |
+| 2.4 La catena di fiducia: il riferimento è il blocco stesso |
 | 3. Metodo di verifica |
 | 3.1 Il dataset e il perimetro dei numeri |
 | 3.2 Una simulazione per traiettoria |
@@ -91,7 +92,20 @@ Il dispositivo sotto test è il blocco di libreria **Donatello_Tier** configurat
 Il blocco è **temporizzato a eventi**: una variazione degli ingressi innesca una singola inferenza, che si completa in **364 cicli di clock** misurati. Non è un circuito combinatorio né a flusso continuo: questa proprietà governa tutto il progetto del banco di prova e del wrapper.
 
 
-### 2.2 Cosa è dentro e cosa è fuori
+### 2.2 La rete, la variante e la quantizzazione
+
+Tre nomi ricorrono nel documento e vanno sciolti, perché identificano scelte di progetto già fatte altrove e qui soltanto ereditate.
+
+| Nome | Che cosa indica |
+|---|---|
+| rete a spike | una rete ricorrente a **32 neuroni nascosti** che, per ogni passo di controllo, evolve per **10 passi interni**; la ricorrenza è fattorizzata a rango 16 e i ritardi sinaptici arrivano a 6 passi. Produce le 5 uscite del §4.1. In hardware i 32 neuroni condividono **una sola** unità di calcolo, percorsa a turno: è ciò che tiene l'area entro il dispositivo |
+| `@BALANCED` | la rete è disponibile in tre varianti di **pipelining** — area minima, compromesso, margine temporale massimo. Qui è in uso la intermedia. Le tre calcolano la stessa funzione: cambiano quanti registri separano gli stadi, quindi area e frequenza, non il risultato |
+| `nfrac 13` | i **bit frazionari** della rappresentazione in virgola fissa interna. Tredici bit dopo la virgola; la scelta viene da uno studio di quantizzazione dedicato, esterno a questo documento |
+
+Il passo di controllo di **0,1 s** che ricorre nel documento non è una convenzione di comodo: è il passo temporale del dataset di riferimento, cioè la cadenza a cui il controllore è chiamato a decidere, **10 volte al secondo**. È anche l'unico requisito temporale del sistema: tutto il resto — frequenza di clock, latenza, duty — è caratterizzazione, non vincolo.
+
+
+### 2.3 Cosa è dentro e cosa è fuori
 
 | Dentro il perimetro | Fuori dal perimetro |
 |---|---|
@@ -102,7 +116,7 @@ Il blocco è **temporizzato a eventi**: una variazione degli ingressi innesca un
 | Bitstream e handoff per la board | Misura su silicio: è la Fase C, su board fisica |
 
 
-### 2.3 La catena di fiducia: il riferimento è il blocco stesso
+### 2.4 La catena di fiducia: il riferimento è il blocco stesso
 
 Un confronto bit-esatto vale quanto il riferimento con cui si confronta. Qui il riferimento è **il blocco stesso**, eseguito nel suo ambiente di modellazione e campionato ciclo per ciclo: l'uguaglianza fra RTL e riferimento è quindi, per costruzione, uguaglianza fra RTL e blocco, senza anelli intermedi da giustificare.
 

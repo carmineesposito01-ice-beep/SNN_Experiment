@@ -427,7 +427,29 @@ def build_doc():
     A(('p', 'Il blocco è **temporizzato a eventi**: una variazione degli ingressi innesca una singola inferenza, '
             'che si completa in **%d cicli di clock** misurati. Non è un circuito combinatorio né a flusso '
             'continuo: questa proprietà governa tutto il progetto del banco di prova e del wrapper.' % LAT_BLK))
-    A(('h2', '2.2 Cosa è dentro e cosa è fuori'))
+    A(('h2', '2.2 La rete, la variante e la quantizzazione'))
+    A(('p', "Tre nomi ricorrono nel documento e vanno sciolti, perche' identificano scelte di progetto "
+            "gia' fatte altrove e qui soltanto ereditate."))
+    A(('table', (['Nome', 'Che cosa indica'], [
+        ["rete a spike", "una rete ricorrente a **32 neuroni nascosti** che, per ogni passo di controllo, "
+                         "evolve per **10 passi interni**; la ricorrenza e' fattorizzata a rango 16 e i "
+                         "ritardi sinaptici arrivano a 6 passi. Produce le 5 uscite del \u00a74.1. In "
+                         "hardware i 32 neuroni condividono **una sola** unita' di calcolo, percorsa a "
+                         "turno: e' cio' che tiene l'area entro il dispositivo"],
+        ["`@BALANCED`", "la rete e' disponibile in tre varianti di **pipelining** \u2014 area minima, "
+                        "compromesso, margine temporale massimo. Qui e' in uso la intermedia. Le tre "
+                        "calcolano la stessa funzione: cambiano quanti registri separano gli stadi, "
+                        "quindi area e frequenza, non il risultato"],
+        ["`nfrac 13`", "i **bit frazionari** della rappresentazione in virgola fissa interna. Tredici bit "
+                       "dopo la virgola; la scelta viene da uno studio di quantizzazione dedicato, "
+                       "esterno a questo documento"],
+    ])))
+    A(('p', "Il passo di controllo di **0,1 s** che ricorre nel documento non e' una convenzione di "
+            "comodo: e' il passo temporale del dataset di riferimento, cioe' la cadenza a cui il "
+            "controllore e' chiamato a decidere, **10 volte al secondo**. E' anche l'unico requisito "
+            "temporale del sistema: tutto il resto \u2014 frequenza di clock, latenza, duty \u2014 e' "
+            "caratterizzazione, non vincolo."))
+    A(('h2', '2.3 Cosa è dentro e cosa è fuori'))
     A(('table', (['Dentro il perimetro', 'Fuori dal perimetro'], [
         ['Equivalenza del VHDL generato rispetto al blocco, su tutto il dataset',
          'Il controllore completo (rete + legge IDM): documento gemello'],
@@ -439,7 +461,7 @@ def build_doc():
          'Implementazione e potenza dell\'intero block design (richiede il modello del processore)'],
         ['Bitstream e handoff per la board', 'Misura su silicio: è la Fase C, su board fisica'],
     ])))
-    A(('h2', '2.3 La catena di fiducia: il riferimento è il blocco stesso'))
+    A(('h2', '2.4 La catena di fiducia: il riferimento è il blocco stesso'))
     A(('p', 'Un confronto bit-esatto vale quanto il riferimento con cui si confronta. Qui il riferimento è '
             '**il blocco stesso**, eseguito nel suo ambiente di modellazione e campionato ciclo per ciclo: '
             'l\'uguaglianza fra RTL e riferimento è quindi, per costruzione, uguaglianza fra RTL e blocco, '
