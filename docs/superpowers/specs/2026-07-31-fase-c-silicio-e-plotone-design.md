@@ -110,16 +110,24 @@ decomposizione in due prove disgiunte di T7a, applicata al silicio.
 C0 → C3 sul bitstream del composto (40 MHz), che è già **provato identico** al sistema caratterizzato.
 
 ### Filone B — Silicio, SNN da sola
-La stessa scala sul bitstream di T6 (52 MHz), che esiste. Dà il quadro del singolo pezzo, e **per differenza
-con A** un numero non ottenibile altrimenti: l'**energia incrementale del controllore** (ACC-IIDM + `align`)
-misurata sul silicio. In simulazione abbiamo la ripartizione dell'*area* dalla gerarchia, ma non quella
-dell'*energia*, perché il SAIF copriva l'intero DUT.
+La stessa scala sul bitstream di T6 (**52 MHz**), che esiste. Dà il quadro del singolo pezzo: la rete
+`Tier@BALANCED` da sola sul silicio, e poi — con il filone A — la stessa rete *con* il controllore.
 
-> ⚠️ **Il confronto richiede pari frequenza.** I due bitstream sono caratterizzati a 52 e 40 MHz: una
-> differenza presa così confonderebbe il costo del controllore con la differenza di frequenza. Per quel
-> confronto la SNN va **ricostruita a 40 MHz** (una implementazione, ~12 min), mantenendo il punto a 52 per la
-> sua caratterizzazione propria. È la *same-window rule*: il confronto deve contenere le stesse condizioni da
-> entrambi i lati.
+**Ogni bitstream si misura al proprio punto deployabile**, 52 MHz per la SNN e 40 per il composto. È il numero
+che descrive come quel pezzo spedirebbe davvero; una build della SNN a 40 MHz sarebbe un artefatto che esiste
+solo per una sottrazione e che nessuno metterebbe in campo. Questo mantiene anche la continuità con quanto già
+caratterizzato in T6b e T7b, senza introdurre un punto di misura che non corrisponde a nulla.
+
+> ⚠️ **Conseguenza dichiarata: l'energia incrementale del controllore NON è ottenibile da questa fase.**
+> Verrebbe naturale ricavarla per differenza fra i due filoni, ma i bitstream differiscono anche in frequenza.
+> La potenza dinamica scala con essa ed è dominata dall'albero del clock (~78 % secondo T6b): da 52 a 40 MHz
+> sono +30 % su quella quota, **≈ 2,6 mW**. Con una risoluzione differenziale di ~0,5 mW per conteggio sono
+> ~5 conteggi — non sotto la soglia, ma **dello stesso ordine del costo del controllore** che si vorrebbe
+> isolare. I due effetti non sono quindi **separabili** da questa misura.
+>
+> La ripartizione dell'**area** fra rete, allineamento e controllore resta nota dalla gerarchia post-route
+> (§6.3 del report T7). Quella dell'**energia** richiederebbe di equalizzare la frequenza, introducendo un
+> punto di misura fittizio, oppure l'accesso al rail del PL. Passa fra i limiti dichiarati (§11).
 
 ### Filone C — Plotone
 Chiude il proxy dichiarato nel motore canonico. L'infrastruttura **esiste già e non è mai stata usata**:
@@ -214,7 +222,9 @@ in B2.0 ha intercettato quattro errori di chi scriveva.
 2. Le **31 metriche** ricalcolate dalle serie del **silicio** coincidono con quelle di T7a
 3. **C3**: guadagno del gating misurato, con incertezza e `Tj` dichiarate, e il confronto esplicito con la
    stima di simulazione (§2.2) — informativo in entrambi gli esiti
-4. **Filone B**: energia incrementale del controllore, a **pari frequenza**
+4. **Filone B**: la SNN da sola validata sul silicio al **proprio** punto deployabile (52 MHz), con la
+   sua potenza di deployment. L'energia **incrementale** del controllore non fa parte dei criteri: e'
+   dichiarata non separabile (§4, filone B)
 5. **Filone C**: string stability **vera** che sostituisce il proxy nei report; per P3, la curva risorse
    misurata e il numero di nodi che chiudono i tempi
 6. Tutto **rigenerabile da un comando**, con le due facciate in **parità**, e ogni decisione architetturale
@@ -222,8 +232,9 @@ in B2.0 ha intercettato quattro errori di chi scriveva.
 
 ## 10. Vincoli permanenti
 
-- **Core SNN congelato**: la Fase C non tocca RTL né blocco. Usa i bitstream esistenti; il `×3` e il `40 MHz`
-  della SNN sono **ri-implementazioni degli stessi sorgenti**, con firma di provenienza verificata.
+- **Core SNN congelato**: la Fase C non tocca RTL né blocco. Usa i **bitstream esistenti** così come sono;
+  l'unica ri-implementazione è il `×3` del filone C, dagli stessi sorgenti e con firma di provenienza
+  verificata.
 - **Niente work-around**: un disallineamento si indaga fino alla causa, non si aggira.
 - **I numeri vivono negli artefatti**, mai nella chat né nell'output di una cella.
 - **Un cancello che non può fallire non è un cancello**: ognuno va visto fallire su dati alterati.
@@ -234,5 +245,6 @@ in B2.0 ha intercettato quattro errori di chi scriveva.
 | Domanda | Perché resta aperta |
 |---|---|
 | Caso peggiore energetico a risoluzione PL | richiede accesso al rail VCCINT, cioè modifica della scheda; e individuare il regime peggiore richiederebbe uno studio dedicato |
+| **Energia incrementale del controllore** (ACC-IIDM + `align`) | i due bitstream sono misurati a frequenze diverse — ciascuno al proprio punto deployabile, per scelta — e l'effetto della frequenza (≈2,6 mW) è dello stesso ordine di quello da isolare. Equalizzare significherebbe misurare un punto che nessuno spedirebbe. L'area, invece, è nota dalla gerarchia |
 | Collo di bottiglia `DEC → align → IIDM` | è una questione di micro-architettura, indipendente dal silicio; non blocca nulla (margine 7207×) |
 | Confronto MPC-vs-SNN | design parcheggiato, spec già depositata |
