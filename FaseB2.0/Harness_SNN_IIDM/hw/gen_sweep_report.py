@@ -201,7 +201,12 @@ a('**L\'area non e\' la leva su cui agire per guadagnare frequenza**, e per conv
 a('costa area in modo apprezzabile.\n')
 
 a('## Margine sul control-step — il solo requisito temporale vero\n')
-a('Una inferenza+controllo dura **%d clock** (misurato in T7a).\n' % LAT_CLK)
+a('Una inferenza+controllo dura **%d clock** (misurato in T7a): e\' la **latenza pura del DUT**.\n' % LAT_CLK)
+a('⚠️ Il **duty** riportato in [`POWER.md`](POWER.md) e\' leggermente piu\' alto perche\' misura la finestra')
+a('**effettivamente occupata**, protocollo AXI incluso (**582 clock**: %d di latenza + 27 di scritture e polling'
+  % LAT_CLK)
+a('del `done`). I due numeri non sono in contraddizione, misurano due cose diverse: qui la **capacita\' del')
+a('blocco**, la\' l\'**occupazione reale del sistema**. Per l\'energia vale il secondo.\n')
 for d in (pts[0], best):
     t = LAT_CLK / (d['freq'] * 1e6)
     a('- a **%g MHz**: %d clock = **%.1f µs** contro un control-step di **%g s** ⇒ margine **%.0f×**, duty **%.4f %%**'

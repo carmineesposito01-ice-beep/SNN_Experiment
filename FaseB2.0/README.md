@@ -5,15 +5,18 @@ Ultima fase prima della **Fase C** (FPGA fisica). Obiettivo: dimostrare che il *
 una **caratterizzazione completa** (funzionamento della rete e di rete+car-following) al livello dei report
 in `../report/`.
 
-> **Stato (2026-07-30):** T1–T4 · **T5** (deriva open-loop → [`common/DRIFT.md`](common/DRIFT.md)) · **T6a**
+> **Stato (2026-07-31):** T1–T4 · **T5** (deriva open-loop → [`common/DRIFT.md`](common/DRIFT.md)) · **T6a**
 > (validazione RTL della SNN → [`Harness_SNN/results/RESULTS.md`](Harness_SNN/results/RESULTS.md)) · ✅ **T6b
 > COMPLETO M1–M5** (caratterizzazione HW → [`Harness_SNN/results/RESULTS_HW.md`](Harness_SNN/results/RESULTS_HW.md))
 > · ✅ **T7a COMPLETO sui 99** (anello chiuso RTL + metriche →
-> [`Harness_SNN_IIDM/results/RESULTS.md`](Harness_SNN_IIDM/results/RESULTS.md)) — tutti FATTI e committati.
-> **Prossimo: T7b** (hardware del composto: FCLK, risorse, potenza, bitstream), poi **T8** (2 report
-> `create-report`) e **T9** (allineamento doc).
+> [`Harness_SNN_IIDM/results/RESULTS.md`](Harness_SNN_IIDM/results/RESULTS.md)) · ✅ **T7b COMPLETO**
+> (hardware del composto → [`Harness_SNN_IIDM/results/RESULTS_HW.md`](Harness_SNN_IIDM/results/RESULTS_HW.md))
+> — tutti FATTI e committati.
+> **Prossimo: T8** (2 report `create-report`), poi **T9** (allineamento doc).
 > **▶ Riesecuzione T7a:** `run_harness_snn_iidm('full')` (43 min) — prerequisito
 > `rtl_gen_dut('Donatello_SNN_IIDM','C:/t7hdlv','Verilog')`.
+> **▶ Riesecuzione HW T7b:** `bash Harness_SNN_IIDM/hw/run_harness_snniidm_hw.sh [stadio]`
+> (`summary` = numeri in pochi secondi; `check` = cancello di provenienza sui sorgenti).
 
 ### Sintesi dei numeri T7a (dettaglio in `Harness_SNN_IIDM/results/RESULTS.md`)
 | Grandezza | Valore | Natura |
@@ -45,6 +48,33 @@ blocco **DEPRECATO** `Donatello_ACC_IIDM_M` e **diverge dal composto** (385 scar
 | Guadagno del gating in watt | **2–4×** atteso sulla dinamica | ⚠️ **stima** → Fase C |
 | **Bitstream PYNQ-Z1** @52 MHz (`.bit`/`.hwh`/`.xsa`) | WNS +0,358 = quello dello sweep | prodotto |
 | Worst-case sintetico come bound | ❌ invalidato (era il più basso) → si usa il **max osservato** 0,045 W | — |
+
+### Sintesi dei numeri HW del COMPOSTO (T7b, dettaglio in `Harness_SNN_IIDM/results/RESULTS_HW.md`)
+
+> Questa tabella è **generata** (`gen_results_hw.py` compone i JSON dei tre generatori di dettaglio);
+> il file qui sotto ne è una copia di comodo. La fonte è `Harness_SNN_IIDM/results/RESULTS_HW.md`.
+
+| Grandezza | Valore | Natura |
+|---|---|---|
+| Params letti dal **PS via AXI** == blocco | **0 / 58 522** su 99 scenari, gating ON e OFF | misurato |
+| Netlist **post-place&route** == blocco | **0 / 1507** (3 scenari **dichiarati**, funcsim) | misurato |
+| **FCLK deployabile** / limite del cammino critico | **40 MHz** (WNS +0,022 · WHS +0,033) / **41,1 MHz** | misurato / derivato |
+| Risorse post-route @40 MHz | 8453 LUT (15,9 %) · 4556 FF (4,3 %) · **69 DSP** (31,4 %) · **1 BRAM** | misurato |
+| Finestra attiva (inferenza + protocollo AXI) | **582 clock** = 555 di latenza + **27 di AXI** | misurato |
+| Latenza / margine sul control-step 0,1 s | 13,9 µs / **≈7207×** (duty **0,0146 %**) | derivato |
+| **Energia dinamica per control-step** (duty **reale**) | **1,10 mJ** (0,011 W) | misurato |
+| Statica del device (pavimento del chip, **separata**) | 0,103 W → 10,3 mJ | misurato |
+| **Clock gating**: commutazione in idle | **26,0 → 2,0** toggle/clock = **13×** | misurato **nel SAIF** |
+| Guadagno del gating **in watt** | ❌ **non misurabile con questo flusso** (watt identici) | — |
+| Dispersione fra gli 8 carichi reali | watt identici a 3 decimali · **2,9 %** sui *toggle* | misurato |
+| **Copertura SAIF** / confidenza | **12 506 / 19 951 net = 62,7 %** · `High` | misurato |
+| **Bitstream PYNQ-Z1** @40 MHz (`.bit`/`.hwh`/`.xsa`) | WNS **e** utilizzo **identici** allo sweep | prodotto |
+
+⚠️ **Due premesse su cui non costruire, apprese qui:** (1) il **PS7 quantizza** la frequenza richiesta
+(15→15,152 · 30→30,303 · 35→34,484 · 45→45,455 MHz) — il periodo va **letto** dal `report_timing`, non
+calcolato come `1000/f`; (2) **OOC e sistema sono perimetri diversi**: lo stesso circuito a 40 MHz chiude
+nel sistema (+0,022) e **non** chiude in OOC (−0,194), quindi un numero OOC **non** è una capacità del
+progetto. Ne segue che la vecchia regola «il deployabile vale ~metà dell'OOC» **non vale** su questo blocco.
 
 ## Requisiti di metodo (vincolanti — appresi in T6a, 2026-07-29)
 1. **Riproducibilità:** ogni harness è **rilanciabile da chiunque con UN comando** e salva i numeri in **artefatti su

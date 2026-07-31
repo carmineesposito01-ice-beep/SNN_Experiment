@@ -1,64 +1,50 @@
 
-## ▶ RIPRESA 2026-08-01 — T7b a meta': sweep e cosim FATTI, netlist/energia/bitstream DA FARE
+## ▶ RIPRESA — T7b **COMPLETO**. Prossimo: **T8** (i due report `create-report`)
 
-**Interrotto il 2026-07-31 alle 16:20 su richiesta (fine giornata), non per un problema.**
-Nessun job lasciato girare: processi Vivado/xsim chiusi, albero git pulito.
+**T7b chiuso il 2026-07-31.** Tutto committato, albero pulito, nessun job lasciato girare.
 
-### Cosa e' FATTO (committato, con artefatti su disco)
+### PRIMA AZIONE — verificare lo stato in pochi secondi, senza lanciare calcolo
+
+```
+bash FaseB2.0/Harness_SNN_IIDM/hw/run_harness_snniidm_hw.sh summary
+```
+Riestrae i numeri dagli artefatti; se un artefatto manca lo **dice**. Lo stadio `check` confronta la
+firma md5 dei sorgenti con `results/src.sig` e **blocca** gli stadi di calcolo se non coincide.
+
+### Cosa e' FATTO (artefatti tutti GENERATI da script che parsano i report grezzi)
 
 | | Esito | Artefatto |
 |---|---|---|
-| T7a sui 99 | **verde**, ri-validato dopo il cambio di `align` (3168 metriche, **0 diverse**) | `Harness_SNN_IIDM/results/RESULTS.md` |
+| T7a sui 99 | **0 / 58 522** (T7-EXACT) · 0 collisioni aggiuntive · 31 metriche/scenario | `Harness_SNN_IIDM/results/RESULTS.md` |
 | Cosim AXI sui 99 | **0 / 58 522** in **entrambi** i modi di gating | `results/COSIM_AXI.md` |
-| **Sweep FCLK** (8 punti) | **deployabile 40 MHz** (misurata, WNS +0,022 · WHS +0,033) · **limite 41,1 MHz** (derivata) | `results/SWEEP_FCLK.md` + 24 `.rpt` grezzi |
-| Risorse post-route @40 MHz | gerarchia fino a SNN/DEC/align; LUT 15,9% · FF 4,3% · DSP 31,4% · BRAM 0,7% | idem |
-| Netlist funcsim | **esportata** (150 396 righe), impl OOC fatta | `C:/t7bnl/netlist/` (fuori repo) |
+| Sweep FCLK (8 punti) | **40 MHz deployabile** (WNS +0,022 · WHS +0,033) · **41,1 MHz** limite derivato | `results/SWEEP_FCLK.md` |
+| Netlist post-route | **0 / 1507** su sottoinsieme dichiarato [1, 4, 9] · gate-level **44×** · i 99 = ~28 h | `results/NETLIST.md` |
+| Energia | duty REALE **1,10 mJ** dinamica/control-step (statica 10,3 mJ separata) · SAIF **62,7 %** | `results/POWER.md` |
+| Bitstream @40 MHz | `.bit`/`.hwh`/`.xsa`, WNS **e** utilizzo **identici** allo sweep | `bitstream/` |
+| **Sintesi** | tutti i numeri con la loro **natura** (misurato/derivato/stima/prodotto) | **`results/RESULTS_HW.md`** |
 
-### PRIMA AZIONE — riprendere la netlist (era in corso quando ci siamo fermati)
+### PROSSIMO: T8 — i due report `create-report`
 
-```
-bash FaseB2.0/Harness_SNN_IIDM/hw/run_netlist.sh
-```
-La **fase 1 (impl OOC, ~10 min) viene SALTATA**: c'e' un cancello di provenienza sulla firma dei
-sorgenti (`C:/t7bnl/netlist/src.sig`), gia' scritta e verificata. Provato in tutte e tre le direzioni:
-salta se combacia, ricostruisce se la firma differisce **o** se la netlist manca. Con `NETLIST_DRYRUN=1`
-stampa la decisione senza lanciare Vivado.
-Parte quindi direttamente la **fase 2**: funcsim sul sottoinsieme **DICHIARATO [1, 4, 9]** (9 collide,
-N=307 — e' lo scenario che aveva scoperto il difetto di `axi_len`).
-**Totale atteso, dichiarato in anticipo: 600 + 600 + 307 = 1507 confronti, nMismatch = 0.**
-Costo: **~80 min** — stima da T6b (~22 min/traiettoria) scalata per 560/371 clock/passo. **Non e'
-ancora misurata su T7b**: il primo scenario che completa la trasforma in misura.
+Uno per **Harness_SNN** (T6a+T6b) — **gia' fatto**, `report/B2_0_HARNESS_SNN_REPORT.{md,pdf}` — e uno per
+**Harness_SNN_IIDM** (T7a+T7b), **da fare**. Fonti per il secondo: i 5 `.md` in
+`Harness_SNN_IIDM/results/` + i `.rpt`/`.log` grezzi accanto. Poi **T9** (allineamento doc finale).
 
-### Poi, nell'ordine
+### Cose IMPARATE, da non ri-scoprire (dettaglio completo in `HDL_PHASE.md` §9 "T7b")
 
-1. **Energia** — `bash FaseB2.0/Harness_SNN_IIDM/hw/run_power.sh` (predisposto, **mai eseguito**).
-   Quattro passi: P0 finestra attiva *derivata dal banco* · P1 idle (convergenza 200/1000/5000 +
-   gating) · P2 **8 carichi reali** · P3 **duty REALE** · P4 `report_power`.
-   ⚠️ **P3 e' l'incognita di costo**: un control-step intero = **4 000 000 di clock**. In idle il
-   simulatore ha pochi eventi e va molto piu' veloce, ma **quanto non e' noto**: la forbice va da
-   ~13 min a >2 h. **Misurare il rate con una run corta (`IDLECYC` piccolo) PRIMA di lanciare**, e
-   se risulta proibitivo portare la scelta all'utente invece di ridurre di propria iniziativa —
-   il duty non composto e' il punto stesso di quel passo.
-2. **Bitstream** @40 MHz + entry-point a stadi + `RESULTS_HW.md` scritto da script (~25 min).
-3. **Documentazione** (`FaseB2.0/README.md`, `HDL_PHASE.md` §6, questo file) — poi **T8**: i due report.
-
-### Due cose IMPARATE il 2026-07-31, da non ri-scoprire
-
-- **Il PS7 QUANTIZZA la frequenza richiesta** (15→15,152 · 30→30,303 · 35→34,484 · 45→45,455 MHz).
-  Il periodo **non** e' `1000/f_richiesta`: va letto dalla tabella dei clock del `report_timing`.
-  Una tabella costruita sull'assunzione aveva 4 righe sbagliate su 8.
-- **OOC e sistema sono perimetri DIVERSI e i numeri non si scambiano.** Lo stesso circuito a 40 MHz
-  **chiude nel sistema** (+0,022) e **non chiude in OOC** (−0,194). Un numero OOC non e' una capacita'
-  del progetto. ⚠️ Ne segue che la frase "il deployabile io-timed vale ~meta' dell'OOC", scritta qui
-  ieri, **non vale su questo blocco**: quella regolarita' del Tier valeva perche' il collo stava al
-  confine d'ingresso, e dopo la correzione di `align` non ci sta piu'.
+- **Il PS7 QUANTIZZA** la frequenza richiesta: il periodo si **legge** dal `report_timing`, non si calcola.
+- **OOC e sistema sono perimetri diversi**: lo stesso circuito a 40 MHz chiude nel sistema e **non** in OOC.
+  ⇒ la vecchia frase "il deployabile vale ~meta' dell'OOC" **non vale** su questo blocco.
+- **`report_power` stampa 3 decimali e sotto quelli la dispersione sparisce.** Si contano i **toggle** nel
+  SAIF: e' cosi' che si vede il 2,9 % fra i carichi, il **13×** del clock gating e la stazionarieta' dell'idle.
+- **Le stime di costo scalate da un altro progetto sono ordini di grandezza**: netlist stimata ~80 min,
+  misurata **42**.
 
 ### Numeri da NON riderivare
 
-`LAT_CLK` = 560 · inferenza+controllo = **555 clock** · control-step 0,1 s = **4 000 000 clock @40 MHz**
-⇒ margine **7207×**, duty **0,0139 %**. Formato ingressi **En20**, uscita `accel` **sfix13_En8**.
-Mappa registri AXI: `0x00–0x0C` ingressi · `0x10` controllo (bit0 commit, bit1 gating) e `done` in
-lettura · `0x14` accel.
+`LAT_CLK` = 560 · inferenza+controllo = **555 clock** · finestra attiva **582 clock** (555 + 27 di protocollo
+AXI, MISURATA) · control-step 0,1 s = **4 000 000 clock @40 MHz** ⇒ margine **7207×**, duty **0,0146 %**.
+Formato ingressi **En20**, uscita `accel` **sfix13_En8**. Mappa registri AXI: `0x00–0x0C` ingressi ·
+`0x10` controllo (bit0 commit, bit1 gating) e `done` in lettura · `0x14` accel.
 
 **Collo di bottiglia — APERTO e documentato** (`HDL_PHASE.md` §9): il cammino critico attraversa
 ancora `DEC → align → IIDM` (24,1 ns). `align` e' sceso da 32 a 18 celle ma HDL Coder ne

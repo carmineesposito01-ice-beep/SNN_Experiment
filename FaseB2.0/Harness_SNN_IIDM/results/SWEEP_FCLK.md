@@ -89,7 +89,12 @@ costa area in modo apprezzabile.
 
 ## Margine sul control-step — il solo requisito temporale vero
 
-Una inferenza+controllo dura **555 clock** (misurato in T7a).
+Una inferenza+controllo dura **555 clock** (misurato in T7a): e' la **latenza pura del DUT**.
+
+⚠️ Il **duty** riportato in [`POWER.md`](POWER.md) e' leggermente piu' alto perche' misura la finestra
+**effettivamente occupata**, protocollo AXI incluso (**582 clock**: 555 di latenza + 27 di scritture e polling
+del `done`). I due numeri non sono in contraddizione, misurano due cose diverse: qui la **capacita' del
+blocco**, la' l'**occupazione reale del sistema**. Per l'energia vale il secondo.
 
 - a **15.152 MHz**: 555 clock = **36.6 µs** contro un control-step di **0.1 s** ⇒ margine **2730×**, duty **0.0366 %**
 - a **40 MHz**: 555 clock = **13.9 µs** contro un control-step di **0.1 s** ⇒ margine **7207×**, duty **0.0139 %**

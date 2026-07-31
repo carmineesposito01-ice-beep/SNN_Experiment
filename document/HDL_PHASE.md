@@ -487,6 +487,27 @@ Config in `make_hdl.m`: `LoopOptimization='StreamLoops'`, `ConstantMultiplierOpt
   `dmax=0`). **Gate HDL self-contained** `run_milestone_hdl_gates`: **5/5 PASS** (LUT N=64 e N=16, Tier, ACC_IIDM_M,
   ACC-IIDM). Report QC'd (create-report, 6 fix, rebuild deterministico). Finding composizione + workflow libreria: §9.
   Stato completo: `SESSION_RESUME.md` §MILESTONE 2026-07-27.
+- ✅ **[FASE B2.0 T7b — 2026-07-31] Caratterizzazione HARDWARE del COMPOSTO** (`Donatello_SNN_IIDM` = Tier@BAL/n13
+  + `align` + ACC-IIDM, dietro `snniidm_axi_lite` + PS7), su xc7z020clg400-1 / PYNQ-Z1. Artefatti in
+  `FaseB2.0/Harness_SNN_IIDM/results/` — **tutti generati da script che parsano i report grezzi**, mai trascritti:
+  `RESULTS_HW.md` (sintesi) · `SWEEP_FCLK.md` · `NETLIST.md` · `POWER.md`.
+  - **FCLK deployabile 40 MHz** (WNS +0,022 · WHS +0,033, entrambi letti dal report — l'hold non si suppone) ·
+    **limite del cammino critico 41,1 MHz** (derivato al punto più stretto, che NON chiude).
+  - **Risorse post-route @40 MHz**: 8453 LUT (15,9 %) · 4556 FF · **69 DSP** (31,4 %) · **1 BRAM**. Gerarchia fino a
+    SNN/DEC/`align`: `align` costa **876 LUT (11 % del DUT)** — è il prezzo di **una** inferenza per control-step.
+  - **Netlist post-route == blocco: 0 / 1507** su sottoinsieme **dichiarato** [1, 4, 9] (9 collide, N=307).
+    Penalizzazione gate-level **44×** MISURATA qui (T6b: 29× sul proprio progetto) ⇒ i 99 costerebbero **~28 h**.
+  - **Energia**: idle 0,011 W · attiva 0,026 W · **duty REALE 0,011 W dinamica ⇒ 1,10 mJ per control-step**
+    (statica 0,103 W = 10,3 mJ, **separata**). Finestra attiva **582 clock MISURATI** (555 + 27 di protocollo AXI),
+    duty **0,0146 %**. Copertura SAIF **62,7 %**, confidenza `High` — dentro il numero, non in nota.
+  - ⚠️ **I watt da soli sarebbero stati fuorvianti**: gli 8 carichi reali risultano identici a 3 decimali, ma nei
+    SAIF la commutazione varia del **2,9 %** — sotto la precisione di stampa. Ed è la lettura dei toggle che rende
+    **misurabile il clock gating** (**26,0 → 2,0** toggle/clock = **13×**) là dove i watt non cambiano affatto.
+  - **Bitstream PYNQ-Z1 @40 MHz** prodotto, con WNS **e** utilizzo **identici** allo sweep: è lo stesso sistema
+    caratterizzato, e un cancello lo verifica a ogni rigenerazione della sintesi.
+  - **Entry-point** `hw/run_harness_snniidm_hw.sh [check|cosim|sweep|netlist|power|bitstream|summary|all]`;
+    `summary` riestrae i numeri in secondi, `check` blocca gli stadi di calcolo se la firma dei sorgenti non
+    coincide con `results/src.sig`. Trappole nuove: **§9 T7b**.
 
 ## §7 File (worktree)
 - **Sorgente HDL:** `matlab/snn_core.m` (mod), `matlab/snn_types.m` (mod, +`accw`),
@@ -525,6 +546,38 @@ Config in `make_hdl.m`: `LoopOptimization='StreamLoops'`, `ConstantMultiplierOpt
 6. **Registrazione custom-board PYNQ-Z1** + eventuale ri-profilazione Qm.n.
 
 ## §9 Gotcha / lezioni (FONDAMENTALI — non ri-sbatterci)
+- **⚠️ T7b — 7 trappole nuove, verificate su misura (2026-07-31).** Sono in aggiunta alle 10 di T6b qui sotto,
+  e riguardano tutte lo stesso tema: **il numero che il tool stampa non è il numero che credi di leggere.**
+  1. **Il PS7 QUANTIZZA la frequenza richiesta.** Chiesti 15/30/35/45 MHz → realizzati **15,152 / 30,303 /
+     34,484 / 45,455**. Il periodo **non** è `1000/f_richiesta`: va letto dalla **tabella dei clock** del
+     `report_timing`. Una tabella costruita sull'assunzione aveva **4 righe sbagliate su 8** — e le due
+     conclusioni si sono salvate solo perché 40 e 50 MHz erano stati realizzati esatti.
+  2. **OOC e sistema sono perimetri DIVERSI e i numeri non si scambiano.** Lo stesso circuito a 40 MHz
+     **chiude nel sistema** (WNS +0,022) e **NON chiude in OOC** (−0,194). Un numero OOC **non è una capacità
+     del progetto**; è confrontabile solo con altri OOC dello stesso perimetro. ⇒ La regola «il deployabile
+     vale ~metà dell'OOC» valeva per il Tier **perché il collo stava al confine d'ingresso**: non è una legge.
+  3. **`%0t` non dice in che unità stampa.** Dipende da `$timeformat`, non garantito fra versioni. Assumere
+     "ps" e sbagliare dà una finestra attiva 1000× più piccola: `IDLECYC` cambierebbe dello 0,014 %
+     (invisibile) e il duty verrebbe stampato `0,0000 %`. Si provano **entrambe** le letture e si tiene quella
+     plausibile — non possono esserlo insieme (separazione 1000× contro finestra 50×).
+  4. **Il preludio a tempo fisso prima di aprire la finestra SAIF è tarato su UNA frequenza.** T6b usava
+     `run 2 us`; a 40 MHz sono 80 clock mentre il banco raggiunge `DUTY-READY` a ~25 ⇒ taglierebbe ~55 clock
+     **dentro la fase attiva**, cioè la parte che consuma.
+  5. **Il SAIF esiste anche quando la finestra è nel posto sbagliato.** Un preludio insufficiente produce un
+     file regolare che misura la fase ATTIVA credendo di misurare l'idle: numero credibile, misura sbagliata.
+     Il cancello deve verificare che il banco abbia **dichiarato** l'idle, non che il file esista.
+  6. **`report_power` stampa 3 decimali: sotto quelli, la dispersione sparisce.** 8 carichi diversi risultano
+     identici a 0,026 W mentre nei SAIF la commutazione varia del **2,9 %**. Riportare «dispersione nulla»
+     significherebbe scambiare un limite di precisione per una proprietà del circuito. **Si contano i toggle.**
+     È la stessa lettura che rende misurabile il **clock gating** (26,0 → 2,0 toggle/clock) dove i watt sono
+     identici, e che prova la **stazionarietà dell'idle** (TC/clock costante su un fattore 25 di durata) là
+     dove tre watt uguali potrebbero esserlo per insensibilità dello strumento.
+  7. **Le stime di costo scalate da un altro progetto sono ordini di grandezza, non previsioni.** La netlist
+     stimata da T6b (~22 min/traiettoria × 560/371 clock) dava ~80 min: il misurato è **42**. E la
+     penalizzazione gate-level qui è **44×**, non i 29× di T6b.
+  ⇒ **Regola operativa che le riassume:** quando un numero sembra troppo uniforme, troppo tondo o troppo
+  comodo, **guarda l'artefatto sotto** (SAIF, `.rpt`, tabella dei clock) prima di spiegarlo. Una spiegazione
+  tecnica plausibile per un dato sbagliato è più pericolosa di nessuna spiegazione.
 - **⚠️ WRAPPER AXI + POTENZA + SIM DI NETLIST — 10 trappole verificate in T6b (2026-07-30).** Chi rifà un harness
   hardware (T7, Fase C) le trova tutte:
   1. **`ce_out` di HDL Coder è un CLOCK-ENABLE, non un `done`.** Misurato: alto **1500/1500 cicli**. Usarlo come
