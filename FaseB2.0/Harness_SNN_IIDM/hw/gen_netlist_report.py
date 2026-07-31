@@ -136,5 +136,14 @@ a('| Il timing chiude? | **si** a 40 MHz | STA, non simulazione (`SWEEP_FCLK.md`
 a('| L\'integrazione con PS7 / protocol converter? | STA di sistema; board in Fase C | perimetro OOC, dichiarato sopra |')
 
 io.open(OUT, 'w', encoding='utf-8', newline='').write('\n'.join(L) + '\n')
+
+import json
+json.dump({
+    'nmismatch': NM, 'n': N, 'nscen': NS,
+    'scenari': [r['sc'] for r in runs],
+    'wall_s': T, 's_per_step': round(sp_avg, 3),
+    'gate_level_ratio': round(ratio, 1), 'beh_s_per_step': round(BEH_S_PER_STEP, 4),
+    'full99_hours': round(full_h, 1),
+}, io.open(os.path.join(RES, 'netlist.json'), 'w', encoding='utf-8'), indent=1, ensure_ascii=False)
 print('GEN-OK %s | %d scenari | %d/%d | %d m | gate-level %.0fx | full-%d ~%.0f h'
       % (os.path.basename(OUT), NS, NM, N, T // 60, ratio, NSCEN_FULL, full_h))

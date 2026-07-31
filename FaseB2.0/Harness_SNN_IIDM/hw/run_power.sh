@@ -94,6 +94,16 @@ echo "  finestra attiva MISURATA = ${ACT_CLK} clock (latenza pura 555 + protocol
 echo "  control-step a ${FCLK} MHz = ${TOT_CLK} clock  ->  IDLECYC = ${IDLECYC}  ->  duty = ${DUTY} %"
 [ "$IDLECYC" -gt 0 ] || { echo "POWER-ABORT: IDLECYC non positivo"; exit 1; }
 
+# I parametri EFFETTIVAMENTE usati vanno su disco: il generatore del report li LEGGE invece di
+# riportarli a mano. ACT_CLK in particolare e' MISURATO -- riscriverlo nel generatore significherebbe
+# che una P0 futura misura un valore e il report ne stampa un altro, in silenzio.
+mkdir -p "$OUT"
+printf '{\n "fclk_mhz": %s,\n "clkhalf_ns": %s,\n "act_clk": %s,\n "nact": %s,\n "idlecyc": %s,\n "tot_clk": %s,\n "duty_pct": %s,\n "ctrl_step_s": %s,\n "workloads": [%s],\n "time_unit": "%s"\n}\n' \
+  "$FCLK" "$CLKHALF" "$ACT_CLK" "$NACT" "$IDLECYC" "$TOT_CLK" "$DUTY" "$CTRL_STEP_S" \
+  "$(echo $WLS | tr ' ' ',')" "$TUNIT" > "$OUT/power_params.json"
+echo "  parametri scritti in results/power_params.json"
+[ "$STAGE" = "params" ] && { echo "=== FINE (stadio: params -- solo P0)  [$(date +%H:%M:%S)] ==="; exit 0; }
+
 # ---------- P1: idle, convergenza + gating ----------
 if [ "$STAGE" = "all" ] || [ "$STAGE" = "idle" ]; then
 echo "=== P1 · idle: convergenza della finestra e confronto gating  [$(date +%H:%M:%S)] ==="

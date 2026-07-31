@@ -1,0 +1,39 @@
+{
+ "idle_dyn_w": 0.011,
+ "idle_tot_w": 0.114,
+ "static_w": 0.103,
+ "idle_converge": true,
+ "idle_gated_dyn_w": 0.011,
+ "act_max_dyn_w": 0.026,
+ "act_max_wl": [
+  1,
+  4,
+  28,
+  31,
+  55,
+  58,
+  73,
+  76
+ ],
+ "act_min_dyn_w": 0.026,
+ "n_workloads": 8,
+ "duty_frac": 0.0001455,
+ "act_clk": 582,
+ "duty_tot_w": 0.114,
+ "duty_dyn_w": 0.011,
+ "energy_dyn_per_step_mj": 1.1,
+ "energy_static_per_step_mj": 10.3,
+ "tc_disp_pct": 2.9,
+ "tc_act_min": 42973956,
+ "tc_act_max": 44252587,
+ "tc_idle_per_clk": 26.0,
+ "tc_idle_gated_per_clk": 2.0,
+ "gating_toggle_gain": 13.0,
+ "duty_coherence_err_pct": 1.5,
+ "composed_dyn_w": 0.011,
+ "saif_cov": [
+  12506,
+  19951
+ ],
+ "confidence": "High"
+}

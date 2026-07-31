@@ -1,0 +1,15 @@
+{
+ "nmismatch": 0,
+ "n": 1507,
+ "nscen": 3,
+ "scenari": [
+  1,
+  4,
+  9
+ ],
+ "wall_s": 2549,
+ "s_per_step": 1.718,
+ "gate_level_ratio": 44.1,
+ "beh_s_per_step": 0.039,
+ "full99_hours": 27.9
+}

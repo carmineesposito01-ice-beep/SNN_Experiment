@@ -211,5 +211,26 @@ a('una caratterizzazione, non un requisito**.')
 
 with io.open(OUT, 'w', encoding='utf-8', newline='') as f:
     f.write('\n'.join(L) + '\n')
+
+# Sommario MACCHINA per il sintetizzatore (RESULTS_HW.md). Un numero nasce in UN posto solo: qui, dal
+# .rpt grezzo. Il sintetizzatore legge questo, non ri-parsa le stesse fonti ne' il markdown generato.
+import json
+json.dump({
+    'deployable_mhz': best['freq'], 'deployable_wns_ns': best['wns'], 'deployable_whs_ns': best['whs'],
+    'datapath_limit_mhz': round(lim, 2), 'limit_from_mhz': tight['freq'],
+    'points': [{'req': d['req'], 'mhz': d['freq'], 'wns': d['wns'], 'whs': d['whs'],
+                'lut': d['lut'], 'ff': d['ff']} for d in pts],
+    'quantized': [{'req': d['req'], 'mhz': d['freq']} for d in quant],
+    'ooc_wns_ns': ooc,
+    'util': {'lut': pts[[d['req'] for d in pts].index(best['req'])]['lut'],
+             'lut_pct': pts[[d['req'] for d in pts].index(best['req'])]['lutp'],
+             'ff': pts[[d['req'] for d in pts].index(best['req'])]['ff'],
+             'ff_pct': pts[[d['req'] for d in pts].index(best['req'])]['ffp'],
+             'dsp': pts[[d['req'] for d in pts].index(best['req'])]['dsp'],
+             'dsp_pct': pts[[d['req'] for d in pts].index(best['req'])]['dspp'],
+             'bram': pts[[d['req'] for d in pts].index(best['req'])]['bram'],
+             'bram_pct': pts[[d['req'] for d in pts].index(best['req'])]['bramp']},
+    'hier': {k: hier[k] for k in hier},
+}, io.open(os.path.join(RES, 'sweep.json'), 'w', encoding='utf-8'), indent=1, ensure_ascii=False)
 print('GEN-OK %s | %d punti | deployabile %g MHz | limite %.1f MHz | gerarchia %d istanze'
       % (os.path.basename(OUT), len(pts), best['freq'], lim, len(hier)))

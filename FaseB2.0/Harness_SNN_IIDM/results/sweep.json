@@ -1,0 +1,185 @@
+{
+ "deployable_mhz": 40.0,
+ "deployable_wns_ns": 0.022,
+ "deployable_whs_ns": 0.033,
+ "datapath_limit_mhz": 41.06,
+ "limit_from_mhz": 50.0,
+ "points": [
+  {
+   "req": 15,
+   "mhz": 15.152,
+   "wns": 30.749,
+   "whs": 0.022,
+   "lut": 8416,
+   "ff": 4556
+  },
+  {
+   "req": 20,
+   "mhz": 20.0,
+   "wns": 16.097,
+   "whs": 0.052,
+   "lut": 8405,
+   "ff": 4556
+  },
+  {
+   "req": 25,
+   "mhz": 25.0,
+   "wns": 9.519,
+   "whs": 0.037,
+   "lut": 8412,
+   "ff": 4556
+  },
+  {
+   "req": 30,
+   "mhz": 30.303,
+   "wns": 2.764,
+   "whs": 0.045,
+   "lut": 8408,
+   "ff": 4556
+  },
+  {
+   "req": 35,
+   "mhz": 34.484,
+   "wns": 1.008,
+   "whs": 0.026,
+   "lut": 8404,
+   "ff": 4556
+  },
+  {
+   "req": 40,
+   "mhz": 40.0,
+   "wns": 0.022,
+   "whs": 0.033,
+   "lut": 8453,
+   "ff": 4556
+  },
+  {
+   "req": 45,
+   "mhz": 45.455,
+   "wns": -2.47,
+   "whs": 0.048,
+   "lut": 8483,
+   "ff": 4560
+  },
+  {
+   "req": 50,
+   "mhz": 50.0,
+   "wns": -4.355,
+   "whs": 0.023,
+   "lut": 8503,
+   "ff": 4562
+  }
+ ],
+ "quantized": [
+  {
+   "req": 15,
+   "mhz": 15.152
+  },
+  {
+   "req": 30,
+   "mhz": 30.303
+  },
+  {
+   "req": 35,
+   "mhz": 34.484
+  },
+  {
+   "req": 45,
+   "mhz": 45.455
+  }
+ ],
+ "ooc_wns_ns": -0.194,
+ "util": {
+  "lut": 8453,
+  "lut_pct": 15.89,
+  "ff": 4556,
+  "ff_pct": 4.28,
+  "dsp": 69,
+  "dsp_pct": 31.36,
+  "bram": 1.0,
+  "bram_pct": 0.71
+ },
+ "hier": {
+  "sys_wrapper": {
+   "mod": "(top)",
+   "lut": 8453,
+   "srl": 60,
+   "ff": 4556,
+   "rb36": 0,
+   "rb18": 2,
+   "dsp": 69
+  },
+  "tier0": {
+   "mod": "sys_tier0_0",
+   "lut": 8084,
+   "srl": 0,
+   "ff": 4097,
+   "rb36": 0,
+   "rb18": 2,
+   "dsp": 69
+  },
+  "u_dut": {
+   "mod": "sys_tier0_0_Donatello_SNN_IIDM",
+   "lut": 7974,
+   "srl": 0,
+   "ff": 3794,
+   "rb36": 0,
+   "rb18": 2,
+   "dsp": 69
+  },
+  "u_ACC": {
+   "mod": "sys_tier0_0_ACC",
+   "lut": 3032,
+   "srl": 0,
+   "ff": 1100,
+   "rb36": 0,
+   "rb18": 0,
+   "dsp": 17
+  },
+  "u_Tier": {
+   "mod": "sys_tier0_0_Tier",
+   "lut": 4077,
+   "srl": 0,
+   "ff": 2442,
+   "rb36": 0,
+   "rb18": 2,
+   "dsp": 52
+  },
+  "u_SNN": {
+   "mod": "sys_tier0_0_SNN",
+   "lut": 2735,
+   "srl": 0,
+   "ff": 2045,
+   "rb36": 0,
+   "rb18": 2,
+   "dsp": 36
+  },
+  "u_DEC": {
+   "mod": "sys_tier0_0_DEC",
+   "lut": 950,
+   "srl": 0,
+   "ff": 397,
+   "rb36": 0,
+   "rb18": 0,
+   "dsp": 16
+  },
+  "u_align": {
+   "mod": "sys_tier0_0_align",
+   "lut": 876,
+   "srl": 0,
+   "ff": 252,
+   "rb36": 0,
+   "rb18": 0,
+   "dsp": 0
+  },
+  "ps7_axi_periph": {
+   "mod": "sys_ps7_axi_periph_0",
+   "lut": 352,
+   "srl": 59,
+   "ff": 426,
+   "rb36": 0,
+   "rb18": 0,
+   "dsp": 0
+  }
+ }
+}
