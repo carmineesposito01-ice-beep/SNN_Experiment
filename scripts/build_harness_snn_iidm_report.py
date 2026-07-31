@@ -484,6 +484,10 @@ def freeze_impact():
     return len(fro), len(ks) - len(fro), out
 
 
+def fmt_i(n):
+    return '{:,}'.format(int(n)).replace(',', ' ')
+
+
 def _fmt(v):
     if v is None:
         return "\u2014"
@@ -491,6 +495,74 @@ def _fmt(v):
         return '%.3g' % v
     return ('%.0f' if float(v).is_integer() else '%.3f') % v
 
+
+
+# ---------------------------------------------------------------------------
+# METADATI DELLE 31 METRICHE — nome esteso, unita', famiglia.
+# Presi dalle DEFINIZIONI in utils/closed_loop_eval.py (il motore canonico), non inventati: il nome
+# breve da solo e' illeggibile per chi non ha scritto il motore, e una tabella di 31 sigle senza unita'
+# non e' un risultato, e' un elenco.
+# famiglia: S=sicurezza · C=comfort · I=inseguimento · E=efficienza e stabilita'
+# ---------------------------------------------------------------------------
+METRIC_META = {
+    'min_ttc':              ('S', 'Tempo minimo alla collisione (TTC)', 's',
+                             'minimo sui 99 scenari'),
+    'TET':                  ('S', 'Tempo esposto a TTC sotto soglia (Time Exposed TTC)', 's',
+                             'soglia 1,5 s'),
+    'TIT':                  ('S', 'Tempo integrato del deficit di TTC (Time Integrated TTC)', 's2',
+                             'integrale di (1,5 - TTC) sotto soglia'),
+    'max_DRAC':             ('S', 'Decelerazione massima richiesta per evitare la collisione', 'm/s2',
+                             'DRAC = dv2/(2s)'),
+    'TED_drac':             ('S', 'Tempo esposto a DRAC oltre soglia', 's', 'soglia 3,35 m/s2 (Archer)'),
+    'TID_drac':             ('S', 'Tempo integrato dell eccesso di DRAC', 'm/s2 x s', 'oltre 3,35 m/s2'),
+    'frac_drac_critical':   ('S', 'Frazione di tempo con DRAC critico', '-', 'oltre 3,35 m/s2'),
+    'cpi':                  ('S', 'Crash Potential Index', '-',
+                             'frazione con DRAC oltre il MADR medio 8,45 m/s2'),
+    'min_gap':              ('S', 'Distanza minima paraurti-paraurti', 'm',
+                             'NEGATIVA = compenetrazione, cioe collisione'),
+    'min_time_headway':     ('S', 'Distanza temporale minima (s/v)', 's', '-'),
+    'brake_margin_min':     ('S', 'Margine di evitabilita fisica', 'm',
+                             's - dv2/(2 b_max); NEGATIVO = collisione fisicamente inevitabile'),
+    'impact_dv':            ('S', 'Velocita relativa all impatto (severita)', 'm/s', '0 se nessuna collisione'),
+    'collided':             ('S', 'Scenari con collisione', 'conteggio', '-'),
+    'frac_ttc_below_1.0':   ('S', 'Frazione di tempo in avvicinamento con TTC sotto 1,0 s', '-', '-'),
+    'frac_ttc_below_1.5':   ('S', 'Frazione di tempo in avvicinamento con TTC sotto 1,5 s', '-', '-'),
+    'frac_ttc_below_2.0':   ('S', 'Frazione di tempo in avvicinamento con TTC sotto 2,0 s', '-', '-'),
+    'frac_ttc_below_3.0':   ('S', 'Frazione di tempo in avvicinamento con TTC sotto 3,0 s', '-', '-'),
+    'rms_accel':            ('C', 'Accelerazione efficace (RMS)', 'm/s2', 'indice di comfort ISO 2631'),
+    'max_decel':            ('C', 'Decelerazione piu forte', 'm/s2', 'limite fisico 9 m/s2'),
+    'rms_jerk':             ('C', 'Jerk efficace (RMS)', 'm/s3', '-'),
+    'max_abs_jerk':         ('C', 'Jerk massimo in valore assoluto', 'm/s3', '-'),
+    'frac_jerk_uncomf':     ('C', 'Frazione di tempo con jerk scomodo', '-', 'oltre 2 m/s3'),
+    'frac_decel_iso_viol':  ('C', 'Frazione con decelerazione oltre il limite ISO', '-',
+                             'ISO 15622: -3,5 m/s2'),
+    'frac_accel_iso_viol':  ('C', 'Frazione con accelerazione oltre il limite ISO', '-',
+                             'ISO 15622: +2,0 m/s2'),
+    'rms_gap_error':        ('I', 'Errore di distanza efficace (RMS)', 'm', 'rispetto alla distanza desiderata'),
+    'mean_abs_gap_err_ss':  ('I', 'Errore di distanza medio a regime', 'm', 'ultimo 50 % della traiettoria'),
+    'mean_abs_dv_ss':       ('I', 'Velocita relativa media a regime', 'm/s', 'ultimo 50 %'),
+    'mean_time_gap':        ('I', 'Distanza temporale media (s/v)', 's', '-'),
+    'mean_T_pred':          ('I', 'Tempo di via libera desiderato, medio, predetto dalla rete', 's',
+                             'e uno dei cinque parametri stimati'),
+    'energy_proxy':         ('E', 'Proxy di energia: integrale della potenza specifica positiva', 'm2/s2',
+                             'somma di v x a quando a > 0'),
+    'string_stability':     ('E', 'Guadagno di stabilita di stringa', '-',
+                             'std(perturbazione ego)/std(perturbazione leader) a regime; sotto 1 = smorza'),
+}
+FAMIGLIE = [('S', 'Sicurezza'), ('C', 'Comfort'), ('I', 'Inseguimento'), ('E', 'Efficienza e stabilita')]
+
+
+def metric_table(fam):
+    """Righe della tabella per una famiglia, ordinate come in METRIC_META."""
+    rows = []
+    for nm, how, a_, b_, r in metric_rows():
+        m = METRIC_META.get(nm)
+        if not m or m[0] != fam:
+            continue
+        _f, desc, unit, note = m
+        rows.append([nm, desc, unit, _agg_rule(nm)[1], _fmt(a_), _fmt(b_),
+                     ('%.3f' % r) if r is not None else "\u2014"])
+    return rows
 
 # ============================================================================
 # CONTENUTO
@@ -600,6 +672,21 @@ def build_doc():
                   '`align` guadagnava frequenza ma reintroduceva il **doppio fronte**: più veloce, e con '
                   'l\'anello che si comportava diversamente. Da allora ogni modifica al confine è soggetta a '
                   'un cancello che **conta i fronti** e ne pretende esattamente uno.'))
+    A(('h2', '2.2 I cinque parametri, e cosa significano'))
+    A(('p', "La rete non produce direttamente l'accelerazione: stima **cinque parametri** del modello di "
+            "guida IDM, che la legge di controllo poi usa insieme agli stati misurati. Sono la velocita' "
+            "desiderata in strada libera, il tempo di via libera desiderato, la distanza minima da fermo, "
+            "l'accelerazione massima confortevole e la decelerazione confortevole."))
+    A(('table', (['Parametro', 'Significato', 'Unita'], [
+        ['v0', "velocita' desiderata in strada libera", 'm/s'],
+        ['T',  "tempo di via libera desiderato rispetto al veicolo che precede", 's'],
+        ['s0', "distanza minima da fermo", 'm'],
+        ['a',  "accelerazione massima confortevole", 'm/s2'],
+        ['b',  "decelerazione confortevole", 'm/s2'],
+    ])))
+    A(('p', "Sono questi cinque valori che il blocco di allineamento tratta, che il cancello PARAM-RANGE "
+            "verifica entro i limiti del decodificatore, e la cui **ripetizione** produce il comportamento "
+            "descritto nel \u00a74.3."))
     A(('h2', '2.3 Cosa è dentro e cosa è fuori'))
     A(('table', (['Dentro il perimetro', 'Fuori dal perimetro'], [
         ['Il Verilog generato dal blocco composto, simulato in xsim', 'Il comportamento su silicio (Fase C)'],
@@ -645,6 +732,34 @@ def build_doc():
                   'ha davvero ricevuto.'))
 
     # ---------------------------------------------------------------- 4
+    A(('h2', '3.4 Tre termini di paragone distinti, e a cosa serve ciascuno'))
+    A(('p', "Nel documento compaiono tre entita' diverse. Confonderle rende ininterpretabile ogni numero, "
+            "quindi vengono nominate qui una volta per tutte."))
+    A(('table', (['Entita', 'Che cos e', 'A che domanda risponde'], [
+        ["**il blocco**", "il modello Simulink `Donatello_SNN_IIDM`, eseguito in simulazione",
+         "e' il RIFERIMENTO DI EQUIVALENZA: il codice generato si comporta come il blocco progettato?"],
+        ["**l'RTL** (e a valle la netlist, e il sistema con processore)",
+         "cio' che finira' sull'FPGA, nelle sue tre forme successive",
+         "e' l'OGGETTO della validazione"],
+        ["**l'oracolo**",
+         "un controllore IDEALE: la stessa legge IIDM in forma analitica, alimentata con i parametri "
+         "VERI di ciascuno scenario invece che con quelli stimati dalla rete",
+         "e' la BASELINE DI QUALITA': quanto si perde stimando i parametri invece di conoscerli?"],
+    ])))
+    A(('callout', "La distinzione e' sostanziale. L'equivalenza col **blocco** e' una proprieta' binaria e "
+                  "si prova bit per bit: o coincide o no. Il confronto con l'**oracolo** non e' un cancello "
+                  "e non ha un valore atteso di zero: misura quanto costa, in qualita' di guida, il fatto "
+                  "che i parametri siano stimati da una rete anziche' noti. Un divario li' non e' un difetto "
+                  "dell'implementazione."))
+    A(('p', "Ne segue una domanda legittima: perche' le metriche non confrontano l'RTL con il **blocco**, "
+            "visto che il blocco viene eseguito in Simulink proprio per fare da riferimento? Perche' quel "
+            "confronto sarebbe **degenere per costruzione**. Il cancello T7-EXACT stabilisce che l'accel "
+            "prodotta dall'RTL coincide con quella del blocco a **ogni** passo di controllo, su tutti i "
+            "%s confronti; il modello di ambiente e' deterministico; quindi, a parita' di stato iniziale, "
+            "le due traiettorie coincidono passo per passo e **ogni metrica calcolata su di esse assume lo "
+            "stesso valore**. Calcolarle separatamente produrrebbe due colonne identiche. Il confronto "
+            "informativo e' quello con l'oracolo, ed e' quello riportato."
+            % ('{:,}'.format(T7A_NTOT).replace(',', ' '))))
     A(('h1', '4. Validazione in anello chiuso a livello RTL'))
     A(('h2', '4.1 I cancelli'))
     A(('p', 'Sui **%d scenari** del dataset esaustivo, %d passi di controllo ciascuno, i cancelli danno:'
@@ -664,6 +779,20 @@ def build_doc():
             'non chiede che non ci siano collisioni, chiede che **l\'hardware non ne aggiunga**.' % COLL_RTL))
     A(('p', "La campagna completa \u2014 %d scenari, %d passi di controllo ciascuno, una simulazione "
             "per scenario \u2014 dura **%.0f minuti**." % (MET_NSCEN, T7A_K, T7A_MINS)))
+    _att = MET_NSCEN * T7A_K
+    _dif = _att - T7A_NTOT
+    A(('callout', "**Perche' %s confronti e non %s.** Novantanove scenari da %d passi ne darebbero %s. I "
+                  "tre scenari che **collidono** terminano pero' in anticipo, perche' la simulazione si "
+                  "ferma all'impatto: contribuiscono %s passi invece di %s, cioe' **%s in meno**. Il totale "
+                  "riportato e' la somma effettiva dei passi eseguiti, non un arrotondamento, ed era stato "
+                  "dichiarato prima della campagna."
+                  % (fmt_i(T7A_NTOT), fmt_i(_att), T7A_K, fmt_i(_att),
+                     fmt_i(COLL_RTL * T7A_K - _dif), fmt_i(COLL_RTL * T7A_K), fmt_i(_dif))))
+    A(('p', "I cancelli sono stati provati **sensibili**, cioe' li si e' visti fallire su dati "
+            "deliberatamente alterati: alterando di un solo bit meno significativo un valore di "
+            "riferimento, T7-EXACT segnala esattamente un disallineamento; forzando un parametro fuori "
+            "dominio, PARAM-RANGE lo rileva; e il rilevatore di ripetizione scatta su cinque parametri "
+            "identici ma non su quattro. Un cancello che non si e' mai visto fallire non e' un cancello."))
     A(('h2', '4.2 Metriche dal motore canonico'))
     A(('p', 'Per ciascuno dei %d scenari sono calcolate **%d metriche** di comportamento e sicurezza. Il punto '
             'metodologico è che le metriche non provengono da una simulazione separata: sono calcolate sulle '
@@ -677,9 +806,11 @@ def build_doc():
             "che interessa. Per le grandezze di tipo *minimo* si riporta il minimo, per quelle di tipo "
             "*massimo* e per le frazioni di violazione il massimo, per le restanti la media."
             % (MET_NMETR, MET_NSCEN)))
-    A(('table', (['Metrica', 'Aggregazione', 'RTL', 'Oracolo', 'RTL / oracolo'],
-                 [[nm, _agg_rule(nm)[1], _fmt(a), _fmt(b), ('%.3f' % r) if r is not None else "\u2014"]
-                  for nm, how, a, b, r in metric_rows()])))
+    for _f, _lab in FAMIGLIE:
+        _rows = metric_table(_f)
+        A(('h3', '%s (%d metriche)' % (_lab, len(_rows))))
+        A(('table', (['Metrica', 'Che cosa misura', 'Unita', 'Aggregazione', 'RTL', 'Oracolo', 'Rapporto'],
+                     _rows)))
     A(('callout', "Su alcune metriche il rapporto e' molto lontano da uno. **Non e' un segnale sulla "
                   "qualita' dell'implementazione**: il caso peggiore su tutti gli scenari e' dominato dai "
                   "%d che **collidono**, dove il tempo alla collisione tende a zero e la decelerazione "
@@ -691,6 +822,14 @@ def build_doc():
                              'diagonale è l\'uguaglianza. Gli scostamenti sono la conseguenza del '
                              'comportamento descritto in §4.3, non di un errore di calcolo: l\'equivalenza '
                              'bit-esatta è già stabilita dal cancello T7-EXACT.')))
+    A(('callout', "**Due valori che sembrano errori e non lo sono.** La distanza minima risulta "
+                  "**negativa**: e' la convenzione del motore di valutazione, che non satura la distanza a "
+                  "zero proprio per poter misurare *di quanto* una collisione e' avvenuta \u2014 un valore "
+                  "negativo e' una compenetrazione. E le frazioni di tempo con tempo alla collisione sotto "
+                  "soglia valgono **1** su tutte e quattro le soglie: significa che esiste almeno uno "
+                  "scenario in cui, per tutta la durata dell'avvicinamento, il tempo alla collisione resta "
+                  "sotto i 3 secondi. Sono i medesimi scenari che collidono, e valgono 1 anche per "
+                  "l'oracolo."))
     A(('h2', '4.3 Un caso limite reale: il congelamento a parametri ripetuti'))
     A(('p', 'Il blocco è **sensibile al fronte**: riparte quando i suoi ingressi cambiano. Quando la rete '
             'produce due volte di seguito gli **stessi** cinque parametri, `align` rilascia valori identici, '
@@ -707,14 +846,14 @@ def build_doc():
     A(('table', (['Metrica', 'RTL', 'Oracolo', 'Rapporto'],
                  [[nm, '%.3f' % a, '%.3f' % b, '**%.3f**' % r] for nm, (a, b, r) in fi.items()])))
     A(('p', "Gli scostamenti sono di pochi punti percentuali e **di segno opposto fra loro** \u2014 il "
-            "tempo alla collisione peggiora dello %.0f %%, la distanza minima **migliora** dell'%.0f %% "
+            "tempo alla collisione peggiora del %.1f %%, la distanza minima **migliora** dell'%.1f %% "
             "\u2014 il che indica una perturbazione, non una degradazione sistematica. E le collisioni "
             "aggiuntive restano **%d**."
             % (100 * (1 - fi['min_ttc'][2]), 100 * (fi['min_gap'][2] - 1), COLL_EXTRA)))
     A(('callout', 'È una **diagnostica**, non un difetto: l\'RTL riproduce il blocco esattamente (T7-EXACT è '
                   '%d), quindi il comportamento è quello progettato. Va però conosciuto, perché a valle si '
                   'traduce in un\'accelerazione che si aggiorna meno spesso di quanto il control-step '
-                  'suggerirebbe. L\'effetto sulle metriche di sicurezza è quantificato in §4.2 e **non produce '
+                  'suggerirebbe. L\'effetto sulle metriche di sicurezza è quantificato nella tabella qui sopra e **non produce '
                   'collisioni aggiuntive**.' % T7A_NEXACT))
 
     # ---------------------------------------------------------------- 5
@@ -765,6 +904,13 @@ def build_doc():
 
     # ---------------------------------------------------------------- 6
     A(('h1', '6. Frequenza e risorse'))
+    A(('p', "Due grandezze ricorrono in questa sezione. Lo **slack di setup** (WNS, *worst negative "
+            "slack*) e' il margine temporale del cammino combinatorio peggiore: quanto tempo avanza, nel "
+            "ciclo di clock, dopo che il segnale piu' lento e' arrivato. Se e' negativo il circuito **non "
+            "funziona** a quella frequenza. Lo **slack di hold** (WHS) e' il margine opposto: il segnale "
+            "non deve arrivare troppo PRESTO, prima che il registro di destinazione abbia campionato il "
+            "valore precedente; un hold negativo non si corregge rallentando il clock, ed e' quindi un "
+            "difetto piu' insidioso."))
     A(('h2', '6.1 Due numeri distinti, e come si leggono'))
     A(('p', 'La frequenza di un progetto su FPGA non è un numero solo. Sono due, e confonderli porta a '
             'dichiarare prestazioni che il sistema non ha.'))
@@ -774,7 +920,7 @@ def build_doc():
                            'anche se lì il timing non chiude.')))
     A(('table', (['Chiesta [MHz]', 'Ottenuta [MHz]', 'Periodo [ns]', 'WNS [ns]', 'WHS [ns]',
                   'LUT', 'FF', 'Chiude'],
-                 [['%d' % p['req'], '%.3f' % p['mhz'], '%.3f' % (1000.0 / p['mhz']),
+                 [['%d' % p['req'], '%.3f' % p['mhz'], '%.3f' % p['period'],
                    '%+.3f' % p['wns'], '%+.3f' % p['whs'], str(p['lut']), str(p['ff']),
                    "si" if p['wns'] >= 0 else '**no**'] for p in PTS])))
     A(('table', (['Grandezza', 'Valore', 'Natura'], [

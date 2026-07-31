@@ -223,8 +223,10 @@ import json
 json.dump({
     'deployable_mhz': best['freq'], 'deployable_wns_ns': best['wns'], 'deployable_whs_ns': best['whs'],
     'datapath_limit_mhz': round(lim, 2), 'limit_from_mhz': tight['freq'],
-    'points': [{'req': d['req'], 'mhz': d['freq'], 'wns': d['wns'], 'whs': d['whs'],
-                'lut': d['lut'], 'ff': d['ff']} for d in pts],
+    # `period` LETTO dal report, non 1000/mhz: la frequenza e' stampata arrotondata a 3 cifre e il
+    # round-trip restituisce 65.998 dove il tool dice 66.000.
+    'points': [{'req': d['req'], 'mhz': d['freq'], 'period': d['period'], 'wns': d['wns'],
+                'whs': d['whs'], 'lut': d['lut'], 'ff': d['ff']} for d in pts],
     'quantized': [{'req': d['req'], 'mhz': d['freq']} for d in quant],
     'ooc_wns_ns': ooc,
     'util': {'lut': pts[[d['req'] for d in pts].index(best['req'])]['lut'],

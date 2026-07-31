@@ -18,14 +18,20 @@
 | 2. Oggetto e perimetro |
 | 2.1 Il blocco composto |
 | 2.2 `align`: una inferenza per control-step |
+| 2.2 I cinque parametri, e cosa significano |
 | 2.3 Cosa è dentro e cosa è fuori |
 | 3. Il problema della validazione in anello chiuso |
 | 3.1 Perché un confronto diretto non basta |
 | 3.2 La decomposizione in due prove disgiunte |
 | 3.3 Il riferimento è il blocco, e un golden monolitico non lo è |
+| 3.4 Tre termini di paragone distinti, e a cosa serve ciascuno |
 | 4. Validazione in anello chiuso a livello RTL |
 | 4.1 I cancelli |
 | 4.2 Metriche dal motore canonico |
+| Sicurezza (17 metriche) |
+| Comfort (7 metriche) |
+| Inseguimento (5 metriche) |
+| Efficienza e stabilita (2 metriche) |
 | 4.3 Un caso limite reale: il congelamento a parametri ripetuti |
 | 5. Dal blocco al sistema |
 | 5.1 Il processore legge ciò che il blocco calcola |
@@ -104,6 +110,21 @@ Il blocco di allineamento non è un dettaglio implementativo: è ciò che rende 
 > **Nota.** Questo è un punto in cui una modifica plausibile ha prodotto un difetto reale durante lo sviluppo. Un tentativo di accelerare il blocco registrando le uscite **all'esterno** di `align` guadagnava frequenza ma reintroduceva il **doppio fronte**: più veloce, e con l'anello che si comportava diversamente. Da allora ogni modifica al confine è soggetta a un cancello che **conta i fronti** e ne pretende esattamente uno.
 
 
+### 2.2 I cinque parametri, e cosa significano
+
+La rete non produce direttamente l'accelerazione: stima **cinque parametri** del modello di guida IDM, che la legge di controllo poi usa insieme agli stati misurati. Sono la velocita' desiderata in strada libera, il tempo di via libera desiderato, la distanza minima da fermo, l'accelerazione massima confortevole e la decelerazione confortevole.
+
+| Parametro | Significato | Unita |
+|---|---|---|
+| v0 | velocita' desiderata in strada libera | m/s |
+| T | tempo di via libera desiderato rispetto al veicolo che precede | s |
+| s0 | distanza minima da fermo | m |
+| a | accelerazione massima confortevole | m/s2 |
+| b | decelerazione confortevole | m/s2 |
+
+Sono questi cinque valori che il blocco di allineamento tratta, che il cancello PARAM-RANGE verifica entro i limiti del decodificatore, e la cui **ripetizione** produce il comportamento descritto nel §4.3.
+
+
 ### 2.3 Cosa è dentro e cosa è fuori
 
 | Dentro il perimetro | Fuori dal perimetro |
@@ -145,6 +166,21 @@ Il termine di paragone di ogni cancello è il **blocco composto** eseguito in si
 > **Nota.** Il controllo che avrebbe dovuto intercettarlo era passato, perché verificava il golden sugli stessi sei passi di controllo su cui era stato tarato: **verificava la premessa su cui era costruito**. Da allora il riferimento è il blocco stesso, guidato sugli ingressi che l'RTL ha davvero ricevuto.
 
 
+### 3.4 Tre termini di paragone distinti, e a cosa serve ciascuno
+
+Nel documento compaiono tre entità diverse. Confonderle rende ininterpretabile ogni numero, quindi vengono nominate qui una volta per tutte.
+
+| Entita | Che cos e | A che domanda risponde |
+|---|---|---|
+| **il blocco** | il modello Simulink `Donatello_SNN_IIDM`, eseguito in simulazione | è il RIFERIMENTO DI EQUIVALENZA: il codice generato si comporta come il blocco progettato? |
+| **l'RTL** (e a valle la netlist, e il sistema con processore) | ciò che finira' sull'FPGA, nelle sue tre forme successive | è l'OGGETTO della validazione |
+| **l'oracolo** | un controllore IDEALE: la stessa legge IIDM in forma analitica, alimentata con i parametri VERI di ciascuno scenario invece che con quelli stimati dalla rete | è la BASELINE DI QUALITA': quanto si perde stimando i parametri invece di conoscerli? |
+
+> **Nota.** La distinzione è sostanziale. L'equivalenza col **blocco** è una proprietà binaria e si prova bit per bit: o coincide o no. Il confronto con l'**oracolo** non è un cancello e non ha un valore atteso di zero: misura quanto costa, in qualità di guida, il fatto che i parametri siano stimati da una rete anziché noti. Un divario li' non è un difetto dell'implementazione.
+
+Ne segue una domanda legittima: perché le metriche non confrontano l'RTL con il **blocco**, visto che il blocco viene eseguito in Simulink proprio per fare da riferimento? Perché quel confronto sarebbe **degenere per costruzione**. Il cancello T7-EXACT stabilisce che l'accel prodotta dall'RTL coincide con quella del blocco a **ogni** passo di controllo, su tutti i 58 522 confronti; il modello di ambiente è deterministico; quindi, a parità di stato iniziale, le due traiettorie coincidono passo per passo e **ogni metrica calcolata su di esse assume lo stesso valore**. Calcolarle separatamente produrrebbe due colonne identiche. Il confronto informativo è quello con l'oracolo, ed è quello riportato.
+
+
 ## 4. Validazione in anello chiuso a livello RTL
 
 
@@ -163,6 +199,10 @@ Le 3 collisioni osservate sono le **stesse** per l'RTL e per l'oracolo: derivano
 
 La campagna completa — 99 scenari, 600 passi di controllo ciascuno, una simulazione per scenario — dura **60 minuti**.
 
+> **Nota.** **Perché 58 522 confronti e non 59 400.** Novantanove scenari da 600 passi ne darebbero 59 400. I tre scenari che **collidono** terminano pero' in anticipo, perché la simulazione si ferma all'impatto: contribuiscono 922 passi invece di 1 800, cioè **878 in meno**. Il totale riportato è la somma effettiva dei passi eseguiti, non un arrotondamento, ed era stato dichiarato prima della campagna.
+
+I cancelli sono stati provati **sensibili**, cioè li si è visti fallire su dati deliberatamente alterati: alterando di un solo bit meno significativo un valore di riferimento, T7-EXACT segnala esattamente un disallineamento; forzando un parametro fuori dominio, PARAM-RANGE lo rileva; e il rilevatore di ripetizione scatta su cinque parametri identici ma non su quattro. Un cancello che non si è mai visto fallire non è un cancello.
+
 
 ### 4.2 Metriche dal motore canonico
 
@@ -170,44 +210,67 @@ Per ciascuno dei 99 scenari sono calcolate **31 metriche** di comportamento e si
 
 La tabella che segue riporta **tutte e 31** le metriche, aggregate sui 99 scenari. La regola di aggregazione è dichiarata per famiglia e **non è la mediana**: sulla sicurezza conta la coda, e una mediana su 99 scenari cancellerebbe proprio lo scenario peggiore, che è l'unico che interessa. Per le grandezze di tipo *minimo* si riporta il minimo, per quelle di tipo *massimo* e per le frazioni di violazione il massimo, per le restanti la media.
 
-| Metrica | Aggregazione | RTL | Oracolo | RTL / oracolo |
-|---|---|---|---|---|
-| TED_drac | massimo (caso peggiore) | 1.300 | 1.300 | 1.000 |
-| TET | massimo (caso peggiore) | 1.100 | 1.200 | 0.917 |
-| TID_drac | massimo (caso peggiore) | 26.303 | 819.268 | 0.032 |
-| TIT | massimo (caso peggiore) | 1.277 | 1.333 | 0.958 |
-| brake_margin_min | minimo (caso peggiore) | -3.790 | -3.877 | 0.978 |
-| collided | somma | 3 | 3 | 1.000 |
-| cpi | media | 0.000858 | 0.000873 | 0.983 |
-| energy_proxy | media | 52.914 | 63.327 | 0.836 |
-| frac_accel_iso_viol | massimo (caso peggiore) | 0 | 0 | — |
-| frac_decel_iso_viol | massimo (caso peggiore) | 0.055 | 0.060 | 0.917 |
-| frac_drac_critical | massimo (caso peggiore) | 0.026 | 0.026 | 1.000 |
-| frac_jerk_uncomf | massimo (caso peggiore) | 0.290 | 0.554 | 0.524 |
-| frac_ttc_below_1.0 | massimo (caso peggiore) | 1 | 1 | 1.000 |
-| frac_ttc_below_1.5 | massimo (caso peggiore) | 1 | 1 | 1.000 |
-| frac_ttc_below_2.0 | massimo (caso peggiore) | 1 | 1 | 1.000 |
-| frac_ttc_below_3.0 | massimo (caso peggiore) | 1 | 1 | 1.000 |
-| impact_dv | massimo (caso peggiore) | 7.632 | 7.688 | 0.993 |
-| max_DRAC | massimo (caso peggiore) | 165.334 | 8.08e+03 | 0.020 |
-| max_abs_jerk | massimo (caso peggiore) | 90.625 | 90 | 1.007 |
-| max_decel | massimo (caso peggiore) | 9 | 9 | 1.000 |
-| mean_T_pred | media | 1.400 | 1.249 | 1.121 |
-| mean_abs_dv_ss | media | 0.982 | 0.923 | 1.064 |
-| mean_abs_gap_err_ss | media | 4.675 | 4.093 | 1.142 |
-| mean_time_gap | media | 2.266 | 2.085 | 1.087 |
-| min_gap | minimo (caso peggiore) | -0.387 | -0.536 | 0.721 |
-| min_time_headway | minimo (caso peggiore) | 0.0068 | 0.000156 | 43.743 |
-| min_ttc | minimo (caso peggiore) | 0.017 | 0.000389 | 44.889 |
-| rms_accel | media | 0.800 | 0.844 | 0.949 |
-| rms_gap_error | media | 9.442 | 8.374 | 1.127 |
-| rms_jerk | media | 1.989 | 1.804 | 1.102 |
-| string_stability | media | 0.767 | 0.787 | 0.974 |
+
+#### Sicurezza (17 metriche)
+
+| Metrica | Che cosa misura | Unita | Aggregazione | RTL | Oracolo | Rapporto |
+|---|---|---|---|---|---|---|
+| TED_drac | Tempo esposto a DRAC oltre soglia | s | massimo (caso peggiore) | 1.300 | 1.300 | 1.000 |
+| TET | Tempo esposto a TTC sotto soglia (Time Exposed TTC) | s | massimo (caso peggiore) | 1.100 | 1.200 | 0.917 |
+| TID_drac | Tempo integrato dell eccesso di DRAC | m/s2 x s | massimo (caso peggiore) | 26.303 | 819.268 | 0.032 |
+| TIT | Tempo integrato del deficit di TTC (Time Integrated TTC) | s2 | massimo (caso peggiore) | 1.277 | 1.333 | 0.958 |
+| brake_margin_min | Margine di evitabilita fisica | m | minimo (caso peggiore) | -3.790 | -3.877 | 0.978 |
+| collided | Scenari con collisione | conteggio | somma | 3 | 3 | 1.000 |
+| cpi | Crash Potential Index | - | media | 0.000858 | 0.000873 | 0.983 |
+| frac_drac_critical | Frazione di tempo con DRAC critico | - | massimo (caso peggiore) | 0.026 | 0.026 | 1.000 |
+| frac_ttc_below_1.0 | Frazione di tempo in avvicinamento con TTC sotto 1,0 s | - | massimo (caso peggiore) | 1 | 1 | 1.000 |
+| frac_ttc_below_1.5 | Frazione di tempo in avvicinamento con TTC sotto 1,5 s | - | massimo (caso peggiore) | 1 | 1 | 1.000 |
+| frac_ttc_below_2.0 | Frazione di tempo in avvicinamento con TTC sotto 2,0 s | - | massimo (caso peggiore) | 1 | 1 | 1.000 |
+| frac_ttc_below_3.0 | Frazione di tempo in avvicinamento con TTC sotto 3,0 s | - | massimo (caso peggiore) | 1 | 1 | 1.000 |
+| impact_dv | Velocita relativa all impatto (severita) | m/s | massimo (caso peggiore) | 7.632 | 7.688 | 0.993 |
+| max_DRAC | Decelerazione massima richiesta per evitare la collisione | m/s2 | massimo (caso peggiore) | 165.334 | 8.08e+03 | 0.020 |
+| min_gap | Distanza minima paraurti-paraurti | m | minimo (caso peggiore) | -0.387 | -0.536 | 0.721 |
+| min_time_headway | Distanza temporale minima (s/v) | s | minimo (caso peggiore) | 0.0068 | 0.000156 | 43.743 |
+| min_ttc | Tempo minimo alla collisione (TTC) | s | minimo (caso peggiore) | 0.017 | 0.000389 | 44.889 |
+
+
+#### Comfort (7 metriche)
+
+| Metrica | Che cosa misura | Unita | Aggregazione | RTL | Oracolo | Rapporto |
+|---|---|---|---|---|---|---|
+| frac_accel_iso_viol | Frazione con accelerazione oltre il limite ISO | - | massimo (caso peggiore) | 0 | 0 | — |
+| frac_decel_iso_viol | Frazione con decelerazione oltre il limite ISO | - | massimo (caso peggiore) | 0.055 | 0.060 | 0.917 |
+| frac_jerk_uncomf | Frazione di tempo con jerk scomodo | - | massimo (caso peggiore) | 0.290 | 0.554 | 0.524 |
+| max_abs_jerk | Jerk massimo in valore assoluto | m/s3 | massimo (caso peggiore) | 90.625 | 90 | 1.007 |
+| max_decel | Decelerazione piu forte | m/s2 | massimo (caso peggiore) | 9 | 9 | 1.000 |
+| rms_accel | Accelerazione efficace (RMS) | m/s2 | media | 0.800 | 0.844 | 0.949 |
+| rms_jerk | Jerk efficace (RMS) | m/s3 | media | 1.989 | 1.804 | 1.102 |
+
+
+#### Inseguimento (5 metriche)
+
+| Metrica | Che cosa misura | Unita | Aggregazione | RTL | Oracolo | Rapporto |
+|---|---|---|---|---|---|---|
+| mean_T_pred | Tempo di via libera desiderato, medio, predetto dalla rete | s | media | 1.400 | 1.249 | 1.121 |
+| mean_abs_dv_ss | Velocita relativa media a regime | m/s | media | 0.982 | 0.923 | 1.064 |
+| mean_abs_gap_err_ss | Errore di distanza medio a regime | m | media | 4.675 | 4.093 | 1.142 |
+| mean_time_gap | Distanza temporale media (s/v) | s | media | 2.266 | 2.085 | 1.087 |
+| rms_gap_error | Errore di distanza efficace (RMS) | m | media | 9.442 | 8.374 | 1.127 |
+
+
+#### Efficienza e stabilita (2 metriche)
+
+| Metrica | Che cosa misura | Unita | Aggregazione | RTL | Oracolo | Rapporto |
+|---|---|---|---|---|---|---|
+| energy_proxy | Proxy di energia: integrale della potenza specifica positiva | m2/s2 | media | 52.914 | 63.327 | 0.836 |
+| string_stability | Guadagno di stabilita di stringa | - | media | 0.767 | 0.787 | 0.974 |
 
 > **Nota.** Su alcune metriche il rapporto è molto lontano da uno. **Non è un segnale sulla qualità dell'implementazione**: il caso peggiore su tutti gli scenari è dominato dai 3 che **collidono**, dove il tempo alla collisione tende a zero e la decelerazione richiesta diverge — per l'RTL **e** per l'oracolo, che collidono negli **stessi** scenari. In quel regime il rapporto smette di misurare l'implementazione e misura la patologia dello scenario. Il confronto discriminante è quello del §4.3.
 
 ![Due metriche di sicurezza, RTL contro oracolo, uno scenario per punto. La diagonale è l'uguaglianza. Gli scostamenti sono la conseguenza del comportamento descritto in §4.3, non di un errore di calcolo: l'equivalenza bit-esatta è già stabilita dal cancello T7-EXACT.](figures_harness_snn_iidm/safety.png)
 *Due metriche di sicurezza, RTL contro oracolo, uno scenario per punto. La diagonale è l'uguaglianza. Gli scostamenti sono la conseguenza del comportamento descritto in §4.3, non di un errore di calcolo: l'equivalenza bit-esatta è già stabilita dal cancello T7-EXACT.*
+
+> **Nota.** **Due valori che sembrano errori e non lo sono.** La distanza minima risulta **negativa**: è la convenzione del motore di valutazione, che non satura la distanza a zero proprio per poter misurare *di quanto* una collisione è avvenuta — un valore negativo è una compenetrazione. E le frazioni di tempo con tempo alla collisione sotto soglia valgono **1** su tutte e quattro le soglie: significa che esiste almeno uno scenario in cui, per tutta la durata dell'avvicinamento, il tempo alla collisione resta sotto i 3 secondi. Sono i medesimi scenari che collidono, e valgono 1 anche per l'oracolo.
 
 
 ### 4.3 Un caso limite reale: il congelamento a parametri ripetuti
@@ -229,9 +292,9 @@ L'impatto sulla sicurezza si misura confrontando RTL e oracolo **sui soli scenar
 | min_gap | 2.578 | 2.319 | **1.112** |
 | min_time_headway | 1.384 | 1.512 | **0.915** |
 
-Gli scostamenti sono di pochi punti percentuali e **di segno opposto fra loro** — il tempo alla collisione peggiora dello 2 %, la distanza minima **migliora** dell'11 % — il che indica una perturbazione, non una degradazione sistematica. E le collisioni aggiuntive restano **0**.
+Gli scostamenti sono di pochi punti percentuali e **di segno opposto fra loro** — il tempo alla collisione peggiora del 2.3 %, la distanza minima **migliora** dell'11.2 % — il che indica una perturbazione, non una degradazione sistematica. E le collisioni aggiuntive restano **0**.
 
-> **Nota.** È una **diagnostica**, non un difetto: l'RTL riproduce il blocco esattamente (T7-EXACT è 0), quindi il comportamento è quello progettato. Va però conosciuto, perché a valle si traduce in un'accelerazione che si aggiorna meno spesso di quanto il control-step suggerirebbe. L'effetto sulle metriche di sicurezza è quantificato in §4.2 e **non produce collisioni aggiuntive**.
+> **Nota.** È una **diagnostica**, non un difetto: l'RTL riproduce il blocco esattamente (T7-EXACT è 0), quindi il comportamento è quello progettato. Va però conosciuto, perché a valle si traduce in un'accelerazione che si aggiorna meno spesso di quanto il control-step suggerirebbe. L'effetto sulle metriche di sicurezza è quantificato nella tabella qui sopra e **non produce collisioni aggiuntive**.
 
 
 ## 5. Dal blocco al sistema
@@ -276,6 +339,8 @@ Il sottoinsieme è **dichiarato in anticipo** e comprende uno scenario che **col
 
 ## 6. Frequenza e risorse
 
+Due grandezze ricorrono in questa sezione. Lo **slack di setup** (WNS, *worst negative slack*) è il margine temporale del cammino combinatorio peggiore: quanto tempo avanza, nel ciclo di clock, dopo che il segnale più lento è arrivato. Se è negativo il circuito **non funziona** a quella frequenza. Lo **slack di hold** (WHS) è il margine opposto: il segnale non deve arrivare troppo PRESTO, prima che il registro di destinazione abbia campionato il valore precedente; un hold negativo non si corregge rallentando il clock, ed è quindi un difetto più insidioso.
+
 
 ### 6.1 Due numeri distinti, e come si leggono
 
@@ -286,7 +351,7 @@ La frequenza di un progetto su FPGA non è un numero solo. Sono due, e confonder
 
 | Chiesta [MHz] | Ottenuta [MHz] | Periodo [ns] | WNS [ns] | WHS [ns] | LUT | FF | Chiude |
 |---|---|---|---|---|---|---|---|
-| 15 | 15.152 | 65.998 | +30.749 | +0.022 | 8416 | 4556 | si |
+| 15 | 15.152 | 66.000 | +30.749 | +0.022 | 8416 | 4556 | si |
 | 20 | 20.000 | 50.000 | +16.097 | +0.052 | 8405 | 4556 | si |
 | 25 | 25.000 | 40.000 | +9.519 | +0.037 | 8412 | 4556 | si |
 | 30 | 30.303 | 33.000 | +2.764 | +0.045 | 8408 | 4556 | si |
