@@ -390,10 +390,11 @@ Config in `make_hdl.m`: `LoopOptimization='StreamLoops'`, `ConstantMultiplierOpt
     Ri-verificato **self-contained + HDL-ready 2026-07-27** (`run_milestone_hdl_gates` 5/5, DualPortRAM, 0 err/warn).
     **Ri-sintesi OOC 2026-07-27** (Vivado xc7z020, 125 ns, `synth_acc_iidm.tcl` su VHDL fresco) **CONFERMA**:
     **77,936 MHz · 8387 LUT · 4069 FF · 68 DSP · 1 BRAM**, collo `st_a_iidm` 14 liv — identica a R17. Il 9,30 è chiuso.
-- ⏳ **[FASE B2.0 — aperta 2026-07-17] Validazione RTL del blocco M**: il VHDL generato è solo *generato*, **mai
-  simulato in xsim** vs riferimento sul **dataset intero** (anello ③ = cosim, finora fatto per la sola SNN B2, non
-  per il controllore). Da fare: testbench HDL full-dataset con metriche vere (non traiettoria ridotta — lezione
-  Fase B) + utilizzo post-route completo (incl. BRAM). Vedi §8 e `SESSION_RESUME.md` §AZIONE PENDENTE.
+- ✅ **[FASE B2.0 — CHIUSA 2026-07-31] Validazione RTL del controllore.** La voce precedente diceva che il
+  VHDL/Verilog generato era *solo generato, mai simulato*: non e' piu' cosi'. Il codice generato e' provato
+  **bit-esatto al blocco** su tutto il dataset, in anello aperto (T6a, SNN) e in anello **chiuso** (T7a,
+  composto: 0 / 58 522 su 99 scenari), poi dal processore via AXI, poi sulla netlist post-place&route.
+  Utilizzo post-route completo **BRAM inclusa**. Vedi le voci T6b/T7b/T8 sopra e i due report in `report/`.
 - ✅ **[FASE B2.0-2a M1 — 2026-07-18] Harness A (SNN `Donatello_Champion`) validato a livello RTL**: il VHDL
   generato è **bit-exact al blocco Simulink** su 3 traj × 1000 × 5 param (**A-1: 0/15000**), cancello provato
   sensibile (1 LSB → nMismatch=1). Tre implementazioni concordi: blocco == golden MEX == RTL VHDL. Harness in
@@ -508,6 +509,24 @@ Config in `make_hdl.m`: `LoopOptimization='StreamLoops'`, `ConstantMultiplierOpt
   - **Entry-point** `hw/run_harness_snniidm_hw.sh [check|cosim|sweep|netlist|power|bitstream|summary|all]`;
     `summary` riestrae i numeri in secondi, `check` blocca gli stadi di calcolo se la firma dei sorgenti non
     coincide con `results/src.sig`. Trappole nuove: **§9 T7b**.
+- ✅ **[FASE B2.0 T8 — 2026-07-31] I due report, e l'audit che li tiene onesti.** In `report/`:
+  `B2_0_HARNESS_SNN_REPORT.{md,pdf}` (22 pag., T6 — la SNN da sola) e
+  `B2_0_HARNESS_SNN_IIDM_REPORT.{md,pdf}` (26 pag., T7 — il composto). **Generati**, mai scritti a mano
+  (`scripts/build_harness_snn*_report.py`); il secondo **LEGGE** gli artefatti a macchina (`t7_results.mat`
+  via scipy + 5 JSON), quindi report e artefatto non possono divergere.
+  - **Audit** `scripts/audit_harness_snn_iidm_report.py`: **89 controlli in DUE direzioni** — ogni numero del
+    report torna alla fonte, **e** ogni grandezza delle fonti e' arrivata nel report. La seconda direzione
+    mancava, ed e' quella in cui stavano i buchi: aveva trovato le 31 metriche assenti (c'era solo il
+    conteggio), meta' della gerarchia delle risorse, la tabella dello sweep, le durate per scenario.
+  - Il caso "numero corrotto a valle" non si intercetta con espressioni regolari (parole come "confronti" e
+    "scenari" descrivono grandezze diverse nello stesso documento): si intercetta **rigenerando**, perche' il
+    documento e' deterministico. Provato in negativo su varianti alterate.
+  - **20 lacune** trovate rileggendo da ingegnere e colmate (l'oracolo mai definito, il perche' non ci sia un
+    confronto metriche RTL-vs-blocco, 99×600≠58 522, i cinque parametri mai elencati, WNS/WHS senza
+    definizione, l'architettura della rete, `nfrac`/`@BALANCED`, l'origine del control-step, …).
+  - Due difetti di RESA trovati solo **guardando** le pagine, presenti in ENTRAMBI i report: il **corsivo** non
+    veniva convertito (asterischi letterali, anche nei titoli in bibliografia), e le **larghezze di colonna**
+    erano uniformi (comprimevano la colonna descrittiva e sprecavano spazio su quella dell'unita').
 
 ## §7 File (worktree)
 - **Sorgente HDL:** `matlab/snn_core.m` (mod), `matlab/snn_types.m` (mod, +`accw`),
@@ -524,13 +543,26 @@ Config in `make_hdl.m`: `LoopOptimization='StreamLoops'`, `ConstantMultiplierOpt
 
 ## §8 Prossimi passi
 
-> **🟢 PRIORITÀ ATTUALE — FASE B2.0 (validazione RTL della versione FPGA del controllore + report).** SP4 ha
-> ottimizzato il blocco `Donatello_ACC_IIDM_M` (9,30 MHz, `dmax=0`, self-contained); B2.0 **prova che l'RTL
-> generato funziona davvero** a livello di simulatore HDL, con metriche vere sul **dataset intero**, e ne scrive
-> il report. Sequenza: **Fase 1** `/fpga-expert` (disegno studio RTL + audit headroom) → **Fase 2** testbench HDL
-> full-dataset + utilizzo post-route completo (incl. BRAM) → **Fase 3** `create-report`. La **Fase C** (test
-> sull'FPGA *fisica*) resta separata. Backlog dopo B2.0: timing study · quantization study · MPC. Stato/dettaglio
-> completo in `SESSION_RESUME.md` §AZIONE PENDENTE.
+> **🟢 FASE B2.0 — CHIUSA (2026-07-31).** T1–T5 · T6a/T6b (SNN: RTL + hardware) · T7a/T7b (composto:
+> anello chiuso + hardware) · T8 (i due report) · T9 (documentazione). Tutti i cancelli verdi, bitstream
+> prodotto e **provato identico** al sistema caratterizzato. Numeri e limiti: `report/B2_0_HARNESS_SNN*.pdf`.
+>
+> **🔴 PROSSIMO — FASE C: FPGA fisica.** Cio' che deve chiudere non e' una lista nuova: sono i **limiti
+> DICHIARATI** nei due report, che esistono proprio per questo.
+>
+> | Da chiudere in Fase C | Perche' resta aperto |
+> |---|---|
+> | Il **guadagno in watt del clock gating** | `report_power` deriva la potenza dei net di clock dal VINCOLO di frequenza, non dall'attivita' registrata. Accertato anche in negativo. Serve misura su scheda. |
+> | Il **caso peggiore energetico** | si riporta il massimo OSSERVATO fra carichi reali; il worst sintetico fu smentito su misura (risulto' il piu' basso). Serve uno studio dedicato. |
+> | Il comportamento **su silicio** | tutto B2.0 e' simulazione + STA + implementazione. Nessun numero viene da hardware acceso. |
+> | L'equivalenza della netlist **su tutti i 99 scenari** | esclusa sul costo MISURATO (~28 h). Il sottoinsieme dichiarato e' un cancello di conferma, non una metrica. |
+>
+> **APERTO, indipendente dalla Fase C:** il **collo di bottiglia** del composto (§9 e sotto) — il cammino
+> critico attraversa `DEC → align → IIDM`. Non blocca nulla (margine 7207× sul control-step), ma chiuderlo
+> alzerebbe il tetto per lavoro futuro sullo stesso blocco.
+>
+> **Backlog oltre la Fase C:** confronto **MPC-vs-SNN** (solo design, parcheggiato; spec e piano gia'
+> depositati) · **V2I** in Simulink. Lo **studio di quantizzazione** e' **CHIUSO**, non e' piu' backlog.
 
 1. ✅ **[FATTO 2026-07-10] Sintesi + P&R reali** RTL Donatello su Zynq-7020 (`xc7z020clg400-1`): LUT 44%/slice 53%,
    DSP 32, 0 BRAM, ~5 MHz. + ③ **cosim xsim PASSED** (bit-esatto vs golden). Vedi §0 e `HDL_ARCHITECTURE_STUDY.md`.

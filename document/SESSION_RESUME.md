@@ -173,16 +173,16 @@ piu' veloce e **sbagliato**. Verificare i fronti **prima** delle run lunghe: 2 m
 >   **copertura car-following full-99 in T6/T7** (non è open-loop-abile senza un giro di riferimento). *(DA CONFERMARE
 >   con l'utente: va bene questa divisione, o vuole l'open-loop anche su `val` generato dai 99 scenari?)*
 >
-> **DA FARE (T6–T9) — ⏸ FERMI QUI su richiesta utente (CHECKPOINT 2026-07-28: doc allineati, prossimo = T6):**
-> - **T6** Harness_SNN (Tier@BAL): RTL+xsim su ~9 traj rappresentative · funzionale full-99 (MEX) · HDL post-route · bitstream.
-> - **T7** Harness_SNN_IIDM (composto): RTL closed-loop · car-following full-99 · HDL · bitstream.
-> - **T8** due report esaustivi (`create-report`) in `report/`. **T9** allineamento doc finale.
-> ⚠️ **Decisioni prese:** copertura = RTL xsim su sottoinsieme + funzionale full-99 (MEX, bit-identico); bitstream =
->   blocco as-is (normalize FIXED su FPGA, I/O fisico). Golden per gli harness: **`acciidm_m_traj` è fedele al composto
->   (usabile)**; `snn_traj_champion` è **stale** (blocco rimosso) → per il bench solo-SNN usare **parità RTL vs blocco reale**.
-> ⚠️ **Nessun piano harness aggiornato:** quelli storici (`docs/superpowers/{specs,plans}/2026-07-1{7,8}-b2.0-2a-*`,
->   più il design `…-rtl-validation-harness-design.md`) puntano ai blocchi **RIMOSSI** (`Donatello_Champion` /
->   `ACC_IIDM_M`) → **NON riusarli as-is**: T6/T7 richiedono nuovi brainstorming+piani sui blocchi SCELTI (design-first).
+> **✅ SUPERATO — T6–T9 SONO TUTTI FATTI (2026-07-31).** Questo blocco descriveva il piano quando erano
+> ancora da eseguire; e' conservato per storia. Esito: T6a/T6b (SNN) · T7a/T7b (composto) · T8 (i due
+> report in `report/`) · T9 (documentazione). Stato reale: blocco ▶ in cima a questo file.
+>
+> ⚠️ **UNA DECISIONE DI ALLORA E' STATA SMENTITA SU MISURA, e va letta al contrario:** qui si diceva che
+> `acciidm_m_traj` fosse *«fedele al composto (usabile)»* come golden. **NON lo e'.** E' l'estrazione del
+> blocco monolitico DEPRECATO `Donatello_ACC_IIDM_M` e diverge dal composto: **385 scarti su 600**
+> control-step, misurati il 2026-07-30. L'equivalenza era stata «provata» su 4 e 6 control-step, campioni
+> troppo piccoli per vederlo. Il riferimento del composto e' **il blocco stesso**, pilotato sugli ingressi
+> che l'RTL ha effettivamente ricevuto (`t7_block_replay`).
 
 ### 🏁 MILESTONE 2026-07-27 — LIBRERIA CONSOLIDATA (8 blocchi puliti, tutti verificati sul dataset)
 > **Checkpoint concettuale del track.** `snn_champions_lib.slx` riordinata da 18 a **8 blocchi**:
@@ -233,7 +233,10 @@ piu' veloce e **sbagliato**. Verificare i fronti **prima** delle run lunghe: 2 m
 > **Fmax = MARGINE** (t_inf 5,5–16,7 µs, ~6000–18000× sotto il budget 0,1 s) → il criterio è l'**AREA** (V2I).
 > **📄 Report:** `report/Trade_Off_Study_Parte_A.pdf` (commit `fa4b6c9b`, ristrutturato su richiesta); dati `points_phase2.tsv`; record completo
 > **RESULTS.md §16**; tooling `sweep_phase2.sh`+`impl_point.tcl` (`652ed9e5`). Lib = lock committato (73,6).
-> **➡️ PENDENTE (ripresa post-pausa):** (1) **scelta candidato** SLOW/BAL/FAST per il Blocco B — APERTA, decide
+> **✅ CHIUSO — la scelta e' stata fatta: `BALANCED`.** Questo blocco lasciava aperta la scelta fra
+> SLOW/BALANCED/FAST per il «Blocco B». Il blocco B **esiste**: e' il composto `Donatello_SNN_IIDM`, che
+> monta `Tier@BALANCED / nfrac 13`, ed e' stato validato (T7a) e caratterizzato in hardware (T7b). Anche
+> SAIF power e verifica RTL xsim, che qui erano pendenti, sono fatti.
 > l'utente (base: report §5.2/§6 + RESULTS §16 — area/V2I vs margine; SLOW=area-min, BAL=compromesso, FAST=alto-margine); (2) rinviati:
 > **SAIF** power (traiettoria reale) + **verifica RTL xsim** del candidato; poi **Blocco B** (SNN+IIDM in anello).
 >
