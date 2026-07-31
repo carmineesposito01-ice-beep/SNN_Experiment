@@ -995,6 +995,9 @@ def render_pdf(doc, outpath):
         #    Trovato nell'ispezione VISIVA, non da un controllo sul testo: era in ENTRAMBI i report.
         #    Qui il contenuto non puo' contenere `**` per costruzione.
         s = re.sub(r'(?<!\w)\*\*((?:(?!\*\*).)+?)\*\*', r'<b>\1</b>', s)
+        # CORSIVO, dopo il grassetto: a questo punto i `**` sono gia' diventati <b>, quindi
+        #    un `*` residuo e' sempre un delimitatore di corsivo.
+        s = re.sub(r'(?<![\*\w])\*([^*\n]+?)\*(?![\*\w])', r'<i>\1</i>', s)
         # Spazio INSECABILE fra un numero e la sua unita': impedisce che l'a-capo separi
         # "25" da "%" o "+0.358" da "ns". Solo nel PDF: il .md resta con spazi normali.
         return re.sub(r'(\d)\s+(%|mW|mJ|MHz|GHz|kHz|ns|µs|ms|LUT|FF|DSP|BRAM|W|V|°C|pt|bit)(?![\w])',
@@ -1020,7 +1023,28 @@ def render_pdf(doc, outpath):
         data = [[Paragraph(f'<b>{esc(x)}</b>', th) for x in headers]]
         cell = ParagraphStyle('td', fontName='DJ', fontSize=fs, leading=fs + 2.5, wordWrap='CJK')
         for r in rows: data.append([Paragraph(esc(x), cell) for x in r])
-        t = Table(data, repeatRows=1, colWidths=[usable_w / n] * n, hAlign='LEFT')
+        # LARGHEZZE PROPORZIONALI al contenuto, non uniformi: su una tabella a 7 colonne
+        #    dividere in parti uguali comprime la colonna descrittiva (che va a capo tre volte)
+        #    e spreca spazio su quella dell'unita' di misura (due caratteri). Si stima il peso di
+        #    ogni colonna dalla lunghezza tipica del suo contenuto, con un minimo e un massimo per
+        #    evitare che una colonna sparisca o divori la riga.
+        _txt = [[str(x) for x in headers]] + [[str(x) for x in r] for r in rows]
+        _w = []
+        for _c in range(n):
+            _lens = sorted(len(_row[_c]) for _row in _txt)
+            _p75 = _lens[min(len(_lens) - 1, int(0.75 * len(_lens)))]
+            # L'INTESTAZIONE e le parole INDIVISIBILI sono un pavimento: senza, una colonna
+            #    numerica stretta manda a capo il proprio titolo ('Rappo rto') e spezza i nomi
+            #    che non si possono dividere ('PARAM-RA NGE'). Difetto visto nella resa.
+            _hdr = len(_txt[0][_c])
+            _word = max((len(w) for _row in _txt for w in _row[_c].split()), default=1)
+            # l'intestazione e' in GRASSETTO (piu' larga a parita' di caratteri) e ogni cella ha
+            #    8 pt di padding: entrambi vanno nel peso, altrimenti le colonne strette mandano
+            #    a capo il proprio titolo pur avendo 'abbastanza caratteri'.
+            _w.append(max(1.18 * _hdr, 1.05 * _word, 0.9 * _p75, 4.0) + 2.4)
+        _tot = sum(_w)
+        _cw = [usable_w * x / _tot for x in _w]
+        t = Table(data, repeatRows=1, colWidths=_cw, hAlign='LEFT')
         t.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#26527a')),
             ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f1f5fa')]),

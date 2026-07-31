@@ -18,8 +18,9 @@
 | 2. Oggetto e perimetro |
 | 2.1 Il blocco composto |
 | 2.2 `align`: una inferenza per control-step |
-| 2.2 I cinque parametri, e cosa significano |
-| 2.3 Cosa è dentro e cosa è fuori |
+| 2.2 La rete, la variante e la quantizzazione |
+| 2.3 I cinque parametri, e cosa significano |
+| 2.4 Cosa è dentro e cosa è fuori |
 | 3. Il problema della validazione in anello chiuso |
 | 3.1 Perché un confronto diretto non basta |
 | 3.2 La decomposizione in due prove disgiunte |
@@ -110,7 +111,18 @@ Il blocco di allineamento non è un dettaglio implementativo: è ciò che rende 
 > **Nota.** Questo è un punto in cui una modifica plausibile ha prodotto un difetto reale durante lo sviluppo. Un tentativo di accelerare il blocco registrando le uscite **all'esterno** di `align` guadagnava frequenza ma reintroduceva il **doppio fronte**: più veloce, e con l'anello che si comportava diversamente. Da allora ogni modifica al confine è soggetta a un cancello che **conta i fronti** e ne pretende esattamente uno.
 
 
-### 2.2 I cinque parametri, e cosa significano
+### 2.2 La rete, la variante e la quantizzazione
+
+Tre nomi ricorrono nel documento e vanno sciolti, perché identificano scelte di progetto già fatte e qui soltanto ereditate.
+
+| Nome | Che cosa indica |
+|---|---|
+| rete a spike | una rete ricorrente a **32 neuroni nascosti** che, per ogni passo di controllo, evolve per **10 passi interni**; la ricorrenza è fattorizzata a rango 16 e i ritardi sinaptici arrivano a 6 passi. Produce 5 uscite, i parametri del §2.3. In hardware i 32 neuroni condividono **una sola** unità di calcolo, percorsa a turno: è ciò che tiene l'area entro il dispositivo |
+| `Tier@BALANCED` | la rete è disponibile in tre varianti di **pipelining** — area minima, compromesso, margine temporale massimo. Qui è in uso la intermedia. Le tre varianti calcolano la stessa funzione: cambiano quanti registri separano gli stadi, quindi area e frequenza, non il risultato |
+| `nfrac 13` | i **bit frazionari** della rappresentazione in virgola fissa interna alla rete. Tredici bit dopo la virgola; la scelta viene da uno studio di quantizzazione dedicato, esterno a questo documento |
+
+
+### 2.3 I cinque parametri, e cosa significano
 
 La rete non produce direttamente l'accelerazione: stima **cinque parametri** del modello di guida IDM, che la legge di controllo poi usa insieme agli stati misurati. Sono la velocita' desiderata in strada libera, il tempo di via libera desiderato, la distanza minima da fermo, l'accelerazione massima confortevole e la decelerazione confortevole.
 
@@ -124,8 +136,17 @@ La rete non produce direttamente l'accelerazione: stima **cinque parametri** del
 
 Sono questi cinque valori che il blocco di allineamento tratta, che il cancello PARAM-RANGE verifica entro i limiti del decodificatore, e la cui **ripetizione** produce il comportamento descritto nel §4.3.
 
+| Grandezza | Rappresentazione | Risoluzione | Intervallo |
+|---|---|---|---|
+| ingressi (distanza, velocita, velocita relativa, velocita del leader) | virgola fissa con segno, 32 bit di cui 20 frazionari | circa 1e-6 | circa ±2048 |
+| uscita (accelerazione comandata) | virgola fissa con segno, 13 bit di cui 8 frazionari | 1/256 = 0,0039 m/s2 | da -16,0 a +15,996 m/s2 |
 
-### 2.3 Cosa è dentro e cosa è fuori
+L'intervallo dell'uscita copre con margine la decelerazione fisica massima considerata dal modello di valutazione, 9 m/s2, quindi la rappresentazione non satura nei casi di interesse.
+
+
+### 2.4 Cosa è dentro e cosa è fuori
+
+Il passo di controllo di **0.1 s** non è una convenzione di comodo: è il passo temporale del dataset di riferimento, cioè la cadenza a cui il controllore è chiamato a decidere, **10 volte al secondo**. È anche l'unico requisito temporale che il sistema deve rispettare: tutto il resto — frequenza di clock, latenza, duty — è caratterizzazione.
 
 | Dentro il perimetro | Fuori dal perimetro |
 |---|---|
@@ -213,43 +234,43 @@ La tabella che segue riporta **tutte e 31** le metriche, aggregate sui 99 scenar
 
 #### Sicurezza (17 metriche)
 
-| Metrica | Che cosa misura | Unita | Aggregazione | RTL | Oracolo | Rapporto |
+| Metrica | Che cosa misura | Unita | Aggr. | RTL | Oracolo | Rapporto |
 |---|---|---|---|---|---|---|
-| TED_drac | Tempo esposto a DRAC oltre soglia | s | massimo (caso peggiore) | 1.300 | 1.300 | 1.000 |
-| TET | Tempo esposto a TTC sotto soglia (Time Exposed TTC) | s | massimo (caso peggiore) | 1.100 | 1.200 | 0.917 |
-| TID_drac | Tempo integrato dell eccesso di DRAC | m/s2 x s | massimo (caso peggiore) | 26.303 | 819.268 | 0.032 |
-| TIT | Tempo integrato del deficit di TTC (Time Integrated TTC) | s2 | massimo (caso peggiore) | 1.277 | 1.333 | 0.958 |
-| brake_margin_min | Margine di evitabilita fisica | m | minimo (caso peggiore) | -3.790 | -3.877 | 0.978 |
+| TED_drac | Tempo esposto a DRAC oltre soglia | s | max | 1.300 | 1.300 | 1.000 |
+| TET | Tempo esposto a TTC sotto soglia (Time Exposed TTC) | s | max | 1.100 | 1.200 | 0.917 |
+| TID_drac | Tempo integrato dell eccesso di DRAC | m/s2 x s | max | 26.303 | 819.268 | 0.032 |
+| TIT | Tempo integrato del deficit di TTC (Time Integrated TTC) | s2 | max | 1.277 | 1.333 | 0.958 |
+| brake_margin_min | Margine di evitabilita fisica | m | min | -3.790 | -3.877 | 0.978 |
 | collided | Scenari con collisione | conteggio | somma | 3 | 3 | 1.000 |
 | cpi | Crash Potential Index | - | media | 0.000858 | 0.000873 | 0.983 |
-| frac_drac_critical | Frazione di tempo con DRAC critico | - | massimo (caso peggiore) | 0.026 | 0.026 | 1.000 |
-| frac_ttc_below_1.0 | Frazione di tempo in avvicinamento con TTC sotto 1,0 s | - | massimo (caso peggiore) | 1 | 1 | 1.000 |
-| frac_ttc_below_1.5 | Frazione di tempo in avvicinamento con TTC sotto 1,5 s | - | massimo (caso peggiore) | 1 | 1 | 1.000 |
-| frac_ttc_below_2.0 | Frazione di tempo in avvicinamento con TTC sotto 2,0 s | - | massimo (caso peggiore) | 1 | 1 | 1.000 |
-| frac_ttc_below_3.0 | Frazione di tempo in avvicinamento con TTC sotto 3,0 s | - | massimo (caso peggiore) | 1 | 1 | 1.000 |
-| impact_dv | Velocita relativa all impatto (severita) | m/s | massimo (caso peggiore) | 7.632 | 7.688 | 0.993 |
-| max_DRAC | Decelerazione massima richiesta per evitare la collisione | m/s2 | massimo (caso peggiore) | 165.334 | 8.08e+03 | 0.020 |
-| min_gap | Distanza minima paraurti-paraurti | m | minimo (caso peggiore) | -0.387 | -0.536 | 0.721 |
-| min_time_headway | Distanza temporale minima (s/v) | s | minimo (caso peggiore) | 0.0068 | 0.000156 | 43.743 |
-| min_ttc | Tempo minimo alla collisione (TTC) | s | minimo (caso peggiore) | 0.017 | 0.000389 | 44.889 |
+| frac_drac_critical | Frazione di tempo con DRAC critico | - | max | 0.026 | 0.026 | 1.000 |
+| frac_ttc_below_1.0 | Frazione di tempo in avvicinamento con TTC sotto 1,0 s | - | max | 1 | 1 | 1.000 |
+| frac_ttc_below_1.5 | Frazione di tempo in avvicinamento con TTC sotto 1,5 s | - | max | 1 | 1 | 1.000 |
+| frac_ttc_below_2.0 | Frazione di tempo in avvicinamento con TTC sotto 2,0 s | - | max | 1 | 1 | 1.000 |
+| frac_ttc_below_3.0 | Frazione di tempo in avvicinamento con TTC sotto 3,0 s | - | max | 1 | 1 | 1.000 |
+| impact_dv | Velocita relativa all impatto (severita) | m/s | max | 7.632 | 7.688 | 0.993 |
+| max_DRAC | Decelerazione massima richiesta per evitare la collisione | m/s2 | max | 165.334 | 8.08e+03 | 0.020 |
+| min_gap | Distanza minima paraurti-paraurti | m | min | -0.387 | -0.536 | 0.721 |
+| min_time_headway | Distanza temporale minima (s/v) | s | min | 0.0068 | 0.000156 | 43.743 |
+| min_ttc | Tempo minimo alla collisione (TTC) | s | min | 0.017 | 0.000389 | 44.889 |
 
 
 #### Comfort (7 metriche)
 
-| Metrica | Che cosa misura | Unita | Aggregazione | RTL | Oracolo | Rapporto |
+| Metrica | Che cosa misura | Unita | Aggr. | RTL | Oracolo | Rapporto |
 |---|---|---|---|---|---|---|
-| frac_accel_iso_viol | Frazione con accelerazione oltre il limite ISO | - | massimo (caso peggiore) | 0 | 0 | — |
-| frac_decel_iso_viol | Frazione con decelerazione oltre il limite ISO | - | massimo (caso peggiore) | 0.055 | 0.060 | 0.917 |
-| frac_jerk_uncomf | Frazione di tempo con jerk scomodo | - | massimo (caso peggiore) | 0.290 | 0.554 | 0.524 |
-| max_abs_jerk | Jerk massimo in valore assoluto | m/s3 | massimo (caso peggiore) | 90.625 | 90 | 1.007 |
-| max_decel | Decelerazione piu forte | m/s2 | massimo (caso peggiore) | 9 | 9 | 1.000 |
+| frac_accel_iso_viol | Frazione con accelerazione oltre il limite ISO | - | max | 0 | 0 | — |
+| frac_decel_iso_viol | Frazione con decelerazione oltre il limite ISO | - | max | 0.055 | 0.060 | 0.917 |
+| frac_jerk_uncomf | Frazione di tempo con jerk scomodo | - | max | 0.290 | 0.554 | 0.524 |
+| max_abs_jerk | Jerk massimo in valore assoluto | m/s3 | max | 90.625 | 90 | 1.007 |
+| max_decel | Decelerazione piu forte | m/s2 | max | 9 | 9 | 1.000 |
 | rms_accel | Accelerazione efficace (RMS) | m/s2 | media | 0.800 | 0.844 | 0.949 |
 | rms_jerk | Jerk efficace (RMS) | m/s3 | media | 1.989 | 1.804 | 1.102 |
 
 
 #### Inseguimento (5 metriche)
 
-| Metrica | Che cosa misura | Unita | Aggregazione | RTL | Oracolo | Rapporto |
+| Metrica | Che cosa misura | Unita | Aggr. | RTL | Oracolo | Rapporto |
 |---|---|---|---|---|---|---|
 | mean_T_pred | Tempo di via libera desiderato, medio, predetto dalla rete | s | media | 1.400 | 1.249 | 1.121 |
 | mean_abs_dv_ss | Velocita relativa media a regime | m/s | media | 0.982 | 0.923 | 1.064 |
@@ -260,7 +281,7 @@ La tabella che segue riporta **tutte e 31** le metriche, aggregate sui 99 scenar
 
 #### Efficienza e stabilita (2 metriche)
 
-| Metrica | Che cosa misura | Unita | Aggregazione | RTL | Oracolo | Rapporto |
+| Metrica | Che cosa misura | Unita | Aggr. | RTL | Oracolo | Rapporto |
 |---|---|---|---|---|---|---|
 | energy_proxy | Proxy di energia: integrale della potenza specifica positiva | m2/s2 | media | 52.914 | 63.327 | 0.836 |
 | string_stability | Guadagno di stabilita di stringa | - | media | 0.767 | 0.787 | 0.974 |
@@ -271,6 +292,8 @@ La tabella che segue riporta **tutte e 31** le metriche, aggregate sui 99 scenar
 *Due metriche di sicurezza, RTL contro oracolo, uno scenario per punto. La diagonale è l'uguaglianza. Gli scostamenti sono la conseguenza del comportamento descritto in §4.3, non di un errore di calcolo: l'equivalenza bit-esatta è già stabilita dal cancello T7-EXACT.*
 
 > **Nota.** **Due valori che sembrano errori e non lo sono.** La distanza minima risulta **negativa**: è la convenzione del motore di valutazione, che non satura la distanza a zero proprio per poter misurare *di quanto* una collisione è avvenuta — un valore negativo è una compenetrazione. E le frazioni di tempo con tempo alla collisione sotto soglia valgono **1** su tutte e quattro le soglie: significa che esiste almeno uno scenario in cui, per tutta la durata dell'avvicinamento, il tempo alla collisione resta sotto i 3 secondi. Sono i medesimi scenari che collidono, e valgono 1 anche per l'oracolo.
+
+> **Nota.** **Una domanda a cui questo documento NON risponde:** quanto sono accurati i cinque parametri stimati dalla rete rispetto ai valori veri. È la validazione del **modello**, non della sua implementazione, ed è stata svolta in fasi precedenti del progetto. Qui l'accuratezza della rete entra solo indirettamente, attraverso il confronto con l'oracolo del §4.2: quel divario **e'** il costo della stima, misurato sull'esito che conta, cioè la qualità di guida.
 
 
 ### 4.3 Un caso limite reale: il congelamento a parametri ripetuti
@@ -405,6 +428,8 @@ La risorsa più impegnata è il DSP, al 31.4 %; nessuna è vicina alla saturazio
 
 ![Ripartizione delle risorse dentro il blocco, dopo place&route. Il blocco di allineamento non è logica gratuita: costa 876 LUT, il 11 % del blocco. È il prezzo di **una sola** inferenza per passo di controllo, cioè della correttezza del filtro interno.](figures_harness_snn_iidm/hier.png)
 *Ripartizione delle risorse dentro il blocco, dopo place&route. Il blocco di allineamento non è logica gratuita: costa 876 LUT, il 11 % del blocco. È il prezzo di **una sola** inferenza per passo di controllo, cioè della correttezza del filtro interno.*
+
+> **Nota.** **Perché allora 40 MHz e non meno?** Con un margine di oltre settemila volte sul passo di controllo, qualunque punto dello sweep soddisfa il requisito, e i più lenti risparmierebbero energia dinamica. La frequenza riportata è il **massimo dimostrato**, non una scelta di deployment: caratterizzare il limite superiore serve a sapere quanto margine esiste per lavoro futuro sullo stesso blocco. La scelta della frequenza di esercizio è una decisione di sistema, e alla luce di questi dati può essere presa guardando al consumo invece che alle prestazioni.
 
 
 ### 6.4 Margine sul control-step

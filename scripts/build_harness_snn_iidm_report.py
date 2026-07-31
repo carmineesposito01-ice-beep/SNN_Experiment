@@ -560,7 +560,9 @@ def metric_table(fam):
         if not m or m[0] != fam:
             continue
         _f, desc, unit, note = m
-        rows.append([nm, desc, unit, _agg_rule(nm)[1], _fmt(a_), _fmt(b_),
+        # sigla invece della frase per esteso: ripetuta su 31 righe, la frase divorava una colonna
+        _sig = {'min': 'min', 'max': 'max', 'sum': 'somma', 'mean': 'media'}[_agg_rule(nm)[0]]
+        rows.append([nm, desc, unit, _sig, _fmt(a_), _fmt(b_),
                      ('%.3f' % r) if r is not None else "\u2014"])
     return rows
 
@@ -672,7 +674,24 @@ def build_doc():
                   '`align` guadagnava frequenza ma reintroduceva il **doppio fronte**: più veloce, e con '
                   'l\'anello che si comportava diversamente. Da allora ogni modifica al confine è soggetta a '
                   'un cancello che **conta i fronti** e ne pretende esattamente uno.'))
-    A(('h2', '2.2 I cinque parametri, e cosa significano'))
+    A(('h2', '2.2 La rete, la variante e la quantizzazione'))
+    A(('p', "Tre nomi ricorrono nel documento e vanno sciolti, perche' identificano scelte di progetto "
+            "gia' fatte e qui soltanto ereditate."))
+    A(('table', (['Nome', 'Che cosa indica'], [
+        ["rete a spike", "una rete ricorrente a **32 neuroni nascosti** che, per ogni passo di controllo, "
+                         "evolve per **10 passi interni**; la ricorrenza e' fattorizzata a rango 16 e i "
+                         "ritardi sinaptici arrivano a 6 passi. Produce 5 uscite, i parametri del \u00a72.3. "
+                         "In hardware i 32 neuroni condividono **una sola** unita' di calcolo, percorsa a "
+                         "turno: e' cio' che tiene l'area entro il dispositivo"],
+        ["`Tier@BALANCED`", "la rete e' disponibile in tre varianti di **pipelining** \u2014 area minima, "
+                            "compromesso, margine temporale massimo. Qui e' in uso la intermedia. Le tre "
+                            "varianti calcolano la stessa funzione: cambiano quanti registri separano gli "
+                            "stadi, quindi area e frequenza, non il risultato"],
+        ["`nfrac 13`", "i **bit frazionari** della rappresentazione in virgola fissa interna alla rete. "
+                       "Tredici bit dopo la virgola; la scelta viene da uno studio di quantizzazione "
+                       "dedicato, esterno a questo documento"],
+    ])))
+    A(('h2', '2.3 I cinque parametri, e cosa significano'))
     A(('p', "La rete non produce direttamente l'accelerazione: stima **cinque parametri** del modello di "
             "guida IDM, che la legge di controllo poi usa insieme agli stati misurati. Sono la velocita' "
             "desiderata in strada libera, il tempo di via libera desiderato, la distanza minima da fermo, "
@@ -687,7 +706,20 @@ def build_doc():
     A(('p', "Sono questi cinque valori che il blocco di allineamento tratta, che il cancello PARAM-RANGE "
             "verifica entro i limiti del decodificatore, e la cui **ripetizione** produce il comportamento "
             "descritto nel \u00a74.3."))
-    A(('h2', '2.3 Cosa è dentro e cosa è fuori'))
+    A(('table', (['Grandezza', 'Rappresentazione', 'Risoluzione', 'Intervallo'], [
+        ["ingressi (distanza, velocita, velocita relativa, velocita del leader)",
+         "virgola fissa con segno, 32 bit di cui 20 frazionari", "circa 1e-6", "circa \u00b12048"],
+        ["uscita (accelerazione comandata)",
+         "virgola fissa con segno, 13 bit di cui 8 frazionari", "1/256 = 0,0039 m/s2",
+         "da -16,0 a +15,996 m/s2"],
+    ])))
+    A(('p', "L'intervallo dell'uscita copre con margine la decelerazione fisica massima considerata dal "
+            "modello di valutazione, 9 m/s2, quindi la rappresentazione non satura nei casi di interesse."))
+    A(('h2', '2.4 Cosa è dentro e cosa è fuori'))
+    A(('p', "Il passo di controllo di **%g s** non e' una convenzione di comodo: e' il passo temporale del "
+            "dataset di riferimento, cioe' la cadenza a cui il controllore e' chiamato a decidere, **10 "
+            "volte al secondo**. E' anche l'unico requisito temporale che il sistema deve rispettare: "
+            "tutto il resto \u2014 frequenza di clock, latenza, duty \u2014 e' caratterizzazione." % CTRL_S))
     A(('table', (['Dentro il perimetro', 'Fuori dal perimetro'], [
         ['Il Verilog generato dal blocco composto, simulato in xsim', 'Il comportamento su silicio (Fase C)'],
         ['Il wrapper AXI4-Lite e il sistema con processore e convertitore', 'Il software applicativo sul processore'],
@@ -809,7 +841,7 @@ def build_doc():
     for _f, _lab in FAMIGLIE:
         _rows = metric_table(_f)
         A(('h3', '%s (%d metriche)' % (_lab, len(_rows))))
-        A(('table', (['Metrica', 'Che cosa misura', 'Unita', 'Aggregazione', 'RTL', 'Oracolo', 'Rapporto'],
+        A(('table', (['Metrica', 'Che cosa misura', 'Unita', 'Aggr.', 'RTL', 'Oracolo', 'Rapporto'],
                      _rows)))
     A(('callout', "Su alcune metriche il rapporto e' molto lontano da uno. **Non e' un segnale sulla "
                   "qualita' dell'implementazione**: il caso peggiore su tutti gli scenari e' dominato dai "
@@ -830,6 +862,12 @@ def build_doc():
                   "scenario in cui, per tutta la durata dell'avvicinamento, il tempo alla collisione resta "
                   "sotto i 3 secondi. Sono i medesimi scenari che collidono, e valgono 1 anche per "
                   "l'oracolo."))
+    A(('callout', "**Una domanda a cui questo documento NON risponde:** quanto sono accurati i cinque "
+                  "parametri stimati dalla rete rispetto ai valori veri. E' la validazione del **modello**, "
+                  "non della sua implementazione, ed e' stata svolta in fasi precedenti del progetto. Qui "
+                  "l'accuratezza della rete entra solo indirettamente, attraverso il confronto con "
+                  "l'oracolo del \u00a74.2: quel divario **e'** il costo della stima, misurato sull'esito "
+                  "che conta, cioe' la qualita' di guida."))
     A(('h2', '4.3 Un caso limite reale: il congelamento a parametri ripetuti'))
     A(('p', 'Il blocco è **sensibile al fronte**: riparte quando i suoi ingressi cambiano. Quando la rete '
             'produce due volte di seguito gli **stessi** cinque parametri, `align` rilascia valori identici, '
@@ -976,6 +1014,13 @@ def build_doc():
                            'allineamento non è logica gratuita: costa %d LUT, il %.0f %% del blocco. È il '
                            'prezzo di **una sola** inferenza per passo di controllo, cioè della correttezza '
                            'del filtro interno.' % (HIER['u_align']['lut'], align_pc))))
+    A(('callout', "**Perche' allora 40 MHz e non meno?** Con un margine di oltre settemila volte sul passo "
+                  "di controllo, qualunque punto dello sweep soddisfa il requisito, e i piu' lenti "
+                  "risparmierebbero energia dinamica. La frequenza riportata e' il **massimo dimostrato**, "
+                  "non una scelta di deployment: caratterizzare il limite superiore serve a sapere quanto "
+                  "margine esiste per lavoro futuro sullo stesso blocco. La scelta della frequenza di "
+                  "esercizio e' una decisione di sistema, e alla luce di questi dati puo' essere presa "
+                  "guardando al consumo invece che alle prestazioni."))
     A(('h2', '6.4 Margine sul control-step'))
     A(('p', 'Il solo requisito temporale del sistema è il passo di controllo, %g s. L\'inferenza completa dura '
             '%d cicli di clock.' % (CTRL_S, LAT_CLK)))
@@ -1271,6 +1316,9 @@ def render_pdf(doc, outpath):
         #    Trovato nell'ispezione VISIVA, non da un controllo sul testo: era in ENTRAMBI i report.
         #    Qui il contenuto non puo' contenere `**` per costruzione.
         s = re.sub(r'(?<!\w)\*\*((?:(?!\*\*).)+?)\*\*', r'<b>\1</b>', s)
+        # CORSIVO, dopo il grassetto: a questo punto i `**` sono gia' diventati <b>, quindi
+        #    un `*` residuo e' sempre un delimitatore di corsivo.
+        s = re.sub(r'(?<![\*\w])\*([^*\n]+?)\*(?![\*\w])', r'<i>\1</i>', s)
         # Spazio INSECABILE fra un numero e la sua unita': impedisce che l'a-capo separi
         # "25" da "%" o "+0.358" da "ns". Solo nel PDF: il .md resta con spazi normali.
         return re.sub(r'(\d)\s+(%|mW|mJ|MHz|GHz|kHz|ns|µs|ms|LUT|FF|DSP|BRAM|W|V|°C|pt|bit)(?![\w])',
@@ -1296,7 +1344,28 @@ def render_pdf(doc, outpath):
         data = [[Paragraph(f'<b>{esc(x)}</b>', th) for x in headers]]
         cell = ParagraphStyle('td', fontName='DJ', fontSize=fs, leading=fs + 2.5, wordWrap='CJK')
         for r in rows: data.append([Paragraph(esc(x), cell) for x in r])
-        t = Table(data, repeatRows=1, colWidths=[usable_w / n] * n, hAlign='LEFT')
+        # LARGHEZZE PROPORZIONALI al contenuto, non uniformi: su una tabella a 7 colonne
+        #    dividere in parti uguali comprime la colonna descrittiva (che va a capo tre volte)
+        #    e spreca spazio su quella dell'unita' di misura (due caratteri). Si stima il peso di
+        #    ogni colonna dalla lunghezza tipica del suo contenuto, con un minimo e un massimo per
+        #    evitare che una colonna sparisca o divori la riga.
+        _txt = [[str(x) for x in headers]] + [[str(x) for x in r] for r in rows]
+        _w = []
+        for _c in range(n):
+            _lens = sorted(len(_row[_c]) for _row in _txt)
+            _p75 = _lens[min(len(_lens) - 1, int(0.75 * len(_lens)))]
+            # L'INTESTAZIONE e le parole INDIVISIBILI sono un pavimento: senza, una colonna
+            #    numerica stretta manda a capo il proprio titolo ('Rappo rto') e spezza i nomi
+            #    che non si possono dividere ('PARAM-RA NGE'). Difetto visto nella resa.
+            _hdr = len(_txt[0][_c])
+            _word = max((len(w) for _row in _txt for w in _row[_c].split()), default=1)
+            # l'intestazione e' in GRASSETTO (piu' larga a parita' di caratteri) e ogni cella ha
+            #    8 pt di padding: entrambi vanno nel peso, altrimenti le colonne strette mandano
+            #    a capo il proprio titolo pur avendo 'abbastanza caratteri'.
+            _w.append(max(1.18 * _hdr, 1.05 * _word, 0.9 * _p75, 4.0) + 2.4)
+        _tot = sum(_w)
+        _cw = [usable_w * x / _tot for x in _w]
+        t = Table(data, repeatRows=1, colWidths=_cw, hAlign='LEFT')
         t.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#26527a')),
             ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f1f5fa')]),
