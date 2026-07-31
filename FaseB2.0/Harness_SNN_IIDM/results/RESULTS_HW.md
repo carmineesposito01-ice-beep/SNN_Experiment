@@ -24,7 +24,7 @@ Dispositivo **xc7z020clg400-1** (PYNQ-Z1), Vivado 2026.1, `-jobs` fisso per il d
 | **Energia dinamica** per control-step | **1.10 mJ** | derivato (`P_dyn × 0.1 s`) |
 | Statica del device (pavimento del chip, **separata**) | 0.103 W → 10.3 mJ per control-step | misurato |
 | **Copertura SAIF** / confidenza | **12506 / 19951 net = 62.7 %** · `High` | misurato |
-| Bitstream PYNQ-Z1 | **non ancora prodotto** | — |
+| **Bitstream PYNQ-Z1** @40 MHz (`.bit`/`.hwh`/`.xsa`) | 4.05 MB — WNS +0.022 ns, **identico** a quello dello sweep; utilizzo **identico** | prodotto |
 
 ## Tre cose che questi numeri NON dicono
 

@@ -31,8 +31,39 @@ def load(name, what):
 sw = load('sweep.json',   'lo sweep FCLK')
 nl = load('netlist.json', 'la simulazione di netlist')
 pw = load('power.json',   'lo studio energetico')
-bit = os.path.join(RES, '..', 'bitstream', 'donatello_snn_iidm.bit')
+BITS = os.path.normpath(os.path.join(RES, '..', 'bitstream'))
+bit = os.path.join(BITS, 'donatello_snn_iidm.bit')
 has_bit = os.path.exists(bit)
+
+# CANCELLO: il bitstream deve essere lo STESSO sistema caratterizzato. E' una build Vivado separata:
+# se utilizzo o WNS non coincidono con quelli dello sweep, i numeri di questo documento NON si
+# applicano al .bit che verrebbe spedito -- e sarebbe invisibile guardando il solo .bit.
+bit_match = None
+if has_bit:
+    import re
+    def _u(p):
+        if not os.path.exists(p): return None
+        t = io.open(p, encoding='utf-8', errors='replace').read()
+        out = {}
+        for k, pat in (('lut', r'^\|\s*Slice LUTs\s*\|\s*(\d+)'), ('ff', r'^\|\s*Slice Registers\s*\|\s*(\d+)'),
+                       ('dsp', r'^\|\s*DSPs\s*\|\s*(\d+)'), ('bram', r'^\|\s*Block RAM Tile\s*\|\s*([\d.]+)')):
+            m = re.search(pat, t, re.M); out[k] = m.group(1) if m else None
+        return out
+    ub = _u(os.path.join(BITS, 'util_bitstream_fclk%d.rpt' % int(sw['deployable_mhz'])))
+    us = _u(os.path.join(RES, 'util_flat_fclk%d.rpt' % int(sw['deployable_mhz'])))
+    tb = os.path.join(BITS, 'timing_bitstream_fclk%d.rpt' % int(sw['deployable_mhz']))
+    wns_b = None
+    if os.path.exists(tb):
+        m = re.search(r'WNS\(ns\)[^\n]*\n[-\s]*\n\s*(-?[\d.]+)', io.open(tb, encoding='utf-8', errors='replace').read())
+        wns_b = float(m.group(1)) if m else None
+    if ub and us:
+        bit_match = (ub == us) and (wns_b is not None and abs(wns_b - sw['deployable_wns_ns']) < 1e-6)
+        if not bit_match:
+            print('GEN-ABORT: il bitstream NON e\' il sistema caratterizzato.\n'
+                  '           utilizzo bitstream %s vs sweep %s ; WNS %s vs %s\n'
+                  '           I numeri di RESULTS_HW.md non si applicherebbero al .bit.'
+                  % (ub, us, wns_b, sw['deployable_wns_ns']), file=sys.stderr)
+            sys.exit(1)
 
 lat_us = LAT_CLK / (sw['deployable_mhz'] * 1e6) * 1e6
 margin = CTRL_S / (lat_us * 1e-6)
@@ -85,8 +116,9 @@ a('| Statica del device (pavimento del chip, **separata**) | %.3f W → %.1f mJ 
 a('| **Copertura SAIF** / confidenza | **%d / %d net = %.1f %%** · `%s` | misurato |'
   % (cov_n, cov_t, 100.0 * cov_n / cov_t, pw['confidence']))
 if has_bit:
-    a('| **Bitstream PYNQ-Z1** @%g MHz (`.bit`/`.hwh`/`.xsa`) | %.2f MB | prodotto |'
-      % (sw['deployable_mhz'], os.path.getsize(bit) / 1e6))
+    a('| **Bitstream PYNQ-Z1** @%g MHz (`.bit`/`.hwh`/`.xsa`) | %.2f MB — WNS %+.3f ns, **identico** a quello '
+      'dello sweep; utilizzo **identico** | prodotto |'
+      % (sw['deployable_mhz'], os.path.getsize(bit) / 1e6, sw['deployable_wns_ns']))
 else:
     a('| Bitstream PYNQ-Z1 | **non ancora prodotto** | — |')
 
