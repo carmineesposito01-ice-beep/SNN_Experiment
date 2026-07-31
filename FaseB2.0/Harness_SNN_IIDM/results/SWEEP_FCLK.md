@@ -36,11 +36,25 @@ Il limite si legge **stringendo** il vincolo, non al crossover WNS=0: a vincolo 
 di ottimizzare e il ritardo si assesta su un valore che **non** e' il limite del circuito. Lo mostrano i dati:
 il ritardo ottenuto scende da **35.25 ns** a **24.36 ns** via via che il vincolo stringe.
 
-## Conferma indipendente: il collo e' INTERNO al DUT
+## OOC e sistema sono perimetri DIVERSI: i numeri non si scambiano
 
-Il limite derivato **41.1 MHz** coincide col **Fmax OOC del solo DUT, 41.5 MHz** — misurato a parte e per via
-diversa. Le due misure concordano ⇒ il cammino critico e' **dentro il DUT** (dentro la SNN, come mostra il
-`report_timing`), e **wrapper AXI + interfaccia PS7 non lo allungano**.
+Tre misure di timing sullo stesso circuito, a confronto:
+
+| Perimetro | Vincolo | Esito | Frequenza implicata |
+|---|---|---|---|
+| **Sistema completo** (PS7 + converter + wrapper + DUT) | 40 MHz | WNS **+0.022** ⇒ **chiude** | **40 MHz deployabile** |
+| Sistema completo, punto piu' stretto | 50 MHz | WNS -4.355 | 41.1 MHz (limite derivato) |
+| **OOC** wrapper + DUT (per la netlist) | 40 MHz | WNS **-0.194** ⇒ **NON chiude** | 39.7 MHz |
+| OOC del **solo DUT** (misura precedente) | — | — | 41.5 MHz |
+
+Lo stesso circuito alla stessa frequenza **chiude nel sistema e non chiude in OOC**: la stima OOC qui e' piu'
+PESSIMISTA di quella di sistema. Ne segue una regola operativa: **un numero OOC non e' una capacita' del
+progetto** ed e' confrontabile solo con altri numeri OOC dello stesso perimetro. In particolare, la vicinanza
+fra il limite derivato (41.1 MHz) e l'OOC del solo DUT (41.5 MHz) **non** dimostra che il wrapper sia gratuito:
+a parita' di perimetro OOC, wrapper + DUT sta piu' in basso del DUT da solo.
+
+Dove sia il collo lo dice invece un'**osservazione diretta**, non una coincidenza fra numeri: il
+`report_timing` del sistema individua il cammino critico in **`DEC → align → IIDM`**, interno al blocco.
 
 ⚠️ **Qui NON vale la regola «OOC ≈ 2× il deployabile»** registrata per il Tier: la' il cammino critico passava
 dal confine d'ingresso e il metro io-timed lo dimezzava. Quella regolarita' vale solo quando il collo sta **al

@@ -94,6 +94,13 @@ lim   = 1000.0 / (tight['period'] - tight['wns'])
 if best['whs'] < 0:
     die('il punto deployabile (%g MHz) viola il HOLD (WHS=%+.3f ns)' % (best['freq'], best['whs']))
 
+# WNS dell'implementazione OOC del wrapper+DUT (quella da cui esce la netlist), se disponibile:
+# serve a mostrare che OOC e sistema NON sono lo stesso perimetro.
+ooc = None
+oocp = os.path.join(RES, 'timing_ooc_nl_fclk%d.rpt' % best['req'])
+if os.path.exists(oocp):
+    ooc = parse_timing(oocp)['wns']
+
 HIER = ['sys_wrapper', 'tier0', 'u_dut', 'u_ACC', 'u_Tier', 'u_SNN', 'u_DEC', 'u_align', 'ps7_axi_periph']
 hp = os.path.join(RES, DEPLOY_HIER.format(best['req']))
 hier = parse_hier(hp, set(HIER)) if os.path.exists(hp) else {}
@@ -136,11 +143,26 @@ a('di ottimizzare e il ritardo si assesta su un valore che **non** e\' il limite
 a('il ritardo ottenuto scende da **%.2f ns** a **%.2f ns** via via che il vincolo stringe.\n'
   % (pts[0]['period'] - pts[0]['wns'], tight['period'] - tight['wns']))
 
-a('## Conferma indipendente: il collo e\' INTERNO al DUT\n')
-a('Il limite derivato **%.1f MHz** coincide col **Fmax OOC del solo DUT, %g MHz** — misurato a parte e per via'
+a('## OOC e sistema sono perimetri DIVERSI: i numeri non si scambiano\n')
+a('Tre misure di timing sullo stesso circuito, a confronto:\n')
+a('| Perimetro | Vincolo | Esito | Frequenza implicata |')
+a('|---|---|---|---|')
+a('| **Sistema completo** (PS7 + converter + wrapper + DUT) | %g MHz | WNS **%+.3f** ⇒ **chiude** | **%g MHz deployabile** |'
+  % (best['freq'], best['wns'], best['freq']))
+a('| Sistema completo, punto piu\' stretto | %g MHz | WNS %+.3f | %.1f MHz (limite derivato) |'
+  % (tight['freq'], tight['wns'], lim))
+if ooc is not None:
+    a('| **OOC** wrapper + DUT (per la netlist) | %g MHz | WNS **%+.3f** ⇒ **NON chiude** | %.1f MHz |'
+      % (best['freq'], ooc, 1000.0 / (best['period'] - ooc)))
+a('| OOC del **solo DUT** (misura precedente) | — | — | %g MHz |' % FMAX_OOC_DUT)
+a('\nLo stesso circuito alla stessa frequenza **chiude nel sistema e non chiude in OOC**: la stima OOC qui e\' piu\'')
+a('PESSIMISTA di quella di sistema. Ne segue una regola operativa: **un numero OOC non e\' una capacita\' del')
+a('progetto** ed e\' confrontabile solo con altri numeri OOC dello stesso perimetro. In particolare, la vicinanza')
+a('fra il limite derivato (%.1f MHz) e l\'OOC del solo DUT (%g MHz) **non** dimostra che il wrapper sia gratuito:'
   % (lim, FMAX_OOC_DUT))
-a('diversa. Le due misure concordano ⇒ il cammino critico e\' **dentro il DUT** (dentro la SNN, come mostra il')
-a('`report_timing`), e **wrapper AXI + interfaccia PS7 non lo allungano**.\n')
+a('a parita\' di perimetro OOC, wrapper + DUT sta piu\' in basso del DUT da solo.\n')
+a('Dove sia il collo lo dice invece un\'**osservazione diretta**, non una coincidenza fra numeri: il')
+a('`report_timing` del sistema individua il cammino critico in **`DEC → align → IIDM`**, interno al blocco.\n')
 a('⚠️ **Qui NON vale la regola «OOC ≈ 2× il deployabile»** registrata per il Tier: la\' il cammino critico passava')
 a('dal confine d\'ingresso e il metro io-timed lo dimezzava. Quella regolarita\' vale solo quando il collo sta **al')
 a('confine**; su questo blocco, dopo la correzione di `align`, non ci sta piu\'.\n')
