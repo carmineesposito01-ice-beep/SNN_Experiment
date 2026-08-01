@@ -66,6 +66,20 @@ def esporta(outdir, idx, n_vehicles):
         # accelerazioni REGISTRATE, in ordine [t][veicolo]: le usa PLATOON-PAR, senza DUT
         _scrivi_mem(os.path.join(outdir, 'plat_acc_%d.mem' % j), rec['a'].reshape(-1))
 
+        # INCREMENTO DI VELOCITA' gia' arrotondato a float32.
+        #
+        # Misurato: in platoon_eval `_accel` torna da torch in float32 e numpy tiene `acc * DT`
+        # in float32 (uno scalare Python non promuove un array float32). L'incremento del
+        # plotone e' quindi in SINGOLA precisione, mentre l'anello chiuso (qz_cl_sim, plant_ps)
+        # lavora in doppia.
+        #
+        # Si esporta gia' arrotondato invece di riprodurlo nel testbench per due motivi: xsim
+        # non arrotonda con `shortreal` (verificato: `double == shortreal` da' 1), ed emulare
+        # l'arrotondamento a bit in Verilog sarebbe codice delicato che andrebbe provato a sua
+        # volta. Qui il valore nasce dalla STESSA espressione numpy del riferimento.
+        incr = (rec['a'].astype(np.float32) * DT).astype(np.float64)
+        _scrivi_mem(os.path.join(outdir, 'plat_dvi_%d.mem' % j), incr.reshape(-1))
+
         golden['scen_%d' % j] = {'idx_dataset': i + 1, 'K': K, 'N': n_vehicles,
                                  'v': rec['v'], 'x': rec['x'], 'gap': rec['gap'],
                                  'a': rec['a'], 'collided': bool(rec['collided'])}

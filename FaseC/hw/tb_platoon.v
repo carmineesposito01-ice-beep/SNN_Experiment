@@ -1,5 +1,5 @@
 `timescale 1ns/1ps
-`include "p2_params.vh"        // `KVAL, `NVEH, `HOLDV, `SCENF, `INITF, `ACCF, `OUTF
+`include "p2_params.vh"        // `KVAL, `NVEH, `HOLDV, `SCENF, `INITF, `ACCF, `DVIF, `OUTF
 // -----------------------------------------------------------------------------------------------
 // P2 -- plotone in RTL. N veicoli in fila, ciascuno col PROPRIO Donatello_SNN_IIDM.
 //
@@ -29,10 +29,11 @@ module tb_platoon;
 
   reg [63:0] leadm[0:K-1], initm[0:3];
 `ifdef PLATOON_PAR
-  reg [63:0] accm[0:K*N-1];
+  reg [63:0] accm[0:K*N-1];      // accelerazioni registrate (per la serie)
+  reg [63:0] dvim[0:K*N-1];      // incrementi gia' arrotondati a float32 (per il plant)
 `endif
 
-  real x[0:N-1], v[0:N-1], a_out[0:N-1];
+  real x[0:N-1], v[0:N-1], a_out[0:N-1], dv_incr[0:N-1];
   real x_old[0:N-1], v_old[0:N-1];
   real gap[0:N-1], dvv[0:N-1], vlead[0:N-1];
   real v_set, gap_eq, VEH_LEN, DT, x_head_leader;
@@ -75,25 +76,22 @@ module tb_platoon;
     end
   endtask
 
-  // ⚠️ MISURATO, non supposto: nel motore di riferimento `_accel` torna da torch in float32, e
-  // numpy tiene il prodotto `acc * DT` in float32 (uno scalare Python non promuove un array
-  // float32). L'incremento di velocita' del plotone e' quindi in SINGOLA precisione, mentre
-  // l'anello chiuso (qz_cl_sim, plant_ps) lavora in doppia.
+  // Il plant riceve gia' l'INCREMENTO di velocita', non l'accelerazione.
   //
-  // Qui si riproduce, non si corregge: P2 verifica che l'RTL riproduca cio' che P1 HA MISURATO.
-  // Ignorarlo dava uno scarto di 2,79e-10 al primo passo, che si accumula a 2,8e-6 su 600 --
-  // piccolo, ma sistematico, e mascherarlo con una tolleranza nasconderebbe la classe di
-  // difetti che questo cancello esiste per trovare.
-  function real f32(input real z);
-    shortreal s;
-    begin s = z; f32 = s; end
-  endfunction
-
-  task integra;                          // accelerazioni -> nuovo stato
+  // Non e' un dettaglio di comodo: misurato, in platoon_eval `acc * DT` e' calcolato in float32
+  // (`_accel` torna da torch in float32 e uno scalare Python non promuove un array float32),
+  // mentre l'anello chiuso lavora in doppia. In PLATOON-PAR l'incremento arriva quindi gia'
+  // arrotondato dall'esportatore, che lo calcola con la STESSA espressione numpy del riferimento;
+  // in anello chiuso e' `accel * DT` in doppia, come farebbe il processore.
+  //
+  // Il PLANT resta uno solo: cambia da dove viene il suo ingresso, non cosa calcola. Riprodurre
+  // il float32 qui dentro non era una via: xsim non arrotonda con `shortreal` (verificato,
+  // `double == shortreal` da' 1) ed emularlo a bit sarebbe codice delicato da provare a sua volta.
+  task integra;                          // incremento -> nuovo stato
     real vnew;
     begin
       for (i = 0; i < N; i = i + 1) begin
-        vnew = v[i] + f32(a_out[i] * DT);
+        vnew = v[i] + dv_incr[i];
         if (vnew < 0.0) vnew = 0.0;
         v[i] = vnew;
         x[i] = x[i] + vnew * DT;         // con la v NUOVA
@@ -107,6 +105,7 @@ module tb_platoon;
     $readmemh(`SCENF, leadm); $readmemh(`INITF, initm);
 `ifdef PLATOON_PAR
     $readmemh(`ACCF, accm);
+    $readmemh(`DVIF, dvim);
 `endif
     v_set   = $bitstoreal(initm[0]); gap_eq = $bitstoreal(initm[1]);
     VEH_LEN = $bitstoreal(initm[2]); DT     = $bitstoreal(initm[3]);
@@ -136,14 +135,20 @@ module tb_platoon;
     for (t = 0; t < K; t = t + 1) begin
       calcola_ingressi;
 `ifdef PLATOON_PAR
-      for (i = 0; i < N; i = i + 1) a_out[i] = $bitstoreal(accm[t*N + i]);
+      for (i = 0; i < N; i = i + 1) begin
+        a_out[i]   = $bitstoreal(accm[t*N + i]);
+        dv_incr[i] = $bitstoreal(dvim[t*N + i]);   // gia' float32, come il riferimento
+      end
 `else
       for (i = 0; i < N; i = i + 1) begin
         s_in[i] = toq(gap[i]); v_in[i] = toq(v_old[i]);
         dv_in[i] = toq(dvv[i]); vl_in[i] = toq(vlead[i]);
       end
       repeat (HOLD) @(posedge clk);
-      for (i = 0; i < N; i = i + 1) a_out[i] = $itor($signed(accel[i])) / 256.0;
+      for (i = 0; i < N; i = i + 1) begin
+        a_out[i]   = $itor($signed(accel[i])) / 256.0;
+        dv_incr[i] = a_out[i] * DT;                // doppia, come il processore
+      end
 `endif
 
       for (i = 0; i < N; i = i + 1)

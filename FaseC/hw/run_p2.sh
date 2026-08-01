@@ -26,7 +26,7 @@ cp "$QUI/tb_platoon.v" .
 {
   printf '`define KVAL %s\n`define NVEH %s\n`define HOLDV %s\n' "$K" "$NVEH" "$HOLD"
   printf '`define SCENF "scen.mem"\n`define INITF "init.mem"\n'
-  printf '`define ACCF  "acc.mem"\n`define OUTF  "ser.txt"\n'
+  printf '`define ACCF  "acc.mem"\n`define DVIF  "dvi.mem"\n`define OUTF  "ser.txt"\n'
   [ "$MODO" = "par" ] && printf '`define PLATOON_PAR 1\n'
 } > p2_params.vh
 
@@ -40,7 +40,13 @@ done < "$SRC/compile_order.txt"
 for ((i = 1; i <= NSCEN; i++)); do
   cp "plat_scen_${i}.mem" scen.mem
   cp "plat_init_${i}.mem" init.mem
-  [ "$MODO" = "par" ] && cp "plat_acc_${i}.mem" acc.mem || cp "plat_scen_${i}.mem" acc.mem
+  if [ "$MODO" = "par" ]; then
+    cp "plat_acc_${i}.mem" acc.mem
+    cp "plat_dvi_${i}.mem" dvi.mem          # incrementi gia' arrotondati a float32
+  else
+    cp "plat_scen_${i}.mem" acc.mem         # non letti in anello chiuso, ma i define esistono
+    cp "plat_scen_${i}.mem" dvi.mem
+  fi
   o=$("$VIV/xsim.bat" p2snap -R 2>&1)
   echo "$o" | grep -E "^P2(RES|-FATAL)" || { echo "P2-ABORT: scenario $i senza P2RES"; echo "$o" | tail -5; exit 1; }
   mv ser.txt "ser/ser_${i}.txt"
