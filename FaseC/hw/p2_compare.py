@@ -79,10 +79,24 @@ def _main(argv):
     ap.add_argument('--work', default='C:/t7cp2')
     ap.add_argument('--nscen', type=int, required=True)
     ap.add_argument('--campi', nargs='+', default=['gap', 'v', 'x', 'a'])
+    ap.add_argument('--out', default=None, help='artefatto JSON (con provenienza)')
+    ap.add_argument('--modo', default='platoon-par', choices=['platoon-par', 'p2-exact'])
+    ap.add_argument('--nveh', type=int, default=4)
     a = ap.parse_args(argv)
 
     r = confronta(os.path.join(a.work, 'ser'), os.path.join(a.work, 'p2_golden.npz'),
                   a.nscen, a.campi)
+
+    if a.out:
+        sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        from phase_c import artifacts
+        r['modo'] = a.modo
+        r['n_vehicles'] = a.nveh
+        r['campi'] = a.campi
+        r['n_confronti_totale'] = sum(v['n'] for v in r['per_campo'].values())
+        artifacts.write(a.out, r, frontend='script',
+                        bitstream_sig='n/a (P2 e\' simulazione RTL)', sorgente='rtl-xsim')
+        print('artefatto: %s' % a.out)
     for c, v in sorted(r['per_campo'].items()):
         print('  %-4s  %d/%d disallineati   scarto max %.3e' % (c, v['nmis'], v['n'], v['max_abs']))
     if r['bit_esatto']:

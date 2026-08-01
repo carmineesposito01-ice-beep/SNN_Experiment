@@ -1,0 +1,46 @@
+{
+ "data": {
+  "bit_esatto": true,
+  "campi": [
+   "gap",
+   "v",
+   "x",
+   "a"
+  ],
+  "modo": "platoon-par",
+  "n_confronti_totale": 844800,
+  "n_scenari": 88,
+  "n_vehicles": 4,
+  "per_campo": {
+   "a": {
+    "max_abs": 0.0,
+    "n": 211200,
+    "nmis": 0
+   },
+   "gap": {
+    "max_abs": 0.0,
+    "n": 211200,
+    "nmis": 0
+   },
+   "v": {
+    "max_abs": 0.0,
+    "n": 211200,
+    "nmis": 0
+   },
+   "x": {
+    "max_abs": 0.0,
+    "n": 211200,
+    "nmis": 0
+   }
+  },
+  "primo_scarto": null,
+  "scenari_rossi": []
+ },
+ "prov": {
+  "bitstream_sig": "n/a (P2 e' simulazione RTL)",
+  "cwd": "D:\\Project_MBSE\\1.Reti Neurali\\Rete_SNN_Test\\CF_FSNN\\.worktrees\\Simulink_Importer\\FaseC",
+  "frontend": "script",
+  "sorgente": "rtl-xsim",
+  "timestamp": "2026-08-01T14:32:29"
+ }
+}
