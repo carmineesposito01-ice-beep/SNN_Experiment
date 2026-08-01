@@ -32,3 +32,7 @@ PROBE unita=wrapper N=3 max_dsp=220 LUT=25745 FF=12291 DSP=207 BRAM=3 FIT=si SEC
 PROBE unita=wrapper N=4 max_dsp=220 LUT=38877 FF=16416 DSP=212 BRAM=4 FIT=si SEC=151
 === unita=wrapper N=5 max_dsp=220  [avvio 13:52:47] ===
 PROBE unita=wrapper N=5 max_dsp=220 LUT=50940 FF=20520 DSP=210 BRAM=5 FIT=si SEC=162
+sonda: unita=wrapper  N in [6] x max_dsp in [220]   sorgenti=C:/t7bimpl/src   lavoro=C:/t7cprobe
+--- ogni punto e' una sintesi out-of-context; il costo del primo dice quello di tutti ---
+=== unita=wrapper N=6 max_dsp=220  [avvio 13:56:49] ===
+PROBE unita=wrapper N=6 max_dsp=220 LUT=72793 FF=24678 DSP=210 BRAM=6 FIT=no SEC=187

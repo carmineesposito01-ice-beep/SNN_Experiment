@@ -109,7 +109,7 @@
     "lut_margine": 2260,
     "lut_margine_pct": 4.2,
     "n_max": 5,
-    "vincolo": null
+    "vincolo": "lut"
    }
   }
  },
@@ -266,6 +266,17 @@
    "max_dsp": 220,
    "n_istanze": 5,
    "secondi": 162,
+   "unita": "wrapper"
+  },
+  {
+   "bram": 6,
+   "dsp": 210,
+   "entra": false,
+   "ff": 24678,
+   "lut": 72793,
+   "max_dsp": 220,
+   "n_istanze": 6,
+   "secondi": 187,
    "unita": "wrapper"
   }
  ],
