@@ -20,7 +20,7 @@ import sys
 import numpy as np
 
 from . import PROJECT, RESULTS
-from .params import load_champion, load_gt_params, load_leader, n_scenarios
+from .params import load_champion, load_gt_params, load_leader, load_scenario, n_scenarios
 
 if PROJECT not in sys.path:
     sys.path.insert(0, PROJECT)
@@ -95,8 +95,13 @@ CANALI = {
 
 
 def run_one(champion, i, n_vehicles, channel=None):
-    """Un plotone di `n_vehicles` sullo scenario i, con le metriche complete."""
-    rec = run_platoon(champion, load_gt_params(i), n_vehicles, load_leader(i), channel=channel)
+    """Un plotone di `n_vehicles` sullo scenario i, con le metriche complete.
+
+    Il cut viene dal DATASET, non da un'opzione: 33 scenari su 99 lo hanno, e senza di esso
+    il leader si ferma di colpo senza il gap compensativo (difetto trovato il 2026-08-01).
+    """
+    rec = run_platoon(champion, load_gt_params(i), n_vehicles, load_leader(i),
+                      channel=channel, cut_in=load_scenario(i)['cut_in'])
     m = platoon_metrics(rec)
     mancanti = [k for k in CHIAVI if k not in m]
     if mancanti:

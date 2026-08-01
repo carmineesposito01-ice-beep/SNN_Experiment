@@ -48,7 +48,7 @@ def _params_for(model, gap, v, dv, vl, pgt_t, n, device):
 # MESO — plotone aperto (string stability ACC)
 # ===========================================================
 def simulate_platoon(model, params_gt, n_vehicles, v_leader_profile, device='cpu', forward=None,
-                     channel=None):
+                     channel=None, cut_in=None):
     """N veicoli IN FILA. Veicolo 0 = testa (segue il profilo esterno); i segue i-1 (CAM da i-1).
 
     Ritorna dict: v,x,gap,a (T,N) + v_leader (T,) + collided.
@@ -83,6 +83,23 @@ def simulate_platoon(model, params_gt, n_vehicles, v_leader_profile, device='cpu
     collided = False
     with torch.no_grad():
         for t in range(Tlen):
+            # ⚠️ TELETRASPORTO DEL CUT (T2): negli scenari cut_in / cut_out / aggressive_cut_in
+            # il profilo del leader contiene un salto di velocita' FISICAMENTE IMPOSSIBILE
+            # (misurato: 75-245 m/s2). Non e' un difetto del dataset: rappresenta il leader che
+            # esce di scena, e `cut_in=(passo, gap)` riposiziona il gap sul NUOVO leader.
+            #
+            # Senza questa riga il plotone vede un ostacolo che si ferma di colpo SENZA il gap
+            # compensativo: a 22 m/s con 26 m e 9 m/s2 di frenata massima lo spazio d'arresto e'
+            # 26,9 m, quindi la collisione e' inevitabile per costruzione. Riguarda 33 scenari
+            # su 99, e falsava la string stability perche' il salto gonfia std(v_leader), che e'
+            # il DENOMINATORE di head-to-tail.
+            #
+            # Il cut avviene fra la TESTA e il leader esterno: si riposiziona il gap del veicolo
+            # 0 (spostando il leader virtuale), non quello dei follower, che seguono la testa e
+            # non sono toccati dalla manovra. Passo in base 1, come in qz_cl_sim.
+            if cut_in is not None and (t + 1) == int(cut_in[0]):
+                x_head_leader = float(x[0]) + VEH_LEN + float(cut_in[1])
+
             vlead = np.empty(n); vlead[0] = float(v_leader_profile[t]); vlead[1:] = v[:-1]
             xlead = np.empty(n); xlead[0] = x_head_leader; xlead[1:] = x[:-1]
             gap = xlead - x - VEH_LEN
