@@ -52,19 +52,73 @@ def test_p1_aggrega_per_N():
     assert set(r['per_N']) == {2, 3}
     for N in (2, 3):
         v = r['per_N'][N]
-        for k in ('head_to_tail_mediana', 'head_to_tail_p99', 'max_amplification_p99',
-                  'n_string_stable', 'n_collisi', 'min_ttc_minimo', 'n'):
+        for k in ('head_to_tail_mediana', 'head_to_tail_p95', 'max_amplification_p95',
+                  'n_string_stable', 'n_collisi', 'min_ttc_minimo',
+                  'n_stabilita', 'n_sicurezza'):
             assert k in v
-        assert v['n'] == 2
+        assert v['n_sicurezza'] == 2
 
 
-def test_la_stabilita_si_dichiara_sulla_CODA_non_sulla_mediana():
-    """Nella sicurezza contano i casi peggiori, ed e' esattamente quelli che la mediana
-    cancella. Se questo test cadesse, P1 potrebbe dichiarare stabile un plotone che amplifica
-    nel 40% degli scenari."""
+def test_la_stabilita_si_dichiara_in_modo_STRETTO():
+    """Stabile solo se lo e' in OGNI scenario. Un plotone che amplifica in un caso su
+    ottantotto amplifica: una mediana, o anche un p95, cancellerebbe proprio quel caso."""
     r = platoon.run_p1(n_vehicles=(2,), scenari=range(2))
     v = r['per_N'][2]
-    assert v['string_stable'] == (v['head_to_tail_p99'] <= 1.0)
+    assert v['string_stable'] == (v['n_string_stable'] == v['n_stabilita'])
+
+
+# --------------------------------------------- il perimetro: gli scenari degeneri
+
+def test_gli_scenari_a_leader_COSTANTE_sono_riconosciuti():
+    """Sono gli 11 `static_target`: deviazione standard del leader ESATTAMENTE 0."""
+    pert, degen = platoon.partiziona_scenari(range(99))
+    assert len(degen) == 11 and len(pert) == 88
+    assert [i + 1 for i in degen] == [7, 16, 25, 34, 43, 52, 61, 70, 79, 88, 97]
+
+
+def test_p1_ESCLUDE_i_degeneri_dalla_stabilita_ma_li_TIENE_nella_sicurezza():
+    r = platoon.run_p1(n_vehicles=(2,), scenari=[0, 6])       # 6 (base 0) = idx 7, static_target
+    assert r['perimetro']['n_degeneri'] == 1
+    assert r['perimetro']['idx_degeneri_base1'] == [7]
+    v = r['per_N'][2]
+    assert v['n_stabilita'] == 1, 'lo scenario degenere non deve entrare nella stabilita'
+    assert v['n_sicurezza'] == 2, 'ma deve restare nelle metriche di sicurezza'
+
+
+def test_un_degenere_che_trapelasse_ESPLODE_o_finge_di_essere_perfetto():
+    """Il cancello, provato in negativo su ENTRAMBE le facce del difetto.
+
+    Con leader costante, `head_to_tail = std[coda] / (std[testa] + 1e-9)` ha il denominatore
+    a zero esatto. Cosa esce dipende dalla coda, e misurato sui 99 scenari fa due cose diverse:
+
+      * 2 su 11 (regime `truck`, idx 61 e 70): il follower conserva un'oscillazione residua
+        di ~9e-4 m/s -> 9e-4 / 1e-9 = 901 331. Avvelena la coda della distribuzione.
+      * 9 su 11: anche il follower si ferma -> 0 / 1e-9 = 0, che passa il test `<= 1` e viene
+        contato come STRING-STABLE. Piu' insidioso del primo: non si vede.
+
+    Le due facce hanno la stessa radice -- il rapporto e' indefinito senza perturbazione --
+    e per questo la partizione le toglie entrambe.
+    """
+    from phase_c.params import load_champion
+    c = load_champion()
+    esplode = platoon.run_one(c, 60, n_vehicles=2)['head_to_tail_gain']    # base 0 -> idx 61
+    finge = platoon.run_one(c, 6, n_vehicles=2)['head_to_tail_gain']       # base 0 -> idx 7
+    assert esplode > 1e3, 'la faccia esplosiva non si presenta piu: motore cambiato?'
+    assert finge == 0.0 and finge <= 1.0, 'la faccia silenziosa non si presenta piu'
+
+    r = platoon.run_p1(n_vehicles=(2,), scenari=[0, 6, 60])
+    v = r['per_N'][2]
+    assert v['n_stabilita'] == 1, 'entrambi i degeneri devono restare fuori'
+    assert v['head_to_tail_max'] < 10.0, 'un degenere e trapelato nell aggregato'
+
+
+def test_se_TUTTI_gli_scenari_sono_degeneri_la_stabilita_e_INDEFINITA():
+    """None, non un numero qualsiasi: e' una grandezza che non esiste, non una che vale zero."""
+    r = platoon.run_p1(n_vehicles=(2,), scenari=[6])
+    v = r['per_N'][2]
+    assert v['n_stabilita'] == 0
+    assert v['string_stable'] is None and v['head_to_tail_max'] is None
+    assert v['n_sicurezza'] == 1, 'la sicurezza resta misurabile anche li'
 
 
 def test_l_artefatto_porta_la_provenienza_del_campione():
