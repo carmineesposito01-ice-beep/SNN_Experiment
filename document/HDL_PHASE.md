@@ -557,6 +557,9 @@ Config in `make_hdl.m`: `LoopOptimization='StreamLoops'`, `ConstantMultiplierOpt
 > | **P1 — string stability del plotone** | chiude il proxy N=1 dei report B2.0. Mediana head-to-tail **sopra 1 a ogni N** (1,014 a N=2 → 1,358 a N=16), guadagno per stadio ~1,02: **non string-stable in mediana**. Caso peggiore 11,7×. Perimetro: 88 scenari perturbati su 99 (gli 11 `static_target` hanno il leader costante e la grandezza e' indefinita). |
 > | **Sonda risorse** | **5 istanze** del composto entrano nello Zynq-7020 (margine LUT 6%); **4** con margine comodo (28%). L'aritmetica ingenua 220/69 sottostima: Vivado sposta l'eccedenza di moltiplicatori in fabric. Con `max_dsp=0` entrano solo 2. |
 >
+> | **P2 — plotone in RTL** | Chiuso con copertura completa, nelle due meta' della decomposizione di T7a: **PLATOON-PAR 0/844 800** (il plant Verilog riproduce P1, senza DUT) e **P2-EXACT 0/211 200** (ogni DUT riproduce il blocco, senza plant). Aggiunge a T7-EXACT la prova che 4 istanze parallele non si disturbano. |
+> | Costo della quantizzazione dell'uscita | Misurato a livello di PLOTONE: l'accel a 1/256 sposta le traiettorie di 0,22 m/s e 0,54 m (mediane sugli 88), con profilo che parte sotto il LSB, cresce e si STABILIZZA -- l'anello amplifica ma non fa scappare. Collisioni identiche, 1/88. |
+>
 > **Restano alla scheda:** C0–C3 su silicio (filoni A e B), P2, P3, e da li' i limiti dichiarati
 > qui sotto. **Unico codice mancante:** `FaseC/phase_c/cli.py::_overlay()`.
 >

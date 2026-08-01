@@ -1,50 +1,21 @@
 {
- "deployabile": {
-  "lut_margine_dut": 3175,
-  "lut_margine_wrapper": 2260,
-  "lut_margine_wrapper_pct": 4.2,
-  "lut_usate_wrapper": 50940,
-  "n_max_dut_solo": 5,
-  "n_max_wrapper": 5,
-  "nota": "MISURATO col wrapper AXI incluso: 5 istanze, margine 2260 LUT (4.2%). Resta fuori la sola interconnessione AXI del block design (in T7b: 352 LUT e 426 FF per UNO slave; con piu' slave cresce)."
- },
- "limiti_xc7z020": {
-  "bram": 140,
-  "dsp": 220,
-  "ff": 106400,
-  "lut": 53200
- },
- "linearita": {
-  "nota": "rapporto ~1 = le istanze NON sono state fuse. Si allontana da 1 quando il tetto ai DSP obbliga a spostare moltiplicatori in fabric.",
-  "rapporto_per_n": [
-   {
-    "lut_su_lut1_per_n": 1.0,
-    "n": 1
-   },
-   {
-    "lut_su_lut1_per_n": 1.0,
-    "n": 2
-   },
-   {
-    "lut_su_lut1_per_n": 1.0,
-    "n": 3
-   },
-   {
-    "lut_su_lut1_per_n": 1.1355,
-    "n": 4
-   },
-   {
-    "lut_su_lut1_per_n": 1.1912,
-    "n": 5
-   },
-   {
-    "lut_su_lut1_per_n": 1.4228,
-    "n": 6
-   }
-  ]
- },
- "linearita_per_unita": {
-  "dut": {
+ "data": {
+  "deployabile": {
+   "lut_margine_dut": 3175,
+   "lut_margine_wrapper": 2260,
+   "lut_margine_wrapper_pct": 4.2,
+   "lut_usate_wrapper": 50940,
+   "n_max_dut_solo": 5,
+   "n_max_wrapper": 5,
+   "nota": "MISURATO col wrapper AXI incluso: 5 istanze, margine 2260 LUT (4.2%). Resta fuori la sola interconnessione AXI del block design (in T7b: 352 LUT e 426 FF per UNO slave; con piu' slave cresce)."
+  },
+  "limiti_xc7z020": {
+   "bram": 140,
+   "dsp": 220,
+   "ff": 106400,
+   "lut": 53200
+  },
+  "linearita": {
    "nota": "rapporto ~1 = le istanze NON sono state fuse. Si allontana da 1 quando il tetto ai DSP obbliga a spostare moltiplicatori in fabric.",
    "rapporto_per_n": [
     {
@@ -72,216 +43,254 @@
      "n": 6
     }
    ]
-  }
- },
- "per_max_dsp": {
-  "0": {
-   "lut_al_massimo": 38958,
-   "n_max_dut_solo": 2,
-   "vincolo": "lut"
   },
-  "220": {
-   "lut_al_massimo": 50025,
-   "n_max_dut_solo": 5,
-   "vincolo": "lut"
-  }
- },
- "per_unita": {
-  "dut": {
+  "linearita_per_unita": {
+   "dut": {
+    "nota": "rapporto ~1 = le istanze NON sono state fuse. Si allontana da 1 quando il tetto ai DSP obbliga a spostare moltiplicatori in fabric.",
+    "rapporto_per_n": [
+     {
+      "lut_su_lut1_per_n": 1.0,
+      "n": 1
+     },
+     {
+      "lut_su_lut1_per_n": 1.0,
+      "n": 2
+     },
+     {
+      "lut_su_lut1_per_n": 1.0,
+      "n": 3
+     },
+     {
+      "lut_su_lut1_per_n": 1.1355,
+      "n": 4
+     },
+     {
+      "lut_su_lut1_per_n": 1.1912,
+      "n": 5
+     },
+     {
+      "lut_su_lut1_per_n": 1.4228,
+      "n": 6
+     }
+    ]
+   }
+  },
+  "per_max_dsp": {
    "0": {
     "lut_al_massimo": 38958,
-    "lut_margine": 14242,
-    "lut_margine_pct": 26.8,
-    "n_max": 2,
+    "n_max_dut_solo": 2,
     "vincolo": "lut"
    },
    "220": {
     "lut_al_massimo": 50025,
-    "lut_margine": 3175,
-    "lut_margine_pct": 6.0,
-    "n_max": 5,
+    "n_max_dut_solo": 5,
     "vincolo": "lut"
    }
   },
-  "wrapper": {
-   "220": {
-    "lut_al_massimo": 50940,
-    "lut_margine": 2260,
-    "lut_margine_pct": 4.2,
-    "n_max": 5,
-    "vincolo": "lut"
+  "per_unita": {
+   "dut": {
+    "0": {
+     "lut_al_massimo": 38958,
+     "lut_margine": 14242,
+     "lut_margine_pct": 26.8,
+     "n_max": 2,
+     "vincolo": "lut"
+    },
+    "220": {
+     "lut_al_massimo": 50025,
+     "lut_margine": 3175,
+     "lut_margine_pct": 6.0,
+     "n_max": 5,
+     "vincolo": "lut"
+    }
+   },
+   "wrapper": {
+    "220": {
+     "lut_al_massimo": 50940,
+     "lut_margine": 2260,
+     "lut_margine_pct": 4.2,
+     "n_max": 5,
+     "vincolo": "lut"
+    }
    }
-  }
+  },
+  "punti": [
+   {
+    "bram": 1,
+    "dsp": 69,
+    "entra": true,
+    "ff": 3913,
+    "lut": 8399,
+    "max_dsp": 220,
+    "n_istanze": 1,
+    "secondi": 150,
+    "unita": "dut"
+   },
+   {
+    "bram": 2,
+    "dsp": 138,
+    "entra": true,
+    "ff": 7826,
+    "lut": 16798,
+    "max_dsp": 220,
+    "n_istanze": 2,
+    "secondi": 143,
+    "unita": "dut"
+   },
+   {
+    "bram": 2,
+    "dsp": 0,
+    "entra": true,
+    "ff": 7920,
+    "lut": 38958,
+    "max_dsp": 0,
+    "n_istanze": 2,
+    "secondi": 303,
+    "unita": "dut"
+   },
+   {
+    "bram": 3,
+    "dsp": 207,
+    "entra": true,
+    "ff": 11739,
+    "lut": 25197,
+    "max_dsp": 220,
+    "n_istanze": 3,
+    "secondi": 145,
+    "unita": "dut"
+   },
+   {
+    "bram": 3,
+    "dsp": 0,
+    "entra": false,
+    "ff": 11880,
+    "lut": 58437,
+    "max_dsp": 0,
+    "n_istanze": 3,
+    "secondi": 190,
+    "unita": "dut"
+   },
+   {
+    "bram": 4,
+    "dsp": 212,
+    "entra": true,
+    "ff": 15656,
+    "lut": 38148,
+    "max_dsp": 220,
+    "n_istanze": 4,
+    "secondi": 155,
+    "unita": "dut"
+   },
+   {
+    "bram": 4,
+    "dsp": 0,
+    "entra": false,
+    "ff": 15840,
+    "lut": 77916,
+    "max_dsp": 0,
+    "n_istanze": 4,
+    "secondi": 213,
+    "unita": "dut"
+   },
+   {
+    "bram": 5,
+    "dsp": 210,
+    "entra": true,
+    "ff": 19570,
+    "lut": 50025,
+    "max_dsp": 220,
+    "n_istanze": 5,
+    "secondi": 158,
+    "unita": "dut"
+   },
+   {
+    "bram": 5,
+    "dsp": 0,
+    "entra": false,
+    "ff": 19800,
+    "lut": 97395,
+    "max_dsp": 0,
+    "n_istanze": 5,
+    "secondi": 210,
+    "unita": "dut"
+   },
+   {
+    "bram": 6,
+    "dsp": 210,
+    "entra": false,
+    "ff": 23532,
+    "lut": 71700,
+    "max_dsp": 220,
+    "n_istanze": 6,
+    "secondi": 272,
+    "unita": "dut"
+   },
+   {
+    "bram": 6,
+    "dsp": 0,
+    "entra": false,
+    "ff": 23760,
+    "lut": 116874,
+    "max_dsp": 0,
+    "n_istanze": 6,
+    "secondi": 250,
+    "unita": "dut"
+   },
+   {
+    "bram": 3,
+    "dsp": 207,
+    "entra": true,
+    "ff": 12291,
+    "lut": 25745,
+    "max_dsp": 220,
+    "n_istanze": 3,
+    "secondi": 130,
+    "unita": "wrapper"
+   },
+   {
+    "bram": 4,
+    "dsp": 212,
+    "entra": true,
+    "ff": 16416,
+    "lut": 38877,
+    "max_dsp": 220,
+    "n_istanze": 4,
+    "secondi": 151,
+    "unita": "wrapper"
+   },
+   {
+    "bram": 5,
+    "dsp": 210,
+    "entra": true,
+    "ff": 20520,
+    "lut": 50940,
+    "max_dsp": 220,
+    "n_istanze": 5,
+    "secondi": 162,
+    "unita": "wrapper"
+   },
+   {
+    "bram": 6,
+    "dsp": 210,
+    "entra": false,
+    "ff": 24678,
+    "lut": 72793,
+    "max_dsp": 220,
+    "n_istanze": 6,
+    "secondi": 187,
+    "unita": "wrapper"
+   }
+  ],
+  "unita_misurate": [
+   "dut",
+   "wrapper"
+  ]
  },
- "punti": [
-  {
-   "bram": 1,
-   "dsp": 69,
-   "entra": true,
-   "ff": 3913,
-   "lut": 8399,
-   "max_dsp": 220,
-   "n_istanze": 1,
-   "secondi": 150,
-   "unita": "dut"
-  },
-  {
-   "bram": 2,
-   "dsp": 138,
-   "entra": true,
-   "ff": 7826,
-   "lut": 16798,
-   "max_dsp": 220,
-   "n_istanze": 2,
-   "secondi": 143,
-   "unita": "dut"
-  },
-  {
-   "bram": 2,
-   "dsp": 0,
-   "entra": true,
-   "ff": 7920,
-   "lut": 38958,
-   "max_dsp": 0,
-   "n_istanze": 2,
-   "secondi": 303,
-   "unita": "dut"
-  },
-  {
-   "bram": 3,
-   "dsp": 207,
-   "entra": true,
-   "ff": 11739,
-   "lut": 25197,
-   "max_dsp": 220,
-   "n_istanze": 3,
-   "secondi": 145,
-   "unita": "dut"
-  },
-  {
-   "bram": 3,
-   "dsp": 0,
-   "entra": false,
-   "ff": 11880,
-   "lut": 58437,
-   "max_dsp": 0,
-   "n_istanze": 3,
-   "secondi": 190,
-   "unita": "dut"
-  },
-  {
-   "bram": 4,
-   "dsp": 212,
-   "entra": true,
-   "ff": 15656,
-   "lut": 38148,
-   "max_dsp": 220,
-   "n_istanze": 4,
-   "secondi": 155,
-   "unita": "dut"
-  },
-  {
-   "bram": 4,
-   "dsp": 0,
-   "entra": false,
-   "ff": 15840,
-   "lut": 77916,
-   "max_dsp": 0,
-   "n_istanze": 4,
-   "secondi": 213,
-   "unita": "dut"
-  },
-  {
-   "bram": 5,
-   "dsp": 210,
-   "entra": true,
-   "ff": 19570,
-   "lut": 50025,
-   "max_dsp": 220,
-   "n_istanze": 5,
-   "secondi": 158,
-   "unita": "dut"
-  },
-  {
-   "bram": 5,
-   "dsp": 0,
-   "entra": false,
-   "ff": 19800,
-   "lut": 97395,
-   "max_dsp": 0,
-   "n_istanze": 5,
-   "secondi": 210,
-   "unita": "dut"
-  },
-  {
-   "bram": 6,
-   "dsp": 210,
-   "entra": false,
-   "ff": 23532,
-   "lut": 71700,
-   "max_dsp": 220,
-   "n_istanze": 6,
-   "secondi": 272,
-   "unita": "dut"
-  },
-  {
-   "bram": 6,
-   "dsp": 0,
-   "entra": false,
-   "ff": 23760,
-   "lut": 116874,
-   "max_dsp": 0,
-   "n_istanze": 6,
-   "secondi": 250,
-   "unita": "dut"
-  },
-  {
-   "bram": 3,
-   "dsp": 207,
-   "entra": true,
-   "ff": 12291,
-   "lut": 25745,
-   "max_dsp": 220,
-   "n_istanze": 3,
-   "secondi": 130,
-   "unita": "wrapper"
-  },
-  {
-   "bram": 4,
-   "dsp": 212,
-   "entra": true,
-   "ff": 16416,
-   "lut": 38877,
-   "max_dsp": 220,
-   "n_istanze": 4,
-   "secondi": 151,
-   "unita": "wrapper"
-  },
-  {
-   "bram": 5,
-   "dsp": 210,
-   "entra": true,
-   "ff": 20520,
-   "lut": 50940,
-   "max_dsp": 220,
-   "n_istanze": 5,
-   "secondi": 162,
-   "unita": "wrapper"
-  },
-  {
-   "bram": 6,
-   "dsp": 210,
-   "entra": false,
-   "ff": 24678,
-   "lut": 72793,
-   "max_dsp": 220,
-   "n_istanze": 6,
-   "secondi": 187,
-   "unita": "wrapper"
-  }
- ],
- "unita_misurate": [
-  "dut",
-  "wrapper"
- ]
+ "prov": {
+  "bitstream_sig": "n/a (sintesi out-of-context)",
+  "cwd": "D:\\Project_MBSE\\1.Reti Neurali\\Rete_SNN_Test\\CF_FSNN\\.worktrees\\Simulink_Importer\\FaseC",
+  "frontend": "script",
+  "sorgente": "vivado-synth",
+  "timestamp": "2026-08-01T17:53:28"
+ }
 }

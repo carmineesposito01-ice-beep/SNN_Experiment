@@ -129,8 +129,13 @@ def analizza(punti):
 
 def _main():
     ris = analizza(leggi())
-    io.open(OUT, 'w', encoding='utf-8', newline='').write(
-        json.dumps(ris, indent=1, ensure_ascii=False, sort_keys=True))
+    # Stessa busta degli altri artefatti della Fase C ({data, prov}): senza, `run_phase_c.sh
+    # summary` lo elencherebbe con provenienza sconosciuta, e sarebbe l'unico a non dire da
+    # dove viene.
+    sys.path.insert(0, FASEC)
+    from phase_c import artifacts
+    artifacts.write(OUT, ris, frontend='script',
+                    bitstream_sig='n/a (sintesi out-of-context)', sorgente='vivado-synth')
     print('punti: %d   unita misurate: %s' % (len(ris['punti']), ris['unita_misurate']))
     for u in ris['unita_misurate']:
         print('  --- %s ---' % u)

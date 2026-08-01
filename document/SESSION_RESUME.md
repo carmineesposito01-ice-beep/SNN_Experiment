@@ -15,7 +15,9 @@ cd FaseC && python -m pytest -q          # tutto verde = si puo' ripartire
 | | Esito | Artefatto |
 |---|---|---|
 | **P1 — plotone in simulazione** | mediana head-to-tail **sopra 1 a ogni N** (1,014 → 1,358); **non** string-stable in mediana; guadagno per stadio ~1,02; caso peggiore 11,7× a N=16 | `FaseC/results/p1.json` |
-| **Sonda risorse** | **5 istanze** del composto entrano nello Zynq-7020 (margine 6%); **4** con margine comodo (28%). Con tutti i moltiplicatori in fabric solo 2 | `results/P3_resources.json` |
+| **Sonda risorse** | **5 istanze** entrano, CONFERMATO col wrapper AXI incluso (50 940 LUT, margine 4,2%). Il wrapper costa 183 LUT/istanza, costante su 3 punti. Con tutti i moltiplicatori in fabric solo 2 | `results/P3_resources.json` |
+| **P2 — plotone in RTL** | **0 / 844 800** (PLATOON-PAR, il plant) e **0 / 211 200** (P2-EXACT, i 4 DUT). Prova che quattro istanze parallele, ciascuna col proprio stato, non si disturbano | `results/p2_*.json` |
+| Costo della quantizzazione | l'uscita a 1/256 sposta le traiettorie del plotone di 0,22 m/s e 0,54 m (mediane) ma **non cambia le collisioni**: 1/88 da entrambe le parti | `results/p2_costo_quantizzazione.json` |
 | Moduli C0–C3 | scritti e collaudati **contro il mock**, cancelli provati anche in negativo | `FaseC/phase_c/` |
 | Due facciate + parita' | `run_phase_c.sh` e `notebook/phase_c.ipynb` sopra lo stesso `phase_c.cli` | `c_frontend_parity.py` |
 | RUNBOOK | sequenza, costi, e cosa guardare a ogni cancello rosso | `FaseC/RUNBOOK.md` |
