@@ -114,9 +114,9 @@ minuti contro i 118 reali. Un secondo punto costa poco e toglie l'ambiguità.
 `tail` lo trattiene fino alla fine, e per venti minuti non si distingue "sta lavorando" da
 "è appesa" senza andare a guardare la CPU del processo. Lasciare scorrere, o scrivere su file.
 
-Il resto:
-i cancelli si provano **prima**: 32 secondi per sapere che i 21 minuti successivi misurano
-qualcosa.
+E i cancelli si provano **prima** della run lunga, non dopo: 32 secondi per sapere che i 21 minuti
+successivi misurano qualcosa. Su P2-EXACT è bastato alterare **un LSB** al passo 100 del veicolo 0
+per vedere il confronto diventare rosso e indicare esattamente quel veicolo e quel passo.
 
 ---
 
