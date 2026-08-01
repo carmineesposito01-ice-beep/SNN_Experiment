@@ -19,6 +19,23 @@
 > prova la deployabilita'**. A N=5 le LUT entravano (47 842 su 53 200) e il **placer fallisce**
 > -- una slice ha 4 LUT e 8 FF e il packing e' limitato dai control set. Vale per qualunque
 > cosa si voglia mettere su quel dispositivo.
+>
+> ### Perche' e' registrato qui, e non solo cancellato
+>
+> Perche' l'errore da non ripetere non e' "abbiamo provato il plotone su hardware": era una
+> ipotesi legittima. E' **aver continuato a lavorarci dopo che il consumatore era sparito**.
+>
+> P2 (l'equivalenza RTL del plotone) esisteva SOLO come passaggio verso P3. Cancellato P3,
+> P2 e' rimasto senza destinatario -- eppure e' stato rilanciato per intero (~150 minuti di
+> simulazione) in risposta a un "aggiorna tutto". E' stato l'utente a chiedere "ma a cosa
+> serve?", e la domanda era giusta.
+>
+> **Regola che ne discende:** dopo ogni taglio di scope, prima di rilanciare qualunque cosa,
+> per ogni pezzo rimasto rispondere a *chi lo consuma adesso*. Se la risposta e' "nessuno", va
+> messo davanti a chi decide come scelta esplicita -- completarlo per non lasciare artefatti
+> irriproducibili, oppure cancellarlo -- non eseguito e basta. La stessa regola che vale per il
+> codice abbandonato vale per il **calcolo** in corso: cio' che nessuno consuma e' debito, non
+> completezza.
 
 
 > **Data:** 2026-07-31 · **Branch:** `Simulink_Importer` · **Stato:** design approvato
