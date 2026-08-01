@@ -1,0 +1,171 @@
+{
+ "deployabile": {
+  "avvertenza": "la sonda misura il DUT DA SOLO: niente wrapper AXI, niente interconnessione. In T7b il contorno costava 479 LUT e 762 FF per una istanza. Con 5 istanze il margine e' 3175 LUT (6.0% del dispositivo): il numero deployabile va CONFERMATO con una sintesi che includa il wrapper, non dedotto da qui.",
+  "contorno_stimato_1_istanza": {
+   "ff": 762,
+   "lut": 479
+  },
+  "lut_margine": 3175,
+  "lut_usate": 50025,
+  "n_max_dut_solo": 5
+ },
+ "limiti_xc7z020": {
+  "bram": 140,
+  "dsp": 220,
+  "ff": 106400,
+  "lut": 53200
+ },
+ "linearita": {
+  "nota": "rapporto ~1 = le istanze NON sono state fuse. Si allontana da 1 quando il tetto ai DSP obbliga a spostare moltiplicatori in fabric.",
+  "rapporto_per_n": [
+   {
+    "lut_su_lut1_per_n": 1.0,
+    "n": 1
+   },
+   {
+    "lut_su_lut1_per_n": 1.0,
+    "n": 2
+   },
+   {
+    "lut_su_lut1_per_n": 1.0,
+    "n": 3
+   },
+   {
+    "lut_su_lut1_per_n": 1.1355,
+    "n": 4
+   },
+   {
+    "lut_su_lut1_per_n": 1.1912,
+    "n": 5
+   },
+   {
+    "lut_su_lut1_per_n": 1.4228,
+    "n": 6
+   }
+  ]
+ },
+ "per_max_dsp": {
+  "0": {
+   "lut_al_massimo": 38958,
+   "n_max_dut_solo": 2,
+   "vincolo": "lut"
+  },
+  "220": {
+   "lut_al_massimo": 50025,
+   "n_max_dut_solo": 5,
+   "vincolo": "lut"
+  }
+ },
+ "punti": [
+  {
+   "bram": 1,
+   "dsp": 69,
+   "entra_dut_solo": true,
+   "ff": 3913,
+   "lut": 8399,
+   "max_dsp": 220,
+   "n_istanze": 1,
+   "secondi": 150
+  },
+  {
+   "bram": 2,
+   "dsp": 138,
+   "entra_dut_solo": true,
+   "ff": 7826,
+   "lut": 16798,
+   "max_dsp": 220,
+   "n_istanze": 2,
+   "secondi": 143
+  },
+  {
+   "bram": 2,
+   "dsp": 0,
+   "entra_dut_solo": true,
+   "ff": 7920,
+   "lut": 38958,
+   "max_dsp": 0,
+   "n_istanze": 2,
+   "secondi": 303
+  },
+  {
+   "bram": 3,
+   "dsp": 207,
+   "entra_dut_solo": true,
+   "ff": 11739,
+   "lut": 25197,
+   "max_dsp": 220,
+   "n_istanze": 3,
+   "secondi": 145
+  },
+  {
+   "bram": 3,
+   "dsp": 0,
+   "entra_dut_solo": false,
+   "ff": 11880,
+   "lut": 58437,
+   "max_dsp": 0,
+   "n_istanze": 3,
+   "secondi": 190
+  },
+  {
+   "bram": 4,
+   "dsp": 212,
+   "entra_dut_solo": true,
+   "ff": 15656,
+   "lut": 38148,
+   "max_dsp": 220,
+   "n_istanze": 4,
+   "secondi": 155
+  },
+  {
+   "bram": 4,
+   "dsp": 0,
+   "entra_dut_solo": false,
+   "ff": 15840,
+   "lut": 77916,
+   "max_dsp": 0,
+   "n_istanze": 4,
+   "secondi": 213
+  },
+  {
+   "bram": 5,
+   "dsp": 210,
+   "entra_dut_solo": true,
+   "ff": 19570,
+   "lut": 50025,
+   "max_dsp": 220,
+   "n_istanze": 5,
+   "secondi": 158
+  },
+  {
+   "bram": 5,
+   "dsp": 0,
+   "entra_dut_solo": false,
+   "ff": 19800,
+   "lut": 97395,
+   "max_dsp": 0,
+   "n_istanze": 5,
+   "secondi": 210
+  },
+  {
+   "bram": 6,
+   "dsp": 210,
+   "entra_dut_solo": false,
+   "ff": 23532,
+   "lut": 71700,
+   "max_dsp": 220,
+   "n_istanze": 6,
+   "secondi": 272
+  },
+  {
+   "bram": 6,
+   "dsp": 0,
+   "entra_dut_solo": false,
+   "ff": 23760,
+   "lut": 116874,
+   "max_dsp": 0,
+   "n_istanze": 6,
+   "secondi": 250
+  }
+ ]
+}

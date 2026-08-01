@@ -32,6 +32,7 @@ logs/
 # produrre i .md di results/. Senza il log versionato l'artefatto non e' rigenerabile e la riga
 # "Rigenerabile: python hw/gen_*.py" che sta nella sua intestazione sarebbe falsa.
 !FaseB2.0/**/results/*.log
+!FaseC/results/*.log
 
 # Jupyter
 .ipynb_checkpoints/

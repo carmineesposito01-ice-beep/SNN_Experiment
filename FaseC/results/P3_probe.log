@@ -1,0 +1,25 @@
+sonda: N in [1] x max_dsp in [220]   sorgenti=C:/t7bimpl/src   lavoro=C:/t7cprobe
+--- ogni punto e' una sintesi out-of-context; il costo del primo dice quello di tutti ---
+=== N=1 max_dsp=220  [avvio 12:16:10] ===
+PROBE N=1 max_dsp=220 LUT=8399 FF=3913 DSP=69 BRAM=1 FIT=si SEC=150
+griglia: N in 2..6 x max_dsp in {220, 0} = 10 punti x 150 s ~ 25 min
+=== N=2 max_dsp=220  [avvio 12:20:24] ===
+PROBE N=2 max_dsp=220 LUT=16798 FF=7826 DSP=138 BRAM=2 FIT=si SEC=143
+=== N=2 max_dsp=0  [avvio 12:23:09] ===
+PROBE N=2 max_dsp=0 LUT=38958 FF=7920 DSP=0 BRAM=2 FIT=si SEC=303
+=== N=3 max_dsp=220  [avvio 12:28:34] ===
+PROBE N=3 max_dsp=220 LUT=25197 FF=11739 DSP=207 BRAM=3 FIT=si SEC=145
+=== N=3 max_dsp=0  [avvio 12:31:20] ===
+PROBE N=3 max_dsp=0 LUT=58437 FF=11880 DSP=0 BRAM=3 FIT=no SEC=190
+=== N=4 max_dsp=220  [avvio 12:34:49] ===
+PROBE N=4 max_dsp=220 LUT=38148 FF=15656 DSP=212 BRAM=4 FIT=si SEC=155
+=== N=4 max_dsp=0  [avvio 12:37:43] ===
+PROBE N=4 max_dsp=0 LUT=77916 FF=15840 DSP=0 BRAM=4 FIT=no SEC=213
+=== N=5 max_dsp=220  [avvio 12:41:37] ===
+PROBE N=5 max_dsp=220 LUT=50025 FF=19570 DSP=210 BRAM=5 FIT=si SEC=158
+=== N=5 max_dsp=0  [avvio 12:44:35] ===
+PROBE N=5 max_dsp=0 LUT=97395 FF=19800 DSP=0 BRAM=5 FIT=no SEC=210
+=== N=6 max_dsp=220  [avvio 12:48:26] ===
+PROBE N=6 max_dsp=220 LUT=71700 FF=23532 DSP=210 BRAM=6 FIT=no SEC=272
+=== N=6 max_dsp=0  [avvio 12:53:21] ===
+PROBE N=6 max_dsp=0 LUT=116874 FF=23760 DSP=0 BRAM=6 FIT=no SEC=250
