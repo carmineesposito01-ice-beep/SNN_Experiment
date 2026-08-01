@@ -168,18 +168,24 @@ def run_p1(n_vehicles=(2, 4, 8, 16), scenari=None, device='cpu'):
 
 
 def _main(argv):
+    """Scorciatoia per lanciare P1 con opzioni comode. NON scrive l'artefatto da se':
+    delega a phase_c.cli, che e' l'unico posto in cui un artefatto della Fase C nasce.
+    Due percorsi di scrittura per lo stesso file sono due posti in cui la stessa decisione
+    (la provenienza) puo' divergere -- ed era gia' divergente: qui mancava `sorgente`.
+    """
     import argparse
-    from . import artifacts
+    from . import cli
     ap = argparse.ArgumentParser(description='P1 - string stability del plotone')
     ap.add_argument('--n', type=int, nargs='+', default=[2, 4, 8, 16])
     ap.add_argument('--scenari', type=int, default=None,
                     help='usa solo i primi K scenari (per una prova rapida)')
-    ap.add_argument('--out', default=os.path.join(RESULTS, 'P1_platoon.json'))
+    ap.add_argument('--out-dir', default=RESULTS)
     ap.add_argument('--frontend', default='script')
     a = ap.parse_args(argv)
     sc = range(a.scenari) if a.scenari else None
-    r = run_p1(n_vehicles=tuple(a.n), scenari=sc)
-    artifacts.write(a.out, r, frontend=a.frontend, bitstream_sig='n/a (P1 e\' simulazione)')
+    r, out_path = cli.run_stage('p1', frontend=a.frontend, out_dir=a.out_dir,
+                                n_vehicles=tuple(a.n), scenari=sc)
+    a.out = out_path
     pm = r['perimetro']
     print('perimetro: %d scenari, di cui %d con perturbazione del leader; %d degeneri esclusi '
           'dalla stabilita (static_target): %s'
