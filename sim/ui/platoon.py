@@ -37,10 +37,10 @@ def batched_forward(champion, n, device="cpu"):
     return _BatchedForward(champion, device)
 
 
-def run_platoon(champion, params_gt, n_vehicles, v_leader_profile, device="cpu"):
+def run_platoon(champion, params_gt, n_vehicles, v_leader_profile, device="cpu", channel=None):
     fw = _BatchedForward(champion, device)
     return simulate_platoon(champion.model, params_gt, n_vehicles, v_leader_profile,
-                            device=device, forward=fw)
+                            device=device, forward=fw, channel=channel)
 
 
 def run_ring(champion, params_gt, n_vehicles, ring_length, n_steps, device="cpu", perturb=0.1):

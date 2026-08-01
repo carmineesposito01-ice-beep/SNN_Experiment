@@ -47,7 +47,8 @@ def _params_for(model, gap, v, dv, vl, pgt_t, n, device):
 # ===========================================================
 # MESO — plotone aperto (string stability ACC)
 # ===========================================================
-def simulate_platoon(model, params_gt, n_vehicles, v_leader_profile, device='cpu', forward=None):
+def simulate_platoon(model, params_gt, n_vehicles, v_leader_profile, device='cpu', forward=None,
+                     channel=None):
     """N veicoli IN FILA. Veicolo 0 = testa (segue il profilo esterno); i segue i-1 (CAM da i-1).
 
     Ritorna dict: v,x,gap,a (T,N) + v_leader (T,) + collided.
@@ -64,6 +65,16 @@ def simulate_platoon(model, params_gt, n_vehicles, v_leader_profile, device='cpu
     x_head_leader = gap_eq + VEH_LEN
     alpha_al = float(np.exp(-DT / ACC_AL_TAU))
     a_l = np.zeros(n); vl_prev = np.full(n, v_set)
+    # Canale V2X (opt-in, additivo): ogni veicolo ha il PROPRIO stato di canale -- buffer di
+    # latenza, stato Gilbert-Elliott, rumore OU. Condividerne uno solo farebbe perdere e
+    # ricevere tutti i veicoli INSIEME, che e' il caso meno realistico possibile per un plotone.
+    if channel is not None:
+        # import locale: il canale e' opt-in, e a livello di modulo introdurrebbe una
+        # dipendenza da closed_loop_eval che oggi non c'e'.
+        from utils.closed_loop_eval import _channel_obs
+    ch_state = [{} for _ in range(n)] if channel is not None else None
+    ch_rng = np.random.default_rng(channel.get('seed', 0)) if channel is not None else None
+    aoi = np.zeros((Tlen, n))
     if forward is not None:
         forward.reset(n, device)               # family-aware batched forward owns its state
     elif model is not None:
@@ -76,11 +87,27 @@ def simulate_platoon(model, params_gt, n_vehicles, v_leader_profile, device='cpu
             xlead = np.empty(n); xlead[0] = x_head_leader; xlead[1:] = x[:-1]
             gap = xlead - x - VEH_LEN
             dv = v - vlead
-            params = (forward.infer(gap, v, dv, vlead) if forward is not None
-                      else _params_for(model, gap, v, dv, vlead, pgt_t, n, device))
-            a_l_raw = (vlead - vl_prev) / DT
-            a_l = alpha_al * a_l + (1.0 - alpha_al) * a_l_raw; vl_prev = vlead.copy()
-            acc = _accel(gap, v, dv, a_l, params)
+
+            # Cosa OSSERVA il controllore di ciascun veicolo. Senza canale, la verita'.
+            # Con canale: gap e velocita' del predecessore arrivano degradati, e da li' in poi
+            # TUTTO il controllore lavora sull'osservazione -- la rete, l'IIDM e anche a_l,
+            # esattamente come in closed_loop_eval.simulate. Il plant continua invece a
+            # evolvere sullo stato VERO: e' cio' che distingue "il veicolo non sa" da
+            # "il veicolo non c'e'".
+            if channel is None:
+                gap_obs, vlead_obs = gap, vlead
+            else:
+                gap_obs = np.empty(n); vlead_obs = np.empty(n)
+                for i in range(n):
+                    gap_obs[i], vlead_obs[i], aoi[t, i] = _channel_obs(
+                        float(gap[i]), float(vlead[i]), ch_state[i], channel, ch_rng, float(v[i]))
+            dv_obs = v - vlead_obs
+
+            params = (forward.infer(gap_obs, v, dv_obs, vlead_obs) if forward is not None
+                      else _params_for(model, gap_obs, v, dv_obs, vlead_obs, pgt_t, n, device))
+            a_l_raw = (vlead_obs - vl_prev) / DT
+            a_l = alpha_al * a_l + (1.0 - alpha_al) * a_l_raw; vl_prev = vlead_obs.copy()
+            acc = _accel(gap_obs, v, dv_obs, a_l, params)
             rec['v'][t] = v; rec['x'][t] = x; rec['gap'][t] = gap; rec['a'][t] = acc
             v = np.maximum(0.0, v + acc * DT); x = x + v * DT
             x_head_leader += float(v_leader_profile[t]) * DT

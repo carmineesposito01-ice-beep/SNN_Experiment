@@ -74,9 +74,29 @@ def partiziona_scenari(idx):
     return pert, degen
 
 
-def run_one(champion, i, n_vehicles):
+# Configurazioni di canale V2X. NON inventate: sono i valori che il progetto stesso sweepa in
+# `scripts/closed_loop_identify.py:403-404` (fase T2.9/T3.6). Riusarli tiene i numeri della
+# Fase C confrontabili con quelli gia' prodotti, invece di aprire una scala nuova.
+#
+# ⚠️ Perche' questo sweep conta piu' qui che altrove: la latenza e' il destabilizzatore CLASSICO
+# delle catene di veicoli, ed e' il meccanismo per cui veicoli individualmente stabili diventano
+# instabili in fila. Il guadagno per stadio misurato senza canale e' gia' 1,02.
+CANALI = {
+    'ideale':        None,
+    'pdr_0.9':       {'pdr': 0.9, 'seed': 0},
+    'pdr_0.7':       {'pdr': 0.7, 'seed': 0},
+    'pdr_0.5':       {'pdr': 0.5, 'seed': 0},
+    'latenza_1':     {'latency_steps': 1, 'seed': 0},
+    'latenza_2':     {'latency_steps': 2, 'seed': 0},
+    'latenza_3':     {'latency_steps': 3, 'seed': 0},
+    'lat2_jitter2':  {'latency_steps': 2, 'jitter_steps': 2, 'seed': 0},
+    'gilbert_02_06': {'gilbert': (0.2, 0.6), 'seed': 0},
+}
+
+
+def run_one(champion, i, n_vehicles, channel=None):
     """Un plotone di `n_vehicles` sullo scenario i, con le metriche complete."""
-    rec = run_platoon(champion, load_gt_params(i), n_vehicles, load_leader(i))
+    rec = run_platoon(champion, load_gt_params(i), n_vehicles, load_leader(i), channel=channel)
     m = platoon_metrics(rec)
     mancanti = [k for k in CHIAVI if k not in m]
     if mancanti:
@@ -85,7 +105,7 @@ def run_one(champion, i, n_vehicles):
     return m
 
 
-def run_p1(n_vehicles=(2, 4, 8, 16), scenari=None, device='cpu'):
+def run_p1(n_vehicles=(2, 4, 8, 16), scenari=None, device='cpu', channel=None):
     """P1 - string stability del plotone, su TUTTI gli scenari salvo indicazione diversa.
 
     Gli scenari sono quelli del dataset esaustivo: gli stessi su cui girano C1 e C2. Prova e
@@ -106,6 +126,7 @@ def run_p1(n_vehicles=(2, 4, 8, 16), scenari=None, device='cpu'):
                           'quella in testa, e senza oscillazione in testa e\' INDEFINITA (il '
                           'denominatore diventa rumore numerico). Restano nelle metriche di '
                           'sicurezza, escono da quelle di stabilita\'.')},
+           'canale': channel,
            'campione': {'variante': champ.variant, 'topologia': champ.topology,
                         'epoch': champ.epoch, 'val_loss': champ.val_loss}}
 
@@ -115,7 +136,7 @@ def run_p1(n_vehicles=(2, 4, 8, 16), scenari=None, device='cpu'):
         ttc_sani, gap, jerk = [], [], []
         collisi = 0
         for i in idx:
-            m = run_one(champ, i, N)
+            m = run_one(champ, i, N, channel=channel)
             gap.append(float(m['min_gap_platoon']))
             jerk.append(float(m['rms_jerk_mean']))
             coll = bool(m['collided'])
@@ -204,3 +225,61 @@ def _main(argv):
 
 if __name__ == '__main__':
     raise SystemExit(_main(sys.argv[1:]))
+
+
+def run_channel_sweep(n_vehicles=4, scenari=None, canali=None, device='cpu'):
+    """P1 attraverso lo sweep dei canali V2X.
+
+    N=4 di default perche' e' il numero DEPLOYABILE misurato col place & route (a 5 il placer
+    fallisce): misurare la degradazione su una configurazione che non entra nel dispositivo
+    darebbe un numero senza destinatario.
+    """
+    canali = canali or CANALI
+    out = {'n_vehicles': n_vehicles, 'per_canale': {},
+           'fonte_configurazioni': 'scripts/closed_loop_identify.py:403-404 (T2.9/T3.6)'}
+    base = None
+    for nome, cfg in canali.items():
+        r = run_p1(n_vehicles=(n_vehicles,), scenari=scenari, device=device, channel=cfg)
+        v = r['per_N'][n_vehicles]
+        if base is None:
+            base = v
+            out['perimetro'] = r['perimetro']
+            out['campione'] = r['campione']
+        out['per_canale'][nome] = {
+            'config': cfg,
+            'head_to_tail_mediana': v['head_to_tail_mediana'],
+            'head_to_tail_p95': v['head_to_tail_p95'],
+            'head_to_tail_max': v['head_to_tail_max'],
+            'n_string_stable': v['n_string_stable'],
+            'n_stabilita': v['n_stabilita'],
+            'n_collisi': v['n_collisi'],
+            'min_ttc_minimo': v['min_ttc_minimo'],
+            'min_gap_minimo': v['min_gap_minimo'],
+            # Rispetto all'ideale: e' il numero che dice quanto il canale COSTA.
+            'degrado_mediana': (None if base is v else
+                                round(v['head_to_tail_mediana'] - base['head_to_tail_mediana'], 4)),
+            'collisioni_in_piu': (None if base is v else v['n_collisi'] - base['n_collisi']),
+        }
+    return out
+
+
+def _main_sweep(argv):
+    import argparse
+    from . import cli, artifacts
+    ap = argparse.ArgumentParser(description='P1 - sweep dei canali V2X sul plotone')
+    ap.add_argument('--n', type=int, default=4)
+    ap.add_argument('--scenari', type=int, default=None)
+    ap.add_argument('--out', default=os.path.join(RESULTS, 'p1_canale.json'))
+    a = ap.parse_args(argv)
+    sc = range(a.scenari) if a.scenari else None
+    r = run_channel_sweep(n_vehicles=a.n, scenari=sc)
+    artifacts.write(a.out, r, frontend='script',
+                    bitstream_sig='n/a (P1 e\' simulazione)', sorgente='simulazione')
+    print('N=%d, %d scenari perturbati' % (a.n, r['perimetro']['n_perturbati']))
+    print('  %-15s %9s %9s %9s %10s %8s' % ('canale', 'mediana', 'p95', 'max', 'stabili', 'collis.'))
+    for nome, v in r['per_canale'].items():
+        print('  %-15s %9.3f %9.3f %9.3f %6d/%-4d %8d' %
+              (nome, v['head_to_tail_mediana'], v['head_to_tail_p95'], v['head_to_tail_max'],
+               v['n_string_stable'], v['n_stabilita'], v['n_collisi']))
+    print('artefatto: %s' % a.out)
+    return 0
