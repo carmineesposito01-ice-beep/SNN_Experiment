@@ -28,7 +28,8 @@ FASEC = os.path.dirname(QUI)
 sys.path.insert(0, FASEC)
 
 from phase_c import PROJECT                                        # noqa: E402
-from phase_c.params import load_champion, load_gt_params, load_leader  # noqa: E402
+from phase_c.params import (load_champion, load_gt_params, load_leader,  # noqa: E402
+                            load_scenario)
 from phase_c import platoon as P                                   # noqa: E402
 
 sys.path.insert(0, PROJECT)
@@ -53,7 +54,8 @@ def esporta(outdir, idx, n_vehicles):
 
     for j, i in enumerate(idx, start=1):
         lead = load_leader(i)
-        rec = run_platoon(champ, load_gt_params(i), n_vehicles, lead)
+        cut = load_scenario(i)['cut_in']
+        rec = run_platoon(champ, load_gt_params(i), n_vehicles, lead, cut_in=cut)
         K = len(lead)
 
         v_set = float(lead[0])
@@ -61,8 +63,13 @@ def esporta(outdir, idx, n_vehicles):
         gap_eq = s0 + v_set * T
 
         _scrivi_mem(os.path.join(outdir, 'plat_scen_%d.mem' % j), lead)
-        # init: v_set, gap_eq, VEH_LEN, DT -- tutto cio' che serve al plant, niente di piu'
-        _scrivi_mem(os.path.join(outdir, 'plat_init_%d.mem' % j), [v_set, gap_eq, VEH_LEN, DT])
+        # init: v_set, gap_eq, VEH_LEN, DT, cut_k, cut_gap.
+        # Il cut fa parte dello SCENARIO, non e' un'opzione: 33 su 99 lo hanno, e senza di esso
+        # il leader si ferma di colpo senza il gap compensativo (difetto trovato il 2026-08-01).
+        # cut_k = 0 significa "nessun cut".
+        _scrivi_mem(os.path.join(outdir, 'plat_init_%d.mem' % j),
+                    [v_set, gap_eq, VEH_LEN, DT,
+                     float(cut[0]) if cut else 0.0, float(cut[1]) if cut else 0.0])
         # accelerazioni REGISTRATE, in ordine [t][veicolo]: le usa PLATOON-PAR, senza DUT
         _scrivi_mem(os.path.join(outdir, 'plat_acc_%d.mem' % j), rec['a'].reshape(-1))
 

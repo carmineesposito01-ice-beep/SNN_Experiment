@@ -27,7 +27,7 @@ module tb_platoon;
   localparam integer N    = `NVEH;
   localparam integer HOLD = `HOLDV;
 
-  reg [63:0] leadm[0:K-1], initm[0:3];
+  reg [63:0] leadm[0:K-1], initm[0:5];
 `ifdef PLATOON_PAR
   reg [63:0] accm[0:K*N-1];      // accelerazioni registrate (per la serie)
   reg [63:0] dvim[0:K*N-1];      // incrementi gia' arrotondati a float32 (per il plant)
@@ -36,7 +36,8 @@ module tb_platoon;
   real x[0:N-1], v[0:N-1], a_out[0:N-1], dv_incr[0:N-1];
   real x_old[0:N-1], v_old[0:N-1];
   real gap[0:N-1], dvv[0:N-1], vlead[0:N-1];
-  real v_set, gap_eq, VEH_LEN, DT, x_head_leader;
+  real v_set, gap_eq, VEH_LEN, DT, x_head_leader, cut_gap;
+  integer cut_k;
   integer t, i, fo, collided;
 
   reg clk = 0, reset = 1, ce = 1;
@@ -109,6 +110,7 @@ module tb_platoon;
 `endif
     v_set   = $bitstoreal(initm[0]); gap_eq = $bitstoreal(initm[1]);
     VEH_LEN = $bitstoreal(initm[2]); DT     = $bitstoreal(initm[3]);
+    cut_k   = $rtoi($bitstoreal(initm[4])); cut_gap = $bitstoreal(initm[5]);
 
     for (i = 0; i < N; i = i + 1) begin
       x[i] = -1.0 * i * (gap_eq + VEH_LEN);
@@ -133,6 +135,12 @@ module tb_platoon;
 `endif
 
     for (t = 0; t < K; t = t + 1) begin
+      // Teletrasporto del cut: il leader esterno ESCE di scena e il gap si riposiziona sul
+      // nuovo. Riguarda 33 scenari su 99; senza, il plotone vede un ostacolo fermarsi di colpo
+      // e la collisione e' inevitabile per costruzione. Il cut avviene fra la TESTA e il leader
+      // esterno, quindi si sposta il leader virtuale: i follower seguono la testa e non sono
+      // toccati. Passo in base 1, come qz_cl_sim e come il motore Python.
+      if (cut_k != 0 && (t + 1) == cut_k) x_head_leader = x[0] + VEH_LEN + cut_gap;
       calcola_ingressi;
 `ifdef PLATOON_PAR
       for (i = 0; i < N; i = i + 1) begin
