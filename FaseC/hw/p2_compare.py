@@ -33,11 +33,13 @@ def leggi_serie(path):
         raise RuntimeError('%s: manca la riga END -- la simulazione si e\' interrotta' % path)
     K, collided = int(fine[0][1]), bool(int(fine[0][2]))
     N = max(int(r[1]) for r in dati) + 1
-    out = {k: np.zeros((K, N)) for k in ('gap', 'v', 'x', 'a')}
+    campi = ('gap', 'v', 'x', 'a', 'dv', 'vl')
+    out = {k: np.zeros((K, N)) for k in campi}
     for r in dati:
         t, i = int(r[0]), int(r[1])
-        out['gap'][t, i] = _real(r[2]); out['v'][t, i] = _real(r[3])
-        out['x'][t, i] = _real(r[4]);   out['a'][t, i] = _real(r[5])
+        for c, col in zip(campi, range(2, 8)):
+            if col < len(r):
+                out[c][t, i] = _real(r[col])
     return out, collided
 
 
@@ -82,10 +84,11 @@ def _main(argv):
     ap.add_argument('--out', default=None, help='artefatto JSON (con provenienza)')
     ap.add_argument('--modo', default='platoon-par', choices=['platoon-par', 'p2-exact'])
     ap.add_argument('--nveh', type=int, default=4)
+    ap.add_argument('--serdir', default=None)
     a = ap.parse_args(argv)
 
-    r = confronta(os.path.join(a.work, 'ser'), os.path.join(a.work, 'p2_golden.npz'),
-                  a.nscen, a.campi)
+    serdir = a.serdir or os.path.join(a.work, 'ser_%s' % ('par' if a.modo == 'platoon-par' else 'loop'))
+    r = confronta(serdir, os.path.join(a.work, 'p2_golden.npz'), a.nscen, a.campi)
 
     if a.out:
         sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))

@@ -19,7 +19,10 @@ case "$WORK" in *" "*) echo "P2-ABORT: work-dir con spazi ($WORK): xsim si spezz
 [ -f "$WORK/plat_scen_1.mem" ] || { echo "P2-ABORT: scenari non esportati in $WORK (p2_export.py)"; exit 1; }
 
 cd "$WORK"
-rm -rf xsim.dir *.jou *.log *.pb hdl; mkdir -p hdl ser
+# Serie separate per modalita': PLATOON-PAR e anello chiuso devono poter coesistere
+# nella stessa work-dir, con UN SOLO export.
+SERDIR="ser_${MODO}"
+rm -rf xsim.dir *.jou *.log *.pb hdl "$SERDIR"; mkdir -p hdl "$SERDIR"
 cp "$SRC"/*.v hdl/ 2>/dev/null || true
 cp "$QUI/tb_platoon.v" .
 
@@ -49,6 +52,6 @@ for ((i = 1; i <= NSCEN; i++)); do
   fi
   o=$("$VIV/xsim.bat" p2snap -R 2>&1)
   echo "$o" | grep -E "^P2(RES|-FATAL)" || { echo "P2-ABORT: scenario $i senza P2RES"; echo "$o" | tail -5; exit 1; }
-  mv ser.txt "ser/ser_${i}.txt"
+  mv ser.txt "$SERDIR/ser_${i}.txt"
 done
-echo "P2-DONE $NSCEN scenari, serie in $WORK/ser/"
+echo "P2-DONE $NSCEN scenari, serie in $WORK/$SERDIR/"

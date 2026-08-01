@@ -151,10 +151,16 @@ module tb_platoon;
       end
 `endif
 
+      // Si scrivono ANCHE dv e vlead, benche' derivabili: sono due dei quattro ingressi che il
+      // DUT ha effettivamente ricevuto, e P2-EXACT ripilota il blocco proprio su quelli.
+      // Ricostruirli nel comparatore sarebbe un secondo posto in cui la stessa decisione vive,
+      // e basterebbe che le due copie divergessero perche' il cancello confronti la cosa
+      // sbagliata restando verde.
       for (i = 0; i < N; i = i + 1)
-        $fwrite(fo, "%0d %0d %h %h %h %h\n", t, i,
+        $fwrite(fo, "%0d %0d %h %h %h %h %h %h\n", t, i,
                 $realtobits(gap[i]), $realtobits(v_old[i]),
-                $realtobits(x_old[i]), $realtobits(a_out[i]));
+                $realtobits(x_old[i]), $realtobits(a_out[i]),
+                $realtobits(dvv[i]),  $realtobits(vlead[i]));
 
       integra;
     end
