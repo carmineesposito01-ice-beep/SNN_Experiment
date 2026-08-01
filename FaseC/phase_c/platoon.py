@@ -138,8 +138,16 @@ def run_p1(n_vehicles=(2, 4, 8, 16), scenari=None, device='cpu'):
         out['per_N'][N] = {
             # --- stabilita': SOLO sugli scenari con una perturbazione da propagare
             'n_stabilita': len(h2t),
+            # La distribuzione GREZZA, non solo i suoi riassunti. Il conteggio degli stabili
+            # non e' monotono in N (36, 30, 24, 34 sui 99 scenari): non e' un artefatto, e' la
+            # distribuzione che si ALLARGA nelle due direzioni al crescere del plotone. Un
+            # riassunto solo non lo mostra, e senza i valori grezzi la domanda costerebbe un
+            # altro giro da un quarto d'ora.
+            'head_to_tail_per_scenario': {str(i + 1): g for i, g in zip(pert, h2t)},
             'head_to_tail_mediana': _pct(h2t, 0.5) if ha_stab else None,
+            'head_to_tail_p05': _pct(h2t, 0.05) if ha_stab else None,
             'head_to_tail_p95': _pct(h2t, 0.95) if ha_stab else None,
+            'head_to_tail_min': min(h2t) if ha_stab else None,
             'head_to_tail_max': max(h2t) if ha_stab else None,
             'max_amplification_p95': _pct(amp, 0.95) if ha_stab else None,
             'max_amplification_max': max(amp) if ha_stab else None,
@@ -178,11 +186,12 @@ def _main(argv):
           % (pm['n_totale'], pm['n_perturbati'], pm['n_degeneri'], pm['idx_degeneri_base1']))
     for N in a.n:
         v = r['per_N'][N]
-        print('N=%-3d | stabilita su %d: h2t mediana %.3f  p95 %.3f  max %.3f | '
-              'string-stable %d/%d | sicurezza su %d: collisioni %d  TTC min %.2f s  gap min %.2f m'
-              % (N, v['n_stabilita'], v['head_to_tail_mediana'], v['head_to_tail_p95'],
-                 v['head_to_tail_max'], v['n_string_stable'], v['n_stabilita'],
-                 v['n_sicurezza'], v['n_collisi'], v['min_ttc_minimo'], v['min_gap_minimo']))
+        print('N=%-3d | h2t  min %.3f  p05 %.3f  mediana %.3f  p95 %.3f  max %.3f | '
+              'string-stable %d/%d | collisioni %d/%d  TTC min %.2f s  gap min %.2f m'
+              % (N, v['head_to_tail_min'], v['head_to_tail_p05'], v['head_to_tail_mediana'],
+                 v['head_to_tail_p95'], v['head_to_tail_max'],
+                 v['n_string_stable'], v['n_stabilita'],
+                 v['n_collisi'], v['n_sicurezza'], v['min_ttc_minimo'], v['min_gap_minimo']))
     print('artefatto: %s' % a.out)
     return 0
 
