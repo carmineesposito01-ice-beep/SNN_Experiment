@@ -1,13 +1,18 @@
 {
  "data": {
   "deployabile": {
+   "fonte": "implementazione (place & route)",
    "lut_margine_dut": 3175,
-   "lut_margine_wrapper": 2260,
-   "lut_margine_wrapper_pct": 4.2,
-   "lut_usate_wrapper": 50940,
+   "lut_margine_wrapper": 16671,
+   "lut_margine_wrapper_pct": 31.3,
+   "lut_usate_wrapper": 36529,
+   "n_max_da_lut_sopravvalutato": 5,
    "n_max_dut_solo": 5,
-   "n_max_wrapper": 5,
-   "nota": "MISURATO col wrapper AXI incluso: 5 istanze, margine 2260 LUT (4.2%). Resta fuori la sola interconnessione AXI del block design (in T7b: 352 LUT e 426 FF per UNO slave; con piu' slave cresce)."
+   "n_max_instradato": 4,
+   "n_max_wrapper": 4,
+   "n_min_non_instradato": 5,
+   "nota": "MISURATO con place & route VERI: 4 istanze si instradano, 5 NO. Il conteggio LUT da solo diceva 5, e SOPRAVVALUTAVA: a 5 le LUT \"entrano\" ma il placer fallisce, perche' una slice ha 4 LUT e 8 FF e il packing e' limitato dai control set (Vivado: \"6040 slice disponibili, le non piazzate ne richiedono 7964\"). A 4 istanze il WNS a 40 MHz vale -2.84 ns: il timing a 40 MHz NON chiude, ma il requisito e' il control-step da 0,1 s (555 clock), non la frequenza -- anche a 20 MHz il margine resterebbe di ordine 3600x. Resta fuori la sola interconnessione AXI del block design.",
+   "wns_ns_al_massimo": -2.84
   },
   "limiti_xc7z020": {
    "bram": 140,
@@ -90,27 +95,36 @@
   "per_unita": {
    "dut": {
     "0": {
+     "fonte_n_max": "conteggio LUT post-sintesi (NON prova che si instradi)",
      "lut_al_massimo": 38958,
      "lut_margine": 14242,
      "lut_margine_pct": 26.8,
      "n_max": 2,
+     "n_max_da_lut": 2,
      "vincolo": "lut"
     },
     "220": {
+     "fonte_n_max": "conteggio LUT post-sintesi (NON prova che si instradi)",
      "lut_al_massimo": 50025,
      "lut_margine": 3175,
      "lut_margine_pct": 6.0,
      "n_max": 5,
+     "n_max_da_lut": 5,
      "vincolo": "lut"
     }
    },
    "wrapper": {
     "220": {
-     "lut_al_massimo": 50940,
-     "lut_margine": 2260,
-     "lut_margine_pct": 4.2,
-     "n_max": 5,
-     "vincolo": "lut"
+     "fonte_n_max": "implementazione (place & route)",
+     "lut_al_massimo": 36529,
+     "lut_margine": 16671,
+     "lut_margine_pct": 31.3,
+     "n_max": 4,
+     "n_max_da_lut": 5,
+     "n_max_instradato": 4,
+     "n_min_non_instradato": 5,
+     "vincolo": "lut",
+     "wns_ns": -2.84
     }
    }
   },
@@ -119,6 +133,7 @@
     "bram": 1,
     "dsp": 69,
     "entra": true,
+    "fase": "synth",
     "ff": 3913,
     "lut": 8399,
     "max_dsp": 220,
@@ -130,6 +145,7 @@
     "bram": 2,
     "dsp": 138,
     "entra": true,
+    "fase": "synth",
     "ff": 7826,
     "lut": 16798,
     "max_dsp": 220,
@@ -141,6 +157,7 @@
     "bram": 2,
     "dsp": 0,
     "entra": true,
+    "fase": "synth",
     "ff": 7920,
     "lut": 38958,
     "max_dsp": 0,
@@ -152,6 +169,7 @@
     "bram": 3,
     "dsp": 207,
     "entra": true,
+    "fase": "synth",
     "ff": 11739,
     "lut": 25197,
     "max_dsp": 220,
@@ -163,6 +181,7 @@
     "bram": 3,
     "dsp": 0,
     "entra": false,
+    "fase": "synth",
     "ff": 11880,
     "lut": 58437,
     "max_dsp": 0,
@@ -174,6 +193,7 @@
     "bram": 4,
     "dsp": 212,
     "entra": true,
+    "fase": "synth",
     "ff": 15656,
     "lut": 38148,
     "max_dsp": 220,
@@ -185,6 +205,7 @@
     "bram": 4,
     "dsp": 0,
     "entra": false,
+    "fase": "synth",
     "ff": 15840,
     "lut": 77916,
     "max_dsp": 0,
@@ -196,6 +217,7 @@
     "bram": 5,
     "dsp": 210,
     "entra": true,
+    "fase": "synth",
     "ff": 19570,
     "lut": 50025,
     "max_dsp": 220,
@@ -207,6 +229,7 @@
     "bram": 5,
     "dsp": 0,
     "entra": false,
+    "fase": "synth",
     "ff": 19800,
     "lut": 97395,
     "max_dsp": 0,
@@ -218,6 +241,7 @@
     "bram": 6,
     "dsp": 210,
     "entra": false,
+    "fase": "synth",
     "ff": 23532,
     "lut": 71700,
     "max_dsp": 220,
@@ -229,6 +253,7 @@
     "bram": 6,
     "dsp": 0,
     "entra": false,
+    "fase": "synth",
     "ff": 23760,
     "lut": 116874,
     "max_dsp": 0,
@@ -240,6 +265,7 @@
     "bram": 3,
     "dsp": 207,
     "entra": true,
+    "fase": "synth",
     "ff": 12291,
     "lut": 25745,
     "max_dsp": 220,
@@ -251,6 +277,7 @@
     "bram": 4,
     "dsp": 212,
     "entra": true,
+    "fase": "synth",
     "ff": 16416,
     "lut": 38877,
     "max_dsp": 220,
@@ -262,6 +289,7 @@
     "bram": 5,
     "dsp": 210,
     "entra": true,
+    "fase": "synth",
     "ff": 20520,
     "lut": 50940,
     "max_dsp": 220,
@@ -273,11 +301,39 @@
     "bram": 6,
     "dsp": 210,
     "entra": false,
+    "fase": "synth",
     "ff": 24678,
     "lut": 72793,
     "max_dsp": 220,
     "n_istanze": 6,
     "secondi": 187,
+    "unita": "wrapper"
+   },
+   {
+    "bram": 4,
+    "dsp": 212,
+    "entra": true,
+    "fase": "impl",
+    "ff": 16416,
+    "instradato": true,
+    "lut": 36529,
+    "max_dsp": 220,
+    "n_istanze": 4,
+    "secondi": 832,
+    "unita": "wrapper",
+    "wns_ns": -2.84
+   },
+   {
+    "bram": 5,
+    "dsp": 210,
+    "entra": true,
+    "fase": "impl",
+    "ff": 20520,
+    "instradato": false,
+    "lut": 47842,
+    "max_dsp": 220,
+    "n_istanze": 5,
+    "secondi": 625,
     "unita": "wrapper"
    }
   ],
@@ -291,6 +347,6 @@
   "cwd": "D:\\Project_MBSE\\1.Reti Neurali\\Rete_SNN_Test\\CF_FSNN\\.worktrees\\Simulink_Importer\\FaseC",
   "frontend": "script",
   "sorgente": "vivado-synth",
-  "timestamp": "2026-08-01T17:53:28"
+  "timestamp": "2026-08-01T18:58:40"
  }
 }

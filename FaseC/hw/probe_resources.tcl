@@ -98,6 +98,31 @@ read_verilog "$work/${TOP}.v"
 # -max_dsp: tetto ai DSP; sotto il tetto i moltiplicatori finiscono in LUT/FF.
 set t0 [clock seconds]
 synth_design -top $TOP -part $PART -mode out_of_context -max_dsp $MAXDSP
+
+# --------------------------------------------------------------------------- implementazione
+# FASE=impl: place & route VERI, con vincolo di clock. La sintesi da sola dice quante LUT
+# servono, NON se il progetto si instrada. Al 94% di occupazione l'instradabilita' e' il
+# rischio vero -- piu' dell'Fmax, che qui non e' il vincolo (il requisito e' il control-step da
+# 0,1 s: 555 clock a 40 MHz sono 13,9 us, margine 7207x).
+set FASE [expr {[info exists ::env(PROBE_FASE)] ? $::env(PROBE_FASE) : "synth"}]
+set PER  [expr {[info exists ::env(PROBE_PERIOD_NS)] ? $::env(PROBE_PERIOD_NS) : 25.0}]
+set wns "n/a" ; set routed "n/a"
+
+if {$FASE eq "impl"} {
+    set clkport [expr {$UNITA eq "wrapper" ? "S_AXI_ACLK" : "clk"}]
+    create_clock -period $PER -name clk_probe [get_ports $clkport]
+    if {[catch {
+        opt_design
+        place_design
+        route_design
+    } err]} {
+        puts "PROBE-IMPL-FALLITA unita=$UNITA N=$N: $err"
+        set routed "no"
+    } else {
+        set routed "si"
+        set wns [get_property SLACK [get_timing_paths -delay_type max -max_paths 1]]
+    }
+}
 set dt [expr {[clock seconds] - $t0}]
 
 # --------------------------------------------------------------------------------- risultati
@@ -118,6 +143,6 @@ set bram [used "Block RAM Tile"]
 set LUT_TOT 53200 ; set FF_TOT 106400 ; set DSP_TOT 220 ; set BRAM_TOT 140
 
 set fits [expr {$lut <= $LUT_TOT && $ff <= $FF_TOT && $dsp <= $DSP_TOT}]
-puts "PROBE unita=$UNITA N=$N max_dsp=$MAXDSP LUT=$lut FF=$ff DSP=$dsp BRAM=$bram FIT=[expr {$fits ? "si" : "no"}] SEC=$dt"
+puts "PROBE unita=$UNITA N=$N max_dsp=$MAXDSP LUT=$lut FF=$ff DSP=$dsp BRAM=$bram FIT=[expr {$fits ? "si" : "no"}] FASE=$FASE ROUTED=$routed WNS=$wns SEC=$dt"
 
 report_utilization -file "$work/util_${UNITA}_N${N}_dsp${MAXDSP}.rpt"

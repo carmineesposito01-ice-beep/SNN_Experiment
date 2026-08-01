@@ -26,7 +26,7 @@ CONTORNO_1_ISTANZA = {'lut': 8453 - 7974, 'ff': 4556 - 3794}
 # tutte `dut`. Il gruppo e' opzionale invece che obbligatorio, cosi' il log storico resta
 # leggibile -- riscriverlo a mano sarebbe fabbricare una prova.
 RE = re.compile(r'^PROBE (?:unita=(\w+) )?N=(\d+) max_dsp=(\d+) LUT=(\d+) FF=(\d+) DSP=(\d+) '
-                r'BRAM=(\d+) FIT=(\w+) SEC=(\d+)')
+                r'BRAM=(\d+) FIT=(\w+)(?: FASE=(\S+) ROUTED=(\S+) WNS=(\S+))? SEC=(\d+)')
 
 
 def leggi(path=LOG):
@@ -34,11 +34,18 @@ def leggi(path=LOG):
     for riga in io.open(path, encoding='utf-8'):
         m = RE.match(riga.strip())
         if m:
-            unita, n, d, lut, ff, dsp, bram, fit, sec = m.groups()
-            punti.append({'unita': unita or 'dut',
-                          'n_istanze': int(n), 'max_dsp': int(d), 'lut': int(lut),
-                          'ff': int(ff), 'dsp': int(dsp), 'bram': int(bram),
-                          'entra': fit == 'si', 'secondi': int(sec)})
+            unita, n, d, lut, ff, dsp, bram, fit, fase, routed, wns, sec = m.groups()
+            p = {'unita': unita or 'dut', 'n_istanze': int(n), 'max_dsp': int(d),
+                 'lut': int(lut), 'ff': int(ff), 'dsp': int(dsp), 'bram': int(bram),
+                 'entra': fit == 'si', 'secondi': int(sec), 'fase': fase or 'synth'}
+            if routed and routed != 'n/a':
+                p['instradato'] = routed == 'si'
+            if wns and wns not in ('n/a', ''):
+                try:
+                    p['wns_ns'] = float(wns)
+                except ValueError:
+                    pass
+            punti.append(p)
     if not punti:
         raise RuntimeError('nessuna riga PROBE in %s: la sonda non ha prodotto misure' % path)
     return punti
@@ -63,10 +70,42 @@ def _per_unita(punti, unita):
             eccessi = {k: p[k] / float(LIMITI[k]) for k in ('lut', 'ff', 'dsp')}
             vincolo = max(eccessi, key=eccessi.get)
         lut_max = next((p['lut'] for p in v if p['n_istanze'] == n_max), None)
-        out[str(d)] = {'n_max': n_max, 'vincolo': vincolo, 'lut_al_massimo': lut_max,
-                       'lut_margine': (LIMITI['lut'] - lut_max) if lut_max else None,
-                       'lut_margine_pct': (round(100.0 * (LIMITI['lut'] - lut_max) / LIMITI['lut'], 1)
-                                           if lut_max else None)}
+        r = {'n_max_da_lut': n_max, 'vincolo': vincolo, 'lut_al_massimo': lut_max,
+             'lut_margine': (LIMITI['lut'] - lut_max) if lut_max else None,
+             'lut_margine_pct': (round(100.0 * (LIMITI['lut'] - lut_max) / LIMITI['lut'], 1)
+                                 if lut_max else None)}
+
+        # ⚠️ Il conteggio delle LUT SOPRAVVALUTA. Misurato: a N=5 le LUT "entrano" (47 842 su
+        # 53 200) ma il PLACER FALLISCE -- una slice ha 4 LUT e 8 FF, e il packing e' limitato
+        # dai control set (combinazioni clock/reset/enable). Vivado: "6040 slice disponibili,
+        # le istanze non piazzate ne richiedono 7964".
+        #
+        # Quindi quando c'e' un'implementazione VERA, e' lei a decidere: n_max diventa il
+        # massimo INSTRADATO, non il massimo che entra come conteggio.
+        impl = [p for p in v if p.get('fase') == 'impl']
+        if impl:
+            ok = [p['n_istanze'] for p in impl if p.get('instradato')]
+            no = [p['n_istanze'] for p in impl if p.get('instradato') is False]
+            r['n_max_instradato'] = max(ok) if ok else 0
+            r['n_min_non_instradato'] = min(no) if no else None
+            r['n_max'] = r['n_max_instradato']
+            r['fonte_n_max'] = 'implementazione (place & route)'
+            wns = [p['wns_ns'] for p in impl
+                   if p.get('instradato') and 'wns_ns' in p and p['n_istanze'] == r['n_max']]
+            if wns:
+                r['wns_ns'] = wns[0]
+            # I margini devono riferirsi al numero DEPLOYABILE, non a quello che "entra" come
+            # conteggio: altrimenti l'artefatto direbbe "4 istanze, margine 2260 LUT" dove 2260
+            # e' il margine a 5 -- due numeri veri accostati a dire una cosa falsa.
+            lut_dep = next((p['lut'] for p in impl if p['n_istanze'] == r['n_max']), None)
+            if lut_dep is not None:
+                r['lut_al_massimo'] = lut_dep
+                r['lut_margine'] = LIMITI['lut'] - lut_dep
+                r['lut_margine_pct'] = round(100.0 * (LIMITI['lut'] - lut_dep) / LIMITI['lut'], 1)
+        else:
+            r['n_max'] = n_max
+            r['fonte_n_max'] = 'conteggio LUT post-sintesi (NON prova che si instradi)'
+        out[str(d)] = r
     return out
 
 
@@ -111,11 +150,29 @@ def analizza(punti):
         dep['lut_usate_wrapper'] = wrp['lut_al_massimo']
         dep['lut_margine_wrapper'] = wrp['lut_margine']
         dep['lut_margine_wrapper_pct'] = wrp['lut_margine_pct']
-        dep['nota'] = (
-            'MISURATO col wrapper AXI incluso: %d istanze, margine %d LUT (%.1f%%). Resta fuori '
-            'la sola interconnessione AXI del block design (in T7b: 352 LUT e 426 FF per UNO '
-            'slave; con piu\' slave cresce).'
-            % (wrp['n_max'], wrp['lut_margine'], wrp['lut_margine_pct']))
+        dep['fonte'] = wrp.get('fonte_n_max')
+        if 'n_max_instradato' in wrp:
+            dep['n_max_instradato'] = wrp['n_max_instradato']
+            dep['n_min_non_instradato'] = wrp.get('n_min_non_instradato')
+            dep['wns_ns_al_massimo'] = wrp.get('wns_ns')
+            dep['n_max_da_lut_sopravvalutato'] = wrp.get('n_max_da_lut')
+            dep['nota'] = (
+                'MISURATO con place & route VERI: %d istanze si instradano, %s NO. Il conteggio '
+                'LUT da solo diceva %d, e SOPRAVVALUTAVA: a %s le LUT "entrano" ma il placer '
+                'fallisce, perche\' una slice ha 4 LUT e 8 FF e il packing e\' limitato dai '
+                'control set (Vivado: "6040 slice disponibili, le non piazzate ne richiedono '
+                '7964"). A %d istanze il WNS a 40 MHz vale %s ns: il timing a 40 MHz NON chiude, '
+                'ma il requisito e\' il control-step da 0,1 s (555 clock), non la frequenza -- '
+                'anche a 20 MHz il margine resterebbe di ordine 3600x. Resta fuori la sola '
+                'interconnessione AXI del block design.'
+                % (wrp['n_max_instradato'], wrp.get('n_min_non_instradato'),
+                   wrp.get('n_max_da_lut'), wrp.get('n_min_non_instradato'),
+                   wrp['n_max_instradato'], wrp.get('wns_ns')))
+        else:
+            dep['nota'] = (
+                'Conteggio LUT post-sintesi: %d istanze entrano (margine %d LUT, %.1f%%). NON '
+                'prova che si instradino -- serve PROBE_FASE=impl.'
+                % (wrp['n_max'], wrp['lut_margine'], wrp['lut_margine_pct']))
     else:
         dep['contorno_stimato_1_istanza'] = CONTORNO_1_ISTANZA
         dep['nota'] = (
@@ -140,8 +197,8 @@ def _main():
     for u in ris['unita_misurate']:
         print('  --- %s ---' % u)
         for d, v in sorted(ris['per_unita'][u].items(), key=lambda x: -int(x[0])):
-            print('    max_dsp=%-4s  entrano fino a N=%-2s  collo: %-4s  margine LUT: %s'
-                  % (d, v['n_max'], v['vincolo'],
+            print('    max_dsp=%-4s  N max=%-2s (%s)  margine LUT: %s'
+                  % (d, v['n_max'], v['fonte_n_max'],
                      ('%d (%.1f%%)' % (v['lut_margine'], v['lut_margine_pct'])
                       if v['lut_margine'] is not None else '-')))
     print()
