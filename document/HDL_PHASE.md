@@ -547,7 +547,20 @@ Config in `make_hdl.m`: `LoopOptimization='StreamLoops'`, `ConstantMultiplierOpt
 > anello chiuso + hardware) · T8 (i due report) · T9 (documentazione). Tutti i cancelli verdi, bitstream
 > prodotto e **provato identico** al sistema caratterizzato. Numeri e limiti: `report/B2_0_HARNESS_SNN*.pdf`.
 >
-> **🔴 PROSSIMO — FASE C: FPGA fisica.** Cio' che deve chiudere non e' una lista nuova: sono i **limiti
+> **🟡 FASE C — IN CORSO: chiuso tutto cio' che non dipende dalla scheda (2026-08-01).**
+> Il codice sta in `FaseC/` (di primo livello, sorella di `FaseB2.0/`), 109 test verdi.
+>
+> **Gia' misurato, senza scheda:**
+>
+> | | Risultato |
+> |---|---|
+> | **P1 — string stability del plotone** | chiude il proxy N=1 dei report B2.0. Mediana head-to-tail **sopra 1 a ogni N** (1,014 a N=2 → 1,358 a N=16), guadagno per stadio ~1,02: **non string-stable in mediana**. Caso peggiore 11,7×. Perimetro: 88 scenari perturbati su 99 (gli 11 `static_target` hanno il leader costante e la grandezza e' indefinita). |
+> | **Sonda risorse** | **5 istanze** del composto entrano nello Zynq-7020 (margine LUT 6%); **4** con margine comodo (28%). L'aritmetica ingenua 220/69 sottostima: Vivado sposta l'eccedenza di moltiplicatori in fabric. Con `max_dsp=0` entrano solo 2. |
+>
+> **Restano alla scheda:** C0–C3 su silicio (filoni A e B), P2, P3, e da li' i limiti dichiarati
+> qui sotto. **Unico codice mancante:** `FaseC/phase_c/cli.py::_overlay()`.
+>
+> **🔴 QUEL CHE LA SCHEDA DEVE ANCORA CHIUDERE.** Cio' che deve chiudere non e' una lista nuova: sono i **limiti
 > DICHIARATI** nei due report, che esistono proprio per questo.
 >
 > | Da chiudere in Fase C | Perche' resta aperto |

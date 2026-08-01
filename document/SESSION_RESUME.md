@@ -1,5 +1,50 @@
 
-## ▶ RIPRESA — Fase B2.0 **CHIUSA** (T7b + T8). Prossimo: **Fase C** (FPGA fisica)
+## ▶ RIPRESA — **FASE C**: chiuso tutto cio' che non dipende dalla scheda (2026-08-01)
+
+Il codice vive in **`FaseC/`**, di primo livello, sorella di `FaseB2.0/`. **109 test verdi.**
+
+### PRIMA AZIONE
+
+```
+cd FaseC && python -m pytest -q          # tutto verde = si puo' ripartire
+./run_phase_c.sh summary                 # elenca gli artefatti e la loro provenienza
+```
+
+### Cosa e' FATTO, e cosa aspetta la scheda
+
+| | Esito | Artefatto |
+|---|---|---|
+| **P1 — plotone in simulazione** | mediana head-to-tail **sopra 1 a ogni N** (1,014 → 1,358); **non** string-stable in mediana; guadagno per stadio ~1,02; caso peggiore 11,7× a N=16 | `FaseC/results/p1.json` |
+| **Sonda risorse** | **5 istanze** del composto entrano nello Zynq-7020 (margine 6%); **4** con margine comodo (28%). Con tutti i moltiplicatori in fabric solo 2 | `results/P3_resources.json` |
+| Moduli C0–C3 | scritti e collaudati **contro il mock**, cancelli provati anche in negativo | `FaseC/phase_c/` |
+| Due facciate + parita' | `run_phase_c.sh` e `notebook/phase_c.ipynb` sopra lo stesso `phase_c.cli` | `c_frontend_parity.py` |
+| RUNBOOK | sequenza, costi, e cosa guardare a ogni cancello rosso | `FaseC/RUNBOOK.md` |
+| C0–C3 su **silicio**, P2, P3 | **richiedono la scheda accendibile** | — |
+
+### L'UNICO punto di codice rimasto prima del bring-up
+
+`FaseC/phase_c/cli.py::_overlay()` solleva oggi `NotImplementedError` sul ramo dell'overlay
+reale: va scritto il caricamento dell'overlay PYNQ. Driver, stadi, diagnosi e artefatti sono
+gia' pronti. **Il giorno del bring-up non si scrive codice, si esegue** (`FaseC/RUNBOOK.md`).
+
+### Cinque cose misurate che e' bene NON riscoprire
+
+1. **Il reset fra scenari e' un vincolo dell'hardware.** `dut_rst = ~S_AXI_ARESETN | ~started`,
+   e `started` si alza al primo commit senza tornare basso: lo stato della rete non e'
+   azzerabile dai registri. Su PYNQ serve `overlay.download()` a ogni scenario.
+2. **Su CTRL lettura e scrittura sono percorsi diversi**: bit 0 e' `commit` in scrittura e
+   `done` in lettura. Confonderli fa apparire `done` sempre alto e rende ogni cancello verde
+   per costruzione.
+3. **`jupyter nbconvert --execute` esce con 0 senza eseguire nulla** su questa postazione
+   (zeromq). Mai fidarsi del suo exit code: `check_notebook.py` guarda l'artefatto.
+4. **I pesi del `.pt` non coincidono con `champions_export.mat`**: l'export li quantizza a
+   potenze di due. Non e' un altro checkpoint, e Donatello = `PE_t05_gp0002`
+   (`scripts/export_champions.py:19`).
+5. **Il dataset dei 99 scenari sta in `matlab/Quantizzation_Study/`**, non in `data/`.
+
+---
+
+## Fase B2.0 — **CHIUSA** (T7b + T8)
 
 **T7b chiuso il 2026-07-31.** Tutto committato, albero pulito, nessun job lasciato girare.
 
