@@ -15,7 +15,13 @@ cd FaseC && python -m pytest -q          # tutto verde = si puo' ripartire
 | | Esito | Artefatto |
 |---|---|---|
 | **P1 — plotone in simulazione** | mediana head-to-tail **sopra 1 a ogni N** (1,014 → 1,358); **non** string-stable in mediana; guadagno per stadio ~1,02; caso peggiore 11,7× a N=16 | `FaseC/results/p1.json` |
-| **Sonda risorse** | **5 istanze** entrano, CONFERMATO col wrapper AXI incluso (50 940 LUT, margine 4,2%). Il wrapper costa 183 LUT/istanza, costante su 3 punti. Con tutti i moltiplicatori in fabric solo 2 | `results/P3_resources.json` |
+| **Sonda risorse** (caratterizzazione) | **4 istanze** si instradano, non 5: a N=5 le LUT "entrano" ma il **placer fallisce**. Il conteggio LUT non prova la deployabilita' | `results/P3_resources.json` |
+> **⚠️ SCOPE RIVISTO (2026-08-01): il plotone e' FUORI dallo studio su hardware.** P3 su silicio
+> cancellato -- N istanze su una scheda *simulano* un plotone, e il software lo fa meglio. P1 e P2
+> restano come risultati **software/RTL**; la sonda risorse resta come caratterizzazione.
+
+| **P1 — plotone (software)** | mediana head-to-tail **sopra 1 a ogni N** (1,037 → 1,458): **non** string-stable in mediana. Ogni collisione misurata e' un `aggressive_cut_in` — nessun altro tipo collide mai | `results/p1.json` |
+| **Canale V2X** | la latenza NON crea guasti nuovi, **allarga** quello esistente: senza, il taglio aggressivo cede solo in autostrada (3 casi); con 300 ms cede a tutte le velocita' (**10 su 11**). La perdita di pacchetti non sposta nulla | `results/p1_canale.json` |
 | **P2 — plotone in RTL** | **0 / 844 800** (PLATOON-PAR, il plant) e **0 / 211 200** (P2-EXACT, i 4 DUT). Prova che quattro istanze parallele, ciascuna col proprio stato, non si disturbano | `results/p2_*.json` |
 | Costo della quantizzazione | l'uscita a 1/256 sposta le traiettorie del plotone di 0,22 m/s e 0,54 m (mediane) ma **non cambia le collisioni**: 1/88 da entrambe le parti | `results/p2_costo_quantizzazione.json` |
 | Moduli C0–C3 | scritti e collaudati **contro il mock**, cancelli provati anche in negativo | `FaseC/phase_c/` |

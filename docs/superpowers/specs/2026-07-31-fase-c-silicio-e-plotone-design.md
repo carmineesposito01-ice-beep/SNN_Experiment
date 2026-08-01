@@ -1,5 +1,26 @@
 # Fase C — Validazione su silicio e chiusura mesoscopica — design
 
+> ## ⚠️ SCOPE RIVISTO — 2026-08-01: **il plotone esce dallo studio su HARDWARE**
+>
+> **P3 (plotone su silicio) e' CANCELLATO.** Motivo: N istanze su una scheda *simulano* un
+> plotone, non lo sono. E' lo stesso comportamento che il software riproduce, in cambio del
+> costo di bring-up, dell'interconnessione AXI a piu' slave, e di un vincolo di risorse che
+> limita a **4 veicoli** -- una fila troppo corta per dire qualcosa di mesoscopico.
+>
+> **Cosa resta, e con che statuto:**
+>
+> | | |
+> |---|---|
+> | **P1** (simulazione) e **P2** (RTL) | risultati **software**, non alimentano la campagna su scheda |
+> | **Sonda risorse** | **caratterizzazione**, non piu' prerequisito di P3 |
+> | **C0–C3, filoni A e B** | invariati: sono il cuore della Fase C |
+>
+> La sonda ha comunque prodotto una lezione che vale oltre il plotone: **il conteggio LUT non
+> prova la deployabilita'**. A N=5 le LUT entravano (47 842 su 53 200) e il **placer fallisce**
+> -- una slice ha 4 LUT e 8 FF e il packing e' limitato dai control set. Vale per qualunque
+> cosa si voglia mettere su quel dispositivo.
+
+
 > **Data:** 2026-07-31 · **Branch:** `Simulink_Importer` · **Stato:** design approvato
 > **Target:** PYNQ-Z1 (Zynq-7020) · **Oggetto:** `Donatello_SNN_IIDM` (composto) e `Donatello_Tier` (SNN sola)
 >

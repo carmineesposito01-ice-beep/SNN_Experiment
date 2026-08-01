@@ -49,7 +49,7 @@ FaseC/
     plant_ps.py           port 1:1 di qz_cl_sim
     c3_power.py           differenziale randomizzato + Tj
     xadc.py               lettura Tj e tensioni
-    platoon.py            P1/P2/P3
+    platoon.py            P1 (software) e P2 (RTL) -- P3 su silicio cancellato
 
   tests/                  un file per modulo + conftest.py (fixture dei golden)
   hw/                     script Vivado: sonda risorse del plotone
@@ -66,12 +66,18 @@ Gran parte della Fase C. Serve perché quando la scheda si accende non si scriva
 | Gira adesso | Come |
 |---|---|
 | Tutti i moduli C0–C3, contro il mock | `python -m pytest` |
-| **P1** — plotone in simulazione | `./run_phase_c.sh p1` |
+| **P1** — plotone (risultato SOFTWARE, fuori dallo studio su scheda) | `./run_phase_c.sh p1` |
 | **Sonda risorse** del plotone | `bash hw/probe_resources.sh` (è sintesi Vivado, non silicio) |
+| **P2** — plotone in RTL (xsim) | `./hw/run_p2.sh` — è simulazione, non silicio |
 | Cancello di parità fra le facciate | `./run_phase_c.sh parity` |
 
-Richiedono la scheda accendibile: C0/C1/C2/C3 su silicio (filoni A e B), P2 e P3. Procedura in
+Richiedono la scheda accendibile **solo** C0/C1/C2/C3 sui filoni A e B. Procedura in
 [`RUNBOOK.md`](RUNBOOK.md).
+
+> **Scope rivisto il 2026-08-01: il plotone è FUORI dallo studio su hardware.** P3 su silicio è
+> cancellato — N istanze su una scheda *simulano* un plotone, e il software lo fa meglio, senza
+> il costo del bring-up e senza il limite di 4 veicoli imposto dalle risorse. P1 e P2 restano
+> come risultati software/RTL; la sonda risorse resta come caratterizzazione.
 
 ---
 

@@ -11,6 +11,7 @@
   "n_confronti_totale": 844800,
   "n_scenari": 88,
   "n_vehicles": 4,
+  "nota_validita": "MISURATO PRIMA del fix del cut_in (2026-08-01). Il confronto RTL-vs-Python resta valido COME EQUIVALENZA fra i due motori nella versione allora corrente, ed e' bit-esatto. Ma il golden di riferimento non applicava il teletrasporto cut_in, quindi 33 scenari su 99 rappresentavano male la manovra. Rieseguirlo oggi darebbe ROSSO, perche' il motore Python ora applica il cut e tb_platoon.v no: per riallinearlo andrebbe aggiunto il teletrasporto anche al testbench. Non e' stato fatto perche' il plotone e' uscito dallo studio su hardware, e la sua equivalenza RTL non alimenta piu' nessuna decisione.",
   "per_campo": {
    "a": {
     "max_abs": 0.0,
@@ -41,6 +42,7 @@
   "cwd": "D:\\Project_MBSE\\1.Reti Neurali\\Rete_SNN_Test\\CF_FSNN\\.worktrees\\Simulink_Importer\\FaseC",
   "frontend": "script",
   "sorgente": "rtl-xsim",
+  "stato": "storico: precede il fix del cut_in",
   "timestamp": "2026-08-01T14:32:29"
  }
 }
