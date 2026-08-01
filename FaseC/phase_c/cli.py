@@ -73,14 +73,19 @@ def _main(argv):
     ap.add_argument('stage', choices=list(STADI) + ['list'])
     ap.add_argument('--frontend', default='script')
     ap.add_argument('--out-dir', default=None)
+    ap.add_argument('--scenari', type=int, default=None,
+                    help='usa solo i primi K scenari. Serve al cancello di parita\': su tutti '
+                         'e 99 costerebbe mezz\'ora, e un cancello che costa mezz\'ora non '
+                         'viene eseguito.')
     a = ap.parse_args(argv)
 
     if a.stage == 'list':
         for s in STADI:
             print('%-4s %s' % (s, 'senza scheda' if s in SENZA_SCHEDA else 'richiede la scheda'))
         return 0
+    kw = {'scenari': range(a.scenari)} if a.scenari else {}
     try:
-        _, path = run_stage(a.stage, frontend=a.frontend, out_dir=a.out_dir)
+        _, path = run_stage(a.stage, frontend=a.frontend, out_dir=a.out_dir, **kw)
     except SchedaAssente as e:
         print('SCHEDA-ASSENTE: %s' % e)
         return 3

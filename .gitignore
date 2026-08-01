@@ -92,3 +92,6 @@ matlab/hdl_sp4m2c/
 # artefatti Vivado emessi nella cwd (NON sono risultati)
 NA/
 ps7_summary.html
+
+# Intermedi del cancello di parita: si rigenerano con `./run_phase_c.sh parity`
+FaseC/results/_parity/

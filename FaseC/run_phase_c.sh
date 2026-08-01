@@ -22,10 +22,13 @@ case "$STAGE" in
 
   parity)
     # Esegue LO STESSO stadio dalle due facciate e confronta gli artefatti.
-    S="${1:-p1}"
+    # Su p1 usa un sottoinsieme di scenari: il cancello prova che le facciate coincidono,
+    # non rimisura P1 -- e un cancello che costasse mezz'ora non verrebbe eseguito.
+    S="${1:-p1}"; shift || true
+    LIM=""; [ "$S" = "p1" ] && LIM="--scenari ${PARITY_SCEN:-6}"
     mkdir -p results/_parity/script results/_parity/notebook
-    python -m phase_c.cli "$S" --frontend script   --out-dir results/_parity/script   || exit 1
-    python -m phase_c.cli "$S" --frontend notebook --out-dir results/_parity/notebook || exit 1
+    python -m phase_c.cli "$S" --frontend script   --out-dir results/_parity/script   $LIM "$@" || exit 1
+    python -m phase_c.cli "$S" --frontend notebook --out-dir results/_parity/notebook $LIM "$@" || exit 1
     python c_frontend_parity.py "results/_parity/script/$S.json" "results/_parity/notebook/$S.json" ;;
 
   notebook)
