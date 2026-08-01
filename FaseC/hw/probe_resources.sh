@@ -26,15 +26,26 @@ mkdir -p "$WORK"
 
 NS="${1:-1}"
 DSPS="${2:-220}"
+UNITA="${3:-dut}"
 
-echo "sonda: N in [$NS] x max_dsp in [$DSPS]   sorgenti=$SRC   lavoro=$WORK"
+# `dut`     = Donatello_SNN_IIDM da solo: la logica di calcolo.
+# `wrapper` = snniidm_axi_lite, che CONTIENE il DUT -- e' l'unita' DEPLOYABILE, con i registri
+#             AXI e la macchina a stati che nel deployment ci sono e nel `dut` no. Misurare solo
+#             il dut SOTTOSTIMA quante istanze entrano davvero.
+export WRAPPER_V="${WRAPPER_V:-$(cd "$QUI/../.." && pwd)/FaseB2.0/Harness_SNN_IIDM/hw/snniidm_axi_lite.v}"
+if [ "$UNITA" = "wrapper" ] && [ ! -f "$WRAPPER_V" ]; then
+  echo "PROBE-ABORT: wrapper non trovato: $WRAPPER_V (impostare WRAPPER_V)"; exit 1
+fi
+
+echo "sonda: unita=$UNITA  N in [$NS] x max_dsp in [$DSPS]   sorgenti=$SRC   lavoro=$WORK"
 echo "--- ogni punto e' una sintesi out-of-context; il costo del primo dice quello di tutti ---"
 
 for N in $NS; do
   for D in $DSPS; do
-    echo "=== N=$N max_dsp=$D  [avvio $(date +%H:%M:%S)] ==="
+    echo "=== unita=$UNITA N=$N max_dsp=$D  [avvio $(date +%H:%M:%S)] ==="
     "$VIV/vivado.bat" -mode batch -notrace -nojournal -nolog \
-      -source "$QUI/probe_resources.tcl" -tclargs "$SRC" "$WORK/N${N}_d${D}" "$N" "$D" \
+      -source "$QUI/probe_resources.tcl" \
+      -tclargs "$SRC" "$WORK/${UNITA}_N${N}_d${D}" "$N" "$D" "$UNITA" \
       2>&1 | grep -E "^(PROBE|ERROR:|CRITICAL WARNING:)"
   done
 done
