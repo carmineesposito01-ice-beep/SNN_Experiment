@@ -102,10 +102,19 @@ Tutti nella busta `{data, prov}` degli altri artefatti della Fase C, quindi
 | un punto di sonda, place & route | ~14 min |
 | export di 88 scenari | ~4 min |
 | PLATOON-PAR, 88 scenari | ~10 min |
-| anello chiuso, 88 scenari × 4 DUT | ~75 min |
+| anello chiuso, 88 scenari × 4 DUT | **~118 min** — ~80 s/scenario, misurato su 88 punti |
 | P2-EXACT, 88 × 4 replay del blocco | ~21 min |
 
 **Ogni run lunga è preceduta da un punto singolo**, per misurare il costo invece di stimarlo — e
+con una cautela: il primo punto include la compilazione, e stimare da lì **sottostima**. La
+prima stima dell'anello chiuso, derivata da "114 s per compilazione + 1 scenario", dava 75
+minuti contro i 118 reali. Un secondo punto costa poco e toglie l'ambiguità.
+
+⚠️ **Non incanalare una run lunga in `tail`**: il codice stampa l'avanzamento per-scenario, ma
+`tail` lo trattiene fino alla fine, e per venti minuti non si distingue "sta lavorando" da
+"è appesa" senza andare a guardare la CPU del processo. Lasciare scorrere, o scrivere su file.
+
+Il resto:
 i cancelli si provano **prima**: 32 secondi per sapere che i 21 minuti successivi misurano
 qualcosa.
 
