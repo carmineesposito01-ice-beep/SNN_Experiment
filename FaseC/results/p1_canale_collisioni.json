@@ -1,0 +1,51 @@
+{
+ "data": {
+  "collidono": {
+   "ideale": [
+    24
+   ],
+   "latenza_2": [
+    6,
+    15,
+    24
+   ]
+  },
+  "dettaglio": {
+   "15": {
+    "cut_in_gap_m": 42.24,
+    "cut_in_passo": 301,
+    "nome": "cut_out",
+    "regime": "highway",
+    "s_init": 30.76,
+    "v_init": 21.12
+   },
+   "24": {
+    "cut_in_gap_m": 48.96,
+    "cut_in_passo": 301,
+    "nome": "cut_out",
+    "regime": "highway",
+    "s_init": 23.96,
+    "v_init": 24.48
+   },
+   "6": {
+    "cut_in_gap_m": 44.06,
+    "cut_in_passo": 301,
+    "nome": "cut_out",
+    "regime": "highway",
+    "s_init": 34.17,
+    "v_init": 22.03
+   }
+  },
+  "domanda": "quali scenari collidono, e la latenza li cambia?",
+  "lettura": "Il guasto NON e diffuso: tutti e tre gli scenari che collidono sono la stessa manovra nello stesso regime -- cut_out su highway -- e sono TUTTI E TRE i cut-out autostradali del dataset. Nessun cut_out urbano, truck o mixed collide. Senza latenza ne collide uno su tre; con 200 ms tutti e tre. Highway e il regime piu veloce (v_init 22-24,5 m/s), dove lo stesso errore relativo di informazione si traduce in una chiusura di gap piu grande.",
+  "limite": "e una osservazione su 3 scenari, non una legge: dice DOVE guardare (cut-out ad alta velocita), non quanto e generale. Per una conclusione servirebbero piu cut-out autostradali di quanti il dataset ne contenga.",
+  "n_vehicles": 4
+ },
+ "prov": {
+  "bitstream_sig": "n/a (P1 e' simulazione)",
+  "cwd": "D:\\Project_MBSE\\1.Reti Neurali\\Rete_SNN_Test\\CF_FSNN\\.worktrees\\Simulink_Importer\\FaseC",
+  "frontend": "script",
+  "sorgente": "simulazione",
+  "timestamp": "2026-08-01T19:52:45"
+ }
+}
