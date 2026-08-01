@@ -23,13 +23,13 @@
      ],
      "seed": 0
     },
-    "degrado_mediana": -0.001,
+    "degrado_mediana": 0.0,
     "head_to_tail_max": 2.202,
-    "head_to_tail_mediana": 1.073,
+    "head_to_tail_mediana": 1.108,
     "head_to_tail_p95": 1.6362999999999999,
-    "min_gap_minimo": -1.707,
-    "min_ttc_minimo": 0.744,
-    "n_collisi": 1,
+    "min_gap_minimo": -3.164,
+    "min_ttc_minimo": 0.212,
+    "n_collisi": 3,
     "n_stabilita": 88,
     "n_string_stable": 30
    },
@@ -38,76 +38,76 @@
     "config": null,
     "degrado_mediana": null,
     "head_to_tail_max": 2.134,
-    "head_to_tail_mediana": 1.074,
+    "head_to_tail_mediana": 1.108,
     "head_to_tail_p95": 1.6206499999999997,
-    "min_gap_minimo": -1.745,
-    "min_ttc_minimo": 0.748,
-    "n_collisi": 1,
+    "min_gap_minimo": -3.173,
+    "min_ttc_minimo": 0.23,
+    "n_collisi": 3,
     "n_stabilita": 88,
     "n_string_stable": 30
    },
    "lat2_jitter2": {
-    "collisioni_in_piu": 2,
+    "collisioni_in_piu": 5,
     "config": {
      "jitter_steps": 2,
      "latency_steps": 2,
      "seed": 0
     },
-    "degrado_mediana": 0.031,
+    "degrado_mediana": 0.066,
     "head_to_tail_max": 2.352,
-    "head_to_tail_mediana": 1.105,
+    "head_to_tail_mediana": 1.174,
     "head_to_tail_p95": 1.6872999999999998,
-    "min_gap_minimo": -6.802,
-    "min_ttc_minimo": 1.057,
-    "n_collisi": 3,
+    "min_gap_minimo": -5.953,
+    "min_ttc_minimo": 0.306,
+    "n_collisi": 8,
     "n_stabilita": 88,
     "n_string_stable": 29
    },
    "latenza_1": {
-    "collisioni_in_piu": 0,
+    "collisioni_in_piu": 2,
     "config": {
      "latency_steps": 1,
      "seed": 0
     },
-    "degrado_mediana": 0.015,
+    "degrado_mediana": 0.0325,
     "head_to_tail_max": 2.072,
-    "head_to_tail_mediana": 1.089,
+    "head_to_tail_mediana": 1.1404999999999998,
     "head_to_tail_p95": 1.6497999999999997,
-    "min_gap_minimo": -4.084,
-    "min_ttc_minimo": 0.355,
-    "n_collisi": 1,
+    "min_gap_minimo": -4.541,
+    "min_ttc_minimo": 0.319,
+    "n_collisi": 5,
     "n_stabilita": 88,
-    "n_string_stable": 29
+    "n_string_stable": 30
    },
    "latenza_2": {
-    "collisioni_in_piu": 2,
+    "collisioni_in_piu": 5,
     "config": {
      "latency_steps": 2,
      "seed": 0
     },
-    "degrado_mediana": 0.035,
+    "degrado_mediana": 0.1025,
     "head_to_tail_max": 2.292,
-    "head_to_tail_mediana": 1.109,
+    "head_to_tail_mediana": 1.2105000000000001,
     "head_to_tail_p95": 1.6856999999999998,
-    "min_gap_minimo": -6.518,
-    "min_ttc_minimo": 1.126,
-    "n_collisi": 3,
+    "min_gap_minimo": -5.924,
+    "min_ttc_minimo": 0.304,
+    "n_collisi": 8,
     "n_stabilita": 88,
     "n_string_stable": 29
    },
    "latenza_3": {
-    "collisioni_in_piu": 2,
+    "collisioni_in_piu": 7,
     "config": {
      "latency_steps": 3,
      "seed": 0
     },
-    "degrado_mediana": 0.057,
+    "degrado_mediana": 0.146,
     "head_to_tail_max": 2.234,
-    "head_to_tail_mediana": 1.131,
+    "head_to_tail_mediana": 1.254,
     "head_to_tail_p95": 1.7168999999999996,
-    "min_gap_minimo": -8.928,
-    "min_ttc_minimo": 0.948,
-    "n_collisi": 3,
+    "min_gap_minimo": -7.313,
+    "min_ttc_minimo": 0.22,
+    "n_collisi": 10,
     "n_stabilita": 88,
     "n_string_stable": 29
    },
@@ -117,15 +117,15 @@
      "pdr": 0.5,
      "seed": 0
     },
-    "degrado_mediana": 0.014,
+    "degrado_mediana": 0.025,
     "head_to_tail_max": 2.359,
-    "head_to_tail_mediana": 1.088,
+    "head_to_tail_mediana": 1.133,
     "head_to_tail_p95": 1.65715,
-    "min_gap_minimo": -1.733,
-    "min_ttc_minimo": 0.825,
-    "n_collisi": 1,
+    "min_gap_minimo": -3.17,
+    "min_ttc_minimo": 0.221,
+    "n_collisi": 3,
     "n_stabilita": 88,
-    "n_string_stable": 29
+    "n_string_stable": 30
    },
    "pdr_0.7": {
     "collisioni_in_piu": 0,
@@ -133,13 +133,13 @@
      "pdr": 0.7,
      "seed": 0
     },
-    "degrado_mediana": 0.002,
+    "degrado_mediana": -0.011,
     "head_to_tail_max": 2.227,
-    "head_to_tail_mediana": 1.076,
+    "head_to_tail_mediana": 1.097,
     "head_to_tail_p95": 1.6317499999999998,
-    "min_gap_minimo": -1.929,
-    "min_ttc_minimo": 0.764,
-    "n_collisi": 1,
+    "min_gap_minimo": -3.163,
+    "min_ttc_minimo": 0.227,
+    "n_collisi": 3,
     "n_stabilita": 88,
     "n_string_stable": 30
    },
@@ -149,13 +149,13 @@
      "pdr": 0.9,
      "seed": 0
     },
-    "degrado_mediana": -0.005,
+    "degrado_mediana": -0.0015,
     "head_to_tail_max": 2.145,
-    "head_to_tail_mediana": 1.069,
+    "head_to_tail_mediana": 1.1065,
     "head_to_tail_p95": 1.6219999999999999,
-    "min_gap_minimo": -1.729,
-    "min_ttc_minimo": 0.735,
-    "n_collisi": 1,
+    "min_gap_minimo": -3.171,
+    "min_ttc_minimo": 0.218,
+    "n_collisi": 3,
     "n_stabilita": 88,
     "n_string_stable": 30
    }
@@ -185,6 +185,6 @@
   "cwd": "D:\\Project_MBSE\\1.Reti Neurali\\Rete_SNN_Test\\CF_FSNN\\.worktrees\\Simulink_Importer\\FaseC",
   "frontend": "script",
   "sorgente": "simulazione",
-  "timestamp": "2026-08-01T19:45:24"
+  "timestamp": "2026-08-01T21:05:50"
  }
 }
