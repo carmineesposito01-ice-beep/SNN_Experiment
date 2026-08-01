@@ -1,0 +1,190 @@
+{
+ "data": {
+  "campione": {
+   "epoch": 43,
+   "topologia": {
+    "hidden": 32,
+    "input": 4,
+    "output": 5,
+    "rank": 16
+   },
+   "val_loss": 0.37418609857559204,
+   "variante": "eventprop_alif_full"
+  },
+  "fonte_configurazioni": "scripts/closed_loop_identify.py:403-404 (T2.9/T3.6)",
+  "n_vehicles": 4,
+  "per_canale": {
+   "gilbert_02_06": {
+    "collisioni_in_piu": 0,
+    "config": {
+     "gilbert": [
+      0.2,
+      0.6
+     ],
+     "seed": 0
+    },
+    "degrado_mediana": -0.001,
+    "head_to_tail_max": 2.202,
+    "head_to_tail_mediana": 1.073,
+    "head_to_tail_p95": 1.6362999999999999,
+    "min_gap_minimo": -1.707,
+    "min_ttc_minimo": 0.744,
+    "n_collisi": 1,
+    "n_stabilita": 88,
+    "n_string_stable": 30
+   },
+   "ideale": {
+    "collisioni_in_piu": null,
+    "config": null,
+    "degrado_mediana": null,
+    "head_to_tail_max": 2.134,
+    "head_to_tail_mediana": 1.074,
+    "head_to_tail_p95": 1.6206499999999997,
+    "min_gap_minimo": -1.745,
+    "min_ttc_minimo": 0.748,
+    "n_collisi": 1,
+    "n_stabilita": 88,
+    "n_string_stable": 30
+   },
+   "lat2_jitter2": {
+    "collisioni_in_piu": 2,
+    "config": {
+     "jitter_steps": 2,
+     "latency_steps": 2,
+     "seed": 0
+    },
+    "degrado_mediana": 0.031,
+    "head_to_tail_max": 2.352,
+    "head_to_tail_mediana": 1.105,
+    "head_to_tail_p95": 1.6872999999999998,
+    "min_gap_minimo": -6.802,
+    "min_ttc_minimo": 1.057,
+    "n_collisi": 3,
+    "n_stabilita": 88,
+    "n_string_stable": 29
+   },
+   "latenza_1": {
+    "collisioni_in_piu": 0,
+    "config": {
+     "latency_steps": 1,
+     "seed": 0
+    },
+    "degrado_mediana": 0.015,
+    "head_to_tail_max": 2.072,
+    "head_to_tail_mediana": 1.089,
+    "head_to_tail_p95": 1.6497999999999997,
+    "min_gap_minimo": -4.084,
+    "min_ttc_minimo": 0.355,
+    "n_collisi": 1,
+    "n_stabilita": 88,
+    "n_string_stable": 29
+   },
+   "latenza_2": {
+    "collisioni_in_piu": 2,
+    "config": {
+     "latency_steps": 2,
+     "seed": 0
+    },
+    "degrado_mediana": 0.035,
+    "head_to_tail_max": 2.292,
+    "head_to_tail_mediana": 1.109,
+    "head_to_tail_p95": 1.6856999999999998,
+    "min_gap_minimo": -6.518,
+    "min_ttc_minimo": 1.126,
+    "n_collisi": 3,
+    "n_stabilita": 88,
+    "n_string_stable": 29
+   },
+   "latenza_3": {
+    "collisioni_in_piu": 2,
+    "config": {
+     "latency_steps": 3,
+     "seed": 0
+    },
+    "degrado_mediana": 0.057,
+    "head_to_tail_max": 2.234,
+    "head_to_tail_mediana": 1.131,
+    "head_to_tail_p95": 1.7168999999999996,
+    "min_gap_minimo": -8.928,
+    "min_ttc_minimo": 0.948,
+    "n_collisi": 3,
+    "n_stabilita": 88,
+    "n_string_stable": 29
+   },
+   "pdr_0.5": {
+    "collisioni_in_piu": 0,
+    "config": {
+     "pdr": 0.5,
+     "seed": 0
+    },
+    "degrado_mediana": 0.014,
+    "head_to_tail_max": 2.359,
+    "head_to_tail_mediana": 1.088,
+    "head_to_tail_p95": 1.65715,
+    "min_gap_minimo": -1.733,
+    "min_ttc_minimo": 0.825,
+    "n_collisi": 1,
+    "n_stabilita": 88,
+    "n_string_stable": 29
+   },
+   "pdr_0.7": {
+    "collisioni_in_piu": 0,
+    "config": {
+     "pdr": 0.7,
+     "seed": 0
+    },
+    "degrado_mediana": 0.002,
+    "head_to_tail_max": 2.227,
+    "head_to_tail_mediana": 1.076,
+    "head_to_tail_p95": 1.6317499999999998,
+    "min_gap_minimo": -1.929,
+    "min_ttc_minimo": 0.764,
+    "n_collisi": 1,
+    "n_stabilita": 88,
+    "n_string_stable": 30
+   },
+   "pdr_0.9": {
+    "collisioni_in_piu": 0,
+    "config": {
+     "pdr": 0.9,
+     "seed": 0
+    },
+    "degrado_mediana": -0.005,
+    "head_to_tail_max": 2.145,
+    "head_to_tail_mediana": 1.069,
+    "head_to_tail_p95": 1.6219999999999999,
+    "min_gap_minimo": -1.729,
+    "min_ttc_minimo": 0.735,
+    "n_collisi": 1,
+    "n_stabilita": 88,
+    "n_string_stable": 30
+   }
+  },
+  "perimetro": {
+   "idx_degeneri_base1": [
+    7,
+    16,
+    25,
+    34,
+    43,
+    52,
+    61,
+    70,
+    79,
+    88,
+    97
+   ],
+   "n_degeneri": 11,
+   "n_perturbati": 88,
+   "n_totale": 99,
+   "perche": "gli scenari `static_target` hanno il leader a velocita' costante: la string stability e' il rapporto fra l'oscillazione in coda e quella in testa, e senza oscillazione in testa e' INDEFINITA (il denominatore diventa rumore numerico). Restano nelle metriche di sicurezza, escono da quelle di stabilita'."
+  }
+ },
+ "prov": {
+  "bitstream_sig": "n/a (P1 e' simulazione)",
+  "cwd": "D:\\Project_MBSE\\1.Reti Neurali\\Rete_SNN_Test\\CF_FSNN\\.worktrees\\Simulink_Importer\\FaseC",
+  "frontend": "script",
+  "sorgente": "simulazione",
+  "timestamp": "2026-08-01T19:45:24"
+ }
+}
