@@ -1,6 +1,6 @@
 # STATO — Fase C
 
-> **Aggiornato:** 2026-08-03 · **228 test verdi** · albero pulito
+> **Aggiornato:** 2026-08-03 · **230 test verdi** · albero pulito
 >
 > Questo è il documento da cui si riparte. Dice **dove siamo**, **cosa è già provato**, **cosa
 > manca** e **perché certe strade sono state chiuse**. La procedura operativa sta in
@@ -294,7 +294,7 @@ in forma eseguibile, ed è un debito noto (§7).
 cd FaseC && python -m pytest -q
 ```
 
-228 test. Nessuno richiede la scheda; quelli che la richiederebbero verificano invece che il
+230 test. Nessuno richiede la scheda; quelli che la richiederebbero verificano invece che il
 codice **dichiari** che serve, invece di restituire numeri dal mock come se fossero misure.
 
 ```bash

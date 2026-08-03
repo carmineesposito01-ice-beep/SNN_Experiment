@@ -227,3 +227,35 @@ def test_i_bitstream_citati_dal_RUNBOOK_sono_quelli_che_il_CODICE_carica():
     r = _doc('RUNBOOK.md')
     sezione0 = r[r.index('## 0.'):r.index('## 1.')]
     assert 'FaseC/bitstream/' in sezione0
+
+
+def test_la_sweep_di_mutazione_copre_TUTTI_i_moduli():
+    """La mappa di `mutazioni.py` E' il perimetro della sweep: cio' che non e' elencato non viene
+    mai mutato, e la percentuale finale sembra una copertura che non ha. E' successo -- la prima
+    stesura ometteva cinque moduli su diciassette, e il riassunto diceva "66% prese" su un
+    insieme scelto invece che su tutti."""
+    import glob
+    import importlib.util
+    spec = importlib.util.spec_from_file_location('mut', os.path.join(FASEC, 'mutazioni.py'))
+    M = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(M)
+
+    moduli = {os.path.basename(f) for f in glob.glob(os.path.join(FASEC, 'phase_c', '*.py'))}
+    moduli -= {'__init__.py'}
+    mancanti = moduli - set(M.COPERTURA)
+    assert not mancanti, 'moduli mai mutati: %s' % sorted(mancanti)
+
+    for modulo, testfile in M.COPERTURA.items():
+        assert os.path.isfile(os.path.join(FASEC, 'tests', testfile)), \
+            '%s e\' mappato su %s, che non esiste' % (modulo, testfile)
+
+
+def test_la_sweep_NON_campiona_di_nascosto():
+    """Un tetto per modulo lascia buchi che il riassunto non distingue dalle mutazioni prese.
+    Se un giorno servisse rimetterlo per costo, va dichiarato nell'uscita, non nascosto."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location('mut', os.path.join(FASEC, 'mutazioni.py'))
+    M = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(M)
+    assert M.MAX_PER_MODULO == 0, \
+        'la sweep campiona %d mutazioni per modulo: il resto non viene provato' % M.MAX_PER_MODULO

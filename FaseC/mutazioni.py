@@ -27,8 +27,19 @@ import sys
 FASEC = r'D:\Project_MBSE\1.Reti Neurali\Rete_SNN_Test\CF_FSNN\.worktrees\Simulink_Importer\FaseC'
 
 # modulo -> file di test che deve coprirlo
+# ⚠️ Questa mappa e' il perimetro della sweep: cio' che non e' elencato NON viene mai mutato,
+# e la percentuale finale sembra una copertura che non c'e'. La prima stesura ne ometteva cinque
+# (cli, driver, golden, platoon, plots) e nessuno se ne accorgeva -- il riassunto diceva
+# "66% prese" su un insieme scelto, non su tutti i moduli.
+#
+# I moduli senza un file di test omonimo si mutano contro i file che li esercitano davvero.
 COPERTURA = {
     'regmap.py': 'test_regmap.py',
+    'cli.py': 'test_parity.py',
+    'driver.py': 'test_mock_negative.py',
+    'golden.py': 'test_c1.py',
+    'platoon.py': 'test_platoon.py',
+    'plots.py': 'test_plots.py',
     'c0_liveness.py': 'test_c0.py',
     'c1_functional.py': 'test_c1.py',
     'c2_closedloop.py': 'test_c2.py',
@@ -55,7 +66,9 @@ MUTAZIONI = [
     (r'(?<![\w.\d])\+ 1(?![\w\d])', '+ 0', '+1 diventa +0'),
 ]
 
-MAX_PER_MODULO = 14
+# 0 = nessun tetto. Un tetto campiona, e un campione lascia buchi che il riassunto
+# non distingue da mutazioni prese (c1_functional ne nascondeva 4 su 18).
+MAX_PER_MODULO = 0
 
 
 def righe_di_codice(src):
@@ -107,8 +120,11 @@ def main():
         p = os.path.join('phase_c', modulo)
         originale = io.open(p, encoding='utf-8').read()
         mut = genera(originale)
-        passo = max(1, len(mut) // MAX_PER_MODULO)
-        scelte = mut[::passo][:MAX_PER_MODULO]
+        if MAX_PER_MODULO:
+            passo = max(1, len(mut) // MAX_PER_MODULO)
+            scelte = mut[::passo][:MAX_PER_MODULO]
+        else:
+            scelte = mut
         print('%-20s %3d mutazioni possibili, ne provo %d  (contro %s)'
               % (modulo, len(mut), len(scelte), testfile), flush=True)
 
