@@ -316,3 +316,69 @@ def esegui_campagna(dmm, banco, seed, repeats=8, punti=None, csv_path=None,
             'sorgente_dmm': getattr(dmm, 'sorgente', 'ignota'),
             'n_deriva_durante_lettura': sospetti,
             'csv': csv_path}
+
+
+# ------------------------------------------------- pre-flight: quante repliche servono
+
+EFFETTO_ATTESO_MA = 1.4     # ~7 mW per istanza a 5 V: il guadagno del gating stimato in T7b
+
+
+def repliche_necessarie(iqr_mA, effetto_mA=EFFETTO_ATTESO_MA, n_istanze=1):
+    """Quante VISITE per punto servono a rendere separabile un effetto di `effetto_mA`.
+
+    Inverte la condizione di `differenza_mW`: |d| > 2 * u, con u l'errore standard della
+    differenza fra due mediane (due contributi indipendenti, sommati in quadratura).
+
+    `n_istanze` e' l'amplificazione: replicare le istanze moltiplica il segnale MISURATO
+    lasciando invariato il rumore dello strumento, quindi abbassa n col quadrato. E' l'intera
+    ragione per cui x2 esiste.
+
+    Restituire questo numero PRIMA della campagna e' cio' che trasforma "vedremo se e'
+    separabile" in una decisione: con la lettura manuale ogni replica costa un'attesa di
+    equilibrio termico, e la differenza fra 15 e 57 e' la differenza fra mezza giornata e due.
+    """
+    if iqr_mA <= 0:
+        return 2                 # dispersione nulla: bastano due punti per avere una stima
+    misurato = abs(effetto_mA) * n_istanze
+    if misurato == 0:
+        return None              # nessun effetto da distinguere: la domanda non ha risposta
+    rapporto = 2.0 * (2 ** 0.5) * MEDIANA_SU_MEDIA * iqr_mA / (SIGMA_DA_IQR * misurato)
+    import math
+    return max(2, int(math.floor(rapporto ** 2)) + 1)
+
+
+def misura_dispersione(dmm, banco, cfg='blank', k=10, intervallo_s=5.0, max_attesa_s=600.0,
+                       stampa=print):
+    """PRE-FLIGHT: la dispersione dello strumento, con k letture in UNA SOLA visita.
+
+    ⚠️ Queste letture NON sono repliche e non vanno mai messe nella campagna. Condividono la
+    stessa visita: stesso bitstream appena caricato, stesso stato termico. Usarle come punti
+    indipendenti gonfierebbe n e restringerebbe l'errore standard senza che nulla di reale sia
+    stato ripetuto -- pseudo-replicazione, cioe' una precisione inventata.
+
+    Servono a UNA cosa: stimare il rumore dello strumento per decidere quante visite fare.
+    Ed e' proprio perche' non sono repliche che costano poco -- una sola attesa di equilibrio
+    invece di k.
+    """
+    from phase_c.dmm import attendi_equilibrio
+
+    _pretendi_sorgente_valida(dmm)
+    banco.carica(cfg)
+    attendi_equilibrio(banco.leggi_tj, intervallo_s=intervallo_s, max_attesa_s=max_attesa_s)
+
+    letture = []
+    for i in range(k):
+        letture.append(float(dmm.leggi_mA(etichetta='%s -- dispersione %d/%d' % (cfg, i + 1, k))))
+    b = sorted(letture)
+    iqr = _pct(b, 0.75) - _pct(b, 0.25)
+
+    suggerite = {'x1': repliche_necessarie(iqr, n_istanze=1),
+                 'x2': repliche_necessarie(iqr, n_istanze=2)}
+    stampa('dispersione (IQR) = %.3f mA su %d letture -- repliche suggerite: x1 %s, x2 %s'
+           % (iqr, k, suggerite['x1'], suggerite['x2']))
+    return {'letture': letture, 'iqr_mA': iqr, 'k': k, 'cfg': cfg,
+            'mediana_mA': statistics.median(b),
+            'repliche_suggerite': suggerite,
+            'effetto_atteso_mA': EFFETTO_ATTESO_MA,
+            'nota': 'letture di UNA SOLA visita: misurano il rumore dello strumento, NON sono '
+                    'repliche e non vanno messe nella campagna (pseudo-replicazione).'}

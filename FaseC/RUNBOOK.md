@@ -180,22 +180,36 @@ manuale di questo strumento**. Non comprare l'adattatore su quella base. Resta d
 esista una voce di menu (F4 → *serial port output*) che ne cambi la funzione; finché non è vista
 sullo strumento, è un'ipotesi.
 
-⚠️ **Misurato il 2026-08-03**: collegato via USB-C col cavo a disposizione, Windows **non ha
-enumerato nulla** — nessuna porta COM (pyserial 3.5 presente), nessun dispositivo senza driver o
-in errore, nessun evento PnP.
+#### Esito: **nessun canale dati verso il PC. Chiuso.**
 
-Quella misura dice che *in quella configurazione* non è comparso niente. **Non** dice che la USB-C
-non sia un canale dati — il manuale afferma il contrario, e trattare l'assenza di enumerazione
-come prova del contrario sarebbe scambiare l'assenza di evidenza per evidenza dell'assenza. Le
-cause possibili, in ordine di probabilità:
+Indagato il 2026-08-03 ed esaurito. Non riaprirlo senza un fatto nuovo.
 
-1. **cavo USB-C di sola alimentazione** (2 fili). È la causa più comune in assoluto, e si
-   distingue in un secondo: lo strumento si carica lo stesso mentre il PC non vede nulla.
-2. **modalità di collegamento al PC** da attivare sullo strumento prima che enumeri.
-3. porta USB dello strumento o del PC guasta.
+| Provato | Esito |
+|---|---|
+| USB-C, cavo in dotazione | nessuna enumerazione |
+| USB-C, **cavo dati certo** | nessuna enumerazione |
+| Porte USB diverse | nessuna enumerazione |
+| Scollega/ricollega con rilevatore attivo | nessun evento |
+| `pyserial`, porte COM | zero |
+| Dispositivi in errore o senza driver | nessuno |
 
-Da provare in quest'ordine, con un cavo che si **sa** portare dati (per esempio quello di un disco
-esterno).
+Il rilevatore **non** è in dubbio: nella stessa sessione ha registrato eventi reali — un dongle
+USB sparito e ritornato — e il conteggio dei dispositivi lo ha seguito in tempo reale
+(158 → 156 → 159). Vede gli arrivi; il multimetro non ne genera.
+
+Il manuale, dal canto suo, contiene **soltanto** la frase «Communicate with the computer and
+charge the battery through the TYPE-C data cable»: nessuna procedura di collegamento, nessun
+software, nessuna modalità da attivare. Una promessa senza istruzioni, e senza enumerazione
+osservata in nessuna configurazione.
+
+**Conseguenza operativa:** l'acquisizione è `PromptDMM`, e va bene così. Anche un canale
+funzionante andava verificato per un requisito che nessuna fonte gli attribuisce — la lettura
+**live nell'istante richiesto**, non l'esportazione di registrazioni salvate — quindi il costo
+atteso di continuare a inseguirlo era alto e il beneficio incerto.
+
+⚠️ Questo cambia il **dimensionamento**, non il metodo: con la lettura manuale ogni replica costa
+un'attesa di equilibrio termico. Vedi la tabella delle repliche più sotto — è lì che questa
+decisione si paga.
 
 #### Ricavare il parser
 
@@ -222,24 +236,40 @@ Ricavato il parser, `verifica_contro_display(atteso_mA)` è il cancello obbligat
 campagna: `esegui_campagna` **si rifiuta di partire** con una seriale non validata, e lo fa
 *prima* di toccare l'hardware. Un fallimento della verifica **revoca** la validazione.
 
-### Quante repliche per punto
+### Quante repliche per punto — e quanto costano
 
 `repeats=8` era un numero scelto a occhio. Quello giusto dipende dalla **dispersione dello
-strumento**, che si misura: si fanno ~10 letture su `blank`, si guarda `iqr` nell'aggregato, e si
-legge la riga corrispondente.
+strumento**, e si misura *prima*: `misura_dispersione(dmm, banco)` fa ~10 letture in **una sola
+visita** e restituisce l'IQR insieme al numero di repliche suggerito.
+
+⚠️ Quelle 10 letture **non sono repliche** e non vanno mai messe nella campagna: condividono la
+stessa visita — stesso bitstream appena caricato, stesso stato termico. Usarle come punti
+indipendenti gonfierebbe `n` e restringerebbe l'errore standard senza che nulla di reale sia stato
+ripetuto: **pseudo-replicazione**, cioè precisione inventata. Ed è proprio perché non sono repliche
+che costano poco — una sola attesa di equilibrio invece di dieci.
 
 L'effetto cercato è ~7 mW per istanza = **1,4 mA** a 5 V, su un fondo di ~400 mA.
 
-| dispersione (IQR, mA) | n minimo con `x1` | n minimo con `x2` |
-|---|---|---|
-| 0,5 | 4 | 4 |
-| 1,0 | 4 | 4 |
-| 2,0 | **15** | 4 |
-| 4,0 | **57** | 15 |
+<!-- generata da repliche_necessarie(); non modificare a mano -->
 
-È anche la ragione per cui `x2` esiste: raddoppia il segnale lasciando invariato il rumore dello
-strumento, quindi dimezza l'incertezza *per istanza*. Con IQR = 4 mA la differenza fra 57 letture
-per punto e 15 è la differenza fra una campagna di un giorno e una di poche ore.
+| dispersione (IQR, mA) | n con `x1` | n con `x2` | visite totali | ore a 3 min/visita |
+|---|---|---|---|---|
+| 0,5 | 2 | 2 | 10 | 0,5 |
+| 1,0 | 4 | 2 | 20 | 1,0 |
+| 2,0 | 15 | 4 | 75 | 3,8 |
+| 4,0 | **57** | 15 | 285 | **14,2** |
+| 8,0 | 226 | 57 | 1130 | 56,5 |
+
+**Le ore contano perché la lettura è manuale.** Una *visita* è: ricarica del bitstream + attesa
+dell'equilibrio termico + lettura trascritta. L'attesa domina — il resto sono secondi — e si paga
+a ogni visita, perché il cambio di bitstream sposta la potenza dissipata e quindi la temperatura.
+
+`x2` esiste per questo: raddoppia il segnale misurato lasciando invariato il rumore dello
+strumento, quindi abbassa `n` **col quadrato**. Con IQR = 4 mA sono 57 visite contro 15.
+
+Se la dispersione risultasse alta, la via d'uscita **non** è misurare di più: è riportare il solo
+guadagno su `x2` — che è anche il numero più solido — e dichiarare quello su `x1` non separabile
+con questo strumento. Con IQR = 4 mA sono 45 visite invece di 285.
 
 ### Come si legge il risultato
 

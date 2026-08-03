@@ -308,3 +308,98 @@ def test_un_punto_solo_non_puo_dichiarare_nulla_di_separabile():
            {'cfg': 'b', 'gating': '-', 'mA': 300.0, 'tj': 45.0}]
     d = differenza_mW(aggregate(pts, (40.0, 50.0)), 'a/-', 'b/-')
     assert not d['separabile'], 'una differenza enorme su un punto solo non e\' un risultato'
+
+
+# ------------------------------- 6. pre-flight: quante repliche, e quanto costano
+
+from phase_c.c3_power import repliche_necessarie, misura_dispersione, EFFETTO_ATTESO_MA
+
+
+def test_piu_rumore_vuole_piu_repliche_e_va_col_QUADRATO():
+    """Non e' un dettaglio: fra IQR 2 e IQR 4 la campagna passa da mezza giornata a due."""
+    n2, n4 = repliche_necessarie(2.0), repliche_necessarie(4.0)
+    assert n4 > n2
+    assert n4 == pytest.approx(4 * n2, rel=0.1), 'raddoppiare il rumore quadruplica le repliche'
+
+
+def test_amplificare_le_ISTANZE_abbassa_le_repliche_col_quadrato():
+    """E' l'intera ragione per cui x2 esiste: segnale doppio, rumore invariato."""
+    assert repliche_necessarie(4.0, n_istanze=2) == pytest.approx(
+        repliche_necessarie(4.0, n_istanze=1) / 4.0, rel=0.15)
+
+
+def test_il_numero_suggerito_RENDE_davvero_separabile_l_effetto():
+    """Il cancello che conta: la formula inversa deve concordare con differenza_mW, altrimenti
+    e' un numero che sembra una risposta. Provato anche UNA replica sotto."""
+    iqr, eff = 3.0, EFFETTO_ATTESO_MA
+    n = repliche_necessarie(iqr, n_istanze=1)
+    agg_n = {'a': {'mediana': 400.0, 'iqr': iqr, 'n': n},
+             'b': {'mediana': 400.0 - eff, 'iqr': iqr, 'n': n}}
+    agg_meno = {'a': {'mediana': 400.0, 'iqr': iqr, 'n': n - 1},
+                'b': {'mediana': 400.0 - eff, 'iqr': iqr, 'n': n - 1}}
+    assert differenza_mW(agg_n, 'a', 'b')['separabile'], 'n suggerito deve bastare'
+    assert not differenza_mW(agg_meno, 'a', 'b')['separabile'], 'n-1 non deve bastare: e\' il MINIMO'
+
+
+def test_una_dispersione_nulla_non_chiede_infinite_repliche():
+    assert repliche_necessarie(0.0) == 2
+
+
+# --- misura della dispersione: una sola visita
+
+def test_la_dispersione_si_misura_in_UNA_visita_non_in_k():
+    """Se pagasse un'attesa di equilibrio per lettura non sarebbe un pre-flight: costerebbe
+    quanto la campagna che deve dimensionare."""
+    banco = _BancoFinto()
+    valori = iter([400.0, 401.0, 399.0, 402.0, 400.5, 401.5, 399.5, 400.2, 401.2, 399.8])
+    dmm = PromptDMM(chiedi=lambda p: str(next(valori)))
+    r = misura_dispersione(dmm, banco, k=10, intervallo_s=0, stampa=lambda *_: None)
+    assert banco.caricati == ['blank'], 'una sola visita, una sola ricarica'
+    assert r['iqr_mA'] > 0 and r['k'] == 10
+
+
+def test_le_letture_della_dispersione_NON_si_chiamano_punti():
+    """Pseudo-replicazione: usarle come repliche restringerebbe l'errore standard senza che
+    nulla di reale sia stato ripetuto. Il nome del campo lo rende difficile per sbaglio."""
+    banco = _BancoFinto()
+    valori = iter([400.0 + (i % 3) for i in range(10)])
+    dmm = PromptDMM(chiedi=lambda p: str(next(valori)))
+    r = misura_dispersione(dmm, banco, k=10, intervallo_s=0, stampa=lambda *_: None)
+    assert 'punti' not in r and 'letture' in r
+    assert 'pseudo-replicazione' in r['nota']
+
+
+def test_la_dispersione_SUGGERISCE_le_repliche_per_x1_e_x2():
+    banco = _BancoFinto()
+    valori = iter([400.0 + 2.0 * ((i % 5) - 2) for i in range(10)])
+    dmm = PromptDMM(chiedi=lambda p: str(next(valori)))
+    r = misura_dispersione(dmm, banco, k=10, intervallo_s=0, stampa=lambda *_: None)
+    s = r['repliche_suggerite']
+    assert s['x1'] == repliche_necessarie(r['iqr_mA'], n_istanze=1)
+    assert s['x2'] < s['x1'], 'x2 amplifica: deve chiederne meno'
+
+
+def test_anche_il_preflight_pretende_una_sorgente_VALIDATA():
+    """Misurare la dispersione con un parser non validato darebbe un rumore che non e' quello
+    dello strumento -- e dimensionerebbe l'intera campagna su un numero sbagliato."""
+    seriale = SerialDMM('COM_finta', parser=lambda ser: 400.0)
+    with pytest.raises(SorgenteNonValidata):
+        misura_dispersione(seriale, _BancoFinto(), k=3, intervallo_s=0, stampa=lambda *_: None)
+
+
+def test_la_tabella_del_RUNBOOK_viene_dal_CODICE():
+    """Una tabella scritta a mano diverge dalla formula al primo ritocco, e la versione letta
+    dall'operatore sarebbe quella sbagliata."""
+    import io as _io
+    import os as _os
+    import re
+    p = _os.path.join(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))), 'RUNBOOK.md')
+    testo = _io.open(p, encoding='utf-8').read()
+    righe = re.findall(r'^\| (\d,\d) \| \*?\*?(\d+)\*?\*? \| (\d+) \|', testo, re.M)
+    assert len(righe) >= 4, 'tabella delle repliche non trovata nel RUNBOOK'
+    for iqr_txt, n1, n2 in righe:
+        iqr = float(iqr_txt.replace(',', '.'))
+        assert int(n1) == repliche_necessarie(iqr, n_istanze=1), \
+            'RUNBOOK dice %s per IQR %s su x1, la formula dice %d' % (
+                n1, iqr_txt, repliche_necessarie(iqr, n_istanze=1))
+        assert int(n2) == repliche_necessarie(iqr, n_istanze=2)
