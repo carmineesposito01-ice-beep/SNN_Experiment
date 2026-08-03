@@ -40,10 +40,11 @@ costruisci() {
 case "${1:-tutti}" in
   blank) costruisci blank 0 ;;
   x1)    costruisci x1    1 ;;
+  x2)    costruisci x2    2 ;;
   x3)    costruisci x3    3 ;;
   tutti)
     # Ordine deliberato: prima x1, che e' il cancello di taratura. Se non riproduce T7b non ha
     # senso spendere le ore successive.
     costruisci x1 1 && costruisci blank 0 && costruisci x3 3 ;;
-  *) echo "uso: $0 [blank|x1|x3|tutti]"; exit 2 ;;
+  *) echo "uso: $0 [blank|x1|x2|x3|tutti]"; exit 2 ;;
 esac

@@ -58,11 +58,28 @@ apply_bd_automation -rule xilinx.com:bd_rule:processing_system7 \
 set_property -dict [list CONFIG.PCW_FPGA0_PERIPHERAL_FREQMHZ $FCLK CONFIG.PCW_USE_M_AXI_GP0 {1}] $ps
 puts "BITN FCLK impostato: [get_property CONFIG.PCW_FPGA0_PERIPHERAL_FREQMHZ $ps] MHz"
 
-for {set i 0} {$i < $N} {incr i} {
-  create_bd_cell -type module -reference snniidm_axi_lite tier$i
+if {$N == 0} {
+  # ⚠️ Senza slave l'automazione AXI non gira mai, e `M_AXI_GP0_ACLK` del PS7 resta SCOLLEGATO:
+  # e' un ingresso che qualcuno deve pilotare, e normalmente lo fa l'automazione.
+  # ("The following clock pins are not connected to a valid clock source", misurato.)
+  # Lo si collega a mano a FCLK_CLK0: cosi' il blank resta lo STESSO sistema, col PS7
+  # configurato allo stesso modo e il clock a 40 MHz presente -- solo senza logica nel PL.
+  connect_bd_net [get_bd_pins ps7/FCLK_CLK0] [get_bd_pins ps7/M_AXI_GP0_ACLK]
+  puts "BITN N=0: M_AXI_GP0_ACLK collegato a FCLK_CLK0 (nessuna logica nel PL)"
+} else {
+  # ⚠️ UNA sola chiamata per TUTTI gli slave, non N chiamate.
+  # Con N chiamate separate e `Clk {Auto}` Vivado crea N infrastrutture di clock, e la cascata
+  # di BUFG che ne risulta non si piazza ("Sub-optimal placement for a BUFG-BUFG cascade pair"
+  # -> "IO Clock Placer failed", misurato a N=3). Passando tutte le interfacce insieme si
+  # ottiene UNA interconnessione con N slave, un clock, un reset.
+  set pins {}
+  for {set i 0} {$i < $N} {incr i} {
+    create_bd_cell -type module -reference snniidm_axi_lite tier$i
+    lappend pins [get_bd_intf_pins tier$i/S_AXI]
+  }
   apply_bd_automation -rule xilinx.com:bd_rule:axi4 \
-    -config { Master {/ps7/M_AXI_GP0} Clk {Auto} } [get_bd_intf_pins tier$i/S_AXI]
-  puts "BITN istanza tier$i collegata"
+    -config { Master {/ps7/M_AXI_GP0} Clk {Auto} } $pins
+  puts "BITN $N istanze collegate a una sola interconnessione"
 }
 
 validate_bd_design
