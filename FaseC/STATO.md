@@ -1,6 +1,6 @@
 # STATO — Fase C
 
-> **Aggiornato:** 2026-08-03 · **206 test verdi** · albero pulito
+> **Aggiornato:** 2026-08-03 · **228 test verdi** · albero pulito
 >
 > Questo è il documento da cui si riparte. Dice **dove siamo**, **cosa è già provato**, **cosa
 > manca** e **perché certe strade sono state chiuse**. La procedura operativa sta in
@@ -253,10 +253,26 @@ cd FaseC && python mutazioni.py
 
 **Analisi di mutazione** (~12 minuti). Rompe il codice in un punto alla volta e controlla che i
 test se ne accorgano. Una mutazione sopravvissuta è un comportamento che nessun test difende.
-Esito della prima passata (2026-08-03): 92 mutazioni, **31 sopravvissute**, e non sparse — quasi
-tutte **condizioni al confine**. Aggiunte 18 prove al bordo; le 14 che cambiavano un *risultato*
-sono ora tutte prese. Restano vive le mutazioni **equivalenti** (stringhe di avanzamento, rami di
-diagnosi che cambiano il messaggio ma non l'esito): non sono buchi.
+**Prima passata** (12 moduli, 92 mutazioni): **31 sopravvissute**, e non sparse — quasi tutte
+**condizioni al confine**. Aggiunte 18 prove al bordo.
+
+**Seconda passata**, sui 29 punti che la prima non aveva mai toccato — `cli.py`, `driver.py`,
+`golden.py`, `platoon.py`, `plots.py` non erano nella mappa, e `c1_functional` era campionato:
+altre **20 sopravvissute**. Fra queste, tre che cambiavano un risultato senza segnalarlo
+(`gating=True` del driver, la soglia della partizione, la chiave dello scenario nell'artefatto) e
+l'intero smistamento degli stadi in `cli.py`, invisibile perché senza scheda **ogni** rotta
+solleva `SchedaAssente`.
+
+Restano vive per costruzione le mutazioni **equivalenti** (contatori nelle stringhe di
+avanzamento, opzioni grafiche, rami di diagnosi che cambiano il messaggio ma non l'esito): non
+sono buchi.
+
+⚠️ La seconda passata ha fatto emergere un difetto **introdotto in questa stessa sessione**:
+`--scenari K` veniva tradotto in indici base 1 per tutti gli stadi, ma `p1` indicizza il dataset
+(un array, **base 0**) mentre `c*` indicizza i file `axi_stim_<i>.mem` (**base 1**). Il perimetro
+di P1 risultava spostato di uno — primo scenario saltato, uno in più in coda — in silenzio. Le due
+convenzioni sono reali; è la traduzione che deve cambiare, e ora un test la difende in entrambi
+i versi.
 
 ```bash
 cd FaseC && python -m pytest tests/test_documentazione.py -q
@@ -278,7 +294,7 @@ in forma eseguibile, ed è un debito noto (§7).
 cd FaseC && python -m pytest -q
 ```
 
-206 test. Nessuno richiede la scheda; quelli che la richiederebbero verificano invece che il
+228 test. Nessuno richiede la scheda; quelli che la richiederebbero verificano invece che il
 codice **dichiari** che serve, invece di restituire numeri dal mock come se fossero misure.
 
 ```bash

@@ -118,3 +118,89 @@ def test_i_rapporti_ASSENTI_si_scartano_prima_di_diagnosticare():
     solo_none = diagnose(first={'k': 3, 'got': 8.0, 'exp': 4.0}, n=5, nmismatch=5,
                          ratios=[None, None, None])
     assert isinstance(solo_none, (str, list, dict)), 'nessun rapporto utile: non deve rompersi'
+
+
+# ------------------- la scaletta diagnostica, ORDINE COMPLETO (analisi di mutazione)
+#
+# I test qui sopra asseriscono solo CHI E' PRIMO. L'analisi di mutazione ha mostrato che non
+# basta: cambiare `and` in `or` dentro `diagnose` sposta i pesi e riordina la scaletta senza
+# sempre cambiarne la testa. Ma la scaletta INTERA e' cio' che l'operatore legge durante il
+# bring-up: se il secondo sospettato e' sbagliato, si va a cercare nel posto sbagliato.
+
+def _ordine(**kw):
+    from phase_c.c1_functional import diagnose
+    return [r.split(' -> ')[0] for r in diagnose(**kw)]
+
+
+FORMATO = 'formato numerico al confine'
+INDIRIZZI = 'mappa degli indirizzi'
+START = 'START che non si auto-azzera'
+RESET = 'polarita del reset'
+PIPE = 'pipelining insufficiente'
+
+
+def test_ordine_completo_firma_FORMATO():
+    assert _ordine(first={'k': 0, 'got': 2.0, 'exp': 1.0}, n=600, nmismatch=600,
+                   ratios=[2.0] * 600) == [FORMATO, INDIRIZZI, START, RESET, PIPE]
+
+
+def test_ordine_completo_firma_INDIRIZZI():
+    assert _ordine(first={'k': 0, 'got': 0.0, 'exp': -0.25}, n=600, nmismatch=600,
+                   ratios=[0.0] * 600) == [INDIRIZZI, RESET, FORMATO, START, PIPE]
+
+
+def test_ordine_completo_firma_START():
+    assert _ordine(first={'k': 1, 'got': 0.5, 'exp': 0.1}, n=600, nmismatch=599,
+                   ratios=[0.5 + 0.01 * i for i in range(599)]) == \
+        [START, FORMATO, INDIRIZZI, RESET, PIPE]
+
+
+def test_ordine_completo_firma_PIPELINING():
+    assert _ordine(first={'k': 17, 'got': 0.5, 'exp': 0.4}, n=600, nmismatch=6,
+                   ratios=[1.25, 1.4, 0.9, 1.1, 1.3, 0.8]) == \
+        [PIPE, FORMATO, INDIRIZZI, START, RESET]
+
+
+def test_errori_SPARSI_con_la_prima_lettura_a_zero_restano_pipelining():
+    """`tutti = n > 0 and nmismatch == n`: con `or` sarebbe sempre vero, e una singola lettura
+    nulla fra sei scarti sparsi accuserebbe gli INDIRIZZI -- mandando a controllare gli offset
+    mentre il problema e' nei tempi."""
+    assert _ordine(first={'k': 17, 'got': 0.0, 'exp': 0.4}, n=600, nmismatch=6,
+                   ratios=[1.25, 1.4, 0.9, 1.1, 1.3, 0.8]) == \
+        [PIPE, FORMATO, INDIRIZZI, START, RESET]
+
+
+def test_un_rapporto_COSTANTE_ma_su_pochi_campioni_resta_formato():
+    """`not costante and 0 < nmismatch < 0.2n`: con `or` il pipelining prenderebbe peso anche a
+    rapporto costante, e supererebbe il formato. Un fattore di scala su pochi campioni resta un
+    errore di esponente, non di tempi."""
+    assert _ordine(first={'k': 17, 'got': 0.8, 'exp': 0.4}, n=600, nmismatch=6,
+                   ratios=[2.0] * 6)[:2] == [FORMATO, PIPE]
+
+
+def test_il_PRIMO_scarto_a_k1_NON_accusa_lo_START_se_gli_scarti_sono_pochi():
+    """`nmismatch == n - 1 and first.k == 1`: con `or` basterebbe che il primo scarto capiti al
+    secondo campione per accusare lo START, che invece ha una firma precisa -- TUTTE sbagliate
+    tranne la prima."""
+    o = _ordine(first={'k': 1, 'got': 0.5, 'exp': 0.4}, n=600, nmismatch=6,
+                ratios=[1.25, 1.4, 0.9, 1.1, 1.3, 0.8])
+    assert o[0] == PIPE, 'sei scarti su 600 non sono la firma dello START'
+    assert o.index(START) > 1
+
+
+def test_uno_scarto_dove_l_atteso_e_ZERO_non_divide_per_zero(golden_scen1):
+    """`if exp != 0` prima di `got / exp`. In regime stazionario l'accelerazione attesa e'
+    esattamente 0 su molti campioni: uno scarto proprio li' farebbe esplodere C1 sulla scheda,
+    e l'analisi di mutazione ha mostrato che nessun test lo esercitava."""
+    from phase_c.mock_overlay import MockOverlay
+    from phase_c.driver import SnnIidmDriver
+    from phase_c.c1_functional import run_c1
+
+    zeri = [i for i, g in enumerate(golden_scen1.gold) if g == 0.0]
+    if not zeri:
+        import pytest as _p
+        _p.skip('lo scenario 1 non contiene campioni con accelerazione attesa esattamente 0')
+    ov = MockOverlay(golden=[golden_scen1], inject_at=zeri[0], inject_delta=0.5)
+    r = run_c1(SnnIidmDriver(ov), [golden_scen1])
+    assert r['bit_esatto'] is False and r['nmismatch'] >= 1
+    assert 'diagnosi' in r, 'la diagnosi deve esserci comunque, senza divisioni per zero'

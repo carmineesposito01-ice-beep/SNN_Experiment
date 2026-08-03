@@ -14,10 +14,14 @@ il mock: **il giorno del bring-up non si scrive codice, si esegue.**
 
 | | |
 |---|---|
-| Bitstream composto | 40 MHz — `FaseB2.0/Harness_SNN_IIDM/bitstream/donatello_snn_iidm.{bit,hwh}` |
+| Bitstream, tutti e tre | `FaseC/bitstream/{blank,x1,x2}.{bit,hwh}` — è **da qui** che `overlay_hw.py` li carica |
 | Bitstream SNN sola | 52 MHz — `FaseB2.0/Harness_SNN/bitstream/snn_tier_donatello.{bit,hwh}` |
 | Golden bit-esatti | `$T7_WORK/axi_{stim,gold,len}_<i>.mem`, i = 1…99 (default `C:/t7bw`) |
 | Strumenti | multimetro 9999 conteggi **in serie** all'alimentazione |
+
+⚠️ I `.bit` **non sono versionati** (4 MB, rigenerabili). Se mancano:
+`bash hw/build_bitstreams.sh tutti`. I `.hwh` invece sì — sono piccoli e senza di loro PYNQ non
+sa nulla della mappa degli indirizzi.
 
 **Copiare sulla scheda il `.bit` E il `.hwh` insieme**, con lo stesso nome base: PYNQ legge la
 mappa degli indirizzi dal `.hwh`, e senza quello `Overlay()` fallisce prima ancora di C0. È il
@@ -30,9 +34,36 @@ cd FaseC && python -m pytest        # dev'essere tutto verde PRIMA di accendere
 Se qui è rosso, il problema è nel codice o nell'ambiente: risolverlo adesso costa minuti,
 scoprirlo a metà campagna costa la campagna.
 
-**Da scrivere al passo 1 del primo bring-up:** `phase_c/cli.py::_overlay()` solleva oggi
-`NotImplementedError` sul ramo dell'overlay reale. È l'unico punto rimasto: caricare l'overlay
-PYNQ e restituirlo. Driver, stadi e diagnosi sono già pronti.
+### I due cancelli di accensione
+
+Vanno **osservati**, non supposti. Entrambi falliscono in silenzio se nessuno li controlla, e
+entrambi invalidano tutto ciò che viene dopo.
+
+**1. L'XADC legge davvero.**
+
+```python
+from phase_c import xadc
+tj, vcc = xadc.read_tj_sysfs(), xadc.read_vccint_sysfs()
+xadc.verifica_plausibile(tj, vcc)          # solleva se fuori dai limiti FISICI
+```
+
+Una lettura fallita non dà errore: dà `0`, che nella eq. 2-9 di UG480 fa esattamente
+**−273,15 °C**. È il numero che nessuno guarda, perché «è solo la temperatura» — finché i dati di
+potenza non risultano inspiegabili. Se anche il percorso MMIO è disponibile, `confronta_percorsi`
+li mette a confronto: **un percorso solo non può contraddirsi.**
+
+**2. Il reset del DUT avviene.**
+
+```python
+from phase_c.overlay_hw import prova_firma_del_reset
+prova_firma_del_reset(ov)                  # DOPO uno scenario completato
+```
+
+Non esiste un bit di reset software: `started` torna a zero solo riasserendo `ARESETN`, cioè
+ri-scaricando il bitstream (`snniidm_axi_lite.v:152`). La firma osservabile è `done_lat` che passa
+da **1 a 0**, e `prova_firma_del_reset` si rifiuta di girare se vale già 0 — lì non potrebbe
+distinguere nulla. Senza questo controllo uno scenario partirebbe dallo stato del precedente, e la
+Fase C chiamerebbe «silicio» dei numeri sbagliati.
 
 ---
 

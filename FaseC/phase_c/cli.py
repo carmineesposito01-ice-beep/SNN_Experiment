@@ -167,7 +167,18 @@ def _main(argv):
         for s in STADI:
             print('%-4s %s' % (s, 'senza scheda' if s in SENZA_SCHEDA else 'richiede la scheda'))
         return 0
-    kw = {'scenari': range(1, a.scenari + 1)} if a.scenari else {}
+    # ⚠️ `--scenari K` vuol dire "i primi K" per tutti gli stadi, ma la TRADUZIONE in indici
+    # cambia, e non per una svista: sono due convenzioni reali, imposte dai dati.
+    #
+    #   p1   indicizza il DATASET, che e' un array          -> base 0, range(K)
+    #   c*   indicizza i file dei golden `axi_stim_<i>.mem`, i = 1..99  -> base 1, range(1, K+1)
+    #
+    # Una traduzione sola non puo' essere giusta per entrambi: con base 1 su p1 si salta il
+    # primo scenario e se ne prende uno in piu' in coda -- un perimetro diverso da quello
+    # dichiarato, spostato di uno e silenzioso. (E' successo: vedi il test di parita' sotto.)
+    kw = {}
+    if a.scenari:
+        kw['scenari'] = range(a.scenari) if a.stage == 'p1' else range(1, a.scenari + 1)
     if a.stage == 'c3':
         kw.update(seed=a.seed, repeats=a.repeats)
     else:

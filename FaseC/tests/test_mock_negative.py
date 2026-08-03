@@ -115,3 +115,21 @@ def test_UN_passo_oltre_la_fine_SI_contamina(golden_scen1):
         drv.infer(s, v, dv, vl)
     drv.infer(*golden_scen1.stim[0])                 # un passo di troppo
     assert ov.contaminato is True
+
+
+def test_il_driver_accende_il_GATING_per_impostazione_predefinita(golden_scen1):
+    """Trovato dall'analisi di mutazione: `gating=True` non era difeso da nulla. Invertirlo
+    farebbe girare l'acceleratore SENZA gating in tutti gli stadi funzionali -- e C3 misurerebbe
+    il guadagno di una funzione che nel resto della Fase C non e' attiva."""
+    from phase_c.mock_overlay import MockOverlay
+    from phase_c.driver import SnnIidmDriver, GATING_BIT
+
+    # ⚠️ si guarda cio' che e' stato SCRITTO (`_ctrl_w`), non `read(CTRL)`: sul wrapper vero
+    # la lettura di CTRL restituisce `done`, che e' un percorso DIVERSO dal bit scritto.
+    ov = MockOverlay(golden=[golden_scen1])
+    SnnIidmDriver(ov)
+    assert (ov._ctrl_w >> GATING_BIT) & 1 == 1, 'il bit di gating deve essere ALTO'
+
+    ov2 = MockOverlay(golden=[golden_scen1])
+    SnnIidmDriver(ov2, gating=False)
+    assert (ov2._ctrl_w >> GATING_BIT) & 1 == 0, 'e spegnibile esplicitamente'

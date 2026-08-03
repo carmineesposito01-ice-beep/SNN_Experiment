@@ -190,3 +190,40 @@ def test_il_conteggio_dei_test_in_STATO_e_quello_vero():
     assert int(m.group(1)) == n, \
         'STATO.md dice %s test, ce ne sono %d. Aggiornare STATO.md.' % (m.group(1), n)
     assert '%d test.' % n in s, 'anche la sezione "Come rilanciare tutto" deve dire %d' % n
+
+
+def test_i_cancelli_di_accensione_stanno_DAVVERO_dove_STATO_dice():
+    """STATO.md §1 manda al RUNBOOK §0 per i due cancelli di accensione. Ci sono stati due
+    documenti d'accordo su un rimando e un terzo posto vuoto: il rimando c'era, i cancelli no.
+    Un rinvio a una sezione che non contiene quello che promette e' peggio di nessun rinvio --
+    chi legge conclude di aver capito male."""
+    r = _doc('RUNBOOK.md')
+    sezione0 = r[r.index('## 0.'):r.index('## 1.')]
+    for atteso in ('verifica_plausibile', 'prova_firma_del_reset', 'done_lat', '273'):
+        assert atteso in sezione0, 'RUNBOOK §0 deve nominare %s' % atteso
+
+
+def test_nessun_documento_dice_ancora_che_overlay_e_DA_SCRIVERE():
+    """`_overlay()` e' scritto. Un documento che lo dichiara mancante manda chi riprende a
+    scrivere codice che c'e' gia' -- ed e' successo: il blocco di ripresa lo diceva ancora
+    dopo che era stato implementato."""
+    from phase_c import cli
+    import inspect
+    src = inspect.getsource(cli._overlay)
+    assert 'NotImplementedError' not in src, '_overlay() non solleva piu NotImplementedError'
+    for nome in ('STATO.md', 'RUNBOOK.md', 'README.md'):
+        t = _doc(nome)
+        assert 'NotImplementedError' not in t, \
+            '%s dice ancora che _overlay() e\' da scrivere' % nome
+
+
+def test_i_bitstream_citati_dal_RUNBOOK_sono_quelli_che_il_CODICE_carica():
+    """Il RUNBOOK indicava i bitstream della Fase B2.0, mentre overlay_hw.py carica quelli di
+    FaseC/bitstream/. Mandare l'operatore a copiare il file sbagliato blocca il bring-up al
+    passo zero."""
+    from phase_c import cli
+    assert os.path.basename(cli.BITSTREAM) == 'bitstream'
+    assert os.path.basename(os.path.dirname(cli.BITSTREAM)) == 'FaseC'
+    r = _doc('RUNBOOK.md')
+    sezione0 = r[r.index('## 0.'):r.index('## 1.')]
+    assert 'FaseC/bitstream/' in sezione0

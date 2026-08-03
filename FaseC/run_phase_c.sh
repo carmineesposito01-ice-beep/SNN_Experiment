@@ -53,7 +53,10 @@ for f in files:
 PY
     ;;
 
-  help|*)
+  # `list` e' il nome che usa gia' `python -m phase_c.cli list`: le due facciate devono
+  # accettare lo stesso comando, altrimenti la documentazione e' giusta per una e sbagliata
+  # per l'altra -- ed e' successo (STATO.md documentava `list`, che qui usciva con 2).
+  help|list|*)
     cat <<'EOF'
 uso: ./run_phase_c.sh <stadio>
 
@@ -71,5 +74,5 @@ uso: ./run_phase_c.sh <stadio>
 Gli stadi su silicio sono gia' scritti e collaudati contro il mock; la procedura
 di esecuzione e' in RUNBOOK.md.
 EOF
-    [ "$STAGE" = "help" ] && exit 0 || exit 2 ;;
+    case "$STAGE" in help|list) exit 0 ;; *) exit 2 ;; esac ;;
 esac

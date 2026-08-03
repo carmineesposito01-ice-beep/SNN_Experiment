@@ -132,3 +132,45 @@ def test_l_artefatto_porta_la_provenienza_del_campione():
 def champ_e_scenario():
     from phase_c.params import load_champion
     return load_champion(), 0
+
+
+def test_uno_scenario_ESATTAMENTE_alla_soglia_finisce_in_UNA_delle_due_liste():
+    """`pert` usa `>` e `degen` usa `<=`: insieme coprono tutto. Trovato dall'analisi di
+    mutazione che con `<` uno scenario con std esattamente alla soglia sparirebbe da ENTRAMBE,
+    uscendo dall'analisi senza che nessun conteggio lo segnali."""
+    from phase_c import platoon as P
+
+    valori = {1: 0.0, 2: P.SOGLIA_PERTURBAZIONE, 3: P.SOGLIA_PERTURBAZIONE * 2}
+    vero = P.leader_std
+    P.leader_std = lambda i: valori[i]
+    try:
+        pert, degen = P.partiziona_scenari([1, 2, 3])
+    finally:
+        P.leader_std = vero
+    assert sorted(pert + degen) == [1, 2, 3], 'nessuno scenario puo\' sparire dalla partizione'
+    assert 2 in degen, 'esattamente alla soglia = NON perturbato'
+    assert pert == [3] and 1 in degen
+
+
+def test_le_chiavi_degli_scenari_nell_artefatto_sono_in_BASE_1():
+    """`{str(i + 1): g for i, g in zip(pert, h2t)}`: con `+0` ogni guadagno verrebbe attribuito
+    allo scenario SBAGLIATO -- un risultato con l'etichetta di un altro. Trovato dall'analisi di
+    mutazione; i file dei golden e gli altri artefatti usano la base 1."""
+    import io
+    import json
+    import os
+    from phase_c import RESULTS
+    p = os.path.join(RESULTS, 'p1.json')
+    if not os.path.isfile(p):
+        import pytest as _p
+        _p.skip('results/p1.json non ancora prodotto')
+    d = json.load(io.open(p, encoding='utf-8'))['data']
+    for N, v in d['per_N'].items():
+        chiavi = [int(k) for k in v['head_to_tail_per_scenario']]
+        assert min(chiavi) >= 1, 'N=%s: c\'e una chiave < 1, quindi base 0' % N
+        assert max(chiavi) <= d['perimetro']['n_totale']
+    # e coincidono col perimetro dichiarato dei perturbati
+    degeneri = set(d['perimetro']['idx_degeneri_base1'])
+    prima = next(iter(d['per_N'].values()))['head_to_tail_per_scenario']
+    assert not (set(int(k) for k in prima) & degeneri), \
+        'uno scenario degenere e finito fra i perturbati: le basi non coincidono'
