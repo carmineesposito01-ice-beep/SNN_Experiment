@@ -55,7 +55,7 @@
   "uso_dichiarato": {
    "blank": "riferimento a PL vuoto: (x1)-(blank) isola il contributo della logica",
    "x1": "configurazione base, funzionale (WNS +0,022)",
-   "x2": "SOLO misura di potenza A RIPOSO. WNS -1,060: il setup non chiude (94 endpoint su 21 861, cammino DEC->IIDM, lo stesso collo gia' noto da T7b). A riposo nessun dato commuta, quindi nessuna violazione si verifica e la potenza della rete di clock non ne dipende. NON usare x2 per prove funzionali (C1/C2)."
+   "x2": "SOLO misura di potenza A RIPOSO. WNS -1,060: il setup non chiude (94 endpoint su 15 549, cammino DEC->IIDM, lo stesso collo gia' noto da T7b). A riposo nessun dato commuta, quindi nessuna violazione si verifica e la potenza della rete di clock non ne dipende. NON usare x2 per prove funzionali (C1/C2)."
   }
  },
  "prov": {

@@ -1,8 +1,8 @@
 {
  "data": {
   "collisioni": {
-   "p1": 1,
-   "rtl": 1,
+   "p1": 3,
+   "rtl": 3,
    "uguali": true
   },
   "lettura": "la differenza parte sotto il LSB, cresce nei primi ~100 control-step e si stabilizza: l'anello amplifica l'errore di quantizzazione fino a un livello LIMITATO, non lo fa scappare. L'esito di sicurezza (numero di collisioni) e' identico, quindi la quantizzazione dell'uscita non cambia cio' che conta.",
@@ -26,23 +26,23 @@
   "scarto_di_picco_per_scenario": {
    "a": {
     "massimo": 1.758725643157959,
-    "mediana": 0.6006215810775757,
-    "p95": 1.3025168180465696
+    "mediana": 0.5594263672828674,
+    "p95": 1.4445739269256592
    },
    "gap": {
-    "massimo": 1.1671808844766929,
-    "mediana": 0.5410822045598707,
-    "p95": 1.0917250110007783
+    "massimo": 1.1488288789653325,
+    "mediana": 0.5341507003741697,
+    "p95": 1.0844401724347108
    },
    "v": {
     "massimo": 0.614760110439228,
-    "mediana": 0.21534686359227617,
-    "p95": 0.49118022711987713
+    "mediana": 0.20804272780569777,
+    "p95": 0.48620851487576044
    },
    "x": {
-    "massimo": 2.5129617593877356,
-    "mediana": 0.8072669546966154,
-    "p95": 1.5772574064945524
+    "massimo": 2.6790595563538773,
+    "mediana": 0.8246627043195645,
+    "p95": 1.6281576213480176
    }
   }
  },
@@ -51,6 +51,6 @@
   "cwd": "D:\\Project_MBSE\\1.Reti Neurali\\Rete_SNN_Test\\CF_FSNN\\.worktrees\\Simulink_Importer\\FaseC",
   "frontend": "script",
   "sorgente": "rtl-xsim",
-  "timestamp": "2026-08-01T17:28:14"
+  "timestamp": "2026-08-03T13:22:51"
  }
 }

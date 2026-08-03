@@ -211,10 +211,14 @@ atteso di continuare a inseguirlo era alto e il beneficio incerto.
 un'attesa di equilibrio termico. Vedi la tabella delle repliche più sotto — è lì che questa
 decisione si paga.
 
-#### Ricavare il parser
+#### Se un giorno una porta comparisse — come si ricava il parser
 
-⚠️ **Il parser seriale non è scritto, ed è deliberato.** Il formato del frame dello ZT-702S non è
-documentato in modo affidabile e cambia fra revisioni dello stesso modello: uno scritto «da
+Questa procedura **non va eseguita adesso**: non c'è nessuna porta. È qui perché il giorno in cui
+comparisse (altro strumento, adattatore, firmware diverso) il modo giusto di procedere non vada
+riscoperto da capo.
+
+⚠️ **Il parser seriale non è scritto, ed è deliberato.** Il formato del frame di questi strumenti
+non è documentato in modo affidabile e cambia fra revisioni dello stesso modello: uno scritto «da
 manuale» non darebbe errore, darebbe numeri **plausibili**. Procedura per ricavarlo:
 
 ```bash

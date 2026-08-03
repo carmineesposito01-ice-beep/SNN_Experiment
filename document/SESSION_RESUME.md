@@ -1,54 +1,29 @@
 
-## ▶ RIPRESA — **FASE C**: chiuso tutto cio' che non dipende dalla scheda (2026-08-01)
+## ▶ RIPRESA — **FASE C** (agg. 2026-08-03)
 
-Il codice vive in **`FaseC/`**, di primo livello, sorella di `FaseB2.0/`. **109 test verdi.**
+> **Lo stato vivo della Fase C sta in [`FaseC/STATO.md`](../FaseC/STATO.md). Leggere quello.**
+>
+> Questo blocco NON lo riassume: una copia sincronizzata a mano diverge, e la copia dimenticata
+> e' sempre quella che viene letta. (Era gia' successo: qui c'era scritto «109 test» quando erano
+> 187, «`cli.py::_overlay()` da scrivere» quando era scritto, e la quantizzazione «1/88» quando
+> era 3/88 — numeri di prima della correzione del `cut_in`.)
 
-### PRIMA AZIONE
+**In una frase:** tutto cio' che non richiede la scheda e' scritto, provato e chiuso; il codice
+per la scheda esiste ed e' collaudato contro il mock, ma non e' mai girato su silicio perche' la
+PYNQ-Z1 non e' disponibile. **Non manca codice: manca l'hardware.**
 
 ```
 cd FaseC && python -m pytest -q          # tutto verde = si puo' ripartire
-./run_phase_c.sh summary                 # elenca gli artefatti e la loro provenienza
 ```
 
-### Cosa e' FATTO, e cosa aspetta la scheda
+I quattro documenti della Fase C, e bastano quelli:
 
-| | Esito | Artefatto |
-|---|---|---|
-| **P1 — plotone in simulazione** | mediana head-to-tail **sopra 1 a ogni N** (1,014 → 1,358); **non** string-stable in mediana; guadagno per stadio ~1,02; caso peggiore 11,7× a N=16 | `FaseC/results/p1.json` |
-| **Sonda risorse** (caratterizzazione) | **4 istanze** si instradano, non 5: a N=5 le LUT "entrano" ma il **placer fallisce**. Il conteggio LUT non prova la deployabilita' | `results/P3_resources.json` |
-> **⚠️ SCOPE RIVISTO (2026-08-01): il plotone e' FUORI dallo studio su hardware.** P3 su silicio
-> cancellato -- N istanze su una scheda *simulano* un plotone, e il software lo fa meglio. P1 e P2
-> restano come risultati **software/RTL**; la sonda risorse resta come caratterizzazione.
-
-| **P1 — plotone (software)** | mediana head-to-tail **sopra 1 a ogni N** (1,037 → 1,458): **non** string-stable in mediana. Ogni collisione misurata e' un `aggressive_cut_in` — nessun altro tipo collide mai | `results/p1.json` |
-| **Canale V2X** | la latenza NON crea guasti nuovi, **allarga** quello esistente: senza, il taglio aggressivo cede solo in autostrada (3 casi); con 300 ms cede a tutte le velocita' (**10 su 11**). La perdita di pacchetti non sposta nulla | `results/p1_canale.json` |
-| **P2 — plotone in RTL** | **0 / 844 800** (PLATOON-PAR, il plant) e **0 / 211 200** (P2-EXACT, i 4 DUT). Prova che quattro istanze parallele, ciascuna col proprio stato, non si disturbano | `results/p2_*.json` |
-| Costo della quantizzazione | l'uscita a 1/256 sposta le traiettorie del plotone di 0,22 m/s e 0,54 m (mediane) ma **non cambia le collisioni**: 1/88 da entrambe le parti | `results/p2_costo_quantizzazione.json` |
-| Moduli C0–C3 | scritti e collaudati **contro il mock**, cancelli provati anche in negativo | `FaseC/phase_c/` |
-| Due facciate + parita' | `run_phase_c.sh` e `notebook/phase_c.ipynb` sopra lo stesso `phase_c.cli` | `c_frontend_parity.py` |
-| RUNBOOK | sequenza, costi, e cosa guardare a ogni cancello rosso | `FaseC/RUNBOOK.md` |
-| C0–C3 su **silicio**, P2, P3 | **richiedono la scheda accendibile** | — |
-
-### L'UNICO punto di codice rimasto prima del bring-up
-
-`FaseC/phase_c/cli.py::_overlay()` solleva oggi `NotImplementedError` sul ramo dell'overlay
-reale: va scritto il caricamento dell'overlay PYNQ. Driver, stadi, diagnosi e artefatti sono
-gia' pronti. **Il giorno del bring-up non si scrive codice, si esegue** (`FaseC/RUNBOOK.md`).
-
-### Cinque cose misurate che e' bene NON riscoprire
-
-1. **Il reset fra scenari e' un vincolo dell'hardware.** `dut_rst = ~S_AXI_ARESETN | ~started`,
-   e `started` si alza al primo commit senza tornare basso: lo stato della rete non e'
-   azzerabile dai registri. Su PYNQ serve `overlay.download()` a ogni scenario.
-2. **Su CTRL lettura e scrittura sono percorsi diversi**: bit 0 e' `commit` in scrittura e
-   `done` in lettura. Confonderli fa apparire `done` sempre alto e rende ogni cancello verde
-   per costruzione.
-3. **`jupyter nbconvert --execute` esce con 0 senza eseguire nulla** su questa postazione
-   (zeromq). Mai fidarsi del suo exit code: `check_notebook.py` guarda l'artefatto.
-4. **I pesi del `.pt` non coincidono con `champions_export.mat`**: l'export li quantizza a
-   potenze di due. Non e' un altro checkpoint, e Donatello = `PE_t05_gp0002`
-   (`scripts/export_champions.py:19`).
-5. **Il dataset dei 99 scenari sta in `matlab/Quantizzation_Study/`**, non in `data/`.
+| Documento | Cosa contiene |
+|---|---|
+| [`FaseC/STATO.md`](../FaseC/STATO.md) | **da dove si riparte** — stato, risultati, decisioni prese, trappole gia' pagate |
+| [`FaseC/RUNBOOK.md`](../FaseC/RUNBOOK.md) | la procedura con la scheda accesa |
+| [`FaseC/README.md`](../FaseC/README.md) | mappa dei file e regole di collocazione |
+| [`FaseC/hw/README.md`](../FaseC/hw/README.md) | strumenti Vivado e xsim |
 
 ---
 

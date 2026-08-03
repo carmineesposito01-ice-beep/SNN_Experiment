@@ -6,6 +6,17 @@ caratterizzato in simulazione nella Fase B2.0, e chiude il proxy mesoscopico.
 `FaseC/` sta **di primo livello, sorella di `FaseB2.0/`** — non dentro. La Fase C non è un harness della
 Fase B2.0: ne *consuma* gli artefatti.
 
+> ### ▶ Da dove si riparte
+> **[STATO.md](STATO.md)** — dove siamo, cosa e' gia' provato, cosa manca, quali strade sono
+> chiuse e perche'. La Fase C si riprende leggendo **solo** i documenti qui dentro.
+
+| Documento | Cosa contiene |
+|---|---|
+| [STATO.md](STATO.md) | stato, risultati misurati, decisioni prese, trappole gia' pagate |
+| [RUNBOOK.md](RUNBOOK.md) | la procedura operativa con la scheda accesa |
+| questo README | mappa dei file, regole di collocazione, come si eseguono i test |
+| [hw/README.md](hw/README.md) | gli strumenti che girano su Vivado e xsim |
+
 - **Spec:** [`docs/superpowers/specs/2026-07-31-fase-c-silicio-e-plotone-design.md`](../docs/superpowers/specs/2026-07-31-fase-c-silicio-e-plotone-design.md)
 - **Piano:** [`docs/superpowers/plans/2026-07-31-fase-c-silicio-e-plotone.md`](../docs/superpowers/plans/2026-07-31-fase-c-silicio-e-plotone.md)
 
@@ -28,6 +39,7 @@ Valgono per ogni file aggiunto qui dentro, adesso e in seguito.
 
 ```
 FaseC/
+  STATO.md                DA DOVE SI RIPARTE — stato, decisioni, trappole
   README.md               questo file
   RUNBOOK.md              procedura con la scheda accesa
   pytest.ini              rende `phase_c` importabile da qualunque cwd
@@ -38,7 +50,9 @@ FaseC/
     __init__.py           percorsi verificati (ROOT, RESULTS, PROJECT, T7_WORK, DATASET)
     regmap.py             mappe registri e conversioni di formato — UNICO posto
     driver.py             SnnIidmDriver, SnnTierDriver (sopra overlay reale o mock)
+    overlay_hw.py         l'overlay VERO (PYNQ) + BancoPynq per C3; reset PROVATO
     mock_overlay.py       finge la scheda; risponde coi golden di T7a
+    golden.py             i golden di T7a: UNICO posto dove vive il formato dei file
     artifacts.py          scrittura/lettura artefatti con provenienza
     params.py             gt_params e campione addestrato
     cli.py                entry-point condiviso dalle DUE facciate
