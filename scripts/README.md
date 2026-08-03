@@ -12,6 +12,26 @@ deliverable, script di studio/valutazione, verifiche e animazioni.
 | `build_fpga_report.py` | `report/FPGA_REPORT.{md,pdf}` (legge `results/evaluate/FPGA/`) |
 | `fpga_figures.py` | Le 45 figure a dati reali della FPGA-evaluate (da tensori/forward reali) |
 
+## Generatori dei report di Fase B / B2.0 (→ `report/`)
+
+La catena verso l'FPGA: quantizzazione, blocchi della libreria, potenza di sistema, harness di
+validazione hardware. Stessa pipeline reportlab della terna.
+
+| Script | Produce |
+|---|---|
+| `build_quantization_report.py` | `report/QUANTIZATION_STUDY_REPORT.{md,pdf}` |
+| `build_blocco_a_report.py` | `report/Trade_Off_Study_Parte_A.{md,pdf}` |
+| `build_fpga_phase_b_report.py` | `report/FPGA_PHASE_B_REPORT.{md,pdf}` |
+| `build_b2_0_checkpoint_report.py` | `report/B2_0_CHECKPOINT_REPORT.{md,pdf}` |
+| `build_harness_snn_report.py` | `report/B2_0_HARNESS_SNN_REPORT.{md,pdf}` (SNN da sola: T6a/T6b) |
+| `build_harness_snn_iidm_report.py` | `report/B2_0_HARNESS_SNN_IIDM_REPORT.{md,pdf}` (composto: T7a/T7b) |
+
+## Export verso MATLAB
+
+| Script | Produce |
+|---|---|
+| `export_champions.py` | `matlab/champions_export.mat` — i pesi dei champion quantizzati po2, che alimentano la catena Simulink → HDL |
+
 Tutti e tre i `build_*` sono **sorgente unica → md+pdf** (reportlab). Vedi `report/README.md`.
 
 ## Studio e valutazione

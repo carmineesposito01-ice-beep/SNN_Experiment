@@ -54,6 +54,9 @@ Dettagli e numeri: `report/VALIDATION_REPORT_v3` e `report/FPGA_REPORT`.
 | [`utils/`](utils/) | Toolbox: simulatore closed-loop, quantizzazione, identificabilità, profilatori FPGA | `utils/README.md` |
 | [`scripts/`](scripts/) | Generatori dei report, figure FPGA, script di studio e verifica, animazioni Manim | `scripts/README.md` |
 | [`tests/`](tests/) | Test pytest (I/O champion, tier-0 eval, profilatori/SEU FPGA) | `tests/README.md` |
+| [`matlab/`](matlab/) | La **catena Simulink → HDL**: libreria dei blocchi, studio di quantizzazione, trade-off, conversione ACC-IIDM, build AXI | `matlab/README.md` |
+| [`FaseB2.0/`](FaseB2.0/) | **Harness di validazione hardware**: RTL bit-esatto e caratterizzazione della SNN da sola e del composto SNN+IIDM | `FaseB2.0/README.md` |
+| [`FaseC/`](FaseC/) | **Bring-up su silicio** (PYNQ-Z1): C0–C3, plotone in software e RTL, campagna di potenza differenziale | [`FaseC/STATO.md`](FaseC/STATO.md) |
 | [`results/`](results/) | Output degli esperimenti (per studio) + `evaluate/` (le run che alimentano i report) | `results/README.md` |
 | [`Arch_Tested/`](Arch_Tested/) | Snapshot self-contained delle architetture testate (uno per variante, con README) | `Arch_Tested/README.md` |
 | [`champions/`](champions/) | I 4 checkpoint champion frozen (~30 KB l'uno, versionati) | `champions/README.md` |
