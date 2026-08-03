@@ -95,3 +95,8 @@ ps7_summary.html
 
 # Intermedi del cancello di parita: si rigenerano con `./run_phase_c.sh parity`
 FaseC/results/_parity/
+
+# Bitstream della Fase C: il .bit pesa 4 MB e si RIGENERA con hw/build_bitstreams.sh.
+# Si versiona il .hwh (PYNQ ne ha bisogno per la mappa indirizzi, e pesa 138 KB) e i report.
+FaseC/bitstream/*.bit
+FaseC/bitstream/*.xsa
