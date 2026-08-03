@@ -23,6 +23,25 @@ import random
 import statistics
 
 
+# Le configurazioni MISURATE, coi bitstream che esistono davvero (results/bitstream_set.json).
+#
+#   blank  PL vuoto (LUT 0).            (x1) - (blank) isola il contributo della logica.
+#   x1     una istanza, WNS +0,022.     Funzionale.
+#   x2     due istanze, WNS -1,060.     SOLO potenza A RIPOSO -- vedi sotto.
+#
+# ⚠️ x3 NON ESISTE, e non e' un'omissione: il clock gating e' un BUFGCTRL, e lo Zynq-7020 vuole
+# la cascata BUFG->BUFGCTRL ADIACENTE. Con tre gate sullo stesso BUFG il piazzatore fallisce
+# (rule_cascaded_bufg, misurato). Cio' che impedisce di replicare e' il gate stesso, cioe' la
+# funzione da misurare: l'amplificazione massima e' x2, non x3.
+#
+# ⚠️ x2 non chiude i tempi (94 endpoint su 21 861, cammino DEC->IIDM, lo stesso collo gia' noto
+# da T7b). Va usato SOLO per la potenza a riposo, dove nessun dato commuta e quindi nessuna
+# violazione di setup si verifica -- la potenza della rete di clock non dipende dallo slack sui
+# percorsi dati. NON usarlo per C1/C2.
+CONFIGURAZIONI = ('blank', 'x1', 'x2')
+GATING = ('on', 'off')          # slv_reg4[1]: un BIT DI REGISTRO, non un bitstream diverso
+
+
 class ThermalReject(RuntimeError):
     pass
 

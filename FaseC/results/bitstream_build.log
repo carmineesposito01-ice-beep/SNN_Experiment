@@ -45,3 +45,12 @@ ERROR: [Place 30-99] Placer failed with error: 'IO Clock Placer failed'
 ERROR: [Common 17-69] Command failed: Placer could not place all instances
 ERROR: [Vivado 12-13638] Failed runs(s) : 'impl_1'
 ERROR: [Common 17-39] 'wait_on_runs' failed due to earlier errors.
+=== x2 (N=2 istanze, FCLK=40 MHz) [avvio 10:29:31] ===
+BITN board_part: www.digilentinc.com:pynq-z1:part0:1.0   N=2   nome=x2
+CRITICAL WARNING: [PSU-1]  Parameter : PCW_UIPARAM_DDR_DQS_TO_CLK_DELAY_2 has negative value -0.009 . PS DDR interfaces might fail when entering negative DQS skew values. 
+CRITICAL WARNING: [PSU-2]  Parameter : PCW_UIPARAM_DDR_DQS_TO_CLK_DELAY_3 has negative value -0.033 . PS DDR interfaces might fail when entering negative DQS skew values. 
+BITN FCLK impostato: 40 MHz
+BITN 2 istanze collegate a una sola interconnessione
+CRITICAL WARNING: [Timing 38-282] The design failed to meet the timing requirements. Please see the timing summary report for details on the timing violations.
+BITN nome=x2 N=2 FCLK=40 LUT=16688 FF=8856 DSP=138 BRAM=2 WNS=-1.060
+BITN-DONE
