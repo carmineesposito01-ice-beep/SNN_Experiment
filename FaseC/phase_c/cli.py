@@ -25,10 +25,19 @@ class SchedaAssente(RuntimeError):
     pass
 
 
-def _overlay(regmap=IIDM, mock_golden=None):
-    """(overlay, sorgente). Prova la scheda; se non c'e', usa il mock e lo DICHIARA."""
+BITSTREAM = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'bitstream')
+
+
+def _overlay(regmap=IIDM, mock_golden=None, cfg='x1'):
+    """(overlay, sorgente). Prova la scheda; se non c'e', usa il mock e lo DICHIARA.
+
+    ⚠️ Il ripiego sul mock e' consentito SOLO quando manca PYNQ, cioe' quando non si e' su
+    scheda per niente. Se PYNQ c'e' ma il bitstream no, l'errore si propaga: ripiegare sul mock
+    lì produrrebbe un artefatto marcato `mock` proprio nella sessione in cui l'operatore crede
+    di stare misurando il silicio, ed e' il momento in cui l'etichetta serve di piu'.
+    """
     try:
-        from pynq import Overlay                                  # noqa: F401
+        import pynq                                               # noqa: F401
     except ImportError:
         if mock_golden is None:
             raise SchedaAssente(
@@ -36,10 +45,9 @@ def _overlay(regmap=IIDM, mock_golden=None):
                 'scheda. Vedi RUNBOOK.md.')
         from .mock_overlay import MockOverlay
         return MockOverlay(golden=mock_golden, regmap=regmap), 'mock'
-    raise NotImplementedError(
-        'caricamento dell\'overlay reale: da scrivere quando la scheda e\' accendibile '
-        '(RUNBOOK.md, passo 1). Il driver e tutti gli stadi sono gia\' pronti e collaudati '
-        'contro il mock.')
+
+    from .overlay_hw import OverlayScheda
+    return OverlayScheda(os.path.join(BITSTREAM, '%s.bit' % cfg), regmap=regmap), 'silicio'
 
 
 def run_stage(stage, frontend='script', out_dir=None, **kw):
@@ -58,13 +66,84 @@ def run_stage(stage, frontend='script', out_dir=None, **kw):
         dati = platoon.run_p1(**kw)
         sorgente, bit = 'simulazione', 'n/a (P1 e\' simulazione)'
     else:
-        raise SchedaAssente(
-            'lo stadio %r richiede la scheda accendibile. Il codice e\' pronto e collaudato '
-            'contro il mock (%d test); la procedura di esecuzione e\' in RUNBOOK.md.'
-            % (stage, 102))
+        dati, sorgente, bit = _stadio_su_scheda(stage, **kw)
 
     artifacts.write(path, dati, frontend=frontend, bitstream_sig=bit, sorgente=sorgente)
     return dati, path
+
+
+def _stadio_su_scheda(stage, scenari=None, cfg='x1', seed=None, repeats=8, dmm=None, **kw):
+    """Gli stadi che vogliono il silicio. La sorgente finisce nella provenienza."""
+    from . import artifacts as _a
+    from .golden import carica_scenari
+
+    indici = list(scenari) if scenari is not None else range(1, 100)
+
+    if stage == 'c3':
+        return _stadio_c3(cfg=cfg, seed=seed, repeats=repeats, dmm=dmm, **kw)
+
+    ov, sorgente = _overlay(cfg=cfg, **({'mock_golden': kw['mock_golden']}
+                                        if 'mock_golden' in kw else {}))
+    bit = _a.file_sig(os.path.join(BITSTREAM, '%s.bit' % cfg)) if sorgente == 'silicio' else 'mock'
+
+    if stage == 'c0':
+        from .c0_liveness import run_c0
+        return run_c0(ov), sorgente, bit
+
+    from .driver import SnnIidmDriver
+    drv = SnnIidmDriver(ov)
+
+    if stage == 'c1':
+        from .c1_functional import run_c1
+        return run_c1(drv, carica_scenari(indici)), sorgente, bit
+
+    from .c2_closedloop import run_c2
+    from .plant_ps import plant_par
+    # PLANT-PAR PRIMA dell'anello: se la pianta del PS non coincide con quella dell'oracolo,
+    # ogni scostamento dell'anello chiuso sarebbe attribuito al DUT invece che alla pianta.
+    return run_c2(drv, kw['scenari_c2'], plant_par()), sorgente, bit
+
+
+def _stadio_c3(cfg='x1', seed=None, repeats=8, dmm=None, csv_path=None, tj_window=(35.0, 60.0),
+               **kw):
+    """C3 non usa il driver: misura la scheda, non il DUT. Vuole il multimetro e l'XADC."""
+    from .c3_power import esegui_campagna, aggregate, differenza_mW
+    from .overlay_hw import BancoPynq
+    from .xadc import read_tj_sysfs, read_vccint_sysfs, verifica_plausibile
+
+    from .xadc import XadcAssente
+    try:
+        # Cancello PRIMA di partire: una lettura fallita non da' errore, da' un numero -- e una
+        # Tj sbagliata non si vede nei dati di potenza, li rende solo inspiegabili.
+        #
+        # Questo controllo viene PRIMA di quello sul seme, e non per costo: senza scheda non c'e'
+        # nessuna campagna, quindi il seme non e' ancora un errore. Cosi' `SchedaAssente` resta
+        # l'esito UNIFORME di tutti gli stadi su silicio, che e' cio' che rende significativo
+        # l'elenco SENZA_SCHEDA.
+        verifica_plausibile(read_tj_sysfs(), read_vccint_sysfs())
+    except XadcAssente as e:
+        raise SchedaAssente('C3 richiede la scheda: %s' % e)
+
+    if seed is None:
+        raise ValueError(
+            'C3 richiede un seed esplicito: e\' la decisione che rende la campagna ripetibile, '
+            'e un default silenzioso darebbe una sequenza "sorteggiata" che nessuno ha scelto.')
+    if dmm is None:
+        from .dmm import PromptDMM
+        dmm = PromptDMM()
+
+    banco = BancoPynq(BITSTREAM, read_tj_sysfs, read_vccint_sysfs)
+    r = esegui_campagna(dmm, banco, seed=seed, repeats=repeats,
+                        csv_path=csv_path or os.path.join(RESULTS, 'c3_campagna.csv'), **kw)
+    agg = aggregate(r['punti'], tj_window)
+    r['aggregato'] = agg
+    r['tj_window'] = tj_window
+    r['differenze'] = {
+        'logica (x1 - blank)': differenza_mW(agg, 'blank/-', 'x1/on'),
+        'gating su x1 (on - off)': differenza_mW(agg, 'x1/off', 'x1/on'),
+        'gating su x2 (on - off)': differenza_mW(agg, 'x2/off', 'x2/on', n_istanze=2),
+    }
+    return r, 'silicio', 'campagna su blank+x1+x2'
 
 
 def _main(argv):
@@ -73,6 +152,11 @@ def _main(argv):
     ap.add_argument('stage', choices=list(STADI) + ['list'])
     ap.add_argument('--frontend', default='script')
     ap.add_argument('--out-dir', default=None)
+    ap.add_argument('--seed', type=int, default=None,
+                    help='seme della sequenza sorteggiata di C3. OBBLIGATORIO per c3: senza, '
+                         'la campagna non e\' ripetibile.')
+    ap.add_argument('--repeats', type=int, default=8, help='repliche per punto in C3')
+    ap.add_argument('--cfg', default='x1', help='bitstream da caricare (c0/c1/c2)')
     ap.add_argument('--scenari', type=int, default=None,
                     help='usa solo i primi K scenari. Serve al cancello di parita\': su tutti '
                          'e 99 costerebbe mezz\'ora, e un cancello che costa mezz\'ora non '
@@ -83,7 +167,11 @@ def _main(argv):
         for s in STADI:
             print('%-4s %s' % (s, 'senza scheda' if s in SENZA_SCHEDA else 'richiede la scheda'))
         return 0
-    kw = {'scenari': range(a.scenari)} if a.scenari else {}
+    kw = {'scenari': range(1, a.scenari + 1)} if a.scenari else {}
+    if a.stage == 'c3':
+        kw.update(seed=a.seed, repeats=a.repeats)
+    else:
+        kw.update(cfg=a.cfg)
     try:
         _, path = run_stage(a.stage, frontend=a.frontend, out_dir=a.out_dir, **kw)
     except SchedaAssente as e:
