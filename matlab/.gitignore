@@ -1,0 +1,65 @@
+# Artefatti generati da HDL Coder (RTL + report) — rigenerabili con make_hdl(<name>)
+codegen/
+slprj/
+# ROM del champion attivo — generata da gen_b2_rom(<name>)
+b2_rom_active.m
+# LUT tanh — generate da gen_tanh_lut() (piena bit-exact + interp); la piena si inlina in iidm_tanh al deploy
+tanh_lut_full.m
+tanh_lut_interp.m
+# MEX compilati — rigenerabili con build_traj_mex
+snn_traj_fixed_r16_mex.*
+snn_traj_fixed_r8_mex.*
+
+# Studio IIDM (Quantizzation_Study_IIDM) — MEX + codegen + progresso rigenerabili
+Quantizzation_Study_IIDM/qzi_cl_step_*_mex.*
+Quantizzation_Study_IIDM/codegen_ni*/
+Quantizzation_Study_IIDM/hdl_iidm_n*/
+Quantizzation_Study_IIDM/qzi_acc_progress.txt
+
+# Fase B2.0 — VHDL generato per la validazione RTL (rigenerabile via rtl_gen_dut) + artefatti xsim
+hdlsrc_*/
+# Fase B2.0-2b — VHDL delle varianti di pipeline (rigenerabile via probe_pipe_tanh) + sintesi OOC
+hdl_pipe/
+# Fase B2.0-2b — VHDL del DUT tanh L1 (rigenerabile via build_tanhdut) + sintesi OOC
+hdl_tanh/
+axi/champion/xsim.dir/
+axi/champion/*.jou
+axi/champion/*.log
+axi/champion/*.pb
+axi/champion/*.wdb
+axi/champion/stim_*.mem
+axi/champion/gold_*.mem
+axi/champion/meta_*.mat
+axi/champion/compile_order.txt
+
+# Fase B2.0 — golden fedele al blocco (rigenerabile via build_champion_golden)
+snn_champion_algo.m
+snn_traj_champion_mex.*
+acciidm_m_algo.m
+acciidm_m_traj_mex.*
+axi/acciidm_m/xsim.dir/
+axi/acciidm_m/*.jou
+axi/acciidm_m/*.log
+axi/acciidm_m/*.pb
+axi/acciidm_m/*.wdb
+axi/acciidm_m/stim_*.mem
+axi/acciidm_m/gold_*.mem
+axi/acciidm_m/meta_*.mat
+axi/acciidm_m/tb_params.vh
+axi/acciidm_m/cl_*.mem
+axi/acciidm_m/cl_dims.vh
+axi/acciidm_m/cl_meta.mat
+hdl_decode/
+hdl_probe_split/
+hdl_pipe/
+hdl_snn/
+hdl_iidm_divblk/
+hdlsrc_donatello*/
+slprj/
+
+# Fase B2.0 T6a — cache golden del Tier (rigenerabile via tier_golden_cache)
+golden_tier_bal.mat
+
+# VHDL generato per ri-sintesi di conferma Fmax (rigenerabile via gen_r17_vhdl.m / gen_acciidm_m_vhdl.m)
+hdl_iidm_r17/
+hdl_acciidm_m/

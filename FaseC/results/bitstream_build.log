@@ -1,0 +1,56 @@
+=== x1 (N=1 istanze, FCLK=40 MHz) [avvio 09:33:27] ===
+BITN board_part: www.digilentinc.com:pynq-z1:part0:1.0   N=1   nome=x1
+CRITICAL WARNING: [PSU-1]  Parameter : PCW_UIPARAM_DDR_DQS_TO_CLK_DELAY_2 has negative value -0.009 . PS DDR interfaces might fail when entering negative DQS skew values. 
+CRITICAL WARNING: [PSU-2]  Parameter : PCW_UIPARAM_DDR_DQS_TO_CLK_DELAY_3 has negative value -0.033 . PS DDR interfaces might fail when entering negative DQS skew values. 
+BITN FCLK impostato: 40 MHz
+BITN istanza tier0 collegata
+BITN nome=x1 N=1 FCLK=40 LUT=8453 FF=4556 DSP=69 BRAM=1 WNS=0.022
+BITN-DONE
+=== blank (N=0 istanze, FCLK=40 MHz) [avvio 09:46:18] ===
+BITN board_part: www.digilentinc.com:pynq-z1:part0:1.0   N=0   nome=blank
+CRITICAL WARNING: [PSU-1]  Parameter : PCW_UIPARAM_DDR_DQS_TO_CLK_DELAY_2 has negative value -0.009 . PS DDR interfaces might fail when entering negative DQS skew values. 
+CRITICAL WARNING: [PSU-2]  Parameter : PCW_UIPARAM_DDR_DQS_TO_CLK_DELAY_3 has negative value -0.033 . PS DDR interfaces might fail when entering negative DQS skew values. 
+BITN FCLK impostato: 40 MHz
+ERROR: [BD 41-758] The following clock pins are not connected to a valid clock source: 
+ERROR: [Common 17-39] 'validate_bd_design' failed due to earlier errors.
+=== x3 (N=3 istanze, FCLK=40 MHz) [avvio 09:47:10] ===
+BITN board_part: www.digilentinc.com:pynq-z1:part0:1.0   N=3   nome=x3
+CRITICAL WARNING: [PSU-1]  Parameter : PCW_UIPARAM_DDR_DQS_TO_CLK_DELAY_2 has negative value -0.009 . PS DDR interfaces might fail when entering negative DQS skew values. 
+CRITICAL WARNING: [PSU-2]  Parameter : PCW_UIPARAM_DDR_DQS_TO_CLK_DELAY_3 has negative value -0.033 . PS DDR interfaces might fail when entering negative DQS skew values. 
+BITN FCLK impostato: 40 MHz
+BITN istanza tier0 collegata
+BITN istanza tier1 collegata
+BITN istanza tier2 collegata
+ERROR: [Place 30-120] Sub-optimal placement for a BUFG-BUFG cascade pair. If this sub optimal condition is acceptable for this design, you may use the CLOCK_DEDICATED_ROUTE constraint in the .xdc file to demote this message to a WARNING. However, the use of this override is highly discouraged. These examples can be used directly in the .xdc file to override this clock rule.
+ERROR: [Place 30-99] Placer failed with error: 'IO Clock Placer failed'
+ERROR: [Common 17-69] Command failed: Placer could not place all instances
+ERROR: [Vivado 12-13638] Failed runs(s) : 'impl_1'
+ERROR: [Common 17-39] 'wait_on_runs' failed due to earlier errors.
+=== blank (N=0 istanze, FCLK=40 MHz) [avvio 10:01:17] ===
+BITN board_part: www.digilentinc.com:pynq-z1:part0:1.0   N=0   nome=blank
+CRITICAL WARNING: [PSU-1]  Parameter : PCW_UIPARAM_DDR_DQS_TO_CLK_DELAY_2 has negative value -0.009 . PS DDR interfaces might fail when entering negative DQS skew values. 
+CRITICAL WARNING: [PSU-2]  Parameter : PCW_UIPARAM_DDR_DQS_TO_CLK_DELAY_3 has negative value -0.033 . PS DDR interfaces might fail when entering negative DQS skew values. 
+BITN FCLK impostato: 40 MHz
+BITN N=0: M_AXI_GP0_ACLK collegato a FCLK_CLK0 (nessuna logica nel PL)
+BITN nome=blank N=0 FCLK=40 LUT=0 FF=0 DSP=0 BRAM=0 WNS=NA
+BITN-DONE
+=== x3 (N=3 istanze, FCLK=40 MHz) [avvio 10:08:22] ===
+BITN board_part: www.digilentinc.com:pynq-z1:part0:1.0   N=3   nome=x3
+CRITICAL WARNING: [PSU-1]  Parameter : PCW_UIPARAM_DDR_DQS_TO_CLK_DELAY_2 has negative value -0.009 . PS DDR interfaces might fail when entering negative DQS skew values. 
+CRITICAL WARNING: [PSU-2]  Parameter : PCW_UIPARAM_DDR_DQS_TO_CLK_DELAY_3 has negative value -0.033 . PS DDR interfaces might fail when entering negative DQS skew values. 
+BITN FCLK impostato: 40 MHz
+BITN 3 istanze collegate a una sola interconnessione
+ERROR: [Place 30-120] Sub-optimal placement for a BUFG-BUFG cascade pair. If this sub optimal condition is acceptable for this design, you may use the CLOCK_DEDICATED_ROUTE constraint in the .xdc file to demote this message to a WARNING. However, the use of this override is highly discouraged. These examples can be used directly in the .xdc file to override this clock rule.
+ERROR: [Place 30-99] Placer failed with error: 'IO Clock Placer failed'
+ERROR: [Common 17-69] Command failed: Placer could not place all instances
+ERROR: [Vivado 12-13638] Failed runs(s) : 'impl_1'
+ERROR: [Common 17-39] 'wait_on_runs' failed due to earlier errors.
+=== x2 (N=2 istanze, FCLK=40 MHz) [avvio 10:29:31] ===
+BITN board_part: www.digilentinc.com:pynq-z1:part0:1.0   N=2   nome=x2
+CRITICAL WARNING: [PSU-1]  Parameter : PCW_UIPARAM_DDR_DQS_TO_CLK_DELAY_2 has negative value -0.009 . PS DDR interfaces might fail when entering negative DQS skew values. 
+CRITICAL WARNING: [PSU-2]  Parameter : PCW_UIPARAM_DDR_DQS_TO_CLK_DELAY_3 has negative value -0.033 . PS DDR interfaces might fail when entering negative DQS skew values. 
+BITN FCLK impostato: 40 MHz
+BITN 2 istanze collegate a una sola interconnessione
+CRITICAL WARNING: [Timing 38-282] The design failed to meet the timing requirements. Please see the timing summary report for details on the timing violations.
+BITN nome=x2 N=2 FCLK=40 LUT=16688 FF=8856 DSP=138 BRAM=2 WNS=-1.060
+BITN-DONE

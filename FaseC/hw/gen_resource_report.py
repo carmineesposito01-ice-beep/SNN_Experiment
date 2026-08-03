@@ -1,0 +1,211 @@
+"""Da P3_probe.log all'artefatto. LEGGE il log della sonda, non ricalcola nulla.
+
+Il numero che serve al filone C e' uno solo: quante istanze del composto entrano nello
+Zynq-7020. Ma va dato con la sua condizione al contorno, perche' la sonda misura il DUT DA
+SOLO -- senza il wrapper AXI e senza l'interconnessione, che nel deployment reale ci sono.
+"""
+import io
+import json
+import os
+import re
+import sys
+
+QUI = os.path.dirname(os.path.abspath(__file__))
+FASEC = os.path.dirname(QUI)
+LOG = os.path.join(FASEC, 'results', 'P3_probe.log')
+OUT = os.path.join(FASEC, 'results', 'P3_resources.json')
+
+# xc7z020clg400-1
+LIMITI = {'lut': 53200, 'ff': 106400, 'dsp': 220, 'bram': 140}
+
+# Costo del contorno, misurato in T7b (sweep.json, gerarchia): top - u_dut, per UNA istanza.
+# Wrapper AXI + glue + interconnessione. Non e' incluso nella sonda.
+CONTORNO_1_ISTANZA = {'lut': 8453 - 7974, 'ff': 4556 - 3794}
+
+# `unita=` e' stato aggiunto dopo i primi 11 punti: le righe vecchie non ce l'hanno e sono
+# tutte `dut`. Il gruppo e' opzionale invece che obbligatorio, cosi' il log storico resta
+# leggibile -- riscriverlo a mano sarebbe fabbricare una prova.
+RE = re.compile(r'^PROBE (?:unita=(\w+) )?N=(\d+) max_dsp=(\d+) LUT=(\d+) FF=(\d+) DSP=(\d+) '
+                r'BRAM=(\d+) FIT=(\w+)(?: FASE=(\S+) ROUTED=(\S+) WNS=(\S+))? SEC=(\d+)')
+
+
+def leggi(path=LOG):
+    punti = []
+    for riga in io.open(path, encoding='utf-8'):
+        m = RE.match(riga.strip())
+        if m:
+            unita, n, d, lut, ff, dsp, bram, fit, fase, routed, wns, sec = m.groups()
+            p = {'unita': unita or 'dut', 'n_istanze': int(n), 'max_dsp': int(d),
+                 'lut': int(lut), 'ff': int(ff), 'dsp': int(dsp), 'bram': int(bram),
+                 'entra': fit == 'si', 'secondi': int(sec), 'fase': fase or 'synth'}
+            if routed and routed != 'n/a':
+                p['instradato'] = routed == 'si'
+            if wns and wns not in ('n/a', ''):
+                try:
+                    p['wns_ns'] = float(wns)
+                except ValueError:
+                    pass
+            punti.append(p)
+    if not punti:
+        raise RuntimeError('nessuna riga PROBE in %s: la sonda non ha prodotto misure' % path)
+    return punti
+
+
+def _per_unita(punti, unita):
+    per_dsp = {}
+    for p in punti:
+        if p['unita'] == unita:
+            per_dsp.setdefault(p['max_dsp'], []).append(p)
+    for v in per_dsp.values():
+        v.sort(key=lambda p: p['n_istanze'])
+
+    out = {}
+    for d, v in sorted(per_dsp.items()):
+        entrano = [p['n_istanze'] for p in v if p['entra']]
+        n_max = max(entrano) if entrano else 0
+        vincolo = None
+        fuori = [p for p in v if not p['entra']]      # il primo che non entra dice il collo
+        if fuori:
+            p = fuori[0]
+            eccessi = {k: p[k] / float(LIMITI[k]) for k in ('lut', 'ff', 'dsp')}
+            vincolo = max(eccessi, key=eccessi.get)
+        lut_max = next((p['lut'] for p in v if p['n_istanze'] == n_max), None)
+        r = {'n_max_da_lut': n_max, 'vincolo': vincolo, 'lut_al_massimo': lut_max,
+             'lut_margine': (LIMITI['lut'] - lut_max) if lut_max else None,
+             'lut_margine_pct': (round(100.0 * (LIMITI['lut'] - lut_max) / LIMITI['lut'], 1)
+                                 if lut_max else None)}
+
+        # ⚠️ Il conteggio delle LUT SOPRAVVALUTA. Misurato: a N=5 le LUT "entrano" (47 842 su
+        # 53 200) ma il PLACER FALLISCE -- una slice ha 4 LUT e 8 FF, e il packing e' limitato
+        # dai control set (combinazioni clock/reset/enable). Vivado: "6040 slice disponibili,
+        # le istanze non piazzate ne richiedono 7964".
+        #
+        # Quindi quando c'e' un'implementazione VERA, e' lei a decidere: n_max diventa il
+        # massimo INSTRADATO, non il massimo che entra come conteggio.
+        impl = [p for p in v if p.get('fase') == 'impl']
+        if impl:
+            ok = [p['n_istanze'] for p in impl if p.get('instradato')]
+            no = [p['n_istanze'] for p in impl if p.get('instradato') is False]
+            r['n_max_instradato'] = max(ok) if ok else 0
+            r['n_min_non_instradato'] = min(no) if no else None
+            r['n_max'] = r['n_max_instradato']
+            r['fonte_n_max'] = 'implementazione (place & route)'
+            wns = [p['wns_ns'] for p in impl
+                   if p.get('instradato') and 'wns_ns' in p and p['n_istanze'] == r['n_max']]
+            if wns:
+                r['wns_ns'] = wns[0]
+            # I margini devono riferirsi al numero DEPLOYABILE, non a quello che "entra" come
+            # conteggio: altrimenti l'artefatto direbbe "4 istanze, margine 2260 LUT" dove 2260
+            # e' il margine a 5 -- due numeri veri accostati a dire una cosa falsa.
+            lut_dep = next((p['lut'] for p in impl if p['n_istanze'] == r['n_max']), None)
+            if lut_dep is not None:
+                r['lut_al_massimo'] = lut_dep
+                r['lut_margine'] = LIMITI['lut'] - lut_dep
+                r['lut_margine_pct'] = round(100.0 * (LIMITI['lut'] - lut_dep) / LIMITI['lut'], 1)
+        else:
+            r['n_max'] = n_max
+            r['fonte_n_max'] = 'conteggio LUT post-sintesi (NON prova che si instradi)'
+        out[str(d)] = r
+    return out
+
+
+def analizza(punti):
+    unita = sorted({p['unita'] for p in punti})
+    ris = {'limiti_xc7z020': LIMITI, 'punti': punti,
+           'unita_misurate': unita,
+           'per_unita': {u: _per_unita(punti, u) for u in unita}}
+
+    # Compatibilita' con la forma precedente dell'artefatto: `dut` resta in `per_max_dsp`.
+    ris['per_max_dsp'] = {d: {'n_max_dut_solo': v['n_max'], 'vincolo': v['vincolo'],
+                              'lut_al_massimo': v['lut_al_massimo']}
+                          for d, v in ris['per_unita'].get('dut', {}).items()}
+
+    # Linearita': se le istanze fossero state FUSE dal sintetizzatore, le LUT non scalerebbero.
+    for u in unita:
+        base = next((p for p in punti
+                     if p['unita'] == u and p['n_istanze'] == 1 and p['max_dsp'] == 220), None)
+        if not base:
+            continue
+        lin = [{'n': p['n_istanze'],
+                'lut_su_lut1_per_n': round(p['lut'] / (base['lut'] * p['n_istanze']), 4)}
+               for p in sorted(punti, key=lambda x: x['n_istanze'])
+               if p['unita'] == u and p['max_dsp'] == 220]
+        ris.setdefault('linearita_per_unita', {})[u] = {
+            'rapporto_per_n': lin,
+            'nota': ('rapporto ~1 = le istanze NON sono state fuse. Si allontana da 1 quando il '
+                     'tetto ai DSP obbliga a spostare moltiplicatori in fabric.')}
+    if 'dut' in ris.get('linearita_per_unita', {}):
+        ris['linearita'] = ris['linearita_per_unita']['dut']
+
+    # ------------------------------------------------------------------ il numero deployabile
+    dut = ris['per_unita'].get('dut', {}).get('220')
+    wrp = ris['per_unita'].get('wrapper', {}).get('220')
+    dep = {}
+    if dut:
+        dep['n_max_dut_solo'] = dut['n_max']
+        dep['lut_margine_dut'] = dut['lut_margine']
+    if wrp:
+        # Misurato: l'unita' deployabile include il wrapper AXI. Questo e' IL numero.
+        dep['n_max_wrapper'] = wrp['n_max']
+        dep['lut_usate_wrapper'] = wrp['lut_al_massimo']
+        dep['lut_margine_wrapper'] = wrp['lut_margine']
+        dep['lut_margine_wrapper_pct'] = wrp['lut_margine_pct']
+        dep['fonte'] = wrp.get('fonte_n_max')
+        if 'n_max_instradato' in wrp:
+            dep['n_max_instradato'] = wrp['n_max_instradato']
+            dep['n_min_non_instradato'] = wrp.get('n_min_non_instradato')
+            dep['wns_ns_al_massimo'] = wrp.get('wns_ns')
+            dep['n_max_da_lut_sopravvalutato'] = wrp.get('n_max_da_lut')
+            dep['nota'] = (
+                'MISURATO con place & route VERI: %d istanze si instradano, %s NO. Il conteggio '
+                'LUT da solo diceva %d, e SOPRAVVALUTAVA: a %s le LUT "entrano" ma il placer '
+                'fallisce, perche\' una slice ha 4 LUT e 8 FF e il packing e\' limitato dai '
+                'control set (Vivado: "6040 slice disponibili, le non piazzate ne richiedono '
+                '7964"). A %d istanze il WNS a 40 MHz vale %s ns: il timing a 40 MHz NON chiude, '
+                'ma il requisito e\' il control-step da 0,1 s (555 clock), non la frequenza -- '
+                'anche a 20 MHz il margine resterebbe di ordine 3600x. Resta fuori la sola '
+                'interconnessione AXI del block design.'
+                % (wrp['n_max_instradato'], wrp.get('n_min_non_instradato'),
+                   wrp.get('n_max_da_lut'), wrp.get('n_min_non_instradato'),
+                   wrp['n_max_instradato'], wrp.get('wns_ns')))
+        else:
+            dep['nota'] = (
+                'Conteggio LUT post-sintesi: %d istanze entrano (margine %d LUT, %.1f%%). NON '
+                'prova che si instradino -- serve PROBE_FASE=impl.'
+                % (wrp['n_max'], wrp['lut_margine'], wrp['lut_margine_pct']))
+    else:
+        dep['contorno_stimato_1_istanza'] = CONTORNO_1_ISTANZA
+        dep['nota'] = (
+            'la sonda ha misurato SOLO il DUT: niente wrapper AXI, niente interconnessione. In '
+            'T7b il contorno costava %d LUT e %d FF per una istanza. Il numero deployabile va '
+            'CONFERMATO con `./hw/probe_resources.sh "<N>" "220" wrapper`, non dedotto da qui.'
+            % (CONTORNO_1_ISTANZA['lut'], CONTORNO_1_ISTANZA['ff']))
+    ris['deployabile'] = dep
+    return ris
+
+
+def _main():
+    ris = analizza(leggi())
+    # Stessa busta degli altri artefatti della Fase C ({data, prov}): senza, `run_phase_c.sh
+    # summary` lo elencherebbe con provenienza sconosciuta, e sarebbe l'unico a non dire da
+    # dove viene.
+    sys.path.insert(0, FASEC)
+    from phase_c import artifacts
+    artifacts.write(OUT, ris, frontend='script',
+                    bitstream_sig='n/a (sintesi out-of-context)', sorgente='vivado-synth')
+    print('punti: %d   unita misurate: %s' % (len(ris['punti']), ris['unita_misurate']))
+    for u in ris['unita_misurate']:
+        print('  --- %s ---' % u)
+        for d, v in sorted(ris['per_unita'][u].items(), key=lambda x: -int(x[0])):
+            print('    max_dsp=%-4s  N max=%-2s (%s)  margine LUT: %s'
+                  % (d, v['n_max'], v['fonte_n_max'],
+                     ('%d (%.1f%%)' % (v['lut_margine'], v['lut_margine_pct'])
+                      if v['lut_margine'] is not None else '-')))
+    print()
+    print('  %s' % ris['deployabile'].get('nota', ''))
+    print('artefatto: %s' % OUT)
+    return 0
+
+
+if __name__ == '__main__':
+    raise SystemExit(_main())

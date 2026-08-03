@@ -1,0 +1,68 @@
+{
+ "data": {
+  "amplificazione_gating": {
+   "conteggi_stimati_x1": 14,
+   "conteggi_stimati_x2": 28,
+   "fattore": 2,
+   "nota": "meno del x3 sperato, ma su un fondo strutturalmente IDENTICO a x1."
+  },
+  "bitstream": {
+   "blank": {
+    "bram": 0,
+    "chiude_i_tempi": false,
+    "dsp": 0,
+    "fclk_mhz": 40.0,
+    "ff": 0,
+    "lut": 0,
+    "n_istanze": 0,
+    "wns_ns": null
+   },
+   "x1": {
+    "bram": 1,
+    "chiude_i_tempi": true,
+    "dsp": 69,
+    "fclk_mhz": 40.0,
+    "ff": 4556,
+    "lut": 8453,
+    "n_istanze": 1,
+    "wns_ns": 0.022
+   },
+   "x2": {
+    "bram": 2,
+    "chiude_i_tempi": false,
+    "dsp": 138,
+    "fclk_mhz": 40.0,
+    "ff": 8856,
+    "lut": 16688,
+    "n_istanze": 2,
+    "wns_ns": -1.06
+   }
+  },
+  "limite_strutturale": {
+   "conseguenza_oltre_la_misura": "non e' un limite del banco di prova: un sistema reale con piu' acceleratori gatati sullo stesso clock incontrerebbe lo stesso muro.",
+   "massimo_istanze_gatate": 2,
+   "meccanismo": "il clock gating e' un BUFGCTRL (u_gate dentro snniidm_axi_lite). Lo Zynq-7020 impone che la cascata BUFG->BUFGCTRL sia ADIACENTE. Con una istanza il piazzatore ci riesce; con tre, tre BUFGCTRL pendono dallo stesso BUFG e non possono essere tutti adiacenti. Cio' che impedisce di replicare e' il clock gate stesso, cioe' la funzione da misurare. CLOCK_DEDICATED_ROUTE FALSE, che Vivado suggerisce, e' ESCLUSO: instraderebbe il clock sulla logica generale cambiando proprio la potenza della rete di clock che va misurata.",
+   "regola": "rule_cascaded_bufg -- Cascaded bufg (bufg->bufg) must be adjacent and cyclic"
+  },
+  "linearita_sistema_completo": {
+   "due_volte_x1": 16906,
+   "lut_x1": 8453,
+   "lut_x2": 16688,
+   "nota": "x2 costa meno del doppio: interconnessione e reset sono CONDIVISI, non duplicati.",
+   "risparmio": 218
+  },
+  "taratura": "x1 ricostruito con la procedura parametrica differisce dal bitstream di T7b per 8 byte su 4 045 766, tutti fra gli offset 180 e 195 -- l'header con data e CRC. I dati di configurazione sono BYTE-IDENTICI: non e' equivalente, e' lo stesso bitstream.",
+  "uso_dichiarato": {
+   "blank": "riferimento a PL vuoto: (x1)-(blank) isola il contributo della logica",
+   "x1": "configurazione base, funzionale (WNS +0,022)",
+   "x2": "SOLO misura di potenza A RIPOSO. WNS -1,060: il setup non chiude (94 endpoint su 15 549, cammino DEC->IIDM, lo stesso collo gia' noto da T7b). A riposo nessun dato commuta, quindi nessuna violazione si verifica e la potenza della rete di clock non ne dipende. NON usare x2 per prove funzionali (C1/C2)."
+  }
+ },
+ "prov": {
+  "bitstream_sig": "n/a (descrive l insieme)",
+  "cwd": "D:\\Project_MBSE\\1.Reti Neurali\\Rete_SNN_Test\\CF_FSNN\\.worktrees\\Simulink_Importer\\FaseC",
+  "frontend": "script",
+  "sorgente": "vivado-impl",
+  "timestamp": "2026-08-03T10:59:59"
+ }
+}

@@ -1,0 +1,17 @@
+M3 START 11:42:15
+=== 10 workload attivi (gating ON = deployment) ===
+  wl 1: SAIF OK (2892574 B) | AXI-COSIM nMismatch=0 n=250  [11:45:05]
+  wl 2: SAIF OK (2896189 B) | AXI-COSIM nMismatch=0 n=250  [11:47:29]
+  wl 3: SAIF OK (2892902 B) | AXI-COSIM nMismatch=0 n=250  [11:50:08]
+  wl 4: SAIF OK (2894458 B) | AXI-COSIM nMismatch=0 n=250  [11:52:24]
+  wl 5: SAIF OK (2894055 B) | AXI-COSIM nMismatch=0 n=250  [11:54:44]
+  wl 6: SAIF OK (2893246 B) | AXI-COSIM nMismatch=0 n=250  [11:57:03]
+  wl 7: SAIF OK (2893354 B) | AXI-COSIM nMismatch=0 n=250  [11:59:46]
+  wl 8: SAIF OK (2893161 B) | AXI-COSIM nMismatch=0 n=250  [12:01:50]
+  wl 9: SAIF OK (2892799 B) | AXI-COSIM nMismatch=0 n=250  [12:03:53]
+  wl 10: SAIF OK (2879567 B) | AXI-COSIM nMismatch=250 n=250  [12:05:57]
+SAIF-ACTIVE-DONE gating=1
+=== idle GATATA (finestra 200 dal probe) ===
+  finestra 200 cicli (3846.0 ns): SAIF OK (2670701 byte) -> saif_idle_g1_w200.saif
+SAIF-IDLE-DONE gating=1
+M3 SAIF END 12:07:09

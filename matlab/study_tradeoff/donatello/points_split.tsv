@@ -1,0 +1,5 @@
+tag	srcdir	period_ns	fmax_ooc	nota
+sp_balanced	/d/zbd_tradeoff/donatello_split/sp_balanced/src	17.718	56.440	Donatello LUT-64 decode=p3 SPLIT
+sp_slow	/d/zbd_tradeoff/donatello_split/sp_slow/src	32.739	30.545	Donatello LUT-64 decode=fused SPLIT
+sp_p3r9	/d/zbd_tradeoff/donatello_split/sp_p3r9/src	17.718	56.440	Donatello LUT-64 decode=p3 SPLIT
+sp_fast	/d/zbd_tradeoff/donatello_split/sp_fast/src	10.762	92.920	Donatello LUT-64 decode=p5 SPLIT

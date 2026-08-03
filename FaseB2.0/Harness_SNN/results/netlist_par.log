@@ -1,0 +1,49 @@
+IMPL-OOC START 19:10:41
+NETLIST-PAR OOC FCLK=52 WNS=0.355
+NETLIST-PAR EXPORT-OK -> D:/zbd_tier_hw/np_impl/netlist
+IMPL-OOC END 19:16:29
+--- sim di timing su 1 traiettoria (misura del costo) ---
+ERRORE xelab (netlist)
+                                        needs to be captured for all the 
+                                        libraries specified. OFF by default.
+  --cc_type arg                         Specify options for generating Code 
+                                        Coverage Statistics -sbct. 
+                                        (s)Statement, (b)Branch, (c)Condition 
+                                        and (t)Toggle are supported 
+
+Examples:
+  xelab top1 top2
+  xelab lib1.top1 lib2.top2
+  xelab top1 top2 -prj files.prj
+  xelab lib1.top1 lib2.top2 -prj files.prj
+SIM END 19:16:33
+SIM START 19:17:33
+ERRORE xelab (netlist)
+Vivado Simulator v2026.1
+Copyright 1986-2022 Xilinx, Inc. All Rights Reserved.
+Copyright 2022-2026 Advanced Micro Devices, Inc. All Rights Reserved.
+Running: C:/AMDDesignTools/2026.1/Vivado/bin/unwrapped/win64.o/xelab.exe -debug off -L simprims_ver -relax -transport_int_delays -pulse_r 0 -pulse_int_r 0 -sdfmax C:/Program Files/Git/tb_tier_axi/dut=np/tier_axi_lite_time.sdf tb_tier_axi glbl -s snapNP 
+Multi-threading is on. Using 14 slave threads.
+Starting static elaboration
+Pass Through NonSizing Optimizer
+ERROR: [VRFC 10-2991] 'v0' is not declared under prefix 'u_tier' [D:/zbd_tier_hw/np/tb_tier_axi.v:88]
+ERROR: [VRFC 10-2991] 'v0' is not declared under prefix 'u_tier' [D:/zbd_tier_hw/np/tb_tier_axi.v:102]
+ERROR: [XSIM 43-3322] Static elaboration of top level Verilog design unit(s) in library work failed.
+SIM END 19:17:41
+SIM2 START 19:19:30
+ERRORE xelab (netlist)
+Vivado Simulator v2026.1
+Copyright 1986-2022 Xilinx, Inc. All Rights Reserved.
+Copyright 2022-2026 Advanced Micro Devices, Inc. All Rights Reserved.
+Running: C:/AMDDesignTools/2026.1/Vivado/bin/unwrapped/win64.o/xelab.exe -debug off -L simprims_ver -relax -transport_int_delays -pulse_r 0 -pulse_int_r 0 -sdfmax /tb_tier_axi/dut np/tier_axi_lite_time.sdf tb_tier_axi glbl -s snapNP 
+Multi-threading is on. Using 14 slave threads.
+ERROR: [XSIM 43-3225] Cannot find design unit np/tier_axi_lite_time.sdf in library work located at xsim.dir/work.
+SIM2 END 19:19:35
+SIM3 START 19:21:03
+  traj 1: nMismatch=250 / 250  [19:24:17]
+NETLIST-PAR-TOT nMismatch=250 n=250
+SIM3 END 19:24:17
+SIM4 START 19:26:18 (clock 52 MHz = 9.615 ns semi-periodo)
+  traj 1: nMismatch=250 / 250  [19:29:28]
+NETLIST-PAR-TOT nMismatch=250 n=250
+SIM4 END 19:29:28

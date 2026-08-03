@@ -1,0 +1,41 @@
+{
+ "nmismatch": 0,
+ "n": 1507,
+ "nscen": 3,
+ "scenari": [
+  1,
+  4,
+  9
+ ],
+ "per_scenario": [
+  {
+   "sc": 1,
+   "n": 600,
+   "nmis": 0,
+   "dur_s": 991,
+   "s_per_step": 1.652,
+   "include_compile": true
+  },
+  {
+   "sc": 4,
+   "n": 600,
+   "nmis": 0,
+   "dur_s": 943,
+   "s_per_step": 1.572,
+   "include_compile": false
+  },
+  {
+   "sc": 9,
+   "n": 307,
+   "nmis": 0,
+   "dur_s": 615,
+   "s_per_step": 2.003,
+   "include_compile": false
+  }
+ ],
+ "wall_s": 2549,
+ "s_per_step": 1.718,
+ "gate_level_ratio": 44.1,
+ "beh_s_per_step": 0.039,
+ "full99_hours": 27.9
+}

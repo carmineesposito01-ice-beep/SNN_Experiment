@@ -1,0 +1,21 @@
+FUNC START 10:08:08  (gating ON = configurazione di deployment)
+DBG read[0]=033737  gold=033737
+DBG read[1]=003434  gold=003434
+DBG read[2]=0058ce  gold=0058ce
+DBG read[3]=001a63  gold=001a63
+DBG read[4]=0036d0  gold=0036d0
+  traj 1: nMismatch=0 / 5000  [10:30:00]
+DBG read[0]=03325f  gold=03325f
+DBG read[1]=002c19  gold=002c19
+DBG read[2]=0058e6  gold=0058e6
+DBG read[3]=00162f  gold=00162f
+DBG read[4]=003958  gold=003958
+  traj 2: nMismatch=0 / 5000  [10:50:41]
+DBG read[0]=0380c8  gold=0380c8
+DBG read[1]=002f93  gold=002f93
+DBG read[2]=0047ee  gold=0047ee
+DBG read[3]=001d29  gold=001d29
+DBG read[4]=0032fe  gold=0032fe
+  traj 3: nMismatch=0 / 5000  [11:13:19]
+NETLIST-FUNC-TOT nMismatch=0 n=15000
+FUNC END 11:13:19

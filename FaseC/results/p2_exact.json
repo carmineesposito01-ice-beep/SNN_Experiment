@@ -1,0 +1,25 @@
+{
+  "data": {
+    "n_confronti": 211200,
+    "n_esatti": 211200,
+    "n_disallineati": 0,
+    "bit_esatto": true,
+    "n_scenari": 88,
+    "n_vehicles": 4,
+    "scenari_rossi": [],
+    "primo_scarto": {
+      "scen": [],
+      "veh": [],
+      "k": [],
+      "rtl": [],
+      "blk": []
+    }
+  },
+  "prov": {
+    "timestamp": "2026-08-02T00:32:31",
+    "frontend": "matlab",
+    "bitstream_sig": "n/a (P2 e' simulazione RTL)",
+    "sorgente": "rtl-xsim + blocco Simulink",
+    "cwd": "D:\\Project_MBSE\\1.Reti Neurali\\Rete_SNN_Test\\CF_FSNN\\.worktrees\\Simulink_Importer\\FaseC\\hw"
+  }
+}

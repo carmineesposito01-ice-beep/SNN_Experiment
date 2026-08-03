@@ -47,7 +47,8 @@ def _params_for(model, gap, v, dv, vl, pgt_t, n, device):
 # ===========================================================
 # MESO — plotone aperto (string stability ACC)
 # ===========================================================
-def simulate_platoon(model, params_gt, n_vehicles, v_leader_profile, device='cpu'):
+def simulate_platoon(model, params_gt, n_vehicles, v_leader_profile, device='cpu', forward=None,
+                     channel=None, cut_in=None):
     """N veicoli IN FILA. Veicolo 0 = testa (segue il profilo esterno); i segue i-1 (CAM da i-1).
 
     Ritorna dict: v,x,gap,a (T,N) + v_leader (T,) + collided.
@@ -64,20 +65,66 @@ def simulate_platoon(model, params_gt, n_vehicles, v_leader_profile, device='cpu
     x_head_leader = gap_eq + VEH_LEN
     alpha_al = float(np.exp(-DT / ACC_AL_TAU))
     a_l = np.zeros(n); vl_prev = np.full(n, v_set)
-    if model is not None:
+    # Canale V2X (opt-in, additivo): ogni veicolo ha il PROPRIO stato di canale -- buffer di
+    # latenza, stato Gilbert-Elliott, rumore OU. Condividerne uno solo farebbe perdere e
+    # ricevere tutti i veicoli INSIEME, che e' il caso meno realistico possibile per un plotone.
+    if channel is not None:
+        # import locale: il canale e' opt-in, e a livello di modulo introdurrebbe una
+        # dipendenza da closed_loop_eval che oggi non c'e'.
+        from utils.closed_loop_eval import _channel_obs
+    ch_state = [{} for _ in range(n)] if channel is not None else None
+    ch_rng = np.random.default_rng(channel.get('seed', 0)) if channel is not None else None
+    aoi = np.zeros((Tlen, n))
+    if forward is not None:
+        forward.reset(n, device)               # family-aware batched forward owns its state
+    elif model is not None:
         model.eval(); model.reset_state(n, device)
     rec = {k: np.zeros((Tlen, n)) for k in ('v', 'x', 'gap', 'a')}
     collided = False
     with torch.no_grad():
         for t in range(Tlen):
+            # ⚠️ TELETRASPORTO DEL CUT (T2): negli scenari cut_in / cut_out / aggressive_cut_in
+            # il profilo del leader contiene un salto di velocita' FISICAMENTE IMPOSSIBILE
+            # (misurato: 75-245 m/s2). Non e' un difetto del dataset: rappresenta il leader che
+            # esce di scena, e `cut_in=(passo, gap)` riposiziona il gap sul NUOVO leader.
+            #
+            # Senza questa riga il plotone vede un ostacolo che si ferma di colpo SENZA il gap
+            # compensativo: a 22 m/s con 26 m e 9 m/s2 di frenata massima lo spazio d'arresto e'
+            # 26,9 m, quindi la collisione e' inevitabile per costruzione. Riguarda 33 scenari
+            # su 99, e falsava la string stability perche' il salto gonfia std(v_leader), che e'
+            # il DENOMINATORE di head-to-tail.
+            #
+            # Il cut avviene fra la TESTA e il leader esterno: si riposiziona il gap del veicolo
+            # 0 (spostando il leader virtuale), non quello dei follower, che seguono la testa e
+            # non sono toccati dalla manovra. Passo in base 1, come in qz_cl_sim.
+            if cut_in is not None and (t + 1) == int(cut_in[0]):
+                x_head_leader = float(x[0]) + VEH_LEN + float(cut_in[1])
+
             vlead = np.empty(n); vlead[0] = float(v_leader_profile[t]); vlead[1:] = v[:-1]
             xlead = np.empty(n); xlead[0] = x_head_leader; xlead[1:] = x[:-1]
             gap = xlead - x - VEH_LEN
             dv = v - vlead
-            params = _params_for(model, gap, v, dv, vlead, pgt_t, n, device)
-            a_l_raw = (vlead - vl_prev) / DT
-            a_l = alpha_al * a_l + (1.0 - alpha_al) * a_l_raw; vl_prev = vlead.copy()
-            acc = _accel(gap, v, dv, a_l, params)
+
+            # Cosa OSSERVA il controllore di ciascun veicolo. Senza canale, la verita'.
+            # Con canale: gap e velocita' del predecessore arrivano degradati, e da li' in poi
+            # TUTTO il controllore lavora sull'osservazione -- la rete, l'IIDM e anche a_l,
+            # esattamente come in closed_loop_eval.simulate. Il plant continua invece a
+            # evolvere sullo stato VERO: e' cio' che distingue "il veicolo non sa" da
+            # "il veicolo non c'e'".
+            if channel is None:
+                gap_obs, vlead_obs = gap, vlead
+            else:
+                gap_obs = np.empty(n); vlead_obs = np.empty(n)
+                for i in range(n):
+                    gap_obs[i], vlead_obs[i], aoi[t, i] = _channel_obs(
+                        float(gap[i]), float(vlead[i]), ch_state[i], channel, ch_rng, float(v[i]))
+            dv_obs = v - vlead_obs
+
+            params = (forward.infer(gap_obs, v, dv_obs, vlead_obs) if forward is not None
+                      else _params_for(model, gap_obs, v, dv_obs, vlead_obs, pgt_t, n, device))
+            a_l_raw = (vlead_obs - vl_prev) / DT
+            a_l = alpha_al * a_l + (1.0 - alpha_al) * a_l_raw; vl_prev = vlead_obs.copy()
+            acc = _accel(gap_obs, v, dv_obs, a_l, params)
             rec['v'][t] = v; rec['x'][t] = x; rec['gap'][t] = gap; rec['a'][t] = acc
             v = np.maximum(0.0, v + acc * DT); x = x + v * DT
             x_head_leader += float(v_leader_profile[t]) * DT
@@ -102,7 +149,9 @@ def platoon_metrics(rec, warmup_frac=0.3):
     monotone = bool(np.all(np.diff(gain) <= 1e-3))             # strict string stability?
     # convettivita': il minimo di velocita' (l'onda) si sposta verso indici crescenti (a monte)?
     tmin = np.argmin(v[w:], axis=0)                            # istante di min v per veicolo
-    upstream = bool(np.polyfit(np.arange(n), tmin, 1)[0] > 0)  # ritardo cresce con l'indice = onda a monte
+    xa = np.arange(n); xm = xa - xa.mean(); ym = tmin - tmin.mean()   # deg-1 slope WITHOUT np.polyfit:
+    denom = float((xm * xm).sum())                                    # numpy LAPACK lstsq aborts in cf_sim (OMP #15)
+    upstream = bool(denom > 0 and float((xm * ym).sum()) / denom > 0)  # delay grows with index = upstream wave
     return {
         'n_vehicles': n,
         'amp_leader': round(amp_leader, 3),
@@ -135,7 +184,8 @@ def _min_ttc(gap, v, vlead):
 # ===========================================================
 # MACRO — anello chiuso (diagramma fondamentale)
 # ===========================================================
-def simulate_ring(model, params_gt, n_vehicles, ring_length, n_steps, device='cpu', perturb=0.1):
+def simulate_ring(model, params_gt, n_vehicles, ring_length, n_steps, device='cpu', perturb=0.1,
+                  forward=None):
     """N veicoli su ANELLO di lunghezza L (m). i segue i-1; veicolo 0 segue N-1 (+L, wrap).
 
     Densita' rho = N/L. Stato iniziale uniforme + piccola perturbazione. Ritorna v,x (T,N).
@@ -153,7 +203,9 @@ def simulate_ring(model, params_gt, n_vehicles, ring_length, n_steps, device='cp
     v += rng.normal(0, perturb * max(v_eq, 1.0), n)            # perturbazione
     alpha_al = float(np.exp(-DT / ACC_AL_TAU))
     a_l = np.zeros(n); vl_prev = v.copy()
-    if model is not None:
+    if forward is not None:
+        forward.reset(n, device)               # family-aware batched forward owns its state
+    elif model is not None:
         model.eval(); model.reset_state(n, device)
     rec_v = np.zeros((n_steps, n)); rec_x = np.zeros((n_steps, n))
     with torch.no_grad():
@@ -167,7 +219,8 @@ def simulate_ring(model, params_gt, n_vehicles, ring_length, n_steps, device='cp
             vlead[order] = v[lead]
             gap = np.maximum(gap, 0.1)
             dv = v - vlead
-            params = _params_for(model, gap, v, dv, vlead, pgt_t, n, device)
+            params = (forward.infer(gap, v, dv, vlead) if forward is not None
+                      else _params_for(model, gap, v, dv, vlead, pgt_t, n, device))
             a_l_raw = (vlead - vl_prev) / DT
             a_l = alpha_al * a_l + (1.0 - alpha_al) * a_l_raw; vl_prev = vlead.copy()
             acc = _accel(gap, v, dv, a_l, params)

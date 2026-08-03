@@ -1,0 +1,7 @@
+tag	srcdir	period_ns	fmax_ooc	nota
+don_r2	/d/zbd_tradeoff/donatello/don_r2/src	62.034	16.120	Donatello completo LUT-64
+a_ctrl_dec	/d/zbd_tradeoff/donatello/a_ctrl_dec/src	34.203	29.237	Donatello LUT-64 decode=p5
+a_slow	/d/zbd_tradeoff/donatello/a_slow/src	34.203	29.237	Donatello LUT-64 decode=fused
+a_fast	/d/zbd_tradeoff/donatello/a_fast/src	24.334	41.095	Donatello LUT-64 decode=p5
+a_balanced	/d/zbd_tradeoff/donatello/a_balanced/src	24.314	41.129	Donatello LUT-64 decode=p3
+a_fast6	/d/zbd_tradeoff/donatello/a_fast6/src	26.216	38.145	Donatello LUT-64 decode=p6

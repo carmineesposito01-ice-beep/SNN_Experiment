@@ -1,0 +1,63 @@
+# B2.0-2d - Ottimizzazione timing SNN->decode (Donatello_ACC_IIDM_M, xc7z020 OOC @ 8 MHz)
+# Ciclo probe-and-pipeline: ogni round legge il critpath, applica una leva bit-exact, ri-sintetizza.
+# Bit-exact ad ogni round: parity 0/60000 (guardiano DURO del core) + G3 + B-1 RTL 0/3000.
+# Baseline R0 = post-A1 (tanh-LUT integrata, fine 2b). Latenza R0/R1 = 359 clock (<< 800k/control-step).
+#
+# round | leva                                     | Fmax(MHz) | d(R0) | LUT  | FF   | DSP | BRAM | liv | critpath                                | delay(ns)
+# ------|------------------------------------------|-----------|-------|------|------|-----|------|-----|-----------------------------------------|----------
+  R0    | (post-A1: readout+decode FUSI)           | 10.58     |  --   | 7249 | 2121 | 69  | 1    | 172 | pR_idx -> pv_3 (readout+decode fusi)    | 94.513
+  R1    | split readout<->decode (rawl -> registro)| 14.99     | +42%  | 7335 | 2119 | 68  | 1    | 139 | pR_idx -> pC_fat (stage-C reci ripple)  | 66.713
+  R2    | reci adder-tree (16->4 profondita')      | 15.84     | +50%  | 7384 | 2114 | 69  | 1    | 202 | started_not_empty_2 -> ql_7 (control)   | 63.119
+#        (R2: +5,7% su R1; bit-exact 0/60000; area piatta. Il collo LASCIA reci -> ora un path di CONTROLLO
+#         started_not_empty_2 -> ql_7, 202 liv ma 63 ns: LUT-largo/fanout, non aritmetica profonda.)
+#
+# === PROBE tetto SNN (dopo R2): dove va il collo se si togliesse il divisore IIDM? ===
+# Champion = SNN+decode standalone, NESSUNA legge IIDM (4 in s,v,dv,v_l -> 5 out v0,T,s0,a,b).
+#   16.12 MHz, collo pR_idx->pv (88 liv) MA FUSO: il Champion NON ha lo split R1 (rawl) -> readout+decode
+#   in un ciclo -> SOTTO-STIMA il tetto SNN. Nel controllore M (split) la SNN arriva a ~29 (sotto).
+RESULT snn_champ LUT=3890 FF=1705 DSP=52 BRAM=1 WNS=62.966 Fmax=16.120
+CRITPATH snn_champ from=u_SNN/pR_idx_reg[3]/C to=u_SNN/pv_2_reg[3][19]/D  logic_levels=88 delay=62.027
+#
+# Spettro path del CONTROLLORE R2 (top-40, 1 per endpoint) -> cosa viene DOPO il divisore:
+#   PATH 1-19  divisore IIDM (ql_7)         Fmax 15.84   <- collo attuale
+#   PATH 20-22 IIDM s_star/sqrt (st_sab)    Fmax 17.30 -> 24.58   <- 2a struttura IIDM
+#   PATH 23-40 SNN stage-C (pC_fat/pC_V)    Fmax ~29.3            <- tetto SNN vero (split)
+#   Il decode (rawl->pv) NON e' nei 40 peggiori: e' veloce (A1 LUT ok).
+# CONCLUSIONE: la SNN+decode (split) ha tetto ~29 MHz e NON e' piu' il collo. Il controllore e' cappato
+#   dalla LEGGE IIDM: divisore (15.84) + s_star/sqrt (17.30). Headroom 15.84->~29 = TUTTO nell'IIDM,
+#   fuori dallo scope 2d (SNN->decode). Crackare solo il divisore -> 17.30 (la sqrt-prep e' subito dietro).
+#
+# === TETTO SNN forward-only (snn_b2_fsm -> raw, no decode/IIDM): il meter per le round SNN verso 136 ===
+# Il tanh-L1 (2b) ha provato che il time-mux consente ~136 MHz (pipeline gratis in latenza). La SNN e'
+# a 29.75 (stadio-C in UN ciclo). Round SNN = pipelinare lo stadio-C (bit-exact via parity 0/60000).
+# Decomposizione critpath R2 (33.6ns): index 2.4 | reci DSP mult 5.4 | ACCUMULO fuso 18 (reci-tree+Ii+
+#   leaky+Vi+nC_V, 26-bit accw) | si (fanout 560) | nC_fat DSP mult 4 | pC_fat 3.  -> il muro e' l'accumulo.
+SNNFWD  R2  Fmax=29.745  LUT=2971 FF=1712 DSP=22 BRAM=1  critpath pR_idx->pC_fat  (52 liv, 33.6ns)
+SNNFWD  R3  Fmax=47.943  LUT=2955 FF=1808 DSP=22 BRAM=1  critpath pR_idx->pC1_reci (35 liv, 20.9ns)  [+61% su R2]
+#   R3 = split stadio-C in C1(Ii,reci,Vread,fat) -> pC1 -> C2(Vi,soglia,nC_V,nC_fat,accum). parity 0/60000.
+#   Collo ora in C1 (index -> reci DSP mult -> reci-tree -> pC1_reci). +96 FF (registri pipeline), LUT piatta.
+SNNFWD  R4  Fmax=52.151  LUT=2992 FF=1980 DSP=22 BRAM=1  critpath pR_idx->pCa_Ii  (29 liv, 19.2ns)  [+8.8% su R3]
+#   R4 = split albero reci a meta' (Ca: L1-L2 -> pCa 4 parziali; C1: L3-L4). parity 0/60000. +172 FF.
+#   Collo SALTA su Ii (MAC 4-termini RIPPLE, mai tree-ificato) + mux xbuf variabile. -> R5 = attaccare Ii.
+SNNFWD  R5  Fmax=62.162  LUT=3010 FF=1982 DSP=22 BRAM=1  critpath pR_idx->pCa_Ii  (21 liv, 16.1ns)  [+19.2% su R4]
+#   R5 = Ii ad albero (4->2->1). parity 0/60000. Collo ANCORA Ii ma corto: ora DOMINA il DSP mult (4.6ns)
+#   + mux xbuf + tree. -> i DSP mult (~4ns) sono il nuovo pavimento su ogni path. R6 = isolare i MAC nei registri DSP.
+SNNFWD  R6  Fmax=71.942  LUT=3078 FF=2551 DSP=22 BRAM=1  critpath pC1_Vread->pC_fat (21 liv, 13.9ns)  [+15.7% su R5]
+#   R6 = stadio MAC (Cm): 16 prod reci + 4 prod Ii REGISTRATI (fabric, +569 FF). Pipeline R->Cm->Ca->C1->C2.
+#   parity 0/60000. Collo -> C2 (Vi + soglia + nC_fat DSP mult). -> R7 = split C2 a nC_V (tipi noti).
+SNNFWD  R7  Fmax=72.913  LUT=3101 FF=2594 DSP=22 BRAM=1  critpath pC1_Vread->pC2a_nCV (21 liv, 13.7ns)  [+1.3% su R6]
+#   R7 = split C2 in C2a(Vi/soglia/nC_V) + C2b(nC_fat DSP). parity 0/60000. MA quasi nullo: ho staccato il
+#   pezzo CORTO (nC_fat); il collo e' la catena Vi-add+soglia+nC_V (28-bit) in C2a. -> R8 = split C2a a Vi.
+SNNFWD  R8  Fmax=91.853  LUT=3111 FF=2662 DSP=22 BRAM=1  critpath pR_idx->pCm_Iip (12 liv, 10.9ns)  [+26% su R7]
+#   R8 = split C2a a Vi (C2i produce Vi/eth larghi -> registro via prototipo; C2a fa soglia/nC_V). parity 0/60000.
+#   Collo -> Cm MAC (index + mux xbuf + Ii DSP mult, 10.9ns). -> R9 = split il mux xbuf dal DSP mult.
+SNNFWD  R9  Fmax=99.157  LUT=3132 FF=2780 DSP=22 BRAM=1  critpath pC2i_eth->pC2a_nCV (10 liv, 10.1ns)  [+8% su R8]
+#   R9 = split mux xbuf (Cx) dal DSP mult (Cm). parity 0/60000. Pipeline 8 stadi: R->Cx->Cm->Ca->C1->C2i->C2a->C2b.
+#   Collo -> nC_V = Vi - sib*eth (sub 28-bit) in C2a. Ora ogni stadio e' ~1 op larga (~7-10ns) = PAVIMENTO
+#   aritmetico. Il tanh-L1 fece 136 perche' era 1 sola LUT (niente mult/add larghi). SNN: 29.75->99.16 (3.33x).
+#
+# --- record grezzi (RESULT/CRITPATH dalla sintesi OOC) ---
+RESULT l2final LUT=7249 FF=2121 DSP=69 BRAM=1 WNS=30.480 Fmax=10.579771476936099
+CRITPATH l2final from=u_IIDM_CTRL/pR_idx_reg[2]_rep/C to=u_IIDM_CTRL/pv_3_reg[3][19]/D  logic_levels=172 delay=94.513
+RESULT r1 LUT=7335 FF=2119 DSP=68 BRAM=1 WNS=58.280 Fmax=14.98800959232614
+CRITPATH r1 from=u_IIDM_CTRL/pR_idx_reg[2]/C to=u_IIDM_CTRL/pC_fat_reg[15]/D  logic_levels=139 delay=66.713

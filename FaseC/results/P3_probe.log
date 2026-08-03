@@ -1,0 +1,47 @@
+sonda: N in [1] x max_dsp in [220]   sorgenti=C:/t7bimpl/src   lavoro=C:/t7cprobe
+--- ogni punto e' una sintesi out-of-context; il costo del primo dice quello di tutti ---
+=== N=1 max_dsp=220  [avvio 12:16:10] ===
+PROBE N=1 max_dsp=220 LUT=8399 FF=3913 DSP=69 BRAM=1 FIT=si SEC=150
+griglia: N in 2..6 x max_dsp in {220, 0} = 10 punti x 150 s ~ 25 min
+=== N=2 max_dsp=220  [avvio 12:20:24] ===
+PROBE N=2 max_dsp=220 LUT=16798 FF=7826 DSP=138 BRAM=2 FIT=si SEC=143
+=== N=2 max_dsp=0  [avvio 12:23:09] ===
+PROBE N=2 max_dsp=0 LUT=38958 FF=7920 DSP=0 BRAM=2 FIT=si SEC=303
+=== N=3 max_dsp=220  [avvio 12:28:34] ===
+PROBE N=3 max_dsp=220 LUT=25197 FF=11739 DSP=207 BRAM=3 FIT=si SEC=145
+=== N=3 max_dsp=0  [avvio 12:31:20] ===
+PROBE N=3 max_dsp=0 LUT=58437 FF=11880 DSP=0 BRAM=3 FIT=no SEC=190
+=== N=4 max_dsp=220  [avvio 12:34:49] ===
+PROBE N=4 max_dsp=220 LUT=38148 FF=15656 DSP=212 BRAM=4 FIT=si SEC=155
+=== N=4 max_dsp=0  [avvio 12:37:43] ===
+PROBE N=4 max_dsp=0 LUT=77916 FF=15840 DSP=0 BRAM=4 FIT=no SEC=213
+=== N=5 max_dsp=220  [avvio 12:41:37] ===
+PROBE N=5 max_dsp=220 LUT=50025 FF=19570 DSP=210 BRAM=5 FIT=si SEC=158
+=== N=5 max_dsp=0  [avvio 12:44:35] ===
+PROBE N=5 max_dsp=0 LUT=97395 FF=19800 DSP=0 BRAM=5 FIT=no SEC=210
+=== N=6 max_dsp=220  [avvio 12:48:26] ===
+PROBE N=6 max_dsp=220 LUT=71700 FF=23532 DSP=210 BRAM=6 FIT=no SEC=272
+=== N=6 max_dsp=0  [avvio 12:53:21] ===
+PROBE N=6 max_dsp=0 LUT=116874 FF=23760 DSP=0 BRAM=6 FIT=no SEC=250
+--- ogni punto e' una sintesi out-of-context; il costo del primo dice quello di tutti ---
+sonda: unita=wrapper  N in [3 4 5] x max_dsp in [220]   sorgenti=C:/t7bimpl/src   lavoro=C:/t7cprobe
+--- ogni punto e' una sintesi out-of-context; il costo del primo dice quello di tutti ---
+=== unita=wrapper N=3 max_dsp=220  [avvio 13:47:31] ===
+PROBE unita=wrapper N=3 max_dsp=220 LUT=25745 FF=12291 DSP=207 BRAM=3 FIT=si SEC=130
+=== unita=wrapper N=4 max_dsp=220  [avvio 13:49:58] ===
+PROBE unita=wrapper N=4 max_dsp=220 LUT=38877 FF=16416 DSP=212 BRAM=4 FIT=si SEC=151
+=== unita=wrapper N=5 max_dsp=220  [avvio 13:52:47] ===
+PROBE unita=wrapper N=5 max_dsp=220 LUT=50940 FF=20520 DSP=210 BRAM=5 FIT=si SEC=162
+sonda: unita=wrapper  N in [6] x max_dsp in [220]   sorgenti=C:/t7bimpl/src   lavoro=C:/t7cprobe
+--- ogni punto e' una sintesi out-of-context; il costo del primo dice quello di tutti ---
+=== unita=wrapper N=6 max_dsp=220  [avvio 13:56:49] ===
+PROBE unita=wrapper N=6 max_dsp=220 LUT=72793 FF=24678 DSP=210 BRAM=6 FIT=no SEC=187
+sonda: unita=wrapper  N in [4 5] x max_dsp in [220]   sorgenti=C:/t7bimpl/src   lavoro=C:/t7cprobe
+--- ogni punto e' una sintesi out-of-context; il costo del primo dice quello di tutti ---
+=== unita=wrapper N=4 max_dsp=220  [avvio 18:31:12] ===
+PROBE unita=wrapper N=4 max_dsp=220 LUT=36529 FF=16416 DSP=212 BRAM=4 FIT=si FASE=impl ROUTED=si WNS=-2.840 SEC=832
+=== unita=wrapper N=5 max_dsp=220  [avvio 18:45:27] ===
+ERROR: [Place 30-487] The packing of instances into the device could not be obeyed. There are a total of 13300 slices in the device, of which 6040 slices are available, however, the unplaced instances require 7964 slices. Please analyze your design to determine if the number of LUTs, FFs, and/or control sets can be reduced.
+ERROR: [Place 30-99] Placer failed with error: 'Detail Placement failed please check previous errors for details.'
+PROBE-IMPL-FALLITA unita=wrapper N=5: ERROR: [Common 17-69] Command failed: Placer could not place all instances
+PROBE unita=wrapper N=5 max_dsp=220 LUT=47842 FF=20520 DSP=210 BRAM=5 FIT=si FASE=impl ROUTED=no WNS=n/a SEC=625

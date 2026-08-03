@@ -1,0 +1,6 @@
+*.slx
+*.mexw64
+b2_rom_active.m
+slprj/
+codegen*/
+mp_ref13_*.mat

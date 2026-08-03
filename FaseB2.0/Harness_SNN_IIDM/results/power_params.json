@@ -1,0 +1,12 @@
+{
+ "fclk_mhz": 40,
+ "clkhalf_ns": 12.5,
+ "act_clk": 582,
+ "nact": 50,
+ "idlecyc": 3999418,
+ "tot_clk": 4000000,
+ "duty_pct": 0.0146,
+ "ctrl_step_s": 0.1,
+ "workloads": [1,4,28,31,55,58,73,76],
+ "time_unit": "ps"
+}

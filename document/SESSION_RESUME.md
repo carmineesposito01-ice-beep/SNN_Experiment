@@ -1,3 +1,106 @@
+
+## ▶ RIPRESA — **FASE C** (agg. 2026-08-03)
+
+> **Lo stato vivo della Fase C sta in [`FaseC/STATO.md`](../FaseC/STATO.md). Leggere quello.**
+>
+> Questo blocco NON lo riassume: una copia sincronizzata a mano diverge, e la copia dimenticata
+> e' sempre quella che viene letta. (Era gia' successo: qui c'era scritto «109 test» quando erano
+> 187, «`cli.py::_overlay()` da scrivere» quando era scritto, e la quantizzazione «1/88» quando
+> era 3/88 — numeri di prima della correzione del `cut_in`.)
+
+**In una frase:** tutto cio' che non richiede la scheda e' scritto, provato e chiuso; il codice
+per la scheda esiste ed e' collaudato contro il mock, ma non e' mai girato su silicio perche' la
+PYNQ-Z1 non e' disponibile. **Non manca codice: manca l'hardware.**
+
+```
+cd FaseC && python -m pytest -q          # tutto verde = si puo' ripartire
+```
+
+I quattro documenti della Fase C, e bastano quelli:
+
+| Documento | Cosa contiene |
+|---|---|
+| [`FaseC/STATO.md`](../FaseC/STATO.md) | **da dove si riparte** — stato, risultati, decisioni prese, trappole gia' pagate |
+| [`FaseC/RUNBOOK.md`](../FaseC/RUNBOOK.md) | la procedura con la scheda accesa |
+| [`FaseC/README.md`](../FaseC/README.md) | mappa dei file e regole di collocazione |
+| [`FaseC/hw/README.md`](../FaseC/hw/README.md) | strumenti Vivado e xsim |
+
+---
+
+## Fase B2.0 — **CHIUSA** (T7b + T8)
+
+**T7b chiuso il 2026-07-31.** Tutto committato, albero pulito, nessun job lasciato girare.
+
+### PRIMA AZIONE — verificare lo stato in pochi secondi, senza lanciare calcolo
+
+```
+bash FaseB2.0/Harness_SNN_IIDM/hw/run_harness_snniidm_hw.sh summary
+```
+Riestrae i numeri dagli artefatti; se un artefatto manca lo **dice**. Lo stadio `check` confronta la
+firma md5 dei sorgenti con `results/src.sig` e **blocca** gli stadi di calcolo se non coincide.
+
+### Cosa e' FATTO (artefatti tutti GENERATI da script che parsano i report grezzi)
+
+| | Esito | Artefatto |
+|---|---|---|
+| T7a sui 99 | **0 / 58 522** (T7-EXACT) · 0 collisioni aggiuntive · 31 metriche/scenario | `Harness_SNN_IIDM/results/RESULTS.md` |
+| Cosim AXI sui 99 | **0 / 58 522** in **entrambi** i modi di gating | `results/COSIM_AXI.md` |
+| Sweep FCLK (8 punti) | **40 MHz deployabile** (WNS +0,022 · WHS +0,033) · **41,1 MHz** limite derivato | `results/SWEEP_FCLK.md` |
+| Netlist post-route | **0 / 1507** su sottoinsieme dichiarato [1, 4, 9] · gate-level **44×** · i 99 = ~28 h | `results/NETLIST.md` |
+| Energia | duty REALE **1,10 mJ** dinamica/control-step (statica 10,3 mJ separata) · SAIF **62,7 %** | `results/POWER.md` |
+| Bitstream @40 MHz | `.bit`/`.hwh`/`.xsa`, WNS **e** utilizzo **identici** allo sweep | `bitstream/` |
+| **Sintesi** | tutti i numeri con la loro **natura** (misurato/derivato/stima/prodotto) | **`results/RESULTS_HW.md`** |
+
+### T8 — i due report, CHIUSI
+
+| Report | Contenuto | Pagine |
+|---|---|---|
+| `report/B2_0_HARNESS_SNN_REPORT.{md,pdf}` | T6a+T6b — la SNN da sola | 22 |
+| `report/B2_0_HARNESS_SNN_IIDM_REPORT.{md,pdf}` | T7a+T7b — il composto | 26 |
+
+Entrambi **generati** (`scripts/build_harness_snn*_report.py`), mai scritti a mano. Il secondo LEGGE
+gli artefatti a macchina (`t7_results.mat` via scipy + 5 JSON), quindi report e artefatto non possono
+divergere. **Audit** `scripts/audit_harness_snn_iidm_report.py`: **89 controlli in DUE direzioni** —
+ogni numero del report torna alla fonte, **e** ogni grandezza delle fonti e' arrivata nel report.
+Rigenerazione + confronto md5 copre il caso "numero corrotto a valle". Provato in negativo.
+
+**Se si toccano gli artefatti**: rigenerare i report e rilanciare l'audit. Se un numero cambia alla
+fonte, l'audit lo dice; se manca una sezione, pure.
+
+### PROSSIMO: Fase C — FPGA fisica
+
+Il bitstream e i file di consegna sono in `FaseB2.0/Harness_SNN_IIDM/bitstream/`, con WNS e utilizzo
+**identici** a quelli caratterizzati (cancello automatico). Cio' che la Fase C deve chiudere e'
+elencato nei limiti dichiarati dei due report: il guadagno in watt del clock gating, il caso peggiore
+energetico, il comportamento su silicio.
+
+### Cose IMPARATE, da non ri-scoprire (dettaglio completo in `HDL_PHASE.md` §9 "T7b")
+
+- **Il PS7 QUANTIZZA** la frequenza richiesta: il periodo si **legge** dal `report_timing`, non si calcola.
+- **OOC e sistema sono perimetri diversi**: lo stesso circuito a 40 MHz chiude nel sistema e **non** in OOC.
+  ⇒ la vecchia frase "il deployabile vale ~meta' dell'OOC" **non vale** su questo blocco.
+- **`report_power` stampa 3 decimali e sotto quelli la dispersione sparisce.** Si contano i **toggle** nel
+  SAIF: e' cosi' che si vede il 2,9 % fra i carichi, il **13×** del clock gating e la stazionarieta' dell'idle.
+- **Le stime di costo scalate da un altro progetto sono ordini di grandezza**: netlist stimata ~80 min,
+  misurata **42**.
+
+### Numeri da NON riderivare
+
+`LAT_CLK` = 560 · inferenza+controllo = **555 clock** · finestra attiva **582 clock** (555 + 27 di protocollo
+AXI, MISURATA) · control-step 0,1 s = **4 000 000 clock @40 MHz** ⇒ margine **7207×**, duty **0,0146 %**.
+Formato ingressi **En20**, uscita `accel` **sfix13_En8**. Mappa registri AXI: `0x00–0x0C` ingressi ·
+`0x10` controllo (bit0 commit, bit1 gating) e `done` in lettura · `0x14` accel.
+
+**Collo di bottiglia — APERTO e documentato** (`HDL_PHASE.md` §9): il cammino critico attraversa
+ancora `DEC → align → IIDM` (24,1 ns). `align` e' sceso da 32 a 18 celle ma HDL Coder ne
+ricostruisce l'uscita in modo **combinatorio** (`assign sa = sa_1`, sensibilita' su `s`) nonostante
+l'ordinamento nel sorgente. Per spezzarlo serve una tecnica che **garantisca** il registro (Unit
+Delay dentro `align`, non codice MATLAB), **senza** reintrodurre il fronte spurio: i registri devono
+essere inizializzati come i `persistent`, non a zero.
+⚠️ **Cancello obbligatorio di qualunque modifica al confine: `tb_edge_probe.v` deve contare 1 fronte.**
+Un tentativo coi registri ESTERNI dava 61,8 MHz ma **2 fronti** — filtro OU aggiornato due volte:
+piu' veloce e **sbagliato**. Verificare i fronti **prima** delle run lunghe: 2 minuti contro 45.
+
 # SESSION_RESUME.md — Quick context for any new Claude session
 
 > **Scopo**: in 5 minuti capire **dove siamo**, **cosa è stato fatto**, **cosa fare adesso**.
@@ -5,7 +108,711 @@
 
 ---
 
-## 🎯 Stato attuale (2026-06-21 — **EventProp_Study: training a gradiente esatto**)
+## ▶ RIPRESA A FREDDO — LEGGERE QUESTO BLOCCO PER PRIMO (agg. 2026-07-28)
+
+> **Ruolo di questo file:** punto d'ingresso + **STATO** del track `Simulink_Importer`. NON è la procedura
+> generale (quella è la skill `session-reprise`). È un **guida ai documenti**: quando dice «leggi X», leggi X —
+> non ricostruire a memoria.
+
+### ✅ T6a CHIUSO (2026-07-29) — la SNN è validata a livello RTL sui 60. Prossimo: **T6b (HW)**
+> **Leggere PRIMA del blocco T6–T9 sotto (che è superato da questo).**
+>
+> **T6a — Harness_SNN, validazione RTL di `Donatello_Tier@BALANCED`: FATTO, sui 60, riproducibile.**
+> **T6-EXACT 0 / 300 000** (60 traj × 1000 control-step × 5 param) = il VHDL generato **è** il blocco, bit-exact.
+> Cancello **provato sensibile** (1 LSB → nMismatch=1) · **LAT 364** clock (= blocco, < HOLD 500) · PORT-TYPE coperto.
+> **Metriche di stima sugli STESSI 60**: `v0` 15.01/13.8 (**identificabilità**, non difetto RTL) · `T` 1.125/0.913 ·
+> `s0` 0.937/0.844 · `a` 0.991/0.892 · `b` 1.003/0.867 (max/p99).
+> **Golden = il BLOCCO stesso** (`matlab/tier_block_params.m`), in cache (`matlab/tier_golden_cache.m`) e **condiviso**
+> da confronto RTL e metriche → stessi identici dati. ⚠️ NON usare il MEX `r16` (non è il blocco) né `snn_traj_champion` (stale).
+> **▶ RILANCIARE TUTTO CON UN COMANDO:** `matlab -sd FaseB2.0/Harness_SNN -batch "run_harness_snn"` (~75 min)
+> → **`FaseB2.0/Harness_SNN/results/RESULTS.md` = LA FONTE DEI NUMERI** (config + cancelli + metriche). Gate rapido di
+> sviluppo: `run_harness_snn('smoke')`. Doc: `Harness_SNN/README.md` · `HDL_PHASE.md` §6/§9 · piano+spec
+> `docs/superpowers/{plans,specs}/2026-07-28-b2.0-t6*`.
+>
+> **T6b — ✅ COMPLETO (HW full-system, M1–M5, 2026-07-30).**
+> Numeri: **`FaseB2.0/Harness_SNN/results/RESULTS_HW.md`** (fonte per i report) · script `Harness_SNN/hw/` ·
+> probe `Harness_SNN/results/PROBES_T6B.md` · piano `docs/superpowers/plans/2026-07-29-b2.0-t6b-*`.
+> In breve: PS via AXI == blocco **0/300 000** (60 traj, gating ON e OFF) · netlist post-route == blocco
+> **0/15 000** · **FCLK 52 MHz** (WNS +0,358) e limite datapath **58,5 MHz** · **4473 LUT · 3199 FF · 52 DSP ·
+> 1 BRAM** · margine sul control-step **≈14 000×** (duty 0,0071 %) · **energia dinamica 0,9 mJ/control-step
+> MISURATA al duty reale** (statica del device 10,3 mJ, tenuta separata) · **clock gating attivo e trasparente**
+> (`TC 400→0`) ma **guadagno non quantificabile** dal tool → **stima 2–4×**, da validare in Fase C con lo stesso
+> bitstream (è un bit di registro) · **bitstream PYNQ-Z1 prodotto** (`.bit`/`.hwh`/`.xsa`, WNS +0,358 = quello
+> dello sweep ⇒ il flashato è il caratterizzato).
+> **▶ RIESECUZIONE:** `bash FaseB2.0/Harness_SNN/hw/run_harness_snn_hw.sh [check|probe|cosim|sweep|netlist|power|bitstream|summary|all]`
+> — `summary` riestrae i numeri dagli artefatti in secondi; `check` verifica col **checksum** che il DUT sia
+> l'artefatto di T6a (provato sensibile).
+> ⚠️ Due voci NON valide: la **composizione lineare** della potenza (invalidata dal cross-check → si misura al duty
+> reale) e il **worst-case sintetico** (non è un bound). Una **non riuscita**: la sim di *timing* della netlist
+> (la funzionale è verde; il timing lo firma l'STA). **Le 10+4 lezioni in `HDL_PHASE.md` §9 sono obbligatorie per
+> T7/Fase C.**
+>
+> **➡️ PROSSIMO: T7 — `Harness_SNN_IIDM`.** Capitolato già scritto: `FaseB2.0/Harness_SNN_IIDM/README.md`
+> (blocco composto `Donatello_SNN_IIDM` · dataset dei **99** con cut-in aggressivi · **metriche di car-following**
+> in anello chiuso con `qz_safety_metrics.m` · plant-nel-TB da `tb_acciidm_m_closed.v` · ⚠️ latenza del composto
+> **da rimisurare** e costo dei 99 in anello **da misurare** prima di impegnare ore).
+>
+> **[storico] T6b — spec e approccio probe-first:**
+> Scope deciso: utilizzo post-route **incl. BRAM** · power SAIF · **bitstream PYNQ-Z1** · **clock = Fmax del sistema** ·
+> wrapper AXI adattato (I/O fisico 32b, **buffer+commit** per ingressi sincroni, `ce_out` come done).
+> Spec: `docs/superpowers/specs/2026-07-28-b2.0-t6b-harness-snn-hw-design.md` (§0 = requisiti di metodo, §9 = assunzioni
+> da verificare con **probe PRIMA del piano**: `ce_out` unico impulso? wrapper Verilog su DUT VHDL? board preset PYNQ-Z1
+> in Vivado 2026.1? metodo Fmax sul block design?).
+>
+> **⚠️ REQUISITI DI METODO (vincolanti, appresi qui — vedi `FaseB2.0/README.md` §Requisiti):**
+> **(1)** harness **rilanciabile da UN comando** + numeri in **artefatti su disco** (mai solo in chat);
+> **(2)** **stesso perimetro per prova e metriche** (un subset è solo gate di sviluppo: popolazioni diverse ⇒ numeri
+> non appaiabili ⇒ lo scostamento non è leggibile, nemmeno se è 0) → **golden calcolato una volta**, condiviso;
+> **(3)** **niente ripieghi in corsa** per risparmiare tempo (un job corretto ma lungo si lascia finire);
+> **(4)** **probe-first** sulle assunzioni HDL riusate da casi precedenti — in T6a i pattern di M1/Champion non
+> valevano per il Tier (mask, gerarchia, RAM) → **4 fix in esecuzione**; le lezioni sono in **`HDL_PHASE.md` §9**.
+
+### 🔄 FASE B2.0 IN CORSO (agg. 2026-07-28) — validazione RTL + caratterizzazione esaustiva pre-FPGA fisica
+> Ultima fase prima della Fase C. Piano completo + stime in **`FaseB2.0/README.md`**. Cartella dedicata
+> `FaseB2.0/` (common/ · Harness_SNN/ · Harness_SNN_IIDM/).
+> **Blocchi SCELTI:** SNN = `Donatello_Tier@BALANCED` · SNN+IIDM = **`Donatello_SNN_IIDM`** (composto).
+> **Dataset:** l'ultimo generato = `matlab/Quantizzation_Study/test_dataset_exhaustive.mat` (99 traj / 9 scenari).
+>
+> **FATTO + committato:**
+> - **T1** riordino `matlab/` (12 script morti → `archive/`; README riscritto forward-looking) · **T2** struttura
+>   `FaseB2.0/` — commit `2b665716`.
+> - **T3** `Donatello_ACC_IIDM_M` **DEPRECATO** (description+doc; sostituito dal composto).
+> - **T4** blocco composto **`Donatello_SNN_IIDM`** = `Donatello_Tier@BALANCED` + `align` + `ACC-IIDM` — commit
+>   `9112c006`. Allineamento **ritardo-appaiato** (`align` tiene i 4 fisici finché i 5 params non cambiano, poi li
+>   rilascia sincroni → i 9 ingressi ACC-IIDM cambiano allo stesso clock → 1 inferenza/control-step, OU una volta).
+>   Verificato: **dmax=0** vs `acc_iidm_open` + **1 sola inferenza** su ingresso costante + **HDL self-contained**
+>   (11 VHDL, DualPortRAM, `align` come entità a sé, 0 errori). Libreria ora **9 blocchi**.
+>   Builder `build_snn_iidm_block.m`, gate `run_snn_iidm_gate.m`.
+>
+> **T5 (deriva) ✅ FATTO + committato `715b75b7`** — DECISIONE utente: **deriva OPEN-LOOP semplice sui blocchi scelti**
+>   (non la divergenza closed-loop, che era la "complicazione" scartata). Misurata sul **controllore composto scelto
+>   `Donatello_SNN_IIDM`** (`local_normalize` FISSA) vs ideale float, sull'**accel** (grandezza di sicurezza; i 5 param
+>   contano solo a valle via IDM). **Fase 0 (cancello):** golden `acciidm_m_traj` confrontato clock-per-clock col
+>   blocco REALE della libreria → **dmax=0** (il golden È il blocco scelto, non una supposizione). Numeri (60 traj /
+>   60 000 control-step): `|Δaccel|` **max 0.977 · p99 0.188 · mediana 0 · media 0.017** m/s² = **65.8% / 68.9% del
+>   budget E_snn** → la local_normalize fissa NON aggiunge deriva oltre a quella già accettata → **deploy as-is
+>   confermato**. Doc: **`FaseB2.0/common/DRIFT.md`** (+ `drift_chosen.m` + `.mat`). Rigenera:
+>   `matlab -batch "addpath('FaseB2.0/common'); drift_chosen"`.
+>   ⚠️ **Golden stale trovato:** `snn_traj_champion` estrae da `Donatello_Champion` (RIMOSSO nel riordino 8-blocchi) →
+>   **NON usabile**; `acciidm_m_traj` invece è **verificato fedele** al composto (dmax=0, usabile). Deriva sui 5 param
+>   (bench solo-SNN) = **parità RTL bit-exact** in T6, non qui.
+>   ⚠️ **Dataset:** open-loop richiede traiettorie `val` → usato **`test_dataset.mat` (60 traj, con `val`)**. L'esaustivo
+>   `test_dataset_exhaustive.mat` (99 **definizioni di scenario**, senza `val`) è closed-loop-nativo → riservato alla
+>   **copertura car-following full-99 in T6/T7** (non è open-loop-abile senza un giro di riferimento). *(DA CONFERMARE
+>   con l'utente: va bene questa divisione, o vuole l'open-loop anche su `val` generato dai 99 scenari?)*
+>
+> **✅ SUPERATO — T6–T9 SONO TUTTI FATTI (2026-07-31).** Questo blocco descriveva il piano quando erano
+> ancora da eseguire; e' conservato per storia. Esito: T6a/T6b (SNN) · T7a/T7b (composto) · T8 (i due
+> report in `report/`) · T9 (documentazione). Stato reale: blocco ▶ in cima a questo file.
+>
+> ⚠️ **UNA DECISIONE DI ALLORA E' STATA SMENTITA SU MISURA, e va letta al contrario:** qui si diceva che
+> `acciidm_m_traj` fosse *«fedele al composto (usabile)»* come golden. **NON lo e'.** E' l'estrazione del
+> blocco monolitico DEPRECATO `Donatello_ACC_IIDM_M` e diverge dal composto: **385 scarti su 600**
+> control-step, misurati il 2026-07-30. L'equivalenza era stata «provata» su 4 e 6 control-step, campioni
+> troppo piccoli per vederlo. Il riferimento del composto e' **il blocco stesso**, pilotato sugli ingressi
+> che l'RTL ha effettivamente ricevuto (`t7_block_replay`).
+
+### 🏁 MILESTONE 2026-07-27 — LIBRERIA CONSOLIDATA (8 blocchi puliti, tutti verificati sul dataset)
+> **Checkpoint concettuale del track.** `snn_champions_lib.slx` riordinata da 18 a **8 blocchi**:
+> - **4 Campioni comportamentali** (double, NON-HDL, riferimento): `Donatello` · `Leonardo` · `Michelangelo` · `Raffaello`
+> - **4 blocchi HDL-ready self-contained**: `Donatello_LUT` (**NUOVO** — combinato, popup `NLUT` 16/32/64/128/256/512,
+>   default 64) · `Donatello_Tier` (configurabile tier×nfrac + Avanzata) · `ACC-IIDM` (controllore IIDM R17 standalone,
+>   9 ingressi) · `Donatello_ACC_IIDM_M` (controllore R17 completo SNN+IIDM — **DEPRECATO in Fase B2.0**,
+>   sostituito dal composto `Donatello_SNN_IIDM` = Tier@BALANCED + ACC-IIDM, allineamento ritardo-appaiato).
+> - **Rimossi** (assorbiti, `reorg_library.m`): `Donatello_Champion`+`Donatello_LUT{16..512}`→nel LUT combinato ·
+>   `Donatello_SLOW/BALANCED/FAST`→nel Tier · `Donatello_ACC_IIDM` (SP3 nativo, superato da ACC-IIDM+ACC_IIDM_M).
+>
+> **Verifiche — tutte verdi, sul dataset reale:**
+> - **LUT ref gate** (`run_lut_ref_gate`): il LUT combinato (**splitpipe** = architettura attuale, veloce) è
+>   **bit-exact al riferimento** MEX+decode su 6 N × 25 control-step (`dmax=0`) e **discrimina N** (sens. 0.077).
+>   Gli studi LUT usavano `split` (per la precisione, non la velocità); i singoli furono rimossi dopo un
+>   combine-gate iniziale che ne provò l'equivalenza, poi il blocco è stato portato a splitpipe (richiesta utente).
+> - **Test consolidato** (`snn_lib_dataset_test.slx` + `run_lib_dataset_test`): **tutti e 8 PASSANO** — Campioni
+>   max|Δ| vs `ref_params` Python ≤7e-4 · LUT@64/Tier@BAL13 `dmax=0` vs MEX+decode64 · ACC_IIDM_M/ACC-IIDM `dmax=0`
+>   vs `acc_iidm_open`.
+> - **HDL-ready + self-contained** (`run_milestone_hdl_gates`): **5/5 PASS** — Donatello_LUT (N=64 **e** N=16),
+>   Donatello_Tier, Donatello_ACC_IIDM_M (DualPortRAM, 0 err/warn), ACC-IIDM (0 err/warn). `matlab/` fuori dal path.
+> - **Report QC'd** (skill `create-report`): audit avversariale (30+ numeri, **ZERO discrepanze**), 6 fix al generatore
+>   (collisione ToC 10/11, etichetta dataset cut-in→discontinuità, caveat Fmax OOC, `meta'`→metà, docstring, ref
+>   dangling budget), rebuild **deterministico byte-identico**.
+> - **Fix Blocco A** (slider ADV nfrac solo interi, `tier_nfrac_round_cb`) verificato su tutti e 6 gli slider.
+>
+> **FINDING (composizione estimatore→controllore, per V2I)**: comporre `Tier→ACC-IIDM` DAL VIVO dà un **doppio edge**
+> (i 5 params arrivano ~405 clock dopo i 4 fisici) → l'OU (stima a_l) aggiornerebbe due volte/control-step. L'interfaccia
+> a 9 ingressi vuole ingressi **SINCRONI**; per l'anello serve un handshake "params pronti" NON presente nei blocchi →
+> candidato di design. Dettaglio: `HDL_PHASE.md §9`.
+>
+> **Nuovi file:** `build_lut_configurable.m` · `reorg_library.m` · `build_lib_dataset_test.m`+`run_lib_dataset_test.m` ·
+> `run_lut_combine_gate.m` · `run_milestone_hdl_gates.m`. **Workflow libreria:** `build_hdl_variants` (costruisce TUTTO,
+> singoli inclusi) → `reorg_library` (rimuove i singoli assorbiti). Ri-eseguire build_hdl_variants RI-AGGIUNGE i singoli.
+> ✅ **Fmax ACC_IIDM_M — RICONCILIATO + CONFERMATO da ri-sintesi:** la chart usa divisore+radice **sequenziali** =
+> **R17**; la **ri-sintesi OOC 2026-07-27** (Vivado, xc7z020, 125 ns) dà **77,936 MHz · 8387 LUT · 4069 FF · 68 DSP ·
+> 1 BRAM** (collo `st_a_iidm`, 14 liv, 0 errori) — **identica a `hdl_iidm/RESULTS.txt` R17**. Il **9,30 MHz** citato più
+> sotto (SP4, divisore combinatorio) è **superato**. ⚠️ 77,936 è **OOC reg-reg** (non io-timed): il deployabile è inferiore.
+> **Stato git:** modifiche NON committate (commit su richiesta).
+
+### 🔬 TRACK STUDIO TRADE-OFF (Donatello SNN, Blocco A) — ✅ COMPLETO 2026-07-23 (report consegnato)
+> Track PARALLELO a SP4/Fase B2.0 (stesso branch). **Blocco A CHIUSO** al metro REALE io-timed. Il primo giro
+> misurava il Fmax INTERNO reg-reg (illusorio, tier appiattiti ~47); fix `splitpipe` (registro operandi) →
+> muro d'ingresso tolto. **FATTO 2026-07-23:** Phase 1 (verifica: i 3 tier SONO il blocco Donatello 4-in/5-out
+> self-contained, dmax=0, firme di pipeline R2/R5/R9, + controllo negativo Q?.10) + Phase 2 (curve a **CLOCK
+> VINCOLATO io-timed**, NON i preset-directive di Vivado = solo un test) + report.
+> **Risultato:** Fmax reale **SLOW 29,8 / BAL 58,4 / FAST 73,8 MHz** (FAST = lock 73,6 → metro↔RTL concordano).
+> **Fmax = MARGINE** (t_inf 5,5–16,7 µs, ~6000–18000× sotto il budget 0,1 s) → il criterio è l'**AREA** (V2I).
+> **📄 Report:** `report/Trade_Off_Study_Parte_A.pdf` (commit `fa4b6c9b`, ristrutturato su richiesta); dati `points_phase2.tsv`; record completo
+> **RESULTS.md §16**; tooling `sweep_phase2.sh`+`impl_point.tcl` (`652ed9e5`). Lib = lock committato (73,6).
+> **✅ CHIUSO — la scelta e' stata fatta: `BALANCED`.** Questo blocco lasciava aperta la scelta fra
+> SLOW/BALANCED/FAST per il «Blocco B». Il blocco B **esiste**: e' il composto `Donatello_SNN_IIDM`, che
+> monta `Tier@BALANCED / nfrac 13`, ed e' stato validato (T7a) e caratterizzato in hardware (T7b). Anche
+> SAIF power e verifica RTL xsim, che qui erano pendenti, sono fatti.
+> l'utente (base: report §5.2/§6 + RESULTS §16 — area/V2I vs margine; SLOW=area-min, BAL=compromesso, FAST=alto-margine); (2) rinviati:
+> **SAIF** power (traiettoria reale) + **verifica RTL xsim** del candidato; poi **Blocco B** (SNN+IIDM in anello).
+>
+> **✅ AGGIORNAMENTO 2026-07-23 — TIER A BLOCCHI DI LIBRERIA (plug&play).** `Donatello_SLOW/BALANCED/FAST`
+> sono ora blocchi di `snn_champions_lib.slx` (architettura **splitpipe**, decode LUT-64): **self-contained +
+> HDL-ready + simulabili** come gli altri. Builder `build_tier_blocks.m` (riusa i mattoni di montaggio estratti
+> da `build_hdl_variants` in file condivisi: `mount_split`/`snn_chart_code`/`dec_chart_code`/…). **Gate tutti
+> verdi:** G1 self-contained (`run_block_hdl_gate` ×3, DualPortRAM) · G2 `dmax=0` su 3×5 traj + controllo
+> negativo a **nfrac=10** (a 13 bit i tier restano bit-exact, più robusti del previsto) · G3 firma HDL
+> (`tier_signature_gate.sh`: R2/R5/R9 · fused/p3/p5 · splitpipe `op_reg`) · G4 coerenza col VHDL misurato in
+> `D:/zbd_p1` (`tier_coherence_gate.sh`, confronto **modulo-nomi** — 0 diff logiche, provato sensibile) + VHDL
+> **archiviato** in `donatello/vhdl_tiers.tar.gz`. Base `Champion`/`LUT{N}` **obsoleti, NON toccati**. La scelta
+> del prescelto poggia ora su oggetti reali e deployabili. Spec+piano: `docs/superpowers/{specs,plans}/2026-07-23-donatello-tier-blocks*`.
+> **✅ Fase 2 FATTA (2026-07-24) — blocco unico configurabile `Donatello_Tier`:** Variant Subsystem con le 3
+> varianti tier + **mask con menu TIER** (SLOW/BALANCED/FAST). Il mask seleziona la variante; HDL Coder
+> (`VariantActivationTime='update diagram'`) genera **solo il tier scelto**, identico al blocco separato
+> corrispondente (**0 diff logiche** su SNN/DEC/DualPortRAM per tutti e 3 i tier) + self-contained + `dmax=0`.
+> Builder `build_tier_configurable.m`. Il "coronamento" plug&play: un blocco, un menu. ⚠️ Le variant condition
+> NON accettano funzioni (niente `strcmp`) → `TIER` numerico (mask popup `Evaluate=on` = indice) + `TIER==k`.
+> Fix collaterale a `run_block_hdl_gate` (conteggio uscite via `get_param Ports`, robusto ai blocchi mascherati).
+> **⚠️ Debito segnalato (task):** `run_block_sync_check` copre solo i blocchi a chart singola — salta gli split
+> (Champion/LUT/tier); va esteso.
+
+**Repo/posizione:** `D:\Project_MBSE\1.Reti Neurali\Rete_SNN_Test\CF_FSNN\.worktrees\Simulink_Importer`,
+branch **`Simulink_Importer`**. **Deliverable committati; commit LOCALI NON pushati** (T5 deriva `715b75b7`, checkpoint doc `dd8f7ab4`, + allineamento reprise; ahead di `origin/Simulink_Importer` — `git log --oneline` per il conteggio; il push si fa **solo su richiesta dell'utente**). Working tree: **solo `clockInfo.txt` modificato** (artefatto Vivado rigenerabile, non mio) → non committare. ⚠️ **I `*.mexw64` sono TRACCIATI, NON gitignorati** → **mai `git commit -am`** (spazzerebbe i mex ricompilati dai run); stageare esplicitamente i soli file voluti. File dell'utente da NON toccare né stageare: `closed_loop_demo.slx` e `slblocks.m` (tracciati).
+*(Esistono altri track/worktree — es. `Simulator`, `main`/EventProp — con LORO SESSION_RESUME: questo file vale
+solo per `Simulink_Importer`.)*
+
+**Stato in una riga:** SP2/SP3 chiusi, **debito Fase B risolto** (bitstream escluso), e **✅ SP4 CHIUSO
+(2026-07-17)**: il blocco `Donatello_ACC_IIDM_M` porta il controllore completo da **2,0 a 9,30 MHz** con
+**area −21%** (8614 LUT · 2134 FF · **71 DSP**; BRAM **non catturato** nel run OOC → si misura in Fase B2.0),
+**`dmax = 0`** e **timing chiuso** @8 MHz. Il bersaglio 11,65 **non è raggiunto ed è dimostrato
+irraggiungibile** per questa strada (era simmetria con la SNN, non un requisito: 358 clock su 800.000 per
+control-step). Riferimento SP3 e **deployato intatti**. **Ri-verificato in questa sessione (2026-07-17) sulla
+libreria committata**: il blocco è **aggiornato + self-contained + HDL-ready** — 13 funzioni-fase inlinate,
+gate isolato `run_block_hdl_gate` PASSATO (4 VHDL, DualPortRAM presente, 0 errori) col path `matlab/` rimosso;
+gate reso sensibile anche alle dipendenze di M (commit `ab232fc8`). ⚠️ Questi numeri sono **OOC + livello
+Simulink**: la prova RTL (testbench HDL) è la Fase B2.0 qui sotto.
+
+**✅ 2d CHIUSO (2026-07-18) — timing SNN→decode + pipelining del core SNN.** Dentro B2.0: **R1-R2** hanno
+portato il controllore **10,58 → 15,84 MHz** (split readout↔decode + reci adder-tree) → il collo LASCIA la
+SNN e diventa il **divisore IIDM**. Il **probe** ha misurato il tetto SNN (~29 pre-pipeline) e provato che il
+controllore è cappato dalla LEGGE IIDM (divisore 15,84 + sqrt 17,30), NON dalla rete. Decisione utente:
+esaurire prima la SNN → **R3-R9 hanno pipelinato il core SNN forward a 99,16 MHz (3,33×)** — 8 stadi
+(`R→Cx→Cm→Ca→C1→C2i→C2a→C2b`), **bit-exact** (`run_b2_parity_dataset` 0/60000 OGNI round), **BANCATO** per
+dopo l'IIDM. Convergenza a 99 (ogni stadio è già 1 op larga ~7-10ns = pavimento aritmetico; ~130 possibile
+ma senza payoff: SNN già 6,3× il cap IIDM). **Controllore validato** con l'SNN 8-stadi: parity 0/60000 +
+**B-1 0/3000**, Fmax **15,67** (invariata, IIDM-capped; −1% da +1069 FF). Dettaglio: **SP4 §Studio 2d** +
+`matlab/hdl_snn/RESULTS.txt`. Harness: `run_2d_round.m`, `probe_snn_fwd.m`, `probe_snn_ceiling.m`. Core
+8-stadi in `matlab/snn_b2_fsm.m`. **→ PROSSIMO FRONTE per alzare DAVVERO il controllore = pipeline
+dell'IIDM (divisore + s_star/sqrt), fixed-point** — la SNN non è più il collo. (2c gate esaustivo full-60k
+resta prima del deploy.)
+
+**🗄️ CRONOLOGIA B2.0 (2026-07-17→18) — SUPERATA dal riordino a T1–T9.** Il piano e le azioni **CORRENTI** sono
+**SOLO** il blocco **▶ FASE B2.0 in cima** + `FaseB2.0/README.md`. Sotto: dettaglio storico dell'evoluzione
+(vecchi harness 2a-M1 su `Donatello_Champion` / 2a-M2 su `ACC_IIDM_M`, studi timing 2b/2d, gate 2c) — **fatti o
+rimpiazzati** (i nuovi harness T6/T7 sono sui blocchi SCELTI `Donatello_Tier@BAL` / `Donatello_SNN_IIDM`). Restano
+**validi come riferimento**: il **backlog**, il box **"Se si torna su SP4 LEGGI PRIMA"** e i **path ambiente**.
+NON agire sulle "azioni" descritte qui sotto. *(Le sezioni **MODI DI LAVORO** e **TONO** che seguono NON sono
+"azioni" e restano PIENAMENTE VALIDE per tutto il track — la canonica è più in basso sotto i marker 🛠️/🎙️.)*
+
+**[storico] FASE B2.0 APERTA (2026-07-17): validazione RTL della versione FPGA + report.**
+Decisa dall'utente. SP4 ha *ottimizzato* il blocco; **B2.0 prova che l'RTL generato funziona davvero** e ne
+scrive il report. La **Fase C** (test sull'FPGA *fisica*) resta separata e in attesa.
+
+> **Perché B2.0 esiste — il gap, in una riga:** oggi è provato **a livello Simulink/MATLAB** (`dmax=0`: G2
+> 0/60000, G3/G4 5/5; `makehdl` *genera* il VHDL) ma **NON a livello RTL**: il VHDL generato **non è mai stato
+> simulato in un simulatore HDL** (xsim) contro il riferimento, sull'**intero dataset**, con metriche vere. Finché
+> non lo è, "versione FPGA" è una claim Simulink travestita — **è l'errore Fase B** (report su traiettoria ridotta,
+> poi corretto). B2.0 lo chiude.
+
+**Piano (una fase alla volta):**
+- **Fase 0 — allineamento doc:** ✅ in corso/fatto (questo blocco + HDL_PHASE §6/§8 + SP4 box + memoria).
+- **Fase 1 — `/fpga-expert`:** ✅ FATTO. Audit: oltre 9,30 MHz c'è margine **bit-exact** (retiming/pipelining di
+  `tanh`+SNN→decode) = lo Studio Timing, incluso in B2.0 per scelta utente. Studio RTL disegnato: 2 harness
+  (SNN + controllore), closed-loop self-contained per il controllore. Spec `docs/…/2026-07-17-b2.0-rtl-validation-harness-design.md`.
+- **Fase 2 — evidenza RTL (a DUE harness, plan `docs/…/2026-07-17-b2.0-2a-m1-core-harness-snn.md`):**
+  - **2a-M1 (core + Harness A, SNN `Donatello_Champion`):** ✅ **FATTO 2026-07-18** — A-1 **0/15000** (RTL bit-exact
+    al blocco su 3 traj), cancello sensibile, metriche param. Commit `c961bc85`. ⚠️ **Finding:** il golden r16 non
+    è il blocco (diverge a step ~52: `local_normalize` fixed + pilotaggio a ingresso tenuto) → costruito golden
+    **fedele al blocco** `snn_traj_champion` (== blocco, cross-check dmax=0). Dettaglio in `HDL_PHASE.md` §6.
+  - **2a-M2 (Harness B, controllore `Donatello_ACC_IIDM_M`, open + closed-loop):** ✅ **FATTO 2026-07-18**
+    (commit `f3847650` open, `c78872dc` closed). **B-1** RTL accel == blocco **0/3000** (open-loop, 3 traj);
+    **PLANT-PAR** plant-nel-TB == riferimento **1800/1800** (sensibile); **B-LOOP** anello RTL == riferimento
+    **2400/2400** + **BEHAV** gap>0 sempre (car-following corretto, non solo bit-exact). Golden-fedele
+    (`acciidm_m_traj`, algoritmo estratto). ⚠️ **DUT in VERILOG** (il divisore combinatorio IIDM manda un
+    indice-LUT a -1 a time-0 in xsim col VHDL, registri U; Verilog init a 0). Plan `docs/…/2026-07-18-…-m2-harness-b.md`.
+    Resta (piccolo): caratterizzare l'impatto della deriva blocco-vs-deployato (local_normalize) sul car-following.
+  - **2b (ottimizzazione timing `tanh`)** — **F1 (probe pipelining AUTOMATICO) = FAIL, provato in modo esaustivo
+    (2026-07-18).** Il `tanh` fixed è un **monolite combinatorio** (path `st_dd_12 → thl_7`, **201-207 liv**,
+    `IIDM_CTRL.vhd` = 984 KB tutto combinatorio): HDL Coder `DistributedPipelining`/`ClockRatePipelining` mettono i
+    registri **all'uscita** (barriera *"delays not moved across due to non-zero/unknown initial value"* della
+    chart-FSM) → **0%** (9,30); il retiming di **Vivado** (`synth_design -retiming`, op4/80ns **e** op8/40ns =
+    **identici**) rialloca il solo registro `thl` di 6 liv → **+2,4% (9,52 MHz), tetto** (gli altri registri sono
+    bloccati dietro lo stato `acc`). **Non è il periodo di clock** (il path ~107 ns è logica reale). Infra probe:
+    `matlab/probe_pipe_tanh.m` (commit `983c4c33`); sintesi OOC via `scripts/synth_acc_iidm.tcl` da **work-dir
+    SENZA spazi** `D:/zbd_pipe` (⚠️ la tcl con `glob` su path con spazi fallisce — copiare il VHDL lì e sintetizzare);
+    `D:/zbd_pipe/retime_test.tcl` per il retiming; numeri in `matlab/hdl_pipe/RESULTS.txt` (gitignored). Dettaglio +
+    tabella in `SP4_ACC_IIDM_FAST.md` §Studio 2b. Spec/plan `docs/…/2026-07-18-b2.0-2b-timing-*`.
+    **Esp. A — reimplementazione `tanh` = ✅ CHIUSO (2026-07-18):** studio comparativo a 5 vie (native/LUT-piena/
+    LUT-interp/poly/CORDIC), 2 livelli (L1 tanh-solo, L2 controllore). **Vince A1 = LUT PIENA bit-exact**
+    (memoizza il `tanh` nativo, `gen_tanh_lut`): dmax=0 su 20000, L1 136 MHz / 8 liv / 0 DSP, più piccola del
+    nativo. **A1 INTEGRATA** in `Donatello_ACC_IIDM_M` (`iidm_tanh`→`tanh_lut_full`, inlinata da
+    `build_hdl_variants`; commit `2398d5d6`). **L2: controllore 9,30 → 10,58 MHz (+14%), bit-exact, area
+    8614→7249 LUT (−16%), DSP 71→69; nuovo collo = `pR_idx→pv_3`, 172 liv = SNN→decode** (il `tanh` non è più il
+    collo). Dettaglio+tabella: `SP4_ACC_IIDM_FAST.md §Studio 2b`; numeri in `matlab/hdl_tanh/RESULTS.txt`.
+    Validazione fatta: dmax=0 + **B-1 ridotto 0/3000** + HDL 0 errori + L2. ⚠️ **Gate esaustivo RINVIATO**
+    (B-1 full 0/60000 · A-1 · PLANT-PAR · B-LOOP · parity 0/240000): da eseguire prima del deploy finale.
+    ⚠️ **Gotcha ambiente:** `bash`→WSL rotto (sospensione) → lanciare gli harness xsim con **Git Bash in testa al
+    PATH** (`C:\Program Files\Git\bin`). (L'Esp. B "registri a mano nel netlist" non è stato fatto: A1 già risolve.)
+    **→ [SUPERATO] il fronte SNN→decode = Studio 2d, ✅ CHIUSO 2026-07-18** (R1-R9): SNN forward pipelinato a
+    99,16 MHz bit-exact; controllore 15,84→15,67 (cappato dal divisore IIDM). Vedi il box «2d CHIUSO» in cima.
+  - **2c (validazione COMPLETA full-dataset 60k + gate-level)**: dopo il fronte SNN→decode / prima del deploy.
+    Riusa gli harness A+B con `mode` full + il gate esaustivo rinviato sopra.
+- **Fase 3 — `create-report`:** grounded sulla Fase 2 (tecniche: time-mux, FSM a stadi, registro-fra-stadi; drawback).
+
+**Backlog (studi a sé, DOPO B2.0):** 1) **Timing study** (spingere lo slack → max Fmax); 2) **Quantization study**
+(meno bit fixed → meno FPGA vs perdita accuracy, mappa non-lineare — grande); 3) **Fase C + confronto MPC↔SNN**
+(design parcheggiato, `cf-fsnn-mpc-vs-snn-design`); 4) **Clock-gating** (segnato 2026-07-24, DOPO la
+validazione): su Zynq-7020 la potenza è static-dominata (~92%) → ROI basso QUI, ma la rete è **predisposta
+per costruzione** (idle >99,9%: ~364 clk attivi su ~800k per control-step) → su chip più efficienti, dove la
+P_dinamica diventa il collo, il vantaggio si materializza **senza contropartita**. Semi-auto via Vivado
+(clock-enable già presente nel time-mux + `-gated_clock_conversion auto` + `power_opt_design`), NON a mano sul
+VHDL; primo passo = misura SAIF della dinamica in idle. Restano anche le opzioni di track: promuovere M a
+deploy · V2I in Simulink · merge → main.
+
+**Se si torna su SP4, LEGGI PRIMA** `document/SP4_ACC_IIDM_FAST.md` (in testa: il riquadro ✅ SP4 CHIUSO, poi
+§Variante M-FSM #2a): contiene i numeri, le **quattro strade chiuse coi loro perché** (L approssima · M-v1
+area esplosa · #1 dataflow/`tanh` · #2b e #2c escluse dal probe) e cosa si riusa. I vincoli della conversione
+MATLAB-to-dataflow, che valgono **oltre SP4** per qualunque blocco bit-exact, sono in `document/HDL_PHASE.md` §9.
+
+⚠️ **Non ripetere**: #2b (divisore sequenziale a mano) e #2c (tanh CORDIC) sono **esclusi dai dati**, non da
+un'opinione — la divisione non compare in nessun path critico misurato, e col `tanh` a costo zero il tetto è
+10,58 con il collo **fuori dall'IIDM** (SNN→decode = il deployato).
+
+MATLAB: `"C:\Program Files\MATLAB\R2026a\bin\matlab.exe" -batch`. Vivado: `C:\AMDDesignTools\2026.1\Vivado\bin\vivado.bat`.
+
+**MODI DI LAVORO (vincolanti — la sessione li ha pagati a caro prezzo):**
+- **Verifica sul DATASET, mai su un caso singolo** — riporta *quanti su quanti* (es. 0/240.000, 5/5).
+- **Un cancello che non può fallire non è un cancello**: deve `assert`, e va **provato sensibile** (rompilo apposta).
+- **Una claim scritta in un doc/commit/Description è una claim da VERIFICARE**, non un ragionamento da dichiarare
+  (in questa sessione 4-5 mie deduzioni plausibili sono risultate false alla misura).
+- **Root cause prima del fix**; se un loop `fi` è lento → **MEXalo**, non ridurre il campione.
+- Il messaggio VERO di un errore di chart si ha da `codegen('-config:lib',…,{a,a,a,a})` con `a=fi(0,1,32,20)`,
+  non da Simulink. Gotcha fixed-point in `document/SP3_ACC_IIDM_HDL.md` §insidie.
+- **Design prima del codice** (`brainstorming → spec → piano → esecuzione`). Doc aggiornati nei **doc di processo**,
+  non solo qui. Commit **conventional SENZA `Co-Authored-By`**; push libero su `Simulink_Importer`.
+
+**TONO:** italiano, deciso, **evidence-first**, onesto fino all'osso (ammetti gli errori, smaschera le claim non
+verificate anche tue, niente compiacenza). Conciso; quando una scelta è dell'utente, chiedi con un'opzione
+raccomandata; quando puoi decidere sui dati, decidi e mostralo.
+
+**Dopo aver ricostruito lo stato: riporta (stato · azione pendente · modi di lavoro · tono) e ASPETTA il via.**
+
+---
+
+## 🔴 BUG DEL FORWARD DEPLOYATO — TROVATO E CORRETTO (2026-07-14) — LEGGERE PER PRIMO
+
+> **`snn_b2_fsm` (il forward del bitstream) NON era bit-exact a `snn_core`**: divergeva sull'**82,4 %** dei
+> control-step del dataset (60/60 traiettorie). Era invisibile perché i cancelli sono **profondi 16 campioni**
+> (`run_b2_parity`) / **12 control-step** (`test_b2_fsm`) su un uso reale di **1000**, **non assertano** (stampano e
+> basta) ed erano **dipendenti dall'ordine** (ROM globale non rigenerata).
+> **Causa**: `snn_b2_fsm.m:77` castava `(Ii+reci)` da `accw` Q8.17 a `T.V` Q5.13 **prima del confronto di soglia**.
+> **Corretto**: ora **0 / 240.000** control-step (4 champion × 60 traj × 1000). **Costo: +5 LUT (+0,1 %)**.
+> **Impatto funzionale del bug: −0,007 punti** di accuratezza → Fase B e le sue conclusioni **reggono**.
+> **⚠️ Il bitstream attuale è STALE** (costruito con l'FSM difettosa) → da rigenerare quando serve.
+> **Storia, prove e numeri → `document/HDL_PHASE.md` §2 (anello ②bis) e §2.1.** Commit `1e779e1`.
+>
+> **Cancelli nuovi (assertano, girano sul dataset):** `run_b2_parity_dataset` (60×1000×4) ·
+> `run_block_sync_check` (i blocchi inlinano i sorgenti: becca quelli rimasti indietro) ·
+> `run_block_traj_test` · `run_block_hdl_gate`.
+> **Aperto**: i cancelli storici **non assertano** — tutti verdi oggi, ma l'assert va aggiunto (decisione utente).
+
+## ✅ Blocchi libreria HDL-ready — FATTI (2026-07-14)
+
+> `snn_champions_lib.slx` ha ora **7 blocchi Donatello SELF-CONTAINED e HDL-ready** (`Donatello_Champion` +
+> `Donatello_LUT{16..512}`), accanto ai 4 comportamentali: forward **B2 time-mux** (come il bitstream), **I/O fisico**
+> `s,v,dv,v_l → v0,T,s0,a,b`, **niente start/done** (FSM free-running interna), ~341 clock/inferenza.
+> **Dimostrato**, non promesso: cancello **`run_block_hdl_gate`** → copia solo il `.slx`, toglie `matlab/` dal path,
+> `makehdl` **genera VHDL** (con `DualPortRAM_generic` ⇒ time-mux) su `Donatello_Champion` e `Donatello_LUT64`.
+> Funzionale: **dmax = 0** (bit-exact vs norm-float + `snn_core` + `snn_decode_hdl`). Commit `e399572`.
+>
+> **Dettagli → `document/DECODE_LUT_SWEEP.md` §6** · **regole/lezioni → `document/HDL_PHASE.md`** (§3.1 contratto
+> d'interfaccia, §3.1.1 *l'architettura segue il sorgente*, §3.1.2 `start` scollegato = fallimento silenzioso, §9) ·
+> **mappa cartella → `matlab/README.md`**.
+
+**SP2 — FATTO** (2026-07-15, `a9fb61b`…`c66cc5d`): blocco **`Donatello_ACC_IIDM`** in `snn_champions_lib`
+(campione LUT-64 + ACC-IIDM open-loop, `s,v,dv,v_l → accel`, **sola simulazione**). Matematica IIDM a **fonte
+unica** (`acc_iidm_open.m`, usata anche dal plant closed-loop). Dettagli → **`document/SP2_ACC_IIDM.md`**
+(leggere quello: qui solo stato + puntatori).
+
+Cancelli, tutti verdi al 2026-07-15: `run_block_acciidm_test` **dmax = 0 su 5/5 traiettorie**, **verificato
+sensibile** (variante mis-gated → 0.1836 → fallisce) · `run_block_closed_loop_test` **dmax = 0 su 10/10**
+(anello CHIUSO su Simulink, 5 traj × 2 convenzioni di `dv`) · `run_plant_parity` · `run_block_sync_check` (8
+blocchi, 0 stale) · `run_block_traj_test` · `run_block_hdl_gate` (`Donatello_Champion`, `Donatello_LUT64`).
+
+**«NON sintetizzabile» ora è MISURATO, non assunto** (`415e596`): HDL Coder rifiuta il blocco con **14 errori**.
+Causa radice = l'IIDM in **double** → forza l'architettura *MATLAB Datapath* → `tanh` e `min(v/v0,10)^4` non
+supportati in double e, **di rimbalzo**, viene rifiutato lo struct `snn_types` (che nei blocchi HDL-ready passa).
+Chi vorrà l'ACC-IIDM su FPGA non deve inseguire lo struct: deve portare l'IIDM in fixed.
+
+**Anello CHIUSO** (`c3edeff`, `c66cc5d`): dato il leader (`x_l`, `v_l`) l'anello calcola gap e `dv`, li passa al
+blocco e integra l'ego. Semantica **misurata su 60k campioni**: ⚠️ `dv` del dataset **non** è `v − v_l` della
+stessa riga, è `v[k−1] − v_l[k]`; il generatore **non ha posizioni assolute né lunghezza veicolo**;
+`s ∈ [1.25, 150]` col clip attivo nel **6,06%** dei campioni. **Ma la convenzione non morde**: in anello aperto
+sul dataset intero la `dv` istantanea non degrada la stima (20.64% vs 20.97%, **−0.33 pp**) ⇒ l'anello
+realizzabile su strada è utilizzabile. Nuovo kernel `snn_cl_step` (+MEX): un control-step della catena di
+riferimento — i MEX esistenti macinano una traiettoria *già nota*, in anello chiuso serve passo-passo.
+
+**SP3 — ACC-IIDM HDL-Ready. ⇒ COMPLETO (2026-07-16).** Doc di processo: **`document/SP3_ACC_IIDM_HDL.md`**
+(leggere quello; qui solo stato + numeri chiave). Spec `docs/superpowers/specs/2026-07-15-acc-iidm-hdl-ready-design.md`
+· piano `docs/superpowers/plans/2026-07-15-acc-iidm-hdl-ready.md`.
+*Scopo:* chiude un **buco di equità** del confronto MPC (la legge ACC-IIDM appartiene al *nostro* controllore, ma
+con l'IIDM in double il Piano 2 conterebbe solo la rete e ometterebbe la legge che produce `a_cmd`).
+
+`Donatello_ACC_IIDM` è **HDL-ready**: IIDM in fixed (`acc_types`, **`nfrac=8`**), HDL Coder genera VHDL dal solo
+`.slx` con `DualPortRAM`. `acc_iidm_open` **type-parametrico** (double = riferimento, `run_plant_parity`
+invariato bit per bit). Budget derivato: `E_iidm` 0.156/0.834 < `E_snn` 0.272/1.484 (margine 1,75×; a `nfrac=6`
+non passa ⇒ discrimina). ⚠️ **HDL-ready ≠ deployato**: il bitstream resta la sola SNN.
+
+**Premessa SMENTITA (misurata):** «serve una LUT come per la sigmoide» era **falso**. `sqrt`/`tanh`/`x^4` sono
+nativi in HDL Coder; la divisione passa con **`RoundingMethod='Zero'`**. `exp` è l'unica non generabile — motivo
+per cui la sigmoide (σ=1/(1+exp(−x))) richiese la LUT ma `tanh` no. **Corretta la claim in SP2_ACC_IIDM.md,
+spec SP2 §7, README** (era «sola simulazione / non sintetizzabile»).
+
+**Numeri OOC (xc7z020 @8 MHz) — l'IIDM in fixed è CARO:**
+| | LUT | DSP | Fmax | liv.logici |
+|---|---|---|---|---|
+| SNN sola | 3 872 | 52 | **10,6 MHz** ✓ | 172 |
+| catena SNN+IIDM | 10 846 | 69 | **2,0 MHz** ✗ (WNS −373 ns) | **1 077** |
+
+Risorse ×2,8, Fmax ÷5,3, a 8 MHz **il timing non chiude**. Causa misurata: le 4 divisioni srotolate in array
+combinatorio (path critico dentro l'IIDM). **Funzionalmente regge** (a 2 MHz un control-step dura 200k clock,
+l'inferenza 341). **Via d'uscita già identificata (SP a sé): i 4 divisori sono costanti entro il control-step →
+reciproci una volta + moltiplicazioni** (`fpga-expert` ch09). Lo sweep a slack minima è previsto ma non ora.
+
+**Gotcha superati (dettaglio in SP3_ACC_IIDM_HDL.md §insidie):** la **fimath è parte del tipo** (va nei prototipi
+di `acc_types`, non `setfimath` sparse) · niente riassegnazione di tipo (`v0f` non `v0`) · niente sovra-escape
+apici nella chart. Diagnosi errori chart: `codegen('-config:lib','SNN_ACC','-args',{a,a,a,a})` con `a=fi(0,1,32,20)`.
+
+---
+
+## SP4 — ACC-IIDM fast (recuperare l'Fmax). L CHIUSA · M-v1 (resource sharing) NON basta → **prossimo = FSM esplicita**.
+Doc di processo: **`document/SP4_ACC_IIDM_FAST.md`** (leggere quello). Spec/piano in `docs/superpowers/`.
+Problema (SP3): IIDM fixed a **2,0 MHz**, timing non chiude @8 MHz — 1077 livelli, **76% carry** dalle 5
+divisioni combinatorie incatenate. Bersaglio **≥ 11,65 MHz** (pari alla SNN).
+
+**Variante L (reciproci a LUT) — costruita e SCARTATA sui dati (2026-07-16, `457aa6c4`…`e2cb8062`).** Sweep
+MEXato (12 s vs ~6 h; `acc_sweep_kernel` + `build_acc_sweep_mex`, bit-identico all'interpretato) su 60 traj:
+**nessuna N rispetta il budget** `E_snn` (p99<0.272, max<1.484) e l'errore **NON converge** (max piatto ~4 m/s²,
+p99 bottoma 0.59 a N=64 poi peggiora). Saturazione di range **esclusa** (verificato: solo `2·sab` di 0.006,
+innocuo). Root-cause non stabilita (baco fixed-point o amplificazione `1/s_safe`→`z²`), ma **irrilevante per la
+decisione**: un reciproco approssimato che alimenta `z²` è fragile per costruzione. L'infrastruttura L resta
+committata e riusabile (`acc_recip_lut`, `acc_types.recipN`, `acc_div`, sweep+MEX); **SP3 invariato** (recipN=0
+byte-identico, `run_plant_parity` 0.00e+00). Review-catch: divisore costante `DT` resta `divide()` (`nargin>=6`).
+
+**M-v1 (resource sharing) — make-or-break ESEGUITO (2026-07-16, probe `6db20b0a`). ESITO: config NON basta → FSM.**
+Verifica empirica (`probe_acciidm_sharing.m` + 3 sintesi OOC su xc7z020 @8 MHz). Il resource sharing di HDL Coder
+**si attiva** (clock 5× `DUT_tc` + moltiplicatori condivisi + le 5 divisioni incatenate sequenziate in UNA): timing
+**chiude @8 MHz** (WNS −373 → +20 ns), livelli **1077 → 172**, DSP **69 → 38**, `baseline` riproduce SP3 al bit.
+**MA**: Fmax **9,5 MHz < 11,65** (collo = singola divisione digit-recurrence non pipelinata) **e area ESPLOSA**
+(LUT ×2,36, FF ×13,9 dal clock-rate pipelining) → **contro la visione "taglia le risorse"**. Tabella completa in
+`document/SP4_ACC_IIDM_FAST.md` §Variante M.
+- **M-FSM #1 (FSM + blocco `Divide` HDL) — ESEGUITO 2026-07-17. ESITO: bit-identità PROVATA, ma STRADA MORTA.**
+  Verde tutto ciò che riguarda la correttezza: **G1** blocco `Divide` == `divide()`-SP3 **dmax=0 su 300.000
+  coppie reali** (sensibile: 'Nearest' → 1 LSB) · **G2** model FSM == `acc_iidm_open` **0/60000 control-step**
+  (sensibile: q2↔q3 → 1990/2000) · **G3/G4** blocco M == model == SP3 su **5/5 traiettorie**, latenza
+  **misurata 509 clk**, edge-triggered · plant parity ALL PASS. Il blocco `Donatello_ACC_IIDM_M` **esiste,
+  compila e simula bit-identico a SP3 con UN SOLO divisore**.
+  **MA non genera VHDL**, per una ragione strutturale: il blocco `Divide` deve stare accanto alla chart (in HDL
+  Coder il divisore pipelinato esiste solo come blocco) → quella convivenza impone la **conversione
+  MATLAB-to-dataflow** → che **vieta `tanh` in fixed-point** → ma `tanh` è nel cuore dell'IIDM → aggirarla =
+  LUT/float = **approssimare** = `dmax≠0` = ciò che M esiste per evitare. **Non è un bug da tappare.**
+  Prove (non inferenze): la stessa chart **da sola** genera VHDL con 0 errori; `Architecture` era già
+  `MATLAB Function` (verificato); `snn_types→fi(0)` risolveva l'"empty-typed" e faceva emergere subito `tanh`
+  → **core ripristinato, mai committato**. ⚠️ **Il verdetto OOC non è mai stato raggiunto** (fermi alla
+  generazione): Fmax/area della strada FSM restano **ignoti**.
+  Esito completo + cosa si riusa: `document/SP4_ACC_IIDM_FAST.md` §Variante M-FSM. Vincoli dataflow (validi
+  **oltre** SP4): `document/HDL_PHASE.md` §9. Commit: `e31c6b3d`, `a910934f`, `02813818`, `f430aad0`, `c32a9619`.
+- **RESTA l'approccio #2** (divisore **dentro** la chart) = l'unico rimasto → vedi AZIONE PENDENTE in cima.
+  Si riusano **identici**: funzioni-fase (`iidm_prep`/`iidm_nd`/`iidm_use`/`iidm_final`), model `acc_iidm_fsm`,
+  G2, G3/G4, e l'infrastruttura di verifica (`probe_divide_bitexact` 300k in 44s).
+- Spec/piano del config-based (superati come esecuzione, utili come record): `docs/superpowers/{specs,plans}/2026-07-16-acc-iidm-timemux*`.
+- **L insegna a M:** divisioni **sequenziate, non approssimate**; **M-v1 insegna alla FSM:** il config esplode
+  l'area → la FSM deve sequenziare **1 divisore** a mano (area bassa), non delegare al clock-rate pipelining.
+
+**Debito Fase B — RISOLTO in parte (2026-07-16, `4298adf3`).** `report/FPGA_PHASE_B_REPORT` + `results.csv`
+**ri-sintetizzati col campione corretto** (decode-64 + fix §2.1), stesso flusso Fase B: LUT 4223→3868, Fmax
+8.5→**11.65 MHz** (la σ-LUT più piccola accorcia il path), power ~invariata (static 103 mW); conclusioni
+qualitative immutate. Colmato il gap del SAIF: `gen_saif_b2.sh` (era non-scriptato). ⚠️ **Il `.bit` NON è stato
+ricostruito** (scelta utente = sintesi+power+report): il file su disco precede la correzione — nota di
+provenienza aggiunta nel report. Rigenerarlo se/quando servirà flashare.
+
+**Prossimi:** **ottimizzazione ACC-IIDM Fmax = SP4, IN CORSO** (⚠️ NB: l'idea «reciproci-una-volta» qui accennata
+= variante **L, poi SCARTATA sui dati**; SP4-M usa l'opposto, divisione sequenziale esatta — vedi il blocco ▶ in
+cima e la sezione `## SP4`) · **`.bit` Fase B** da rigenerare quando si flasha · **riordino fisico di `matlab/`**
+(21 file caricano i `.mat` via `fullfile(here,…)` → riscrivere i path + ri-verificare) · **report** della
+digressione LUT (`DECODE_LUT_SWEEP.md`
+pronto) · **asserzioni nei cancelli storici** (verdi, sicuro aggiungerle — decisione utente in sospeso).
+
+---
+
+## 🗄️ STORICO — SUPERATO (era: RIPRESA Fase B/C, 2026-07-11). Il punto d'ingresso ATTUALE è il blocco ▶ in cima.
+
+> **RUOLO DI QUESTO FILE:** è il **punto d'ingresso di ripresa + lo STATO** del track `Simulink_Importer` (NON la
+> procedura generale — quella è la skill `session-reprise`). Chi riprende a freddo legge QUI e segue i puntatori.
+> **Repo:** `D:\Project_MBSE\1.Reti Neurali\Rete_SNN_Test\CF_FSNN` · **worktree/branch:** `Simulink_Importer` @
+> `.worktrees/Simulink_Importer` · push libero su `origin`. (Il track ① Simulatore vive su `Simulator`, lo studio
+> EventProp su `main` con master `EVENTPROP_STATUS.md` — QUESTO file copre SOLO il track ② HDL/Simulink_Importer.)
+
+## 🗄️ STORICO — SUPERATO (era: RIPRESA B1.5 + Libreria champion, 2026-07-14). Punto d'ingresso ATTUALE = blocco ▶ in cima.
+
+> **Stato più recente (in cima; il blocco Fase B/C sotto è il precedente).** ⚠️ Working tree: ci sono modifiche NON
+> mie non committate (`matlab/closed_loop_demo.slx`, `matlab/slblocks.m`) + commit `mpc-vs-snn` di un altro filone —
+> **non toccarli**. *(Cos'è quel filone: studio confronto **MPC↔SNN**, **solo fase di design, parcheggiato** —
+> doc depositati qui ma non attivi: `docs/superpowers/specs/2026-07-13-mpc-vs-snn-comparison-design.md`
+> (**Appendice A = record decisionale, leggere prima**) + `docs/superpowers/plans/2026-07-13-mpc-vs-snn-phase-a.md`.
+> Eseguirà su un **suo worktree/branch**; le API del piano sono da ri-verificare dopo B1.5.)* Artefatti generati sono gitignored (`snn_traj_fixed_r*_mex.*`, `b2_rom_active.m`, `codegen/`, `slprj/`).
+
+**B1.5 — validazione HW approfondita (Vivado/sim, pre-silicio).** Spec master (7 filoni → 4 sotto-studi a/b/c/d) =
+`docs/superpowers/specs/2026-07-13-fase-b1.5-design.md`.
+- **B1.5-a (fondamenta 4 champion + validazione funzionale)** — piano `docs/superpowers/plans/2026-07-13-fase-b1.5a-fondamenta.md`.
+  **Task 0-4 FATTI:** `gen_b2_rom(name)`→`b2_rom_active`; `snn_b2_fsm` **rango-parametrico** (`rnk=coder.const(size(W.U,2))`;
+  gate `run_b2_parity` = **0 mismatch su tutti e 4**, baseline rank-8 inclusi); validazione funzionale **via MEX**
+  (`snn_traj_fixed.m`+`build_traj_mex.m` → `snn_traj_fixed_r{16,8}_mex`; `run_b15a_validate.m`; helper `champ_weights.m`).
+  ⚠️ **GOTCHA: core `fi` interpretato = ~10h su 6 traj → OBBLIGO MEX.** `snn_core` reso codegen-safe (reset flag logico +
+  init per-variabile `isempty` + assert bound), **parità 0 preservata**. Metriche 6-traj coerenti col SW (Donatello acc
+  ~85%, Δfloat ≤0.09). **RESTA:** run completo **60-traj** (~24s), **Task Vivado 5-7** (sintesi/SAIF/cosim dei 4). Commit ~`0d759a7`.
+- **B1.5-b/c/d** (quantizzazione post-hoc+1QAT / SEU 2-livelli registri+config / stabilità-fixed-in-loop·AXI-latency·PVT):
+  solo nel master, **non ancora spec'd**.
+
+**SP1 — Libreria champion, varianti di decode (LUT sweep).** Spec `docs/superpowers/specs/2026-07-14-champion-library-expansion-design.md`,
+piano `docs/superpowers/plans/2026-07-14-sp1-decode-variants.md`. **Task 1-2 + sweep 60-traj + dimensionamento risorse FATTI:**
+`snn_decode_lut(raw,N)` (N=256 **bit-identico** a `snn_decode_hdl`); `run_lut_sweep` (forward MEX + decode-LUT-N double,
+**60 traj in 4.8s**). **Finding (definitivo, 60 traj):** accuratezza end-to-end **piatta ~84%** (83.97% da N≥64; N=16=84.06%
+entro rumore) su N∈{16..512}; `dmax vs 512` converge **quadratico** (N=32→0.034, N=64→0.011); risorse = **N×16 bit** →
+**< 1 BRAM18 anche a 512** → compromesso **soft**, LUT 32-64 basta (256 sovradimensionata ma economica). **Documento
+sorgente per il futuro report = `document/DECODE_LUT_SWEEP.md`** (scopo+metodo+dati+risorse+onestà; commit `8f7f248`).
+**Task 4 FATTO:** 6 blocchi streaming `Donatello_LUT{N}` (porte `xn`(4)+`start` → `params`(5)+`done`; interni
+`snn_b2_fsm`+`snn_decode_lut`, **stile referenziato**) aggiunti a `snn_champions_lib.slx` via nuovo `build_hdl_variants.m`
+(i 4 base invariati); **tutti e 6 simulano bit-exact** (dmax=0 vs `snn_core`+decode; l'`hdl.RAM` gira nella MATLAB
+Function; done@≈341 clock). ROM Donatello via `gen_b2_rom('Donatello')`→`b2_rom_active` (gitignored, la rigenera il
+builder). Commit `a4e8d15`. **Task 5 (HDL Coder) FATTO:** i 6 decode `snn_decode_lut(·,N)` generano VHDL (0 errori/warning,
+conformance OK), sigmoide = **tabella costante (niente `exp`)**; tool `make_hdl_decode_lut.m`, commit `c888e86`.
+**Task 3 (sintesi Vivado OOC) + Task 6 (figura) FATTI:** i 6 decode sintetizzati su xc7z020 (Vivado 2026.1) → **LUT
+520→1732 con N, 0 BRAM, DSP=16, carry ~110** (la σ-LUT è logica distribuita, non BRAM); compromesso quantificato:
+**LUT-64=734 vs LUT-256=1167 (~37% in meno) a pari accuratezza**. Figura `document/decode_lut_sweep.png`, script
+`scripts/figs_lut_sweep.py`. **⇒ SP1 COMPLETO.** *(GOTCHA path: Vivado è in `C:\AMDDesignTools\2026.1\Vivado\bin\vivado.bat`,
+NON in C:\Xilinx/AMD.)* Doc sorgente report = `document/DECODE_LUT_SWEEP.md`. Commit
+`454327b`/`8f7f248`/`a4e8d15`/`c888e86`(+doc/figura). *(Skill `fpga-expert` disponibile. Prossimo: SP2 Donatello+ACC-IIDM open-loop.)*
+
+**SP2 — Donatello + ACC-IIDM open-loop. ⇒ COMPLETO** (2026-07-15). Spec
+`docs/superpowers/specs/2026-07-14-sp2-donatello-acc-iidm-design.md`, piano `docs/superpowers/plans/2026-07-14-sp2-*`,
+**doc di processo `document/SP2_ACC_IIDM.md`** (leggere quello: qui solo il puntatore).
+
+Blocco **`Donatello_ACC_IIDM`** in `snn_champions_lib`: `s,v,dv,v_l → accel`, campione **LUT-64** (non 256:
+l'outline SP1 §5 precede la scelta del campione) + ACC-IIDM open-loop in **double**, loop velocità **aperto** come
+richiesto. **Sola simulazione, NON sintetizzabile** (fixed+double): conseguenza accettata del blocco unico —
+l'artefatto HDL-ready resta `Donatello_Champion`. Il `cf_plant_lib/ACC_IIDM` closed-loop **non è stato aperto**:
+ora è `acc_iidm_open` + integrazione, cioè la stessa matematica a **fonte unica** (`run_plant_parity` invariato).
+
+Cancelli: `run_block_acciidm_test` **dmax(accel) = 0 su 5/5 traiettorie**; latenza 340 ed edge-trigger **misurati**;
+il test è **verificato sensibile** al mis-gating dell'IIDM (variante con l'IIDM a ogni clock → **0.1836 m/s²** →
+fallisce). `run_block_sync_check` esteso: **8 blocchi, 0 stale**. Commit `a9fb61b`…`be19044`.
+
+---
+
+**FASE B (validazione del report FPGA) = CHIUSA.** Deliverable **`document/FPGA_PHASE_B_POWER.md`** (numeri +
+tabella claim + re-tag + §9 protocollo Fase C + §8 fonti letteratura). Dati grezzi + CSV in
+`matlab/axi/build/phase_b/` (`util_*`/`timing_*`/`power_*`.rpt, `results.csv`). Spec+piano:
+`docs/superpowers/{specs,plans}/2026-07-10-fpga-phase-b-power*`. **Findings:** DSP 0→38 (elettivi, 0-DSP
+realizzabile), Fmax 100-200→~8.5 MHz, **e_MAC≈e_AC su FPGA** (non 5× Horowitz), energia realizzata≫algoritmica
+(static domina 92%), **vantaggio SNN ~5-65× ma da COMPATTEZZA modello** (letteratura NN car-following ~7k-100k MAC
+vs SNN ~800), NON da AC≪MAC; termica non-problema (Tj~26°C). Bit-exact funzionale già provato (HDL phase, err=0).
+
+**AZIONE 1 — Report Fase B (via skill `create-report`) — ✅ FATTA (2026-07-13).** Deliverable in **`report/`**
+(scelta utente "sempre nella cartella report", NON in `document/` come ipotizzato sotto): `report/FPGA_PHASE_B_REPORT.{md,pdf}`
+(14 pag) + `report/figures_phase_b/` (9 figure) + generatore `scripts/build_fpga_phase_b_report.py` (sorgente unica → md+pdf,
+**deterministico**, ogni numero grounded su `matlab/axi/build/phase_b/results.csv`). Register impersonale, marker ●/○,
+4 caveat onesti; audit indipendente superato (2 fix: §1 punto operativo 8 vs Fmax 8.5 MHz, Wang 2018); QC visivo + `.md`
+byte-stabile. *(Specifica originale conservata sotto per tracciabilità.)*
+- Sorgente = `document/FPGA_PHASE_B_POWER.md` (contenuto già assemblato) + `matlab/axi/build/phase_b/results.csv`.
+- Template/stile = **`report/FPGA_REPORT.md`** + **`report/VALIDATION_REPORT_v3.md`**. ✅ La divergenza di
+  layout **si è riconciliata al merge in `main`**: i report stanno tutti in `report/`, non più in
+  `document/`. (Prima del merge questo blocco diceva `document/` perché su questo branch era così.)
+  Stessa procedura degli altri report.
+- Contenuto atteso: scopo/metodo (3 livelli fedeltà) · correttezza funzionale · risorse/timing · potenza sistema
+  (static 92%, E realizzata≫algoritmica) · costanti e_MAC≈e_AC · confronto SNN-vs-ANN + letteratura (compattezza
+  ~5-65×) · tabella claim (3 correzioni + reframe) · termica · onestà+Fase C. Figure: breakdown potenza · attribuz.
+  38 DSP + test 0-DSP · E realizzata-vs-algoritmica · e_MAC-vs-e_AC · SNN-vs-ANN + scaling letteratura · compattezza · tabella.
+- **4 CAVEAT ONESTI da portare:** (a) costanti per-op order-of-magnitude (floor mW); (b) ANN random→energia del
+  datapath, capacità dalla letteratura; (c) vantaggio = range 5-65×, numero esatto=training (non fatto); (d) tutto
+  stima Vivado, non silicio (Fase C).
+
+**AZIONE 2 — Eseguire l'harness Fase C (design-for-later, board PYNQ-Z1 in arrivo).** Ripartibile da qui.
+- Piano (codice completo, 8 task) = `docs/superpowers/plans/2026-07-11-fpga-phase-c-silicon-validation.md`;
+  spec = `docs/superpowers/specs/2026-07-11-fpga-phase-c-silicon-validation-design.md`.
+- Eseguire via `superpowers:executing-plans` (o subagent-driven): scrive generatore riferimenti MATLAB
+  (`gen_phase_c_reference.m`, rete fixed) + harness Python in `matlab/axi/phase_c/` (driver `SnnDonatello` + mock,
+  plant ACC-IIDM **numpy** PS-friendly, sweep funzionale, closed-loop network-in-the-loop, potenza 3-stati) +
+  unit-test col **MOCK** → tutto VERDE **senza board**. Test: `python -m pytest matlab/axi/phase_c/tests/ -v` (numpy, no torch).
+- Esecuzione reale sulla board = runbook in `document/FPGA_PHASE_C_REPORT.md` (⚠️ **non ancora presente — lo crea
+  l'AZIONE 2**) quando arriva la PYNQ-Z1 (solo total-board delta idle-vs-inferenza; i 9 mW PL < risoluzione →
+  upper-bound + P_deploy totale).
+
+> **Dopo le 2 azioni**, la prossima **fase di progetto** è l'**integrazione dei limiti/segnali V2I in Simulink**
+> attorno alla rete (le menzioni "Prossimo: V2I" nel log storico sotto si riferiscono a QUESTA, non alle 2 azioni pendenti).
+
+### 🛠️ MODI DI LAVORO (vincoli del track — rispettarli sempre)
+- **NIENTE workaround:** se un numero/comportamento non torna si indaga la **CAUSA** (come il bug leak-division,
+  la doppia /n_ticks, i 38 DSP elettivi) — non si aggira né si "aggiusta il numero".
+- **Cura costante della documentazione:** ogni milestone aggiorna il deliverable + questo file + la memoria. I
+  documenti del repo **devono bastare da soli** (la memoria dell'assistente è supplemento, non dipendenza).
+- **Design prima del codice:** nuove funzionalità → `superpowers:brainstorming` → `writing-plans` →
+  `executing-plans`. Non saltare all'implementazione.
+- **VHDL mai a mano** per i datapath (HDL Coder single-source da `snn_core`, o port 1:1 come il plant). **Core SNN
+  congelato:** parità double ~2e-6 dopo ogni modifica a `snn_core`/`snn_types`.
+- **Lavoro lungo Vivado/HW = checkpoint-driven:** run in background, ci si ferma ai checkpoint per far validare
+  all'utente prima di proseguire.
+- **Commit** conventional e chiari, **senza `Co-Authored-By`**. Push libero (Azure dismesso).
+
+### 🎙️ TONO / STILE (riprendere come se la chat non fosse mai finita)
+Tecnico e rigoroso ma **onesto senza overclaiming**: numeri con provenienza, caveat espliciti, si dichiara cosa
+è stima vs misura. **Decisi:** si agisce e si raccomanda un'opzione (niente survey infinite); si chiede solo
+quando la scelta è genuinamente dell'utente. **In italiano.** Diretti sui findings scomodi (es. "il vantaggio del
+report è giusto per il motivo sbagliato") senza addolcirli. Checkpoint espliciti sul lavoro lungo. L'utente è
+competente (MBSE/SNN/FPGA): niente spiegazioni base non richieste.
+
+### 📋 PROMPT DI RIPRESA (ATTUALE — agg. 2026-07-28) — guida a LEGGERE i documenti, non un dump.
+> Copia-incolla questo in una chat nuova dopo /clear. (I prompt più vecchi in coda sono superati.)
+
+```
+Riprendi il progetto CF_FSNN, track HDL / Simulink_Importer. Non ho contesto in questa chat (post-clear):
+NON chiedermi lo stato — ricostruiscilo dai documenti, non a memoria.
+
+Repo: D:\Project_MBSE\1.Reti Neurali\Rete_SNN_Test\CF_FSNN
+Worktree/branch: .worktrees\Simulink_Importer  (branch Simulink_Importer; commit LOCALI non pushati, ahead di origin)
+
+1. POSIZIONATI NEL worktree ed esegui i comandi DA LÌ (bare, NON con -C):
+     cd "D:\Project_MBSE\1.Reti Neurali\Rete_SNN_Test\CF_FSNN\.worktrees\Simulink_Importer"
+     git status   e   git log --oneline -8
+   È da QUESTA cartella che risolvono i path del punto 2 (document/, FaseB2.0/). NIENTE pull: i commit sono
+   locali, ahead di origin (deriva T5, checkpoint doc, allineamento reprise).
+   ⚠️ **NON leggere il `document/SESSION_RESUME.md` del repo-root** `…\CF_FSNN`: quello è un ALTRO worktree su
+   branch `main` (track EventProp), con un file DIVERSO che ha la STESSA prima riga ma NON i blocchi ▶/FASE B2.0.
+   Working tree qui: solo clockInfo.txt (artefatto Vivado rigenerabile, non mio) -> non committare. ATTENZIONE:
+   i *.mexw64 sono TRACCIATI, NON gitignorati -> mai "git commit -am" (spazzerebbe i mex ricompilati); stagearli
+   esplicito. File utente da NON toccare: closed_loop_demo.slx / slblocks.m (tracciati).
+2. Leggi PRIMA document/SESSION_RESUME.md -> blocco "▶ RIPRESA A FREDDO" in CIMA (agg. 2026-07-28), e dentro
+   il sotto-blocco "🔄 FASE B2.0 IN CORSO": è il punto d'ingresso, con lo STATO e le AZIONI pendenti coi
+   puntatori. I MODI DI LAVORO e il TONO stanno nelle sezioni dedicate (marker 🛠️ e 🎙️ in SESSION_RESUME,
+   valide per tutto il track) e in sintesi in fondo a questo prompt. Segui i puntatori — LEGGI i doc, non
+   ricostruire a memoria. Panoramica della fase: FaseB2.0/README.md. Deriva (T5): FaseB2.0/common/DRIFT.md.
+   ⚠️ Le sezioni SOTTO il blocco ▶ (vecchio piano B2.0 2a/2b/2c/2d, "CRONOLOGIA", "STORICO — SUPERATO", e in
+   fondo il track EventProp/main) sono CRONOLOGIA: superate dal riordino T1–T9. Il piano/azioni CORRENTI sono
+   SOLO il blocco FASE B2.0 in cima + FaseB2.0/README.md.
+3. La tua memoria (MEMORY.md + memorie) è già caricata: contesto supplementare, non dipendenza.
+
+Stato in breve (verifica dai doc): libreria consolidata (8 blocchi milestone 2026-07-27 + il composto
+Donatello_SNN_IIDM aggiunto in T4 = 9 blocchi); Fase B2.0 (validazione RTL pre-FPGA) con
+T1–T5 FATTI e committati — blocco composto scelto Donatello_SNN_IIDM (= Donatello_Tier@BALANCED + ACC-IIDM) +
+deriva open-loop CHIUSA (deploy as-is confermato, FaseB2.0/common/DRIFT.md). PENDENTE = blocco harness T6–T9:
+Harness_SNN (Tier@BAL) e Harness_SNN_IIDM (composto) = RTL+xsim su sottoinsieme + funzionale full-99 (MEX) +
+HDL post-route + bitstream; poi 2 report (create-report) in report/; poi allineamento doc finale. Prossimo = T6.
+⚠️ 1 punto da confermarmi: la deriva open-loop è su test_dataset.mat (60 traj, ha val); l'esaustivo
+test_dataset_exhaustive.mat (99 scenari, NO val) è riservato al car-following full-99 in T6/T7 — confermare la
+divisione o chiedermi l'open-loop anche su val generato dai 99 scenari. Anche: pushare i commit locali? (solo su mia richiesta).
+
+Poi, PRIMA di lavorare, dimmi in breve: (a) lo stato; (b) le AZIONI pendenti (T6–T9, prossimo = T6); (c) i modi
+di lavoro e il tono che adotterai. Poi ASPETTA la mia conferma su cosa fare.
+
+Adotta i MODI DI LAVORO e il TONO di SESSION_RESUME (in sintesi: verifica sul DATASET mai su un caso singolo,
+riportando quanti/quanti; un cancello che non può fallire non è un cancello — assert + provalo sensibile; una
+claim va VERIFICATA non dichiarata; root cause prima del fix, loop fi lento → MEX; design prima del codice via
+skill superpowers; VHDL mai a mano / core SNN congelato bit-exact; commit conventional SENZA Co-Authored-By;
+tono italiano, deciso, evidence-first, onesto senza overclaiming, con checkpoint sul lavoro lungo).
+```
+
+---
+
+## 🗄️ STORICO — Stato precedente (2026-07-10 — **B2 REALIZZATO, SNN 6.9% LUT bit-exact**). Stato ATTUALE = blocco ▶ in cima.
+
+> **✅ B2 (SNN Donatello time-multiplexata, `hdl.RAM`) REALIZZATA E VERIFICATA (commit `f20e812`).** Da **44% → 6.9%
+> LUT** (~6.3× meno), 22 DSP, 2 BRAM, **bit-exact** (`test_b2_fsm` err=0), **cosim xsim PASSED**. È l'architettura di
+> deploy lean. File: `matlab/snn_b2_fsm.m` + `gen_b2_rom`/`b2_donatello_rom`/`test_b2_fsm`/`tb_b2_fsm`. Studio in
+> `document/HDL_ARCHITECTURE_STUDY.md`. **decode + wrapper AXI-Lite + BITSTREAM PYNQ-Z1 (board reale) FATTI** (cosim
+> `AXI TEST PASSED`; IP synth **8.9% LUT / 38 DSP / 2 BRAM**; **`.bit` timing-clean** @8 MHz WNS +6.97 ns, con **board
+> preset Digilent PYNQ-Z1** DDR/MIO reali + handoff **`.hwh`/`.xsa`** per PYNQ `Overlay`/Vitis, in `matlab/axi/build/`).
+> **CHAIN HDL COMPLETO** PyTorch→RTL→AXI→bitstream flashabile, tutto headless. **+ FASE B POWER ANALYSIS FATTA**
+> (validazione report FPGA, deliverable `document/FPGA_PHASE_B_POWER.md` + `matlab/axi/build/phase_b/`): synth OOC +
+> SAIF `report_power` High-confidence. **3 correzioni al report**: DSP 0→38 (elettivi, 0-DSP realizzabile), Fmax
+> 100-200→~8.5 MHz, **e_MAC≈e_AC su FPGA** (non il 5× Horowitz); + energia realizzata ≫ algoritmica (static domina
+> 92%). **Vantaggio SNN ri-inquadrato**: reale ~5-65× ma da **compattezza modello** (letteratura NN car-following
+> ~7k-100k MAC vs SNN ~800), NON da AC≪MAC. Fase C (silicio) rinviata-predisposta. **Prossima FASE progetto (dopo le 2 azioni pendenti in testa al file):** integrazione V2I in Simulink.
+> (Storia po2→shift/44% sotto.)
+
+> ⚠️ **WORKTREE PARALLELO — NON è il track principale `main`.** Sei nel worktree
+> `.worktrees/Simulink_Importer` (branch **`Simulink_Importer`**), **traccia ②** (import checkpoint → Simulink → HDL).
+> Il track ① (Simulatore) vive in `.worktrees/Simulator`. Per il track principale (EventProp/training) vedi
+> «Stato precedente» sotto + `EVENTPROP_STATUS.md`. Contesto tracce parallele: memoria `cf-fsnn-parallel-tracks`.
+
+**➜ PUNTO D'INGRESSO HDL: leggi `document/HDL_PHASE.md` §0 (RIPRESA RAPIDA)** — stato, prossima azione, comandi di
+verifica, e **§9 gotcha** (i tranelli da non ri-sbattere). Contesto libreria/blocchi: `document/SIMULINK_IMPORT_DESIGN.md`.
+
+**Stato in una riga:** RTL VHDL **bit-accurato** generato per Donatello via HDL Coder, **single-source da `snn_core`**
+(type-parametrizzato double/fi, NON riscrittura a mano). **po2→shift FATTO → moltiplicatori 27.840 → 32** (→ **32 DSP
+REALI** post-synth+P&R 2026-07-10, **LUT 44% / slice 53%**, 0 BRAM, ~5 MHz — vedi `HDL_PHASE.md §0`), comportamento preservato (parità double **2e-6**, errore
+fixed **≤0.028 = max sui 5 parametri** (v0 il peggiore), Leonardo NON regredito). "bit-accurato" = garanzia HDL Coder
+vs il fixed MATLAB, **ora verificato in cosim xsim** (`TEST COMPLETED (PASSED)`, bit-esatto, 2026-07-10). **Bug leak-division RISOLTO** (`V./ld` fi = plateau ~3.5 → `leaky` bit-shift).
+
+**Cosa fare adesso** — **[✅ Vivado 2026.1 installato; ④ SINTESI+P&R REALI fatti 2026-07-10]:**
+1. ✅ **Donatello sintetizzato E routato** (OOC, `xc7z020clg400-1`): **LUT 23.186 = 44% (slice 53%), FF 3.386 = 3%,
+   DSP 32 = 15%** (mult residui previsti — po2→shift confermato), **BRAM 0**, **Fmax ~5 MHz** (non-vincolante). Fit
+   ok ma **LUT-bound**; la STIMA sotto-contava i LUT. **Decisione aperta:** area-opt **streaming ÷32** (§8.2, refactor
+   `snn_core` gated-parità) **vs** ampiezza (decode→LUT + altri 3 champion + cosim). Dettaglio in `HDL_PHASE.md §0`.
+2. Poi: **decode→LUT** (`coder.approximate` su σ), **altri 3 champion** (`make_hdl('Michelangelo'|...)`), **cosim**.
+
+**Vincoli/modi (track ②):** niente workaround; **VHDL MAI a mano** (rompe la catena 1:1); ottimizzare via config
+HDL Coder o sorgente MATLAB **behavior-preserving, gated dalla parità** (`run_parity_tests` double ~2e-6 dopo OGNI
+modifica a `snn_core`/`snn_types`); metrica primaria = comportamento (gap), non i param grezzi; commit senza
+`Co-Authored-By`. **Merge su `main` NON ancora fatto** (coordinare col track Simulator).
+
+**File chiave (worktree):** sorgente HDL `matlab/snn_core.m`+`snn_types.m` (+`snn_normalize/decode/entry`); wrapper
+`matlab/snn_hdl_<name>.m` (gen da `gen_hdl_tops.m`); driver `matlab/make_hdl.m`; verifiche `run_parity_tests.m`
+(double), `run_fixed_{parity,sweep}.m` + `run_hdl_verify.m` (fixed); diagnostica `diag_{ranges,quant}.m`; export
+`scripts/export_champions.py` → `matlab/champions_export.mat`. RTL generato in `matlab/codegen/` (gitignored,
+rigenerabile con `make_hdl('Donatello')`). MATLAB **R2026a headless** (`C:\Program Files\MATLAB\R2026a\bin`).
+
+**4 champion** (`champions/`): Donatello=`PE_t05_gp0002` + Michelangelo=`A_lr1e2_t06_r16` = **entrambi
+`eventprop_alif_full` rank 16**; Raffaello=`R33_C2_A1_T12_fix` + Leonardo=`LS3_PEAK_R0_launch_d03` = **entrambi
+`baseline` rank 8**. Traiettoria ottimizzazione area e
+catena 1:1 (4 anelli) in `HDL_PHASE.md §5/§2`.
+
+---
+
+---
+
+## ⛔ DA QUI IN GIÙ = TRACK **EventProp / main** (NON Simulink_Importer) — EREDITATO, IGNORARE per QUESTA ripresa
+
+> Questo file nacque come copia dal branch `main` e ne ha ereditato lo **storico del track EventProp/training**.
+> **Non riguarda il track `Simulink_Importer`** (HDL/Simulink) di questa sessione. Lo stato REALE di quel track vive
+> altrove: `document/EVENTPROP_STATUS.md` (master) + il `SESSION_RESUME.md` del branch `main`. Qui è **archeologia
+> inerte** (lasciata per non creare divergenze rischiose al merge); per riprendere QUESTO track fermati al blocco ▶
+> in cima — **niente sotto questa riga è un'azione da eseguire**.
+
+---
+
+## 🎯 [EventProp/main — storico] Stato precedente (2026-06-21 — **EventProp_Study: training a gradiente esatto**)
 
 **Branch corrente**: `EventProp_Study` (da `main`). **`Dynamic_Study` e `Loss_Study` CHIUSI e mergiati in
 `main`, poi eliminati** (locale + remoto). `main` @ `db9fbdb` contiene tutto il lavoro.

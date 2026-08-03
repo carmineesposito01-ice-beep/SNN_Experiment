@@ -1,0 +1,56 @@
+{
+ "data": {
+  "collisioni": {
+   "p1": 3,
+   "rtl": 3,
+   "uguali": true
+  },
+  "lettura": "la differenza parte sotto il LSB, cresce nei primi ~100 control-step e si stabilizza: l'anello amplifica l'errore di quantizzazione fino a un livello LIMITATO, non lo fa scappare. L'esito di sicurezza (numero di collisioni) e' identico, quindi la quantizzazione dell'uscita non cambia cio' che conta.",
+  "lsb_accel": 0.00390625,
+  "n_scenari": 88,
+  "profilo_temporale_scenario_1": {
+   "0": 0.003264334052801132,
+   "1": 0.0037644952535629272,
+   "10": 0.018775276839733124,
+   "100": 0.06322312355041504,
+   "2": 0.012364417314529419,
+   "20": 0.021004900336265564,
+   "200": 0.05145835317671299,
+   "300": 0.05759492702782154,
+   "400": 0.045184409245848656,
+   "5": 0.003895089030265808,
+   "50": 0.04745332896709442,
+   "500": 0.05765828490257263,
+   "599": 0.03996551036834717
+  },
+  "scarto_di_picco_per_scenario": {
+   "a": {
+    "massimo": 1.758725643157959,
+    "mediana": 0.5594263672828674,
+    "p95": 1.4445739269256592
+   },
+   "gap": {
+    "massimo": 1.1488288789653325,
+    "mediana": 0.5341507003741697,
+    "p95": 1.0844401724347108
+   },
+   "v": {
+    "massimo": 0.614760110439228,
+    "mediana": 0.20804272780569777,
+    "p95": 0.48620851487576044
+   },
+   "x": {
+    "massimo": 2.6790595563538773,
+    "mediana": 0.8246627043195645,
+    "p95": 1.6281576213480176
+   }
+  }
+ },
+ "prov": {
+  "bitstream_sig": "n/a (simulazione RTL)",
+  "cwd": "D:\\Project_MBSE\\1.Reti Neurali\\Rete_SNN_Test\\CF_FSNN\\.worktrees\\Simulink_Importer\\FaseC",
+  "frontend": "script",
+  "sorgente": "rtl-xsim",
+  "timestamp": "2026-08-03T13:22:51"
+ }
+}

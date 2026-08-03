@@ -1,0 +1,10 @@
+### PUNTO duty 0.37% (idle 100k) ###
+PW saif_duty_p37  total=0.113  dynamic=0.010  static=0.103  confidence=High
+
+### RUN A DUTY REALE — start 12:52:01, ETA ~2h15 ###
+durata: 12 min
+DUTY-CFG NSTEP=1 IDLECYC=5199584 GATEMODE=0 CLKHALF=`CLKHALF HBEAT=500000
+DUTY-ACT step=0 done t=8009000
+DUTY-DONE steps=1 idle=5199584
+SAIF REALE OK (2827654 B)
+### fine 13:05:37 ###

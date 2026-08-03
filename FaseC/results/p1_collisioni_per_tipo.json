@@ -1,0 +1,76 @@
+{
+ "data": {
+  "collisioni": {
+   "ideale": {
+    "idx": [
+     9,
+     18,
+     27
+    ],
+    "n": 3,
+    "regimi": [
+     "highway",
+     "highway",
+     "highway"
+    ],
+    "tipi": [
+     "aggressive_cut_in",
+     "aggressive_cut_in",
+     "aggressive_cut_in"
+    ]
+   },
+   "latenza_3": {
+    "idx": [
+     9,
+     18,
+     27,
+     36,
+     45,
+     63,
+     72,
+     81,
+     90,
+     99
+    ],
+    "n": 10,
+    "regimi": [
+     "highway",
+     "highway",
+     "highway",
+     "urban",
+     "urban",
+     "truck",
+     "truck",
+     "mixed",
+     "mixed",
+     "mixed"
+    ],
+    "tipi": [
+     "aggressive_cut_in",
+     "aggressive_cut_in",
+     "aggressive_cut_in",
+     "aggressive_cut_in",
+     "aggressive_cut_in",
+     "aggressive_cut_in",
+     "aggressive_cut_in",
+     "aggressive_cut_in",
+     "aggressive_cut_in",
+     "aggressive_cut_in"
+    ]
+   }
+  },
+  "cut_in_applicato": true,
+  "domanda": "gli scenari che collidono sono quelli aggressivi, cioe quelli che DEVONO collidere?",
+  "lettura": "aggressive_cut_in porta il gap a 6,3 m di colpo: e una emergenza per costruzione, e collidere li non e un fallimento del controllore. Il risultato utile e un altro: la latenza NON crea modalita di guasto nuove, ALLARGA quella che gia ce. Senza latenza il controllore regge il taglio aggressivo ovunque tranne in autostrada (il regime piu veloce); con 300 ms cede a TUTTE le velocita, 10 casi su 11.",
+  "limite": "e una misura a N=4 su un dataset con 11 aggressive_cut_in: dice che la soglia di velocita si abbassa con la latenza, non di quanto in generale.",
+  "n_vehicles": 4,
+  "risposta": "SI, e solo quelli. Ogni collisione misurata e un aggressive_cut_in."
+ },
+ "prov": {
+  "bitstream_sig": "n/a",
+  "cwd": "D:\\Project_MBSE\\1.Reti Neurali\\Rete_SNN_Test\\CF_FSNN\\.worktrees\\Simulink_Importer\\FaseC",
+  "frontend": "script",
+  "sorgente": "simulazione",
+  "timestamp": "2026-08-01T21:14:01"
+ }
+}
