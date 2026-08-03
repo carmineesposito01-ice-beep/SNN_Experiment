@@ -108,7 +108,9 @@ class SerialDMM(SorgenteDMM):
     """
     sorgente = 'seriale'
 
-    def __init__(self, porta, parser, baud=2400, timeout_s=2.0):
+    # baud 115200: valore documentato da ZOYI. Un baud sbagliato non produce numeri plausibili
+    # -- produce spazzatura -- e `verifica_contro_display` lo prende comunque.
+    def __init__(self, porta, parser, baud=115200, timeout_s=2.0):
         if parser is None:
             raise ValueError(
                 'SerialDMM richiede un parser esplicito. Ricavarlo con hw/dmm_discover.py e '

@@ -162,15 +162,39 @@ stesso dato**.
 | `SerialDMM` | ZT-702S via seriale. **Richiede un parser esplicito** (vedi sotto) |
 | `ReplayDMM` | ri-aggregare una campagna già fatta, p.es. cambiando la banda termica. **Non** è un modo di raccogliere dati |
 
+#### Il collegamento fisico dello ZT-702S — **non è la USB-C**
+
+Verificato per contrasto il 2026-08-03: con lo strumento collegato via USB-C il PC **non enumera
+nulla** — nessuna porta COM, nessun dispositivo senza driver, nessun evento PnP. Non è un problema
+di driver: è che quel percorso non esiste.
+
+Secondo la documentazione ZOYI la USB-C fa **alimentazione e importazione dei file salvati**. Il
+flusso live è un **UART sulla porta del generatore di segnale**, da abilitare con **F4 → serial
+port output**, a **115200 baud** e **3 letture al secondo**.
+
+Serve quindi un **adattatore USB-UART** (CH340 / CP2102 / FT232) fra quella porta e il PC, con la
+massa in comune.
+
+⚠️ Questi dettagli vengono dal manuale dello **ZT-703S** (3-in-1), dato per «modello simile». Il
+702S è un 2-in-1 e potrebbe non avere quella porta. Sono un'**ipotesi di partenza**, non un fatto
+verificato su questo esemplare — ed è esattamente il motivo per cui la procedura sotto guarda i
+byte invece di dedurre il formato.
+
+#### Ricavare il parser
+
 ⚠️ **Il parser seriale non è scritto, ed è deliberato.** Il formato del frame dello ZT-702S non è
 documentato in modo affidabile e cambia fra revisioni dello stesso modello: uno scritto «da
 manuale» non darebbe errore, darebbe numeri **plausibili**. Procedura per ricavarlo:
 
 ```bash
-pip install pyserial
-python hw/dmm_discover.py --lista                      # quale porta è
-python hw/dmm_discover.py --porta COM3 --secondi 10    # byte grezzi, display su valore NOTO
+python hw/dmm_discover.py --lista
 ```
+
+```bash
+python hw/dmm_discover.py --porta COM3 --secondi 10
+```
+
+(display su un valore **noto e stabile**; `pip install pyserial` se manca)
 
 Si cerca la lunghezza del frame (dal periodo con cui si ripete un byte fisso), i byte costanti
 (delimitatori, unità) contro quelli che cambiano (le cifre), e il valore del display dentro i byte

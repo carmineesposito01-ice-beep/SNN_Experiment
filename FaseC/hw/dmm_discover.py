@@ -5,6 +5,19 @@ non e' documentato in modo affidabile e a volte cambia fra revisioni dello stess
 un parser scritto "da manuale" restituirebbe numeri PLAUSIBILI se il formato fosse diverso --
 il modo di fallire piu' pericoloso che ci sia.
 
+⚠️ COME SI COLLEGA -- non dalla USB-C. Verificato per contrasto il 2026-08-03: con lo strumento
+collegato via USB-C il PC non enumera NULLA (nessuna porta COM, nessun dispositivo senza driver,
+nessun evento PnP). Secondo la documentazione ZOYI la USB-C fa alimentazione e importazione dei
+dati SALVATI; il flusso live e' un UART sulla porta del GENERATORE DI SEGNALE, da abilitare col
+tasto F4 ("serial port output"), a 115200 baud e 3 letture al secondo.
+
+Serve quindi un adattatore USB-UART (CH340 / CP2102 / FT232) fra quella porta e il PC.
+
+⚠️ Quei dettagli vengono dal manuale del ZT-703S (3-in-1), dato per "modello simile": il 702S e'
+un 2-in-1 e potrebbe non avere la porta del generatore. Sono un'IPOTESI DI PARTENZA, non un fatto
+verificato su questo esemplare -- e' esattamente per questo che qui si guardano i byte invece di
+scrivere un parser.
+
 Uso:
     python dmm_discover.py --lista                       # quali porte esistono
     python dmm_discover.py --porta COM3 --secondi 10     # ascolta e mostra i byte
@@ -30,8 +43,12 @@ def lista_porte():
         return 1
     porte = list(list_ports.comports())
     if not porte:
-        print('nessuna porta seriale trovata. Lo strumento e\' collegato e acceso?')
-        print('Molti multimetri usano un cavo ottico USB: la porta compare solo col cavo inserito.')
+        print('nessuna porta seriale trovata.')
+        print()
+        print('ATTENZIONE: la USB-C dello ZT-702S NON e\' il percorso dati. Alimenta e importa')
+        print('i file salvati; il flusso live e\' un UART sulla porta del GENERATORE, e per')
+        print('portarlo al PC serve un adattatore USB-UART (CH340 / CP2102 / FT232).')
+        print('Senza quell\'adattatore collegato, qui non comparira\' mai nulla.')
         return 1
     print('porte disponibili:')
     for p in porte:
@@ -47,7 +64,8 @@ def ascolta(porta, baud, secondi, mostra_ascii=True):
         return 1
     print('ascolto %s a %d baud per %d s -- tenere il display su un valore STABILE e NOTO' %
           (porta, baud, secondi))
-    print('(se non esce nulla, provare altri baud: 2400, 4800, 9600, 19200, 115200)')
+    print("(se non esce nulla, provare altri baud: 115200 e' quello documentato, poi 9600, "
+          "19200, 38400, 2400)")
     print()
     try:
         ser = serial.Serial(porta, baud, timeout=0.5)
@@ -78,8 +96,11 @@ def ascolta(porta, baud, secondi, mostra_ascii=True):
 
     print()
     if n_righe == 0:
-        print('NESSUN BYTE ricevuto. Da controllare, in ordine: il baud, che lo strumento sia in')
-        print('modalita\' di trasmissione (spesso c\'e\' un tasto RS232/SEND da attivare), e il cavo.')
+        print('NESSUN BYTE ricevuto. Da controllare, in ordine:')
+        print("  1. l'uscita seriale e' ABILITATA sullo strumento (F4 -> serial port output)")
+        print('  2. il filo e\' sulla porta del GENERATORE, non sulla USB-C')
+        print('  3. il baud (115200 documentato; provare anche 9600 e 19200)')
+        print('  4. massa in comune fra adattatore e strumento')
         return 1
     print('%d blocchi da 16 byte ricevuti.' % n_righe)
     print()
@@ -96,7 +117,9 @@ def _main(argv):
     ap = argparse.ArgumentParser(description='sonda della seriale del multimetro')
     ap.add_argument('--lista', action='store_true', help='elenca le porte e esci')
     ap.add_argument('--porta', default=None)
-    ap.add_argument('--baud', type=int, default=2400)
+    ap.add_argument('--baud', type=int, default=115200,
+                    help='115200 secondo il manuale ZOYI (ipotesi, non verificata '
+                         'su questo esemplare)')
     ap.add_argument('--secondi', type=int, default=10)
     a = ap.parse_args(argv)
     if a.lista or not a.porta:
