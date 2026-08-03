@@ -82,3 +82,74 @@ def p1_tabella(sorgente):
                       'collisioni': '%d/%d' % (v['n_collisi'], v['n_sicurezza']),
                       'TTC_min_s': v['min_ttc_minimo'], 'gap_min_m': v['min_gap_minimo']})
     return righe
+
+
+def c3_distribuzione(sorgente, ax=None):
+    """La corrente per CONDIZIONE, come distribuzione.
+
+    E' un box plot e non un istogramma perche' il numero di punti e' piccolo (repliche, non
+    campioni): un istogramma su 8 valori disegnerebbe una forma che i dati non sostengono.
+    E non e' una barra sola, perche' su una differenza di pochi mA un valore singolo non e' un
+    risultato -- e' un'illusione di precisione.
+    """
+    import matplotlib.pyplot as plt
+    d = _dati(sorgente)
+    per_cond = {}
+    for p in d['punti']:
+        per_cond.setdefault('%s/%s' % (p['cfg'], p['gating']), []).append(float(p['mA']))
+    etichette = sorted(per_cond)
+    if ax is None:
+        _, ax = plt.subplots(figsize=(8, 5))
+    ax.boxplot([per_cond[k] for k in etichette], tick_labels=etichette, showmeans=True)
+    ax.set_ylabel('corrente di scheda [mA]')
+    ax.set_xlabel('condizione (bitstream / gating)')
+    ax.grid(alpha=0.3, axis='y')
+    lo, hi = d['tj_window']
+    ax.set_title('C3 - %d punti, banda termica [%.0f, %.0f] degC, seme %s'
+                 % (len(d['punti']), lo, hi, d['seed']))
+    return ax
+
+
+def c3_tabella(sorgente):
+    """Le differenze di C3 come righe leggibili, con la separabilita' DICHIARATA.
+
+    `separabile=False` non e' un fallimento della misura: e' il risultato. Sostituirlo con un
+    numero preso dentro il rumore lo sarebbe.
+    """
+    d = _dati(sorgente)
+    righe = []
+    for nome, v in sorted(d['differenze'].items()):
+        righe.append({'confronto': nome,
+                      'delta_mW': v['delta_mW_per_istanza'],
+                      'incertezza_mW': v['incertezza_mW'],
+                      'n_istanze': v['n_istanze'],
+                      'esito': 'separabile' if v['separabile'] else 'NON separabile'})
+    return righe
+
+
+def c3_deriva_termica(sorgente, ax=None):
+    """Tj a ogni punto, nell'ordine in cui i punti sono stati MISURATI.
+
+    Serve a vedere se la deriva termica e' rimasta scorrelata dalla condizione. Se le
+    condizioni si allineassero con la temperatura, la differenza fra loro conterrebbe anche
+    la deriva -- ed e' esattamente cio' che il sorteggio esiste per impedire.
+    """
+    import matplotlib.pyplot as plt
+    d = _dati(sorgente)
+    if ax is None:
+        _, ax = plt.subplots(figsize=(9, 4))
+    punti = sorted(d['punti'], key=lambda p: p['idx'])
+    cond = sorted({'%s/%s' % (p['cfg'], p['gating']) for p in punti})
+    for k in cond:
+        xs = [p['idx'] for p in punti if '%s/%s' % (p['cfg'], p['gating']) == k]
+        ys = [p['tj'] for p in punti if '%s/%s' % (p['cfg'], p['gating']) == k]
+        ax.plot(xs, ys, 'o', ms=5, label=k)
+    lo, hi = d['tj_window']
+    ax.axhspan(lo, hi, color='green', alpha=0.07)
+    ax.set_xlabel('ordine di misura (SORTEGGIATO)')
+    ax.set_ylabel('Tj [degC]')
+    ax.legend(fontsize=8, ncol=3)
+    ax.grid(alpha=0.3)
+    ax.set_title('C3 - se una condizione si raggruppasse in temperatura, la differenza '
+                 'conterrebbe la deriva')
+    return ax
