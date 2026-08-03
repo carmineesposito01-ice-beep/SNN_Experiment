@@ -100,3 +100,6 @@ FaseC/results/_parity/
 # Si versiona il .hwh (PYNQ ne ha bisogno per la mappa indirizzi, e pesa 138 KB) e i report.
 FaseC/bitstream/*.bit
 FaseC/bitstream/*.xsa
+
+# dump di crash di processi bash su Windows
+*.stackdump
