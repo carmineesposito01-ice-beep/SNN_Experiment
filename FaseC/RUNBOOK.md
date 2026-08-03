@@ -205,10 +205,43 @@ Ricavato il parser, `verifica_contro_display(atteso_mA)` è il cancello obbligat
 campagna: `esegui_campagna` **si rifiuta di partire** con una seriale non validata, e lo fa
 *prima* di toccare l'hardware. Un fallimento della verifica **revoca** la validazione.
 
+### Quante repliche per punto
+
+`repeats=8` era un numero scelto a occhio. Quello giusto dipende dalla **dispersione dello
+strumento**, che si misura: si fanno ~10 letture su `blank`, si guarda `iqr` nell'aggregato, e si
+legge la riga corrispondente.
+
+L'effetto cercato è ~7 mW per istanza = **1,4 mA** a 5 V, su un fondo di ~400 mA.
+
+| dispersione (IQR, mA) | n minimo con `x1` | n minimo con `x2` |
+|---|---|---|
+| 0,5 | 4 | 4 |
+| 1,0 | 4 | 4 |
+| 2,0 | **15** | 4 |
+| 4,0 | **57** | 15 |
+
+È anche la ragione per cui `x2` esiste: raddoppia il segnale lasciando invariato il rumore dello
+strumento, quindi dimezza l'incertezza *per istanza*. Con IQR = 4 mA la differenza fra 57 letture
+per punto e 15 è la differenza fra una campagna di un giorno e una di poche ore.
+
 ### Come si legge il risultato
 
-`differenza_mW` restituisce anche `separabile`. Se la differenza è dello stesso ordine
-dell'incertezza, la risposta corretta è **«non separabile con questo strumento»** — e va scritta
+`differenza_mW` restituisce **due** incertezze, e la distinzione decide se C3 può produrre il suo
+numero:
+
+- `dispersione_mW` — quanto balla una **singola lettura**. Non scende con le repliche: è una
+  proprietà dello strumento, e serve a scegliere `n` con la tabella qui sopra.
+- `incertezza_mW` — quanto è incerta la **mediana** (≈ IQR/1,349 × 1,253 / √n). Scende con le
+  repliche, ed è su questa che si decide `separabile`.
+
+⚠️ Ciò che **licenzia** il √n è l'ordine sorteggiato: solo se le letture sono scambiabili la loro
+mediana converge. Con un ordine alternato una deriva sistematica non si media via e dividere per
+√n sarebbe una promessa non mantenuta. Le due decisioni stanno in piedi insieme — se un giorno il
+sorteggio venisse tolto, questa formula andrebbe tolta con lui.
+
+Se la differenza è dello stesso ordine dell'errore standard, la risposta corretta è **«non
+separabile con questi dati»** — e la nota dice **quante repliche servirebbero**. Se quel numero è
+impraticabile, allora la risposta è che lo strumento non distingue questa differenza, e va scritta
 così. Inventare un numero dentro il rumore non è un risultato.
 
 Riportare sempre una **distribuzione** (mediana, p95, IQR, minimo, massimo, n, n scartati), mai

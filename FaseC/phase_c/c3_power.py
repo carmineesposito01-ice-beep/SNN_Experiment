@@ -150,27 +150,76 @@ def aggregate(points, tj_window):
     return out
 
 
-def differenza_mW(agg, a, b, volt=5.0, n_istanze=1):
-    """(b - a) in mW per istanza, con l'incertezza propagata dalla dispersione.
+# Due costanti, entrambe standard e volutamente esplicite:
+#   IQR/1.349 stima sigma su una normale (l'IQR copre 1,349 sigma)
+#   1.253     rapporto fra errore standard della MEDIANA e quello della media (sqrt(pi/2))
+# La mediana si usa perche' e' robusta agli sporadici fuori scala del multimetro; il prezzo e'
+# questo 25% di efficienza in meno, che va pagato esplicitamente invece che ignorato.
+SIGMA_DA_IQR = 1.349
+MEDIANA_SU_MEDIA = 1.253
 
-    L'incertezza non e' un ornamento: se e' dello stesso ordine della differenza, la
-    conclusione e' "non separabile con questo strumento" -- e va scritta cosi'.
+
+def _errore_standard(iqr, n):
+    """Errore standard della mediana, stimato in modo robusto dall'IQR."""
+    if n < 2:
+        return float('inf')
+    return MEDIANA_SU_MEDIA * (iqr / SIGMA_DA_IQR) / (n ** 0.5)
+
+
+def differenza_mW(agg, a, b, volt=5.0, n_istanze=1):
+    """(b - a) in mW per istanza, con l'incertezza della STIMA.
+
+    ⚠️ Distinzione che decide se C3 puo' produrre il suo numero. Ci sono due incertezze diverse:
+
+      dispersione     quanto balla una SINGOLA lettura (IQR). Non scende con le repliche.
+      errore standard quanto e' incerta la MEDIANA (~ IQR/1,349 * 1,253 / sqrt(n)). Scende.
+
+    La separabilita' si decide sull'errore standard, perche' il numero riportato e' la mediana,
+    non una lettura. Usare la dispersione renderebbe le repliche inutili -- l'incertezza non
+    calerebbe mai -- e il guadagno atteso del gating (~7 mW = 1,4 mA su un fondo di ~400) sarebbe
+    dichiarato "non separabile" con qualunque numero di letture. Sarebbe un limite dell'aritmetica
+    spacciato per un limite dello strumento.
+
+    ⚠️ Cio' che LICENZIA il sqrt(n) e' l'ordine SORTEGGIATO. Solo se le letture sono scambiabili
+    la media di n di esse converge; con un ordine alternato una deriva sistematica non si media
+    via, e dividere per sqrt(n) sarebbe una promessa non mantenuta. Le due decisioni stanno in
+    piedi insieme: se un giorno il sorteggio venisse tolto, questa formula andrebbe tolta con lui.
+
+    La dispersione resta riportata: e' cio' che serve a decidere quante repliche fare.
     """
     for k in (a, b):
         if k not in agg:
             raise KeyError('configurazione %r assente dall\'aggregato' % k)
     d_mA = agg[b]['mediana'] - agg[a]['mediana']
-    unc_mA = (agg[a]['iqr'] + agg[b]['iqr']) / 2.0
+    disp_mA = (agg[a]['iqr'] + agg[b]['iqr']) / 2.0
+    # errori standard indipendenti: si sommano in quadratura
+    se_mA = (_errore_standard(agg[a]['iqr'], agg[a]['n']) ** 2 +
+             _errore_standard(agg[b]['iqr'], agg[b]['n']) ** 2) ** 0.5
+
     d_mW = d_mA * volt / n_istanze
-    u_mW = unc_mA * volt / n_istanze
-    return {'delta_mW_per_istanza': d_mW, 'incertezza_mW': u_mW,
+    u_mW = se_mA * volt / n_istanze
+    disp_mW = disp_mA * volt / n_istanze
+    separabile = abs(d_mW) > 2.0 * u_mW
+
+    if separabile:
+        nota = ('differenza maggiore del doppio dell\'errore standard della mediana: separabile')
+    else:
+        # Quante repliche servirebbero? L'errore standard va come 1/sqrt(n): per portare
+        # 2*u sotto |d| serve n scalato di (2u/|d|)^2. E' un'informazione azionabile, non
+        # un rimprovero -- e se il numero e' assurdo, la risposta e' che lo strumento non basta.
+        n_min = agg[a]['n']
+        fattore = (2.0 * u_mW / abs(d_mW)) ** 2 if d_mW else float('inf')
+        nota = ('differenza dello stesso ordine dell\'errore standard: NON separabile con questi '
+                'dati. Servirebbero circa %s repliche per punto (ora %d), oppure piu\' istanze. '
+                'Se il numero e\' impraticabile, la risposta corretta e\' che lo strumento non '
+                'distingue questa differenza -- e va scritta cosi\', non sostituita con un numero '
+                'preso dentro il rumore.'
+                % ('%.0f' % (n_min * fattore) if fattore != float('inf') else 'infinite', n_min))
+
+    return {'delta_mW_per_istanza': d_mW, 'incertezza_mW': u_mW, 'dispersione_mW': disp_mW,
             'n_istanze': n_istanze, 'volt': volt,
-            'separabile': abs(d_mW) > 2.0 * u_mW,
-            'nota': ('differenza maggiore del doppio dell\'incertezza: separabile'
-                     if abs(d_mW) > 2.0 * u_mW else
-                     'differenza dello stesso ordine dell\'incertezza: NON separabile con '
-                     'questo strumento. Aumentare le repliche o le istanze, oppure dichiararlo '
-                     'come limite invece di riportare un numero.')}
+            'n_punti': {a: agg[a]['n'], b: agg[b]['n']},
+            'separabile': separabile, 'nota': nota}
 
 
 # --------------------------------------------------------------------- la campagna

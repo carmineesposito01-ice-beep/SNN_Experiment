@@ -247,3 +247,64 @@ def test_una_DERIVA_durante_la_lettura_viene_CONTATA(tmp_path):
                         punti=[('x1', 'on')], intervallo_s=0, stampa=lambda *_: None)
     assert r['n_deriva_durante_lettura'] == 1
     assert r['punti'][0]['deriva_c'] == pytest.approx(3.0)
+
+
+# --------------------------- 5. dispersione di UNA lettura != incertezza della MEDIANA
+
+def _punti(cfg, gating, n, centro, ampiezza=4.0):
+    """n letture attorno a `centro`, con la STESSA dispersione qualunque sia n.
+
+    ⚠️ `n` dev'essere multiplo di 5: il motivo del ciclo e' che ogni valore compaia lo stesso
+    numero di volte. Con un ciclo incompleto l'IQR cambia con n, e il test misurerebbe quello
+    invece dell'effetto delle repliche.
+    """
+    assert n % 5 == 0, 'n deve essere multiplo di 5, altrimenti la dispersione dipende da n'
+    return [{'cfg': cfg, 'gating': gating, 'tj': 45.0,
+             'mA': centro + ampiezza * ((i % 5) - 2) / 2.0} for i in range(n)]
+
+
+def test_le_REPLICHE_contano_a_parita_di_effetto_e_di_dispersione():
+    """E' la ragione della formula. Con l'incertezza presa dall'IQR le repliche non servivano a
+    niente -- l'incertezza non scendeva mai -- e il guadagno atteso del gating (~1,4 mA su un
+    fondo di ~400) sarebbe stato "non separabile" con qualunque numero di letture: un limite
+    dell'aritmetica spacciato per un limite dello strumento."""
+    def esito(n):
+        pts = _punti('x1', 'off', n, 400.0) + _punti('x1', 'on', n, 398.6)   # 1,4 mA di effetto
+        return differenza_mW(aggregate(pts, (40.0, 50.0)), 'x1/off', 'x1/on')
+
+    poche, molte = esito(10), esito(400)
+    assert not poche['separabile'], 'con 10 letture 1,4 mA non deve essere distinguibile'
+    assert molte['separabile'], 'con 400 letture deve esserlo: e\' il senso delle repliche'
+    assert molte['dispersione_mW'] == pytest.approx(poche['dispersione_mW'], rel=0.2), \
+        'la DISPERSIONE non deve cambiare: e\' l\'errore standard che scende, non lo strumento'
+    assert molte['incertezza_mW'] < poche['incertezza_mW'] / 3
+
+
+def test_la_dispersione_resta_RIPORTATA_accanto_all_errore_standard():
+    """Serve a decidere quante repliche fare: e' la proprieta' dello strumento, non della stima."""
+    pts = _punti('x1', 'off', 20, 400.0) + _punti('x1', 'on', 20, 390.0)
+    d = differenza_mW(aggregate(pts, (40.0, 50.0)), 'x1/off', 'x1/on')
+    assert d['dispersione_mW'] > d['incertezza_mW'], \
+        'con n>1 l\'errore standard deve stare SOTTO la dispersione'
+    assert d['n_punti'] == {'x1/off': 20, 'x1/on': 20}
+
+
+def test_quando_NON_e_separabile_dice_quante_repliche_servirebbero():
+    """Un "non separabile" senza il numero e' un vicolo cieco; col numero e' una decisione."""
+    pts = _punti('x1', 'off', 10, 400.0) + _punti('x1', 'on', 10, 399.6)
+    d = differenza_mW(aggregate(pts, (40.0, 50.0)), 'x1/off', 'x1/on')
+    assert not d['separabile']
+    import re
+    m = re.search(r'circa (\d+) repliche', d['nota'])
+    assert m, 'la nota deve contenere il numero di repliche'
+    assert int(m.group(1)) > d['n_punti']['x1/off'], \
+        'deve chiedere PIU\' repliche di quelle gia\' fatte: un numero minore sarebbe una ' \
+        'risposta senza senso, e il test la accetterebbe senza accorgersene'
+
+
+def test_un_punto_solo_non_puo_dichiarare_nulla_di_separabile():
+    """Con n=1 l'errore standard non e' stimabile: separabile=True sarebbe una certezza inventata."""
+    pts = [{'cfg': 'a', 'gating': '-', 'mA': 400.0, 'tj': 45.0},
+           {'cfg': 'b', 'gating': '-', 'mA': 300.0, 'tj': 45.0}]
+    d = differenza_mW(aggregate(pts, (40.0, 50.0)), 'a/-', 'b/-')
+    assert not d['separabile'], 'una differenza enorme su un punto solo non e\' un risultato'
