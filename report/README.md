@@ -1,8 +1,14 @@
-# report/ — I deliverable finali (terna v3)
+# report/ — I deliverable finali
 
-Questa cartella contiene i **tre documenti definitivi** del progetto CF_FSNN, pensati per essere
-letti da chiunque (anche esperti del settore) e mutuamente coerenti. Sono generati da script:
+Questa cartella contiene i documenti definitivi del progetto CF_FSNN, pensati per essere letti da
+chiunque (anche esperti del settore) e mutuamente coerenti. Sono generati da script:
 **non modificare i `.md`/`.pdf` a mano** — vengono rigenerati e sovrascritti.
+
+Sono **due famiglie**, con perimetri diversi:
+
+- la **terna v3** — teoria, risultati e profilo hardware pre-silicio (sezione qui sotto);
+- i **report di Fase B / B2.0** — la catena verso l'FPGA, dalla quantizzazione al silicio
+  (sezione più in basso). Sono arrivati col merge del ramo `Simulink_Importer`.
 
 ## I tre documenti (la "terna")
 
@@ -43,6 +49,37 @@ Ogni script è una **sorgente unica → md + pdf** con font DejaVu. Blocchi supp
 `cover / h1 / h2 / p / callout / table / img / eq / toc`. Le equazioni sono immagini
 mathtext dimensionate come il testo; il `toc` è un vero Sommario con numeri di pagina
 (reportlab `TableOfContents` a doppia passata). Non c'è LaTeX nel percorso di rendering.
+
+---
+
+## I report di Fase B / B2.0 — la catena verso l'FPGA
+
+Coprono ciò che succede **dopo** la terna: la conversione del controllore in hardware, la sua
+validazione bit-esatta e la caratterizzazione su silicio. Stessa pipeline reportlab, stessa
+regola: generati, non scritti a mano.
+
+| File | Cosa spiega | Generatore |
+|---|---|---|
+| **QUANTIZATION_STUDY_REPORT**.{md,pdf} | quanti bit servono davvero: sweep per-campo, collo della fedeltà contro quello dell'hardware | `scripts/build_quantization_report.py` |
+| **Trade_Off_Study_Parte_A**.{md,pdf} | i blocchi della libreria: area, Fmax, scelte di architettura | `scripts/build_blocco_a_report.py` |
+| **FPGA_PHASE_B_REPORT**.{md,pdf} | Fase B: potenza di sistema misurata, duty reale, confronto SNN-vs-ANN | `scripts/build_fpga_phase_b_report.py` |
+| **B2_0_CHECKPOINT_REPORT**.{md,pdf} | il punto di situazione di Fase B2.0 | `scripts/build_b2_0_checkpoint_report.py` |
+| **B2_0_HARNESS_SNN_REPORT**.{md,pdf} | harness della SNN da sola: validazione RTL (T6a) e caratterizzazione hardware (T6b) | `scripts/build_harness_snn_report.py` |
+| **B2_0_HARNESS_SNN_IIDM_REPORT**.{md,pdf} | harness del composto SNN+IIDM: T7a/T7b, clock gating, energia per control-step | `scripts/build_harness_snn_iidm_report.py` |
+
+### Cartelle di figure
+
+`figures_quant/` · `figures_blocco_a/` · `figures_phase_b/` · `figures_b2_0/` ·
+`figures_harness_snn/` · `figures_harness_snn_iidm/` — una per report, coi riferimenti
+**relativi** come nella terna.
+
+### Dove continua il lavoro
+
+La **Fase C** (bring-up su silicio) non produce un report in questa cartella: vive in
+[`../FaseC/`](../FaseC/) coi suoi artefatti in `FaseC/results/`. Il punto d'ingresso è
+[`../FaseC/STATO.md`](../FaseC/STATO.md).
+
+---
 
 ## Note
 
