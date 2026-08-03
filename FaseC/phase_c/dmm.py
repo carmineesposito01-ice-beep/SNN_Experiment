@@ -23,6 +23,8 @@ import io
 import os
 import time
 
+from phase_c.xadc import EQ_BAND_C, EQ_N, at_equilibrium
+
 
 class SorgenteDMM(object):
     """Interfaccia. Chi la implementa dichiara come si ottiene il numero."""
@@ -142,27 +144,31 @@ class SerialDMM(SorgenteDMM):
         return {'ok': True, 'letto_mA': letto, 'display_mA': atteso_mA}
 
 
-def attendi_equilibrio(leggi_tj, band_c=0.5, n=12, intervallo_s=5.0, max_attesa_s=600.0):
+def attendi_equilibrio(leggi_tj, band_c=EQ_BAND_C, n=EQ_N, intervallo_s=5.0, max_attesa_s=600.0):
     """Attende l'equilibrio termico secondo il criterio DICHIARATO IN ANTICIPO.
 
     Non e' una pausa fissa: e' una condizione sullo stato. Una pausa fissa sarebbe una scelta
     fatta a occhio, e sui punti lenti risulterebbe troppo corta proprio dove serve di piu'.
     Solleva se l'equilibrio non arriva: proseguire misurando durante una deriva darebbe un
     numero che verrebbe poi attribuito alla configurazione sotto test.
+
+    Il criterio NON e' riscritto qui: e' `xadc.at_equilibrium`, che C3 usa gia' per lo scarto dei
+    punti. Riscriverlo darebbe due posti dove cambiare una decisione sola, e la versione dimenticata
+    sarebbe quella che decide davvero.
     """
     storia = []
     t0 = time.time()
     while time.time() - t0 < max_attesa_s:
         storia.append(float(leggi_tj()))
-        if len(storia) >= n:
+        if at_equilibrium(storia, band_c=band_c, n=n):
             ultimi = storia[-n:]
-            if (max(ultimi) - min(ultimi)) <= band_c:
-                return {'ok': True, 'attesa_s': round(time.time() - t0, 1),
-                        'tj_finale': ultimi[-1], 'escursione_c': round(max(ultimi) - min(ultimi), 3)}
+            return {'ok': True, 'attesa_s': round(time.time() - t0, 1),
+                    'tj_finale': ultimi[-1], 'escursione_c': round(max(ultimi) - min(ultimi), 3),
+                    'n_letture': len(storia)}
         time.sleep(intervallo_s)
     raise TimeoutError(
-        'equilibrio termico non raggiunto entro %.0f s (escursione %.2f degC su %d letture, '
-        'banda richiesta %.2f). Misurare durante una deriva attribuirebbe alla configurazione '
-        'un effetto che e\' della temperatura.'
+        'equilibrio termico non raggiunto entro %.0f s (escursione %.2f degC sulle ultime %d '
+        'letture, banda richiesta %.2f). Misurare durante una deriva attribuirebbe alla '
+        'configurazione un effetto che e\' della temperatura.'
         % (max_attesa_s, max(storia[-n:]) - min(storia[-n:]) if len(storia) >= n else -1,
            n, band_c))

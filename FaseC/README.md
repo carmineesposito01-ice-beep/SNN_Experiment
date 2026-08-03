@@ -47,12 +47,13 @@ FaseC/
     c1_functional.py      replay dei 99 scenari, bit-esatto
     c2_closedloop.py      PLANT-PAR del PS, poi anello chiuso
     plant_ps.py           port 1:1 di qz_cl_sim
-    c3_power.py           differenziale randomizzato + Tj
+    c3_power.py           differenziale randomizzato + Tj, campagna e cancello sorgente
+    dmm.py                da dove arriva il numero di corrente (prompt/seriale/rigioco)
     xadc.py               lettura Tj e tensioni
     platoon.py            P1 (software) e P2 (RTL) -- P3 su silicio cancellato
 
   tests/                  un file per modulo + conftest.py (fixture dei golden)
-  hw/                     script Vivado: sonda risorse del plotone
+  hw/                     script Vivado + dmm_discover.py (byte grezzi dello ZT-702S)
   notebook/phase_c.ipynb  FACCIATA 2 — solo chiamate a phase_c.cli + grafici
   results/                ARTEFATTI — l'unico posto in cui vivono i numeri
 ```

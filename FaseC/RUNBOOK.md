@@ -125,15 +125,61 @@ Il consumo del processore, dei regolatori e della periferia **si cancella nella 
    guardando i dati: `Tj` stabile entro **±0,5 °C su 12 letture consecutive** (`xadc.at_equilibrium`).
    Un punto preso mentre la scheda si scalda porta dentro una deriva che verrebbe poi attribuita
    alla configurazione sotto test.
-3. **Sequenza SORTEGGIATA**, non alternata: `plan_sequence(configs, repeats, seed)` col **seme
-   annotato**. Alternare A/B/A/B correla la configurazione con l'istante ed è vulnerabile proprio
+3. **Sequenza SORTEGGIATA**, non alternata: `plan_sequence(punti, repeats, seed)` col **seme
+   annotato**. Alternare A/B/A/B correla la condizione con l'istante ed è vulnerabile proprio
    alla deriva che pretende di cancellare — il bias di misura vale ±10%, abbastanza a invertire
    una conclusione.
-4. **A ogni punto** si registra `(configurazione, mA, Tj, VCCINT)`. Almeno **6 ripetizioni per
-   configurazione**.
+
+   Il sorteggio copre i **punti**, non le sole configurazioni. I punti sono 5, non 3
+   (`punti_di_misura()`): `blank/-`, `x1/on`, `x1/off`, `x2/on`, `x2/off`. Il gating si cambia
+   con una scrittura di registro invece che con un bitstream, quindi verrebbe naturale visitarlo
+   sempre nello stesso ordine dentro ogni configurazione — e sarebbe di nuovo una condizione
+   correlata all'istante. Su `blank` il PL è vuoto e il bit non comanda nulla: **un punto solo**,
+   marcato `-`, altrimenti sarebbero due repliche della stessa cosa spacciate per due condizioni.
+4. **A ogni punto** si registra `(cfg, gating, mA, Tj, VCCINT, Tj_dopo)`. Almeno **6 ripetizioni
+   per punto**. `Tj` si legge **subito prima** della corrente e `Tj_dopo` **subito dopo**: la
+   trascrizione manuale dura secondi, e se la temperatura si è mossa nel frattempo la `Tj`
+   registrata non descrive l'istante della corrente. La deriva viene contata e finisce
+   nell'artefatto (`n_deriva_durante_lettura`).
 5. I punti fuori dalla banda termica dichiarata si **scartano**, e il conteggio degli scartati
    **resta nell'artefatto**: uno scarto silenzioso è uno scarto che nessuno potrà più rimettere
    in discussione.
+
+L'intera procedura è `c3_power.esegui_campagna(dmm, banco, seed=…, repeats=…)`. Il `seed` **non
+ha default**: un default silenzioso darebbe una sequenza «sorteggiata» che nessuno ha scelto.
+Il foglio si scrive **riga per riga con flush** — una campagna dura ore e un'interruzione a metà
+non deve costare i punti già misurati.
+
+### Da dove arriva il numero di corrente
+
+Tre sorgenti dietro la stessa interfaccia (`phase_c/dmm.py`), e la scelta finisce nella
+provenienza dell'artefatto: una misura letta a mano e una letta dallo strumento **non sono lo
+stesso dato**.
+
+| Sorgente | Quando |
+|---|---|
+| `PromptDMM` | ripiego che funziona sempre. L'operatore trascrive **quando il runner chiede** — l'istante non lo sceglie lui |
+| `SerialDMM` | ZT-702S via seriale. **Richiede un parser esplicito** (vedi sotto) |
+| `ReplayDMM` | ri-aggregare una campagna già fatta, p.es. cambiando la banda termica. **Non** è un modo di raccogliere dati |
+
+⚠️ **Il parser seriale non è scritto, ed è deliberato.** Il formato del frame dello ZT-702S non è
+documentato in modo affidabile e cambia fra revisioni dello stesso modello: uno scritto «da
+manuale» non darebbe errore, darebbe numeri **plausibili**. Procedura per ricavarlo:
+
+```bash
+pip install pyserial
+python hw/dmm_discover.py --lista                      # quale porta è
+python hw/dmm_discover.py --porta COM3 --secondi 10    # byte grezzi, display su valore NOTO
+```
+
+Si cerca la lunghezza del frame (dal periodo con cui si ripete un byte fisso), i byte costanti
+(delimitatori, unità) contro quelli che cambiano (le cifre), e il valore del display dentro i byte
+— in ASCII, BCD o intero binario. Poi **si ripete con un secondo valore noto**: un formato
+indovinato su uno solo è quasi sempre sbagliato.
+
+Ricavato il parser, `verifica_contro_display(atteso_mA)` è il cancello obbligatorio prima della
+campagna: `esegui_campagna` **si rifiuta di partire** con una seriale non validata, e lo fa
+*prima* di toccare l'hardware. Un fallimento della verifica **revoca** la validazione.
 
 ### Come si legge il risultato
 

@@ -5,6 +5,7 @@ validato non possa essere usato, che una misura presa durante una deriva termica
 buona, e che il rigioco non si trasformi in un modo di raccogliere dati.
 """
 import io
+import itertools
 
 import pytest
 
@@ -117,9 +118,20 @@ def test_una_DERIVA_non_passa_per_equilibrio():
         attendi_equilibrio(sale, band_c=0.5, n=12, intervallo_s=0, max_attesa_s=0.3)
 
 
-def test_il_criterio_e_una_CONDIZIONE_non_una_pausa_fissa():
-    """Una pausa fissa sarebbe scelta a occhio, e sui punti lenti risulterebbe troppo corta
-    proprio dove serve di piu'."""
-    import inspect
-    from phase_c import dmm
-    assert 'max(ultimi) - min(ultimi)' in inspect.getsource(dmm.attendi_equilibrio)
+def test_il_criterio_e_lo_STESSO_che_scarta_i_punti():
+    """Il criterio di equilibrio vive in xadc e C3 lo usa gia' per lo scarto. Se attendi_equilibrio
+    ne riscrivesse una copia, i due divergerebbero al primo ritocco e la versione dimenticata
+    sarebbe quella che decide. Provato al CONFINE, dove una copia sfasata si vedrebbe."""
+    from phase_c.xadc import EQ_BAND_C, EQ_N
+
+    def storia(spread):
+        # alterna i due estremi: OGNI finestra da EQ_N ha escursione esattamente `spread`.
+        # (una rampa che si ferma NON va bene: la finestra scorre e rientra da sola in banda)
+        return itertools.cycle([45.0, 45.0 + spread])
+
+    dentro = storia(EQ_BAND_C)
+    assert attendi_equilibrio(lambda: next(dentro), intervallo_s=0, max_attesa_s=5)['ok']
+
+    fuori = storia(EQ_BAND_C * 1.05)
+    with pytest.raises(TimeoutError):
+        attendi_equilibrio(lambda: next(fuori), intervallo_s=0, max_attesa_s=0.2)
