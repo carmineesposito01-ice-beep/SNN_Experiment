@@ -164,12 +164,21 @@ stesso dato**.
 
 #### Il collegamento fisico dello ZT-702S
 
-Due strade, ed è il **manuale dello strumento** a dire quale usare:
+Dal **manuale dello strumento** (pagina delle porte, letta direttamente — fonte primaria, non
+ricerca sul web). Sotto l'alettina ci sono tre cose:
 
-| Strada | Come |
+| Porta | Cosa dice il manuale |
 |---|---|
-| **USB-C** | il manuale la indica come canale di comunicazione col PC |
-| **UART** | porta del generatore di segnale, abilitata con **F4 → serial port output**, **115200 baud**, 3 letture al secondo. Serve un adattatore USB-UART (CH340 / CP2102 / FT232), massa in comune. Lo strumento è un **3-in-1**: la porta c'è |
+| **USB-C** | «Communicate with the computer and charge the battery through the TYPE-C data cable» — è il canale col PC **e** la ricarica |
+| tonda | terminale di **massa** |
+| quadra | terminale di **segnale**, «constant output 3V/1KHZ» |
+
+⚠️ La porta quadra è un'uscita di **calibrazione a onda quadra fissa**, non una seriale
+configurabile. Una versione precedente di questo runbook proponeva di prenderci un UART con un
+adattatore USB-UART, sulla base del manuale del **ZT-703S** trovato in rete: **non è sostenuto dal
+manuale di questo strumento**. Non comprare l'adattatore su quella base. Resta da verificare se
+esista una voce di menu (F4 → *serial port output*) che ne cambi la funzione; finché non è vista
+sullo strumento, è un'ipotesi.
 
 ⚠️ **Misurato il 2026-08-03**: collegato via USB-C col cavo a disposizione, Windows **non ha
 enumerato nulla** — nessuna porta COM (pyserial 3.5 presente), nessun dispositivo senza driver o

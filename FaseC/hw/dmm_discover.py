@@ -5,12 +5,18 @@ non e' documentato in modo affidabile e a volte cambia fra revisioni dello stess
 un parser scritto "da manuale" restituirebbe numeri PLAUSIBILI se il formato fosse diverso --
 il modo di fallire piu' pericoloso che ci sia.
 
-COME SI COLLEGA -- due strade, ed e' il MANUALE a dire quale.
+COME SI COLLEGA -- dal manuale dello strumento (fonte primaria, pagina delle porte):
 
-  USB-C   il manuale dello strumento la indica come canale di comunicazione col PC.
-  UART    porta del generatore di segnale, da abilitare con F4 ("serial port output"),
-          115200 baud, 3 letture al secondo. Richiede un adattatore USB-UART
-          (CH340 / CP2102 / FT232). Lo strumento e' un 3-in-1: la porta c'e'.
+  USB-C   "Communicate with the computer and charge the battery through the TYPE-C data
+          cable". E' il canale col PC E la ricarica.
+  tonda   terminale di MASSA.
+  quadra  terminale di SEGNALE, "constant output 3V/1KHZ".
+
+⚠️ La porta quadra e' un'uscita di CALIBRAZIONE a onda quadra fissa, non una seriale
+configurabile. Una versione precedente di questo file proponeva di prenderci un UART con un
+adattatore USB-UART, sulla base del manuale del ZT-703S trovato in rete: NON e' sostenuto dal
+manuale di questo strumento. Resta da verificare se una voce di menu (F4 -> serial port output)
+ne cambi la funzione; finche' non e' vista sullo strumento, e' un'ipotesi.
 
 ⚠️ MISURATO il 2026-08-03: collegato via USB-C col cavo a disposizione, Windows non ha enumerato
 NULLA -- nessuna porta COM (pyserial 3.5 presente), nessun dispositivo senza driver o in errore,
