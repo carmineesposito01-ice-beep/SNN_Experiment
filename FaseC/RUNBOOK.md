@@ -162,23 +162,31 @@ stesso dato**.
 | `SerialDMM` | ZT-702S via seriale. **Richiede un parser esplicito** (vedi sotto) |
 | `ReplayDMM` | ri-aggregare una campagna già fatta, p.es. cambiando la banda termica. **Non** è un modo di raccogliere dati |
 
-#### Il collegamento fisico dello ZT-702S — **non è la USB-C**
+#### Il collegamento fisico dello ZT-702S
 
-Verificato per contrasto il 2026-08-03: con lo strumento collegato via USB-C il PC **non enumera
-nulla** — nessuna porta COM, nessun dispositivo senza driver, nessun evento PnP. Non è un problema
-di driver: è che quel percorso non esiste.
+Due strade, ed è il **manuale dello strumento** a dire quale usare:
 
-Secondo la documentazione ZOYI la USB-C fa **alimentazione e importazione dei file salvati**. Il
-flusso live è un **UART sulla porta del generatore di segnale**, da abilitare con **F4 → serial
-port output**, a **115200 baud** e **3 letture al secondo**.
+| Strada | Come |
+|---|---|
+| **USB-C** | il manuale la indica come canale di comunicazione col PC |
+| **UART** | porta del generatore di segnale, abilitata con **F4 → serial port output**, **115200 baud**, 3 letture al secondo. Serve un adattatore USB-UART (CH340 / CP2102 / FT232), massa in comune. Lo strumento è un **3-in-1**: la porta c'è |
 
-Serve quindi un **adattatore USB-UART** (CH340 / CP2102 / FT232) fra quella porta e il PC, con la
-massa in comune.
+⚠️ **Misurato il 2026-08-03**: collegato via USB-C col cavo a disposizione, Windows **non ha
+enumerato nulla** — nessuna porta COM (pyserial 3.5 presente), nessun dispositivo senza driver o
+in errore, nessun evento PnP.
 
-⚠️ Questi dettagli vengono dal manuale dello **ZT-703S** (3-in-1), dato per «modello simile». Il
-702S è un 2-in-1 e potrebbe non avere quella porta. Sono un'**ipotesi di partenza**, non un fatto
-verificato su questo esemplare — ed è esattamente il motivo per cui la procedura sotto guarda i
-byte invece di dedurre il formato.
+Quella misura dice che *in quella configurazione* non è comparso niente. **Non** dice che la USB-C
+non sia un canale dati — il manuale afferma il contrario, e trattare l'assenza di enumerazione
+come prova del contrario sarebbe scambiare l'assenza di evidenza per evidenza dell'assenza. Le
+cause possibili, in ordine di probabilità:
+
+1. **cavo USB-C di sola alimentazione** (2 fili). È la causa più comune in assoluto, e si
+   distingue in un secondo: lo strumento si carica lo stesso mentre il PC non vede nulla.
+2. **modalità di collegamento al PC** da attivare sullo strumento prima che enumeri.
+3. porta USB dello strumento o del PC guasta.
+
+Da provare in quest'ordine, con un cavo che si **sa** portare dati (per esempio quello di un disco
+esterno).
 
 #### Ricavare il parser
 

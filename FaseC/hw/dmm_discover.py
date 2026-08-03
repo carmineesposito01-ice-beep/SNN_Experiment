@@ -5,18 +5,27 @@ non e' documentato in modo affidabile e a volte cambia fra revisioni dello stess
 un parser scritto "da manuale" restituirebbe numeri PLAUSIBILI se il formato fosse diverso --
 il modo di fallire piu' pericoloso che ci sia.
 
-⚠️ COME SI COLLEGA -- non dalla USB-C. Verificato per contrasto il 2026-08-03: con lo strumento
-collegato via USB-C il PC non enumera NULLA (nessuna porta COM, nessun dispositivo senza driver,
-nessun evento PnP). Secondo la documentazione ZOYI la USB-C fa alimentazione e importazione dei
-dati SALVATI; il flusso live e' un UART sulla porta del GENERATORE DI SEGNALE, da abilitare col
-tasto F4 ("serial port output"), a 115200 baud e 3 letture al secondo.
+COME SI COLLEGA -- due strade, ed e' il MANUALE a dire quale.
 
-Serve quindi un adattatore USB-UART (CH340 / CP2102 / FT232) fra quella porta e il PC.
+  USB-C   il manuale dello strumento la indica come canale di comunicazione col PC.
+  UART    porta del generatore di segnale, da abilitare con F4 ("serial port output"),
+          115200 baud, 3 letture al secondo. Richiede un adattatore USB-UART
+          (CH340 / CP2102 / FT232). Lo strumento e' un 3-in-1: la porta c'e'.
 
-⚠️ Quei dettagli vengono dal manuale del ZT-703S (3-in-1), dato per "modello simile": il 702S e'
-un 2-in-1 e potrebbe non avere la porta del generatore. Sono un'IPOTESI DI PARTENZA, non un fatto
-verificato su questo esemplare -- e' esattamente per questo che qui si guardano i byte invece di
-scrivere un parser.
+⚠️ MISURATO il 2026-08-03: collegato via USB-C col cavo a disposizione, Windows non ha enumerato
+NULLA -- nessuna porta COM (pyserial 3.5 presente), nessun dispositivo senza driver o in errore,
+nessun evento PnP.
+
+Quella misura dice che in QUELLA configurazione non e' comparso niente. Non dice che la USB-C non
+sia un canale dati: il manuale afferma il contrario, e un'assenza di enumerazione ha diverse cause
+possibili, in ordine di probabilita':
+
+  1. cavo USB-C di sola ALIMENTAZIONE (2 fili). E' la causa piu' comune in assoluto, e si
+     distingue in un secondo: lo strumento si carica ma il PC non vede nulla.
+  2. modalita' di collegamento al PC da attivare sullo strumento prima che enumeri.
+  3. porta USB dello strumento o del PC guasta.
+
+Da provare in quest'ordine, con un cavo che si SA portare dati (p.es. quello di un disco esterno).
 
 Uso:
     python dmm_discover.py --lista                       # quali porte esistono
@@ -45,10 +54,14 @@ def lista_porte():
     if not porte:
         print('nessuna porta seriale trovata.')
         print()
-        print('ATTENZIONE: la USB-C dello ZT-702S NON e\' il percorso dati. Alimenta e importa')
-        print('i file salvati; il flusso live e\' un UART sulla porta del GENERATORE, e per')
-        print('portarlo al PC serve un adattatore USB-UART (CH340 / CP2102 / FT232).')
-        print('Senza quell\'adattatore collegato, qui non comparira\' mai nulla.')
+        print('Il manuale indica la USB-C come canale col PC, quindi l\'assenza va spiegata.')
+        print('Da provare in quest\'ordine:')
+        print('  1. un cavo USB-C che si SA portare dati (molti sono di sola alimentazione:')
+        print('     e\' la causa piu\' comune, e si riconosce perche\' lo strumento si carica')
+        print('     lo stesso mentre il PC non vede nulla)')
+        print('  2. la modalita\' di collegamento al PC, da attivare sullo strumento')
+        print('  3. la strada alternativa: UART sulla porta del generatore (F4 -> serial port')
+        print('     output) con un adattatore USB-UART (CH340 / CP2102 / FT232)')
         return 1
     print('porte disponibili:')
     for p in porte:
