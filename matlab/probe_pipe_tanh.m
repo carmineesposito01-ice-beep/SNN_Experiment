@@ -21,7 +21,11 @@ function probe_pipe_tanh(cfgs)
              'op8_dist', 8, 'on',  'off'
              'op4_crp',  4, 'on',  'on'  };
   end
-  md  = 'D:/Project_MBSE/1.Reti Neurali/Rete_SNN_Test/CF_FSNN/.worktrees/Simulink_Importer/matlab';
+  % Radice ricavata dalla POSIZIONE di questo file, mai cablata: questa probe fa
+  % rmdir(md/hdl_pipe,'s') -- una cancellazione ricorsiva. Con un percorso cablato,
+  % eseguirla da un altro albero (p.es. dopo un merge in main) cancellerebbe e
+  % ricostruirebbe la cartella dell'albero SBAGLIATO, in silenzio.
+  md  = fileparts(mfilename('fullpath'));
   addpath(md);
   out = fullfile(md, 'hdl_pipe'); if exist(out,'dir'), rmdir(out,'s'); end; mkdir(out);
   lib = 'snn_champions_lib';

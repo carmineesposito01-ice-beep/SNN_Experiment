@@ -1,6 +1,13 @@
 # power_micro.tcl — NON-PROJECT OOC per micro_ac e micro_mac @100MHz. Synth+impl+vectorless power +
 # funcsim.v + routed.dcp per il SAIF (step separato). OOC = niente I/O pad -> potenza pura logica/DSP.
-set WT  "D:/Project_MBSE/1.Reti Neurali/Rete_SNN_Test/CF_FSNN/.worktrees/Simulink_Importer"
+# Radice del repository dalla POSIZIONE di questo script, mai cablata: cablarla farebbe
+# leggere i sorgenti di un ALTRO albero (p.es. il worktree da cui e' nato il ramo) e
+# attribuire i numeri al codice sbagliato, in silenzio.
+set WT [file normalize [file join [file dirname [info script]] .. .. .. ..]]
+if {![file isdirectory [file join $WT matlab]]} {
+  puts "ABORT: radice ricavata $WT -- non contiene matlab/. Eseguire con 'source' dal repo."
+  exit 1
+}
 set OUT "$WT/matlab/axi/build/phase_b"
 
 proc do_micro {name WT OUT} {

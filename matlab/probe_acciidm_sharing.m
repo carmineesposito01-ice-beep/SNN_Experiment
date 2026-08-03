@@ -12,7 +12,10 @@ function probe_acciidm_sharing()
 %  (DUT/SNN_ACC), non sul subsystem esterno; e il blocco copiato va SLINKATO dalla libreria
 %  (LinkStatus=none) o il contenuto resta read-only -> hdlset_param fallirebbe per un artefatto,
 %  dando un FALSO "config non basta". (Root cause, non workaround.)
-  md = 'D:/Project_MBSE/1.Reti Neurali/Rete_SNN_Test/CF_FSNN/.worktrees/Simulink_Importer/matlab';
+  % Radice dalla POSIZIONE di questo file, mai cablata: sotto c'e' rmdir(md/hdl_sp4m,'s'),
+  % cioe' una cancellazione ricorsiva. Un percorso cablato la farebbe agire sull'albero
+  % sbagliato quando la probe viene eseguita da un altro worktree.
+  md = fileparts(mfilename('fullpath'));
   addpath(md);
   out = fullfile(md, 'hdl_sp4m'); if exist(out,'dir'), rmdir(out,'s'); end; mkdir(out);
   lib = 'snn_champions_lib';

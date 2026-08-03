@@ -24,7 +24,11 @@ import re
 import subprocess
 import sys
 
-FASEC = r'D:\Project_MBSE\1.Reti Neurali\Rete_SNN_Test\CF_FSNN\.worktrees\Simulink_Importer\FaseC'
+# ⚠️ Ricavato da __file__, MAI cablato. Una versione precedente aveva il percorso assoluto del
+# worktree `.worktrees/Simulink_Importer/FaseC`: dopo il merge in main avrebbe eseguito la sweep
+# sul worktree VECCHIO invece che sull'albero corrente -- e in silenzio, perche' quella cartella
+# esiste ancora. Il risultato sarebbe stato una percentuale di copertura riferita a un altro codice.
+FASEC = os.path.dirname(os.path.abspath(__file__))
 
 # modulo -> file di test che deve coprirlo
 # ⚠️ Questa mappa e' il perimetro della sweep: cio' che non e' elencato NON viene mai mutato,

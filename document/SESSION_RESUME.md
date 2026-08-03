@@ -647,9 +647,9 @@ vs SNN ~800), NON da AC≪MAC; termica non-problema (Tj~26°C). Bit-exact funzio
 4 caveat onesti; audit indipendente superato (2 fix: §1 punto operativo 8 vs Fmax 8.5 MHz, Wang 2018); QC visivo + `.md`
 byte-stabile. *(Specifica originale conservata sotto per tracciabilità.)*
 - Sorgente = `document/FPGA_PHASE_B_POWER.md` (contenuto già assemblato) + `matlab/axi/build/phase_b/results.csv`.
-- Template/stile = **`document/FPGA_REPORT.md`** + **`document/VALIDATION_REPORT_v3.md`** (⚠️ su QUESTO branch i
-  report sono in `document/`; su `main` la documentazione è stata **riordinata** — i report spostati — e la
-  **divergenza di layout si riconcilia al MERGE**. Qui, e per generare il report, leggi/scrivi in `document/`).
+- Template/stile = **`report/FPGA_REPORT.md`** + **`report/VALIDATION_REPORT_v3.md`**. ✅ La divergenza di
+  layout **si è riconciliata al merge in `main`**: i report stanno tutti in `report/`, non più in
+  `document/`. (Prima del merge questo blocco diceva `document/` perché su questo branch era così.)
   Stessa procedura degli altri report.
 - Contenuto atteso: scopo/metodo (3 livelli fedeltà) · correttezza funzionale · risorse/timing · potenza sistema
   (static 92%, E realizzata≫algoritmica) · costanti e_MAC≈e_AC · confronto SNN-vs-ANN + letteratura (compattezza

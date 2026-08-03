@@ -7,7 +7,10 @@
 set -euo pipefail
 
 ROOT="D:/zbd_pb2"                         # working dir corto, senza spazi (limite path Windows)
-PB="D:/Project_MBSE/1.Reti Neurali/Rete_SNN_Test/CF_FSNN/.worktrees/Simulink_Importer/matlab/axi/phase_b"
+# Radice dalla POSIZIONE dello script, mai cablata (vedi i .tcl accanto).
+WT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
+[ -d "$WT/matlab" ] || { echo "ABORT: radice ricavata $WT -- non contiene matlab/"; exit 1; }
+PB="$WT/matlab/axi/phase_b"
 XVLOG="C:/AMDDesignTools/2026.1/Vivado/bin/xvlog.bat"
 XELAB="C:/AMDDesignTools/2026.1/Vivado/bin/xelab.bat"
 XSIM="C:/AMDDesignTools/2026.1/Vivado/bin/xsim.bat"
