@@ -94,3 +94,40 @@ def test_fuori_dominio_solleva_invece_di_troncare_in_silenzio():
 def test_fuori_dominio_anche_dal_lato_negativo():
     with pytest.raises(ValueError, match='fuori dal dominio'):
         to_fix(-17.0, ACCEL_NFRAC, ACCEL_NBITS)    # minimo = -16
+
+
+# ------------------------------------------------ confini del dominio (analisi di mutazione)
+
+def test_gli_ESTREMI_del_dominio_sono_AMMESSI():
+    """Trovato dall'analisi di mutazione: cambiare `lo <= q <= hi` in `<` non faceva fallire
+    nulla. Il valore massimo rappresentabile e' legittimo, e rifiutarlo farebbe sollevare su un
+    campione valido -- cioe' interromperebbe C1 su un dato buono."""
+    from phase_c.regmap import to_fix, ACCEL_NFRAC, ACCEL_NBITS
+    lo_q = -(1 << (ACCEL_NBITS - 1))
+    hi_q = (1 << (ACCEL_NBITS - 1)) - 1
+    scala = float(1 << ACCEL_NFRAC)
+    assert to_fix(hi_q / scala, ACCEL_NFRAC, ACCEL_NBITS) == hi_q & ((1 << ACCEL_NBITS) - 1)
+    assert to_fix(lo_q / scala, ACCEL_NFRAC, ACCEL_NBITS) == lo_q & ((1 << ACCEL_NBITS) - 1)
+
+
+def test_UN_LSB_oltre_il_dominio_solleva():
+    """L'altro verso: troncare in silenzio darebbe un numero credibile e sbagliato."""
+    import pytest as _p
+    from phase_c.regmap import to_fix, ACCEL_NFRAC, ACCEL_NBITS
+    scala = float(1 << ACCEL_NFRAC)
+    hi_q = (1 << (ACCEL_NBITS - 1)) - 1
+    with _p.raises(ValueError, match='fuori dal dominio'):
+        to_fix((hi_q + 1) / scala, ACCEL_NFRAC, ACCEL_NBITS)
+    with _p.raises(ValueError, match='fuori dal dominio'):
+        to_fix((-(1 << (ACCEL_NBITS - 1)) - 1) / scala, ACCEL_NFRAC, ACCEL_NBITS)
+
+
+def test_la_mappa_dei_registri_e_IMMUTABILE():
+    """`regmap` e' dichiarato "l'UNICO posto": se fosse scrivibile, un modulo potrebbe cambiarne
+    un indirizzo a runtime e la dichiarazione sarebbe falsa."""
+    import dataclasses
+    import pytest as _p
+    from phase_c.regmap import IIDM
+    assert dataclasses.fields(IIDM.__class__) or True
+    with _p.raises(Exception):
+        IIDM.CTRL = 0x99

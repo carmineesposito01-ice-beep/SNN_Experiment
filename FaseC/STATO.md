@@ -1,6 +1,6 @@
 # STATO — Fase C
 
-> **Aggiornato:** 2026-08-03 · **188 test verdi** · albero pulito
+> **Aggiornato:** 2026-08-03 · **206 test verdi** · albero pulito
 >
 > Questo è il documento da cui si riparte. Dice **dove siamo**, **cosa è già provato**, **cosa
 > manca** e **perché certe strade sono state chiuse**. La procedura operativa sta in
@@ -220,6 +220,7 @@ ripete, non il singolo errore.
 | **Sostituzione di stringa che non combacia** | fallisce **in silenzio**: è successo tre volte in una sessione, e una volta ha lasciato un test che chiedeva *meno* repliche di quelle già fatte | usare `Edit` ancorato, e **rieseguire** — `py_compile` non basta |
 | **Tabella scritta a mano nel RUNBOOK** | divergeva dalla formula; due righe erano già sbagliate (un `4` che veniva dal ciclo di prova, non dalla matematica) | generata da `repliche_necessarie()`, e un test la ricontrolla riga per riga |
 | **Artefatti stantii che sembrano vivi** | due artefatti precedevano la correzione del `cut_in` e **contraddicevano** quelli nuovi | rigenerato uno, ritirato l'altro; il confronto si fa sui **timestamp di provenienza** contro la data della correzione |
+| **I confini non erano provati** | l'analisi di mutazione ha trovato che `<=` → `<` su bande, domini e soglia di collisione **non faceva fallire nulla**: la suite provava il comportamento, quasi mai il bordo | 18 prove al confine; `mutazioni.py` rende la verifica rilanciabile |
 
 ---
 
@@ -241,13 +242,43 @@ Onestà sullo stato, non un elenco di desideri.
 
 ---
 
-## 8. Come rilanciare tutto
+## 8. Controlli di sicurezza — come si rifanno
+
+Oltre alla suite, tre verifiche che **non** sono test e vanno rilanciate a mano quando si tocca
+qualcosa di sostanziale.
+
+```bash
+cd FaseC && python mutazioni.py
+```
+
+**Analisi di mutazione** (~12 minuti). Rompe il codice in un punto alla volta e controlla che i
+test se ne accorgano. Una mutazione sopravvissuta è un comportamento che nessun test difende.
+Esito della prima passata (2026-08-03): 92 mutazioni, **31 sopravvissute**, e non sparse — quasi
+tutte **condizioni al confine**. Aggiunte 18 prove al bordo; le 14 che cambiavano un *risultato*
+sono ora tutte prese. Restano vive le mutazioni **equivalenti** (stringhe di avanzamento, rami di
+diagnosi che cambiano il messaggio ma non l'esito): non sono buchi.
+
+```bash
+cd FaseC && python -m pytest tests/test_documentazione.py -q
+```
+
+**Coerenza dei documenti**: le tabelle di STATO.md sono confrontate riga per riga con gli
+artefatti, e il conteggio dei test con quelli che esistono davvero.
+
+**Staleness degli artefatti**: confrontare il `prov.timestamp` di ogni artefatto con la data
+dell'ultimo commit del codice da cui dipende. È così che sono emersi i due artefatti
+pre-correzione del `cut_in` (§6). Non è automatizzato: la mappa artefatto → dipendenze non esiste
+in forma eseguibile, ed è un debito noto (§7).
+
+---
+
+## 9. Come rilanciare tutto
 
 ```bash
 cd FaseC && python -m pytest -q
 ```
 
-188 test. Nessuno richiede la scheda; quelli che la richiederebbero verificano invece che il
+206 test. Nessuno richiede la scheda; quelli che la richiederebbero verificano invece che il
 codice **dichiari** che serve, invece di restituire numeri dal mock come se fossero misure.
 
 ```bash

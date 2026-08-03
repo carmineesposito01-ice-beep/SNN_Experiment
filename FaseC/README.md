@@ -45,6 +45,7 @@ FaseC/
   pytest.ini              rende `phase_c` importabile da qualunque cwd
   run_phase_c.sh          FACCIATA 1 — a stadi, l'entry-point
   c_frontend_parity.py    il cancello fra le due facciate
+  mutazioni.py            analisi di mutazione: rompe il codice, controlla che i test se ne accorgano
 
   phase_c/                LA LOGICA
     __init__.py           percorsi verificati (ROOT, RESULTS, PROJECT, T7_WORK, DATASET)
@@ -103,7 +104,8 @@ Vengono dalla Fase B2.0. Ricalcolarle qui significherebbe due posti per la stess
 | Grandezza | Valore | Fonte |
 |---|---|---|
 | Composto: FCLK deployabile | 40 MHz (WNS +0,022 ns · WHS +0,033 ns) | `FaseB2.0/Harness_SNN_IIDM/results/sweep.json` |
-| Composto: latenza / finestra attiva | 555 / 582 clock | `.../results/power_params.json` |
+| Composto: finestra attiva | 582 clock | `.../results/power_params.json` (`act_clk`) |
+| Composto: latenza pura del DUT | 555 clock (582 − 27 di protocollo AXI) | `.../results/SWEEP_FCLK.md` §finestra |
 | Composto: duty | 0,0146 % | idem |
 | Composto: potenza PL | 11 mW dinamica + 103 mW statica | `.../results/power.json` |
 | Composto: energia per control-step | 1,10 mJ dinamica | idem |

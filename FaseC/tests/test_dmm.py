@@ -135,3 +135,33 @@ def test_il_criterio_e_lo_STESSO_che_scarta_i_punti():
     fuori = storia(EQ_BAND_C * 1.05)
     with pytest.raises(TimeoutError):
         attendi_equilibrio(lambda: next(fuori), intervallo_s=0, max_attesa_s=0.2)
+
+
+def test_il_rigioco_arriva_all_ULTIMO_punto_del_foglio(tmp_path):
+    """Trovato dall'analisi di mutazione: `self._i >= len(r)` con `>` avrebbe letto una riga
+    oltre la fine. Il confine e' l'ultimo punto misurato, che deve essere leggibile."""
+    p = _foglio(tmp_path, ['0,x1,on,45.1,0.998,1.0', '1,x1,off,45.2,0.997,2.0',
+                           '2,blank,-,45.3,0.996,3.0'])
+    d = ReplayDMM(p)
+    assert [d.leggi_mA() for _ in range(3)] == [1.0, 2.0, 3.0]
+    # Il messaggio, non solo il tipo: senza il controllo esplicito la lista solleva comunque
+    # IndexError, ma dice "list index out of range" invece di quanti punti il foglio contenga.
+    # E' proprio per quel messaggio che il controllo esiste -- l'analisi di mutazione lo ha
+    # mostrato lasciando VIVA la variante `>` finche' il test guardava solo il tipo.
+    with pytest.raises(IndexError, match='il foglio ha 3 punti'):
+        d.leggi_mA()
+
+
+def test_le_righe_vuote_e_i_commenti_NON_diventano_punti(tmp_path):
+    """`r.strip() and not r.startswith('#')`: con `or` un commento entrerebbe fra i punti e la
+    sua ultima colonna verrebbe letta come una corrente."""
+    p = tmp_path / 'con_commenti.csv'
+    with io.open(str(p), 'w', encoding='utf-8', newline='') as f:
+        f.write('idx,cfg,gating,tj,vccint,mA\n'
+                '# questa e una nota, non un punto,,,,,999\n'
+                '\n'
+                '0,x1,on,45.1,0.998,412.3\n')
+    d = ReplayDMM(str(p))
+    assert d.leggi_mA() == 412.3
+    with pytest.raises(IndexError):
+        d.leggi_mA()

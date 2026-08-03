@@ -122,3 +122,28 @@ def test_una_traiettoria_TRONCATA_non_e_bit_esatta():
     a = _riferimento()
     b = dict(a); b['s'] = a['s'][:-5]
     assert not compare_trajectories(a, b)['bit_esatto']
+
+
+# ------------------------------------------ il confine della COLLISIONE (analisi di mutazione)
+
+def test_gap_ESATTAMENTE_zero_e_gia_una_collisione():
+    """Trovato dall'analisi di mutazione: cambiare `s <= 0.0` in `s < 0.0` non faceva fallire
+    nulla. Il gap a zero e' contatto: contarlo come non-collisione toglierebbe casi dal
+    conteggio di SICUREZZA, che e' il numero piu' delicato di tutta la Fase C."""
+    from phase_c.plant_ps import run_plant
+
+    # pianta forzata a chiudere il gap ESATTAMENTE a 0 dopo un passo:
+    # step_plant fa s_new = s + (vl - v_new)*dt; con vl=0, v=1.0, a=0, dt=0.1
+    # un passo porta s da 0,1 a ESATTAMENTE 0,0 (stessa grandezza in virgola mobile)
+    r = run_plant(s_init=0.1, v_init=1.0, vl_all=[0.0] * 5,
+                  accel_fun=lambda s, v, dv, vl, first: 0.0, dt=0.1)
+    assert r['collided'] is True, 'gap portato esattamente a 0: e\' contatto'
+    assert r['s'][-1] > 0.0, 'l\'ultimo gap REGISTRATO e\' quello prima dell\'impatto'
+
+
+def test_un_gap_ancora_POSITIVO_non_e_una_collisione():
+    """L'altro verso: se bastasse avvicinarsi, ogni scenario risulterebbe collidente."""
+    from phase_c.plant_ps import run_plant
+    r = run_plant(s_init=1.0, v_init=1.0, vl_all=[0.0] * 3,
+                  accel_fun=lambda s, v, dv, vl, first: 0.0, dt=0.1)
+    assert r['collided'] is False

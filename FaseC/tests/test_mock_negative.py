@@ -85,3 +85,33 @@ def test_il_driver_tier_legge_CINQUE_uscite(golden_scen1):
     drv = SnnTierDriver(ov)
     out = drv.infer(*golden_scen1.stim[0])
     assert drv.regmap.N_OUT == 5 and len(out) == 5
+
+
+# ----------------------------- confini del mock (analisi di mutazione)
+
+def test_l_ULTIMO_passo_dello_scenario_NON_e_contaminato(golden_scen1):
+    """Trovato dall'analisi di mutazione: `self.k >= n` con `>` avrebbe marcato contaminato
+    l'ultimo passo legittimo. Se il mock si dichiarasse contaminato su uno scenario intero e
+    corretto, il cancello che ne dipende diventerebbe rumore."""
+    from phase_c.mock_overlay import MockOverlay
+    from phase_c.driver import SnnIidmDriver
+    ov = MockOverlay(golden=[golden_scen1])
+    drv = SnnIidmDriver(ov)
+    ov.reset_dut(golden_scen1.idx)
+    for s, v, dv, vl in golden_scen1.stim:
+        drv.infer(s, v, dv, vl)
+    assert ov.contaminato is False, 'lo scenario completo e legittimo non e\' contaminato'
+
+
+def test_UN_passo_oltre_la_fine_SI_contamina(golden_scen1):
+    """L'altro verso, ed e' il caso che il mock esiste per modellare: l'hardware non solleva,
+    continua a produrre valori plausibili e sbagliati."""
+    from phase_c.mock_overlay import MockOverlay
+    from phase_c.driver import SnnIidmDriver
+    ov = MockOverlay(golden=[golden_scen1])
+    drv = SnnIidmDriver(ov)
+    ov.reset_dut(golden_scen1.idx)
+    for s, v, dv, vl in golden_scen1.stim:
+        drv.infer(s, v, dv, vl)
+    drv.infer(*golden_scen1.stim[0])                 # un passo di troppo
+    assert ov.contaminato is True

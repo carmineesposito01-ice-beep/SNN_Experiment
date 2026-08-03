@@ -64,3 +64,31 @@ def test_l_artefatto_e_json_leggibile_a_mano(tmp_path):
     p = tmp_path / 'c1.json'
     artifacts.write(p, {'n': 3}, frontend='script', bitstream_sig='s')
     assert json.loads(p.read_text(encoding='utf-8'))['data']['n'] == 3
+
+
+def test_le_chiavi_dell_artefatto_sono_ORDINATE(tmp_path):
+    """Trovato dall'analisi di mutazione: togliere `sort_keys=True` non faceva fallire nulla.
+    Senza, due esecuzioni identiche producono file diversi byte per byte -- il diff diventa
+    illeggibile e il cancello di determinismo perde ogni significato."""
+    import io as _io
+    import json as _json
+    p = str(tmp_path / 'a.json')
+    artifacts.write(p, {'zeta': 1, 'alfa': 2, 'mu': {'y': 1, 'x': 2}},
+                    frontend='script', bitstream_sig='s')
+    testo = _io.open(p, encoding='utf-8').read()
+    assert testo.index('"alfa"') < testo.index('"mu"') < testo.index('"zeta"')
+    assert testo.index('"x"') < testo.index('"y"'), 'anche i livelli annidati'
+
+
+def test_due_scritture_degli_STESSI_dati_danno_lo_stesso_file(tmp_path):
+    """Il determinismo e' la ragione dell'ordinamento: cio' che cambia deve essere solo la
+    provenienza volatile, non la disposizione delle chiavi."""
+    import io as _io
+    import json as _json
+    dati = {'b': [3, 1, 2], 'a': {'q': 1, 'p': 0}}
+    a, b = str(tmp_path / 'a.json'), str(tmp_path / 'b.json')
+    artifacts.write(a, dati, frontend='script', bitstream_sig='s')
+    artifacts.write(b, dati, frontend='script', bitstream_sig='s')
+    ta = [r for r in _io.open(a, encoding='utf-8') if 'timestamp' not in r]
+    tb = [r for r in _io.open(b, encoding='utf-8') if 'timestamp' not in r]
+    assert ta == tb

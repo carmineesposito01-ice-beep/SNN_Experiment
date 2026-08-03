@@ -113,3 +113,32 @@ def test_il_criterio_di_equilibrio_funziona_nei_due_versi():
     assert at_equilibrium([45.0 + 0.2 * k for k in range(EQ_N)]) is False    # deriva
     assert at_equilibrium([45.0] * (EQ_N - 1)) is False                      # troppo poche
     assert EQ_BAND_C == 0.5 and EQ_N == 12
+
+
+def test_la_banda_e_INCLUSIVA_al_confine():
+    """Provato dall'analisi di mutazione: col solo test qui sopra, cambiare `<=` in `<` NON
+    faceva fallire nulla in questo file -- le escursioni usate (0,11 e 2,2) stanno lontane dalla
+    soglia 0,5. Il confine era difeso solo da test_dmm.py, cioe' da un ALTRO modulo: chi tocca
+    xadc.py ed esegue il suo test non sarebbe stato avvisato."""
+    esatta = [45.0, 45.0 + EQ_BAND_C] * EQ_N
+    appena_sopra = [45.0, 45.0 + EQ_BAND_C * 1.0001] * EQ_N
+    assert at_equilibrium(esatta) is True, 'escursione == banda: DENTRO (il confronto e\' <=)'
+    assert at_equilibrium(appena_sopra) is False, 'appena oltre la banda: fuori'
+
+
+def test_gli_ESTREMI_dei_limiti_fisici_sono_ammessi():
+    """Trovato dall'analisi di mutazione: `lo <= tj <= hi` con `<` avrebbe respinto una lettura
+    esattamente al limite. Il limite dichiarato e' incluso -- altrimenti la banda non e' quella
+    scritta nel codice, ed e' una banda diversa a decidere."""
+    from phase_c.xadc import TJ_PLAUSIBILE, VCCINT_PLAUSIBILE
+    for tj in TJ_PLAUSIBILE:
+        for v in VCCINT_PLAUSIBILE:
+            assert verifica_plausibile(tj, v)['ok']
+
+
+def test_appena_OLTRE_i_limiti_fisici_solleva():
+    from phase_c.xadc import TJ_PLAUSIBILE, VCCINT_PLAUSIBILE
+    with pytest.raises(LetturaImplausibile):
+        verifica_plausibile(TJ_PLAUSIBILE[1] + 0.01, 1.0)
+    with pytest.raises(LetturaImplausibile):
+        verifica_plausibile(45.0, VCCINT_PLAUSIBILE[0] - 0.001)

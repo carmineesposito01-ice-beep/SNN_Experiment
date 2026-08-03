@@ -105,3 +105,16 @@ def test_la_scaletta_elenca_SEMPRE_tutti_i_sospettati():
     testo = ' '.join(d)
     for atteso in ('formato', 'indirizzi', 'START', 'reset', 'pipelining'):
         assert atteso in testo
+
+
+def test_i_rapporti_ASSENTI_si_scartano_prima_di_diagnosticare():
+    """Trovato dall'analisi di mutazione: `if x is not None` con `is None` avrebbe tenuto solo
+    i buchi. La diagnosi si basa sulla costanza dei rapporti: calcolarla su una lista di None
+    solleverebbe, o peggio darebbe una diagnosi presa da niente."""
+    from phase_c.c1_functional import diagnose
+    misti = [2.0, None, 2.0, None, 2.0]
+    d = diagnose(first={'k': 3, 'got': 8.0, 'exp': 4.0}, n=5, nmismatch=5, ratios=misti)
+    assert isinstance(d, (str, list, dict)) and d, 'la diagnosi deve produrre qualcosa'
+    solo_none = diagnose(first={'k': 3, 'got': 8.0, 'exp': 4.0}, n=5, nmismatch=5,
+                         ratios=[None, None, None])
+    assert isinstance(solo_none, (str, list, dict)), 'nessun rapporto utile: non deve rompersi'

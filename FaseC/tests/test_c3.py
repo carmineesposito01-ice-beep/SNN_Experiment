@@ -403,3 +403,29 @@ def test_la_tabella_del_RUNBOOK_viene_dal_CODICE():
             'RUNBOOK dice %s per IQR %s su x1, la formula dice %d' % (
                 n1, iqr_txt, repliche_necessarie(iqr, n_istanze=1))
         assert int(n2) == repliche_necessarie(iqr, n_istanze=2)
+
+
+# ------------------------------- 7. confini, trovati dall'analisi di mutazione
+
+def test_un_punto_ESATTAMENTE_al_bordo_della_banda_termica_si_TIENE():
+    """Cambiare `lo <= tj <= hi` in `<` non faceva fallire nulla. Scartare i punti al bordo
+    ridurrebbe n in silenzio, e n e' cio' da cui dipende la separabilita'."""
+    pts = [{'cfg': 'x1', 'gating': 'on', 'mA': 400.0, 'tj': 40.0},   # bordo basso
+           {'cfg': 'x1', 'gating': 'on', 'mA': 401.0, 'tj': 50.0},   # bordo alto
+           {'cfg': 'x1', 'gating': 'on', 'mA': 402.0, 'tj': 45.0}]
+    r = aggregate(pts, tj_window=(40.0, 50.0))
+    assert r['x1/on']['n'] == 3 and r['x1/on']['n_scartati'] == 0
+
+
+def test_un_punto_appena_FUORI_dalla_banda_si_scarta():
+    pts = [{'cfg': 'x1', 'gating': 'on', 'mA': 400.0, 'tj': 39.999},
+           {'cfg': 'x1', 'gating': 'on', 'mA': 401.0, 'tj': 45.0}]
+    r = aggregate(pts, tj_window=(40.0, 50.0))
+    assert r['x1/on']['n'] == 1 and r['x1/on']['n_scartati'] == 1
+
+
+def test_repeats_UGUALE_A_UNO_e_ammesso():
+    """`repeats >= 1`: con `>` una campagna a una replica per punto verrebbe rifiutata, e una
+    replica sola e' esattamente il caso della prova di accensione."""
+    seq = plan_sequence(punti_di_misura(), repeats=1, seed=0)
+    assert len(seq) == 5
